@@ -1,0 +1,172 @@
+import * as THREE from 'three';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import { objectType, objectTypes } from './model/object-types/index.js';
+export const isHelper = (s) => !!s && objectTypes.find(s)?.family === 'helper';
+export const isPhysical = (s) =>
+  !!s && !!objectTypes.find(s) && !isCut(s) && objectTypes.find(s).physical !== false;
+export const isCut = (s) => !!s && !!objectTypes.find(s)?.cut;
+export const isPlate = (s) => !!s && objectTypes.find(s)?.family === 'plate';
+const baseGeometry = (s) => objectType(s).geometry(s);
+export const cutsForModel = (s, model) =>
+  model.filter((c) => isCut(c) && c.targets?.includes(s.id));
+export const objectAnchors = (s) => objectType(s).anchors(s);
+export function validateObject(s) {
+  if (!s || !objectTypes.find(s)) return `Okänd objekttyp: ${s?.type}`;
+  if (isCut(s) && (!s.targets?.length || s.targets.includes(s.id)))
+    return 'Välj minst ett målobjekt.';
+  return objectType(s).validate(s);
+}
+const cache = new WeakMap(),
+  evaluator = new Evaluator();
+evaluator.useGroups = false;
+evaluator.attributes = ['position', 'normal'];
+function compact(geometry) {
+  const index = geometry.index,
+    pos = geometry.attributes.position,
+    normal = geometry.attributes.normal,
+    start = geometry.drawRange.start,
+    count = Math.min(geometry.drawRange.count, (index?.count ?? pos.count) - start),
+    points = [],
+    normals = [];
+  for (let i = start; i < start + count; i++) {
+    const j = index ? index.getX(i) : i;
+    points.push(pos.getX(j), pos.getY(j), pos.getZ(j));
+    normals.push(normal.getX(j), normal.getY(j), normal.getZ(j));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  return g;
+}
+function evaluated(s, model = []) {
+  const cuts = isCut(s) ? [] : cutsForModel(s, model);
+  let entry = cache.get(s);
+  if (entry && entry.cuts.length === cuts.length && entry.cuts.every((c, i) => c === cuts[i]))
+    return entry;
+  entry?.geometry.dispose();
+  let geometry = baseGeometry(s);
+  try {
+    for (const cut of cuts) {
+      if (!geometry.attributes.position.count) break;
+      const tool = objectType(cut).cutGeometry(cut, geometry);
+      if (!tool) continue;
+      geometry.clearGroups();
+      tool.clearGroups();
+      const a = new Brush(geometry),
+        b = new Brush(tool);
+      a.updateMatrixWorld();
+      b.updateMatrixWorld();
+      let result;
+      try {
+        result = evaluator.evaluate(a, b, SUBTRACTION);
+        const next = compact(result.geometry);
+        geometry.dispose();
+        geometry = next;
+      } finally {
+        tool.dispose();
+        a.material.dispose();
+        b.material.dispose();
+        result?.geometry.dispose();
+      }
+    }
+    entry = { cuts, geometry };
+    cache.set(s, entry);
+    return entry;
+  } catch (error) {
+    geometry.dispose();
+    throw new Error('Skärningen kunde inte beräknas. Ändra polygon eller skärdjup.');
+  }
+}
+export const objectGeometry = (s, model = []) => evaluated(s, model).geometry.clone();
+export const geometryForModel = (s, model) => evaluated(s, model).geometry.clone();
+export function objectCorners(s, model = []) {
+  const entry = evaluated(s, model);
+  if (!entry.cuts.length) return objectType(s).corners(s);
+  if (entry.corners) return entry.corners;
+  const edges = new THREE.EdgesGeometry(entry.geometry),
+    p = edges.attributes.position,
+    nodes = new Map();
+  function add(i, j) {
+    const a = new THREE.Vector3().fromBufferAttribute(p, i),
+      b = new THREE.Vector3().fromBufferAttribute(p, j),
+      key = a
+        .toArray()
+        .map((v) => Math.round(v * 1000))
+        .join(',');
+    if (!nodes.has(key)) nodes.set(key, { point: a.toArray(), directions: [] });
+    nodes.get(key).directions.push(b.sub(a).normalize());
+  }
+  for (let i = 0; i < p.count; i += 2) {
+    add(i, i + 1);
+    add(i + 1, i);
+  }
+  edges.dispose();
+  entry.corners = [...nodes.values()]
+    .filter((n) =>
+      n.directions.some((a) => n.directions.some((b) => a.clone().cross(b).length() > 0.001)),
+    )
+    .map((n) => n.point);
+  return entry.corners;
+}
+
+// Segment targets are cached with the evaluated geometry, including cut revisions.
+export function objectSegments(s, model = []) {
+  const entry = evaluated(s, model);
+  if (entry.segments) return entry.segments;
+  const segments = [];
+  if (!entry.cuts.length) {
+    const targets = objectType(s).snapSegments(s);
+    segments.push(...targets.segments);
+    if (!targets.includeEdges) return (entry.segments = segments);
+  }
+
+  const edges = new THREE.EdgesGeometry(entry.geometry),
+    p = edges.attributes.position,
+    nodes = new Map(),
+    links = new Map();
+  const key = (v) => v.map((n) => Math.round(n * 1000)).join(',');
+  for (let i = 0; i < p.count; i += 2) {
+    const a = [p.getX(i), p.getY(i), p.getZ(i)],
+      b = [p.getX(i + 1), p.getY(i + 1), p.getZ(i + 1)],
+      ka = key(a),
+      kb = key(b);
+    if (ka === kb) continue;
+    nodes.set(ka, a);
+    nodes.set(kb, b);
+    if (!links.has(ka)) links.set(ka, new Set());
+    if (!links.has(kb)) links.set(kb, new Set());
+    links.get(ka).add(kb);
+    links.get(kb).add(ka);
+  }
+  edges.dispose();
+  // Remove collinear subdivisions so a midpoint belongs to the whole edge.
+  for (const [k, neighbors] of links) {
+    if (neighbors.size !== 2) continue;
+    const [a, b] = [...neighbors],
+      v = new THREE.Vector3(...nodes.get(k)),
+      u = new THREE.Vector3(...nodes.get(a)).sub(v).normalize(),
+      w = new THREE.Vector3(...nodes.get(b)).sub(v).normalize();
+    if (u.dot(w) > -0.999999) continue;
+    links.get(a).delete(k);
+    links.get(b).delete(k);
+    links.get(a).add(b);
+    links.get(b).add(a);
+    links.delete(k);
+  }
+  for (const [a, neighbors] of links)
+    for (const b of neighbors) if (a < b) segments.push([nodes.get(a), nodes.get(b)]);
+  return (entry.segments = segments);
+}
+
+/** An isolated context for clients that evaluate several objects from the same model. */
+export function createGeometryContext(initialModel = []) {
+  let model = initialModel;
+  return {
+    setModel(next) {
+      model = next;
+    },
+    objectGeometry: (s) => objectGeometry(s, model),
+    objectCorners: (s) => objectCorners(s, model),
+    objectSegments: (s) => objectSegments(s, model),
+  };
+}

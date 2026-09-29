@@ -1,0 +1,25 @@
+{
+  "name": "lirastructure-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build && node scripts/build-pwa.js",
+    "test": "node --test tests/*.test.js",
+    "format": "prettier --write \"src/**/*.{js,css}\" \"tests/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.{js,css}\" \"tests/**/*.js\"",
+    "check": "npm run format:check && npm run lint && npm test && npm run build",
+    "lint": "eslint src tests"
+  },
+  "dependencies": {
+    "three": "0.180.0",
+    "three-bvh-csg": "0.0.18"
+  },
+  "devDependencies": {
+    "eslint": "9.39.1",
+    "globals": "16.5.0",
+    "prettier": "3.6.2",
+    "vite": "7.1.7"
+  }
+}
