@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "three": "0.180.0",
-    "three-bvh-csg": "0.0.18"
+    "three-bvh-csg": "0.0.18",
+    "web-ifc": "0.0.78"
   },
   "devDependencies": {
     "eslint": "9.39.1",

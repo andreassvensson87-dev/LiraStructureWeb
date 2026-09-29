@@ -2484,6 +2484,19 @@ button.insertion-point.edge-add:hover {
   height: 32px;
   padding: 5px 8px;
 }
+#drawing-manager .drawing-preset-choice {
+  margin-left: 0;
+}
+#drawing-manager .drawing-preset-choice select {
+  width: 190px;
+  text-overflow: ellipsis;
+}
+#drawing-manager .drawing-filters:not(.drawing-preset-choice) {
+  margin-left: auto;
+}
+#drawing-manager .drawing-settings-button {
+  margin-left: 0;
+}
 .part-view-info:empty {
   display: none;
 }
@@ -3180,4 +3193,386 @@ body > footer .pwa-status {
 body > footer .pwa-install {
   padding: 2px 8px;
   font-size: 11px;
+}
+
+/* Drawing typography affects the paper, never the editor's controls. */
+.drawing-font-scope .grid-labels span,
+.drawing-font-scope text,
+.drawing-font-scope .drawing-annotation text {
+  font-family: var(--drawing-font, Arial, sans-serif);
+}
+.drawing-settings-button {
+  margin-left: auto;
+  font-size: 0;
+  padding: 7px;
+}
+.drawing-settings-button svg {
+  width: 18px;
+  height: 18px;
+}
+#drawing-settings {
+  width: min(460px, 90vw);
+  padding: 0;
+  border: 1px solid #ccd7db;
+  border-radius: 10px;
+  color: #233940;
+}
+#drawing-settings header {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #dce4e7;
+}
+#drawing-settings form {
+  padding: 18px;
+}
+#drawing-settings section + section {
+  margin-top: 22px;
+}
+#drawing-settings h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+#drawing-settings p {
+  color: #607780;
+  font-size: 12px;
+}
+#drawing-settings label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+}
+#drawing-settings select {
+  width: 100%;
+}
+#drawing-settings .drawing-settings-libraries button {
+  margin: 0 6px 6px 0;
+}
+#drawing-settings footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  background: none;
+}
+#drawing-settings {
+  width: min(580px, 94vw);
+  max-height: 90vh;
+}
+#drawing-settings form > section:first-child {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+#drawing-settings form > section:first-child > h3,
+#drawing-settings form > section:first-child > p,
+#drawing-settings .preset-actions {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+#drawing-settings .preset-actions {
+  display: flex;
+  gap: 8px;
+}
+#drawing-settings input {
+  width: 100%;
+  min-width: 0;
+}
+#drawing-settings .drawing-check {
+  display: flex;
+  align-items: center;
+}
+#drawing-settings input[type='checkbox'] {
+  width: auto;
+}
+#drawing-settings footer {
+  flex-wrap: wrap;
+}
+#drawing-settings [hidden] {
+  display: none;
+}
+@media (max-width: 520px) {
+  #drawing-settings form > section:first-child {
+    grid-template-columns: 1fr;
+  }
+}
+/* Single Part creation shares the drawing manager's compact controls. */
+.drawing-batch {
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100dvh - 100px);
+  border: 1px solid #ccd7db;
+  border-radius: 10px;
+}
+.drawing-batch .batch-summary {
+  display: flex;
+  gap: 24px;
+  padding: 18px 20px 0;
+  color: #60737a;
+  font-size: 12px;
+}
+.batch-summary strong {
+  font-size: 19px;
+  font-weight: 600;
+  color: #233940;
+  margin-right: 4px;
+}
+.drawing-batch > p {
+  margin: 10px 20px 16px;
+}
+.batch-setup {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 14px 20px;
+  background: #f7f9fa;
+  border-block: 1px solid #e2e8ea;
+}
+.batch-setup label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #60737a;
+  flex: 1;
+  max-width: 360px;
+}
+.batch-setup select {
+  width: 100%;
+  margin: 0;
+  height: 34px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.batch-setup button {
+  margin-left: auto;
+  height: 34px;
+  font-size: 12px;
+}
+.batch-number-needed {
+  color: #286c58;
+  background: #eff7f3;
+  border-color: #bdd7cb;
+}
+.batch-selectionbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+}
+.batch-selection-count {
+  margin-right: auto;
+  color: #60737a;
+  font-size: 12px;
+}
+.batch-selectionbar button {
+  font-size: 12px;
+  padding: 5px 8px;
+  background: transparent;
+  border-color: transparent;
+}
+.batch-selectionbar button:hover:not(:disabled) {
+  background: #eff3f4;
+}
+.drawing-batch .workflow-content {
+  padding: 0 20px;
+  max-height: 36dvh;
+  overflow: auto;
+}
+.drawing-batch .drawing-table thead {
+  position: sticky;
+  top: 0;
+  background: #f7f9fa;
+  z-index: 1;
+}
+.drawing-batch .drawing-table th:first-child {
+  width: 44px;
+}
+.drawing-batch .drawing-table td {
+  padding-block: 10px;
+}
+.drawing-batch .drawing-table small {
+  font-size: 11px;
+  margin-top: 3px;
+}
+.batch-badge {
+  display: inline-block;
+  border-radius: 4px;
+  background: #eef5f1;
+  color: #386852;
+  padding: 3px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.batch-badge-warning {
+  background: #faf1dd;
+  color: #86621a;
+}
+.drawing-batch .batch-feedback {
+  min-height: 18px;
+  margin: 12px 20px;
+}
+.drawing-batch .workflow-actions {
+  background: #fafbfc;
+  padding: 12px 20px;
+  position: sticky;
+  bottom: 0;
+}
+.drawing-batch .workflow-actions .primary {
+  background: #286c58;
+  border-color: #286c58;
+  color: white;
+  min-width: 145px;
+}
+.drawing-batch .workflow-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.batch-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: #60737a;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .batch-selectionbar,
+  .batch-setup {
+    flex-wrap: wrap;
+  }
+  .batch-selection-count {
+    flex-basis: 100%;
+  }
+  .batch-setup label {
+    max-width: none;
+    min-width: 180px;
+  }
+  .drawing-batch .workflow-content {
+    overflow-x: auto;
+  }
+}
+#drawing-manager {
+  width: min(1200px, calc(100vw - 32px));
+}
+#drawing-manager .drawing-list {
+  overflow: auto;
+  max-height: 65dvh;
+}
+#drawing-manager .drawing-table th {
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: #f7f9fa;
+}
+#drawing-manager .drawing-table input {
+  min-width: 105px;
+}
+.drawing-identity {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.drawing-identity button {
+  flex-shrink: 0;
+}
+.drawing-columns {
+  position: relative;
+  font-size: 12px;
+}
+.drawing-columns summary {
+  padding: 8px;
+  cursor: pointer;
+}
+.drawing-columns > div {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 60;
+  padding: 12px;
+  min-width: 230px;
+  max-height: 55vh;
+  overflow: auto;
+  background: white;
+  border: 1px solid #dce5e7;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px #172b3226;
+}
+.drawing-columns label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 0;
+}
+.drawing-columns input {
+  width: 15px;
+  margin: 0;
+}
+#drawing-manager {
+  overflow: visible;
+}
+#drawing-manager[open] {
+  display: flex;
+  flex-direction: column;
+}
+#drawing-manager > header,
+#drawing-manager > p {
+  flex-shrink: 0;
+}
+#drawing-manager .drawing-list {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.drawing-template-save {
+  width: min(480px, 90vw);
+}
+.drawing-template-save label {
+  display: grid;
+  gap: 8px;
+}
+.drawing-template-save footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.drawing-template-save p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.batch-setup label {
+  min-width: 170px;
+}
+.batch-setup {
+  flex-wrap: wrap;
+}
+#inspector-references {
+  padding: 16px;
+}
+#inspector-references h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+#inspector-references button {
+  width: 100%;
+  margin: 5px 0;
+  font-size: 12px;
+}
+#inspector-references label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 12px 0;
+}
+#inspector-references input[type='checkbox'] {
+  width: 15px;
+  margin: 0;
+}
+#inspector-references progress {
+  width: 100%;
+  margin-top: 12px;
+}
+#inspector-references [role='status'] {
+  font-size: 12px;
+  color: #60737a;
+}
+#inspector-references [data-name] {
+  overflow-wrap: anywhere;
 }

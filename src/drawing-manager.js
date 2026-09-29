@@ -1,3 +1,16 @@
+import { positionDrawingMenu } from './drawing-menu-position.js';
+import {
+  drawingAttributes,
+  drawingAttributeContext,
+  attributeValue,
+  attributeApplies,
+  updateDrawingAttribute,
+} from './drawing-attributes.js';
+import {
+  applyDrawingPreset,
+  selectedDrawingPreset,
+  drawingPresetPicker,
+} from './drawing-presets.js';
 import { drawingLayoutStamp } from './drawing-layout.js';
 import { numberWithDrawings, showDrawingBatch } from './drawing-workflows.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
@@ -18,6 +31,14 @@ export function drawingStamp(record, state) {
         : undefined,
       settings: record.settings,
       sheet: record.sheet,
+      attributes: record.attributes,
+      revision: record.revision,
+      date: record.date,
+      drawnBy: record.drawnBy,
+      checkedBy: record.checkedBy,
+      issueStatus: record.issueStatus,
+      typography: record.typography,
+      drawingPreset: record.drawingPreset,
       frame: drawingLayoutStamp(record.sheet?.layoutId),
       parts: state.parts.assignments,
       annotations: record.annotations,
@@ -42,6 +63,14 @@ export function drawingStamp(record, state) {
         key: status.key,
         mark: status.mark,
         sheet: record.sheet,
+        attributes: record.attributes,
+        revision: record.revision,
+        date: record.date,
+        drawnBy: record.drawnBy,
+        checkedBy: record.checkedBy,
+        issueStatus: record.issueStatus,
+        typography: record.typography,
+        drawingPreset: record.drawingPreset,
         frame: drawingLayoutStamp(record.sheet?.layoutId),
         annotations: record.annotations,
       })
@@ -62,7 +91,7 @@ export class DrawingManager {
     const batchButton = document.createElement('button');
     batchButton.type = 'button';
     batchButton.id = 'single-part-batch-open';
-    batchButton.textContent = 'Single Part';
+    batchButton.textContent = 'Skapa detaljritningar';
     batchButton.title = 'Skapa Single Part-ritningar från markerade objekt';
     batchButton.onclick = () => {
       this.beforeNumber?.();
@@ -90,6 +119,40 @@ export class DrawingManager {
     toolbar.prepend(create);
     const filters = this.dialog.querySelector('.drawing-filters');
     toolbar.append(filters);
+    const preset = drawingPresetPicker();
+    const presetChoice = document.createElement('div');
+    presetChoice.className = 'drawing-filters drawing-preset-choice';
+    preset.select.title = 'Inställningar för nya ritningar';
+    presetChoice.append(preset.label);
+    create.after(presetChoice);
+    this.presetSelect = preset.select;
+    const columns = document.createElement('details');
+    columns.className = 'drawing-columns';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Kolumner';
+    this.columnChoices = document.createElement('div');
+    columns.append(summary, this.columnChoices);
+    toolbar.append(columns);
+    const positionColumns = () => {
+      if (columns.open) positionDrawingMenu(summary, this.columnChoices);
+    };
+    columns.addEventListener('toggle', positionColumns);
+    window.addEventListener('resize', positionColumns);
+    document.addEventListener('pointerdown', (e) => {
+      if (!columns.contains(e.target)) columns.open = false;
+    });
+    columns.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && columns.open) {
+        e.preventDefault();
+        e.stopPropagation();
+        columns.open = false;
+        summary.focus();
+      }
+    });
+    this.dialog.addEventListener('close', () => {
+      columns.open = false;
+    });
+    this.visibleAttributes = new Set(['drawing.revision', 'drawing.date', 'drawing.drawnBy']);
     actionMenu(toolbar, {
       label: 'Mer',
       items: [actionButton(this.$('number'), 'number', 'Numrera detaljer')],
@@ -130,6 +193,7 @@ export class DrawingManager {
       levelId: state.levels.active,
       settings: { lower: -1000, cut: 1200, upper: 3000, hiddenLines: false },
     };
+    applyDrawingPreset(record, selectedDrawingPreset(this.presetSelect?.value));
     this.change([...state.drawings, record]);
     this.render();
     this.$('message').textContent = 'Ritning skapad.';
@@ -140,6 +204,27 @@ export class DrawingManager {
       list = this.dialog.querySelector('.drawing-list'),
       filter = this.$('filter').value;
     list.replaceChildren();
+    const available = drawingAttributes().filter(
+      (a) => !['drawing.number', 'drawing.name', 'drawing.type'].includes(a.key),
+    );
+    this.columnChoices.replaceChildren(
+      ...available.map((a) => {
+        const label = document.createElement('label'),
+          check = document.createElement('input');
+        check.type = 'checkbox';
+        check.checked = this.visibleAttributes.has(a.key);
+        check.onchange = () => {
+          check.checked ? this.visibleAttributes.add(a.key) : this.visibleAttributes.delete(a.key);
+          this.render();
+        };
+        label.append(
+          check,
+          a.name + (a.scope === 'SP' ? ' · SP' : a.scope === 'GA' ? ' · GA' : ''),
+        );
+        return label;
+      }),
+    );
+    const attributes = available.filter((a) => this.visibleAttributes.has(a.key));
     const records = state.drawings.filter((r) => filter === 'all' || r.type === filter);
     if (!records.length) {
       const empty = document.createElement('p');
@@ -152,6 +237,11 @@ export class DrawingManager {
     table.className = 'drawing-table';
     table.innerHTML =
       '<thead><tr><th>Nummer</th><th>Namn</th><th>Typ</th><th>Status</th></tr></thead><tbody></tbody>';
+    for (const a of attributes) {
+      const th = document.createElement('th');
+      th.textContent = a.name;
+      table.querySelector('thead tr').append(th);
+    }
     for (const r of records) {
       const row = document.createElement('tr'),
         button = document.createElement('button');
@@ -187,23 +277,55 @@ export class DrawingManager {
               : r.reviewed === stamp
                 ? 'Aktuell'
                 : 'Modell ändrad';
-      const name = document.createElement('input');
-      name.value = r.name;
-      name.setAttribute('aria-label', `Ritningsnamn ${r.number}`);
-      name.maxLength = 100;
-      name.onblur = () => {
-        if (name.value.trim() && name.value.trim() !== r.name) {
-          this.change(
-            this.getState().drawings.map((d) =>
-              d.id === r.id ? { ...d, name: name.value.trim() } : d,
-            ),
-          );
-          this.render();
+      const context = drawingAttributeContext(r, state);
+      const inputFor = (a) => {
+        if (!attributeApplies(a, r.type)) {
+          const span = document.createElement('span');
+          span.textContent = '—';
+          return span;
         }
+        if (!a.editable) {
+          const span = document.createElement('span');
+          span.textContent = attributeValue(a.key, context) || '—';
+          span.title = 'Hämtas från projekt eller modell';
+          return span;
+        }
+        const input = document.createElement('input');
+        input.type = a.dataType || 'text';
+        input.value = attributeValue(a.key, context);
+        input.setAttribute('aria-label', `${a.name} ${r.number}`);
+        input.maxLength = 200;
+        input.onchange = input.onblur = () => {
+          const latest = this.getState().drawings.find((d) => d.id === r.id);
+          if (
+            !latest ||
+            input.value.trim() ===
+              attributeValue(a.key, drawingAttributeContext(latest, this.getState()))
+          )
+            return;
+          try {
+            this.change(updateDrawingAttribute(this.getState().drawings, r.id, a, input.value));
+            this.$('message').textContent = 'Ritningsinformation uppdaterad.';
+            this.render();
+          } catch (error) {
+            this.$('message').textContent = error.message;
+            input.value = attributeValue(a.key, context);
+          }
+        };
+        return input;
       };
+      const name = inputFor(drawingAttributes().find((a) => a.key === 'drawing.name'));
+      const identity = document.createElement('div');
+      identity.className = 'drawing-identity';
+      identity.append(
+        button,
+        inputFor(drawingAttributes().find((a) => a.key === 'drawing.number')),
+      );
+      button.textContent = '↗';
+      button.title = 'Öppna ritning';
       const type = document.createElement('span');
       type.textContent = r.type === 'GA' ? 'GA' : 'Single Part';
-      for (const content of [button, name, type, status]) {
+      for (const content of [identity, name, type, status, ...attributes.map(inputFor)]) {
         const cell = document.createElement('td');
         cell.append(content);
         row.append(cell);

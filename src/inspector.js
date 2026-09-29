@@ -53,6 +53,8 @@ export class Inspector {
     this.tab = tab;
     this.$('inspector-properties').hidden = tab !== 'properties';
     this.$('inspector-model').hidden = tab !== 'model';
+    const references = this.$('inspector-references');
+    if (references) references.hidden = tab !== 'references';
     document
       .querySelectorAll('[data-inspector-tab]')
       .forEach((b) => b.setAttribute('aria-selected', String(b.dataset.inspectorTab === tab)));

@@ -1,3 +1,4 @@
+import { applyDrawingPreset, selectedDrawingPreset } from './drawing-presets.js';
 import { isPhysical } from './model-object.js';
 import { numberParts, partStatus } from './part-marks.js';
 export function nextDrawingNumber(drawings, type = 'SP') {
@@ -118,7 +119,14 @@ export function batchDrawingGroups(state, selection) {
   }
   return [...groups.values()];
 }
-export function createBatchDrawings(state, selection, keys, uuid = () => crypto.randomUUID()) {
+export function createBatchDrawings(
+  state,
+  selection,
+  keys,
+  uuid = () => crypto.randomUUID(),
+  preset = selectedDrawingPreset(),
+  template = null,
+) {
   const drawings = [...state.drawings];
   for (const group of batchDrawingGroups(state, selection)) {
     if (
@@ -127,17 +135,28 @@ export function createBatchDrawings(state, selection, keys, uuid = () => crypto.
       drawings.some((d) => d.type === 'SP' && d.partKey === group.key)
     )
       continue;
-    drawings.push({
-      id: uuid(),
-      type: 'SP',
-      number: nextDrawingNumber(drawings),
-      name: group.mark,
-      sourceId: group.source.id,
-      partKey: group.key,
-      mark: group.mark,
-      levelId: state.levels.active,
-      settings: { lower: -1000, cut: 1200, upper: 3000, hiddenLines: false },
-    });
+    drawings.push(
+      applyDrawingPreset(
+        {
+          id: uuid(),
+          type: 'SP',
+          ...(template ? { template: structuredClone(template) } : {}),
+          number: nextDrawingNumber(drawings),
+          name: group.mark,
+          sourceId: group.source.id,
+          partKey: group.key,
+          mark: group.mark,
+          levelId: state.levels.active,
+          settings: { lower: -1000, cut: 1200, upper: 3000, hiddenLines: false },
+        },
+        template?.drawingPreset || preset,
+      ),
+    );
   }
+  if (template?.typography)
+    for (const record of drawings) {
+      if (!state.drawings.some((d) => d.id === record.id))
+        record.typography = structuredClone(template.typography);
+    }
   return drawings;
 }

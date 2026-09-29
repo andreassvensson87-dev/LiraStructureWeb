@@ -1,3 +1,6 @@
+import { ReferenceModels } from './references/reference-models.js';
+import { drawingAttributeContext } from './drawing-attributes.js';
+import { installDrawingSettings } from './drawing-settings.js';
 import { setupPWA } from './app/pwa.js';
 import { moveGripPoints } from './model/grips.js';
 import { createGroupedToolbox } from './model/ui/toolbox.js';
@@ -36,6 +39,7 @@ let levelsUI = null;
 import { nextIdentity, identityError } from './object-identity.js';
 import { ModelTree } from './model-tree.js';
 let modelTree = null;
+let referenceModels = null;
 const hiddenObjects = new Set();
 const isVisible = (id) =>
   !hiddenObjects.has(id) && (ui.showHelpers || !isHelper(project.objects.find((s) => s.id === id)));
@@ -647,9 +651,14 @@ $('move').onclick = () => startTransform('move');
 $('copy').onclick = () => startTransform('copy');
 $('draw').onclick = startDrawing;
 $('select').onclick = () => setDrawing(false);
-function fit(direction) {
+function fit(direction, referenceBounds = null) {
   projectionOffset.set(0, 0);
-  const bounds = new THREE.Box3().setFromObject(objects).union(grid.bounds);
+  const bounds =
+    referenceBounds ||
+    new THREE.Box3()
+      .setFromObject(objects)
+      .union(grid.bounds)
+      .union(referenceModels?.bounds() || new THREE.Box3());
   const center = bounds.isEmpty()
     ? new THREE.Vector3(1500, 0, 0)
     : bounds.getCenter(new THREE.Vector3());
@@ -811,6 +820,14 @@ function point(e) {
       (s) => isVisible(s.id) && (!isCut(s) || ui.selectedIds.has(s.id)),
     ),
     grid: { ...project.grid, z: levelElevation(project.levels) },
+    referencePoints:
+      referenceModels?.candidates({
+        ray: raycaster.ray,
+        camera,
+        pointer: [e.clientX - r.left, e.clientY - r.top],
+        width: r.width,
+        height: r.height,
+      }) || [],
     endpoints: project.snap.endpoints,
     cornerSnap: project.snap.corners,
     quadrantSnap: project.snap.quadrants,
@@ -1519,13 +1536,10 @@ controls.update();
 fit();
 syncLocks();
 
-new FrameEditor({
+const frameEditor = new FrameEditor({
   getContext: () => ({
     project: project.info,
-    drawings: project.drawings.map((d) => ({
-      ...d,
-      partMark: d.type === 'SP' ? (project.parts.assignments[d.sourceId]?.mark ?? '') : '',
-    })),
+    drawings: project.drawings.map((d) => drawingAttributeContext(d, project).drawing),
   }),
   beforeOpen: () => {
     inspector?.finish();
@@ -1533,4 +1547,14 @@ new FrameEditor({
   },
 });
 
+installDrawingSettings(drawingController, frameEditor);
 setupPWA();
+
+referenceModels = new ReferenceModels({
+  scene,
+  inspector,
+  fit: (bounds) => fit(undefined, bounds),
+  status: (text) => {
+    document.querySelector('footer [role=status]').textContent = text;
+  },
+});

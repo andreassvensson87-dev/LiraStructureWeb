@@ -1,3 +1,5 @@
+import { drawingAttributeContext } from './drawing-attributes.js';
+import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
 import { vectorDrawing, appendVectorDrawing } from './drawing-vector.js';
 import { setDrawingViewScale } from './drawing-views.js';
 import { DrawingDetailTool } from './drawing-detail-tool.js';
@@ -333,6 +335,7 @@ export class PlanView {
     this.markSelected.disabled = true;
     this.views.reset();
     this.record = structuredClone(record);
+    if (this.fontSelect) this.fontSelect.value = drawingFont(this.record);
     this.frameLayout = null;
     this.paperWorkspace.classList.remove('with-layout');
     this.page.style.cssText = '';
@@ -365,7 +368,9 @@ export class PlanView {
       this.span = record.viewport.span;
       this.draw();
     }
-    fillLayoutPicker(this.layoutSelect, record.sheet?.layoutId);
+    if (!this.record.sheet && this.record.drawingPreset?.layoutId)
+      this.record.sheet = { layoutId: this.record.drawingPreset.layoutId };
+    fillLayoutPicker(this.layoutSelect, this.record.sheet?.layoutId);
     this.refreshPaper(true);
     this.views.open();
   }
@@ -439,11 +444,11 @@ export class PlanView {
     this.frameSVG.setAttribute('viewBox', `0 0 ${w} ${h}`);
     this.frameSVG.replaceChildren();
     if (saved)
-      appendDrawingLayout(this.frameSVG, saved, {
-        project: this.getState().project || {},
-        drawing: this.record,
-        custom: this.record.attributes || {},
-      });
+      appendDrawingLayout(
+        this.frameSVG,
+        saved,
+        drawingAttributeContext(this.record, this.getState()),
+      );
     if (fit) this.navigation.fit();
     else this.navigation.size();
   }
@@ -614,8 +619,8 @@ export class PlanView {
       this.rebuildPart(fit);
       return;
     }
-    this.grid.group.visible = true;
-    this.grid.overlay.hidden = false;
+    this.grid.group.visible = this.record.settings.showGrid !== false;
+    this.grid.overlay.hidden = !this.grid.group.visible;
     const state = this.getState(),
       level = state.levels.items.find((l) => l.id === this.$('level').value);
     let h;
@@ -1047,6 +1052,7 @@ export class PlanView {
     }
   }
   draw() {
+    applyDrawingFont(this.page, this.record);
     const w = this.host.clientWidth,
       h = this.host.clientHeight;
     if (!w || !h) return;

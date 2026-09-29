@@ -1,5 +1,8 @@
+import { positionDrawingMenu } from './drawing-menu-position.js';
 // Shared actions keep drawing workspaces consistent as more tools are added.
 const paths = {
+  settings:
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M10 3h4l1 3 3 1 3 3v4l-3 1-1 3-3 3h-4l-1-3-3-1-3-3v-4l3-1 1-3Z',
   detail: 'M3 3h12v12H3zM15 15l6 6M7 9h4M9 7v4',
   section: 'M5 3v18M19 3v18M2 7h7m-3-3 3 3-3 3M16 7h7m-3-3 3 3-3 3M5 15h14',
   select: 'm5 3 14 10-7 1-3 7Z',
@@ -51,6 +54,7 @@ export function actionMenu(root, { label, iconName = 'more', primary = false, it
     const open = panel.hidden;
     panel.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
+    if (open) positionDrawingMenu(trigger, panel);
   };
   panel.addEventListener('click', (e) => {
     if (e.target.closest('button:not(:disabled)')) close(true);
@@ -63,6 +67,7 @@ export function actionMenu(root, { label, iconName = 'more', primary = false, it
     } else if (e.key === 'ArrowDown' && e.target === trigger) {
       e.preventDefault();
       panel.hidden = false;
+      positionDrawingMenu(trigger, panel);
       trigger.setAttribute('aria-expanded', 'true');
       panel.querySelector('button:not(:disabled)')?.focus();
     }
@@ -72,6 +77,9 @@ export function actionMenu(root, { label, iconName = 'more', primary = false, it
   });
   wrap.addEventListener('focusout', (e) => {
     if (!wrap.contains(e.relatedTarget)) close();
+  });
+  window.addEventListener('resize', () => {
+    if (!panel.hidden) positionDrawingMenu(trigger, panel);
   });
   root.closest('dialog')?.addEventListener('close', () => close());
   return wrap;

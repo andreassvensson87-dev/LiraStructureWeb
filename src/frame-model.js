@@ -1,20 +1,5 @@
 export const FRAME_LIBRARY_KEY = 'lirastructure.drawing-frames.v1';
-export const ATTRIBUTE_KEY = 'lirastructure.drawing-attributes.v1';
-export const builtInAttributes = [
-  ['project.name', 'Projektnamn'],
-  ['project.number', 'Projektnummer'],
-  ['project.client', 'Beställare'],
-  ['drawing.number', 'Ritningsnummer'],
-  ['drawing.name', 'Ritningsnamn'],
-  ['drawing.type', 'Ritningstyp'],
-  ['drawing.revision', 'Revision'],
-  ['drawing.date', 'Datum'],
-  ['drawing.partMark', 'Part mark'],
-].map(([key, name]) => ({ key, name }));
-export function attributeValue(key, context) {
-  const [group, field] = key.split('.');
-  return String(context[group]?.[field] ?? '');
-}
+export { ATTRIBUTE_KEY, builtInAttributes, attributeValue } from './drawing-attributes.js';
 export function blankFrame() {
   return {
     id: crypto.randomUUID(),

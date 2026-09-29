@@ -14,6 +14,7 @@ export function resolveSnap({
   z,
   sweeps,
   model = sweeps,
+  referencePoints = [],
   grid,
   endpoints = true,
   cornerSnap = endpoints,
@@ -105,7 +106,9 @@ export function resolveSnap({
       }
   for (const [points, tolerance] of [
     [objectPoints, 14],
+    [referencePoints.filter((p) => !p.edge), 14],
     [segmentPoints, 12],
+    [referencePoints.filter((p) => p.edge), 10],
     [
       (gridIntersections ? grid.x : []).flatMap((x, i) =>
         grid.y.map((y, j) => ({

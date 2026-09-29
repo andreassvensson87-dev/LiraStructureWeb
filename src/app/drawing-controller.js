@@ -26,6 +26,7 @@ export function createDrawingController({
     getSnapSettings,
   });
   const singleSheet = new SinglePartSheet({
+    getAttributeState: () => project,
     getObjects: () => project.objects,
     getProject: () => project.info,
     getSnapSettings,

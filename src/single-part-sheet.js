@@ -1,3 +1,7 @@
+import { instantiateDrawingTemplate } from './drawing-templates.js';
+import { installTemplateSave } from './drawing-template-ui.js';
+import { drawingAttributeContext } from './drawing-attributes.js';
+import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
 import { migrateIndependentPartViews, arrangePartViews } from './part-view-migration.js';
 import { migratePartSection } from './part-section-migration.js';
 import { DrawingViewActions } from './drawing-view-actions.js';
@@ -39,10 +43,16 @@ const node = (tag, attrs = {}, text) => {
   return el;
 };
 export class SinglePartSheet {
-  constructor({ getObjects, getProject = () => ({}), getSnapSettings = () => ({ polar: 45 }) }) {
+  constructor({
+    getAttributeState = () => ({}),
+    getObjects,
+    getProject = () => ({}),
+    getSnapSettings = () => ({ polar: 45 }),
+  }) {
     this.getSnapSettings = getSnapSettings;
     this.getProject = getProject;
     this.getObjects = getObjects;
+    this.getAttributeState = getAttributeState;
     this.base = 1;
     this.zoom = 1;
     this.papers = structuredClone(standardPapers);
@@ -144,6 +154,7 @@ export class SinglePartSheet {
         mark: (id) => (id === this.record.sourceId ? this.record.mark : null),
       },
     });
+    installTemplateSave(this, toolbar);
     drawingEditorShell({
       dialog: this.dialog,
       body,
@@ -360,6 +371,7 @@ export class SinglePartSheet {
   }
   openRecord(record, { save, review }) {
     this.record = structuredClone(record);
+    if (this.fontSelect) this.fontSelect.value = drawingFont(this.record);
     for (const a of this.record.annotations || [])
       if (a.sourceId && !a.manual) a.sourceId = record.sourceId;
     this.save = save;
@@ -373,12 +385,23 @@ export class SinglePartSheet {
     this.geometry.applyMatrix4(localMatrix);
     this.geometry.computeBoundingBox();
     this.bounds = this.geometry.boundingBox.clone();
+    if (!this.record.sheet && this.record.template) {
+      const templateGeometry = this.geometry.clone();
+      if (this.drawingReflection) templateGeometry.applyMatrix4(this.drawingReflection);
+      this.record.sheet = instantiateDrawingTemplate(
+        this.record.template,
+        templateGeometry,
+        record.sourceId,
+      );
+      templateGeometry.dispose();
+    }
     this.config = this.record.sheet || {
       paper: structuredClone(this.papers.find((p) => p.id === 'A3') || this.papers[0]),
       landscape: true,
       scale: 10,
       section: (this.bounds.min.x + this.bounds.max.x) / 2,
       layout: null,
+      layoutId: this.record.drawingPreset?.layoutId || '',
     };
     this.record.sheet = this.config;
     ensurePartViews(this.record);
@@ -519,6 +542,7 @@ export class SinglePartSheet {
     this.syncInspector();
   }
   compose() {
+    applyDrawingFont(this.svg, this.record);
     const [w, h] = this.paper,
       c = this.config;
     this.svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
@@ -554,11 +578,11 @@ export class SinglePartSheet {
       this.detailTool?.paint(this.svg, view.id, (p) => this.projectAnnotation(p, view.id), 1);
       appendViewTitle(this.svg, view, view.position[0] + 1, view.position[1] + view.size[1]);
     }
-    appendDrawingLayout(this.svg, this.frameLayout, {
-      project: this.getProject(),
-      drawing: { ...this.record, partMark: this.record.mark || '' },
-      custom: this.record.attributes || {},
-    });
+    appendDrawingLayout(
+      this.svg,
+      this.frameLayout,
+      drawingAttributeContext(this.record, this.getAttributeState()),
+    );
     this.annotations.render(this.svg);
     const guides = [...this.svg.querySelectorAll('.section-extent-guides')];
     guides.forEach((n) => (n.style.display = 'none'));
@@ -592,7 +616,7 @@ export class SinglePartSheet {
           this.draft.forEach(validatePaper);
           localStorage.setItem(PAPER_KEY, JSON.stringify(this.draft));
           this.papers = structuredClone(this.draft);
-          this.paperOptions();
+          if (this.config) this.paperOptions();
           this.library.close();
         } catch (e) {
           this.library.querySelector('[role=alert]').textContent = e.message;

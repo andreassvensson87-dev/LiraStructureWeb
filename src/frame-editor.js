@@ -1,3 +1,4 @@
+import { customAttributes } from './drawing-attributes.js';
 import { copyLibraryItem, libraryUsage } from './frame-library.js';
 import { rectangleSelection, frameSelectionShapes } from './frame-selection.js';
 import { frameGrips, coincidentFrameVertices, moveFrameVertices } from './frame-grips.js';
@@ -87,7 +88,7 @@ export class FrameEditor {
   <div class="fe-canvas"><svg tabindex="0" aria-label="Rityta för ritningsram"></svg></div>
   <aside><section class="fe-block-placement" hidden><h3>Ramblock</h3><label>Block<select data-ui="blockChoice"></select></label><label>Förankring<select data-ui="anchor"><option value="bottom-left">Nedre vänster</option><option value="bottom-right">Nedre höger</option><option value="top-left">Övre vänster</option><option value="top-right">Övre höger</option></select></label><div class="fe-pair"><label>X-avstånd · mm<input data-ui="offsetX" type="number" value="0"></label><label>Y-avstånd · mm<input data-ui="offsetY" type="number" value="0"></label></div><label>Blockrotation · °<input data-ui="blockAngle" type="number" value="0"></label><button data-action="instanceApply">Tillämpa placering</button><p>Avstånd mäts från valt hörn i +X åt höger och +Y uppåt.</p><div data-ui="instances"></div></section><section class="fe-paper"><h3 data-ui="paperTitle">Arbetsyta</h3><label>Pappersformat<select data-ui="paper"></select></label><label class="fe-check"><input data-ui="landscape" type="checkbox" checked>Liggande</label><div class="fe-pair"><label>Bredd · mm<input data-ui="width" type="number" min="50" max="5000"></label><label>Höjd · mm<input data-ui="height" type="number" min="50" max="5000"></label></div>
   <div class="fe-origin-fields"><h3>Insättningspunkt · mm</h3><label>X<input data-ui="originX" type="number" value="0"></label><label>Y<input data-ui="originY" type="number" value="0"></label></div><button data-action="originApply">Ändra insättningspunkt</button></section><section class="fe-entity-properties"><h3 data-ui="selection">Egenskaper</h3><label>Text / innehåll<input data-ui="text" value="Text"></label><label>Typsnitt<select data-ui="font"><option value="Arial, sans-serif">Arial</option><option value="Verdana, sans-serif">Verdana</option><option value="Georgia, serif">Georgia</option><option value="Times New Roman, serif">Times New Roman</option><option value="Courier New, monospace">Courier New</option></select></label><label>Färg<input data-ui="color" type="text" value="#233940" placeholder="#233940"></label><label>Attribut<select data-ui="attribute"></select></label><div class="fe-pair"><label>Texthöjd · mm<input data-ui="size" type="number" min="0.5" max="100" value="3.5" step="0.5"></label><label>Vinkel · °<input data-ui="angle" type="number" value="0"></label></div><label>Textjustering<select data-ui="align"><option value="start">Vänster</option><option value="middle">Centrerad</option><option value="end">Höger</option></select></label><label>Linjetjocklek · mm<input data-ui="stroke" type="number" min="0.05" max="5" value="0.25" step="0.05"></label><label>Bildbredd · mm<input data-ui="imageWidth" type="number" min="1" max="5000" value="40"></label><label>Bildhöjd · mm<input data-ui="imageHeight" type="number" min="1" max="5000" value="20"></label><label class="fe-check"><input data-ui="ratio" type="checkbox" checked>Lås bildproportioner</label><button data-action="properties">Tillämpa på markerade</button>
-  <details><summary>Attributbibliotek</summary><p>Inbyggda attribut hämtas från projekt och ritning. Egna attribut kan ges ett värde i förhandsvisningen.</p><label>Namn<input data-ui="attributeName" placeholder="Exempel: Ritad av"></label><button data-action="attributeAdd">Lägg till attribut</button><label>Förhandsvisningsvärde för valt eget attribut<input data-ui="attributeValue"></label><button data-action="attributeValue">Sätt förhandsvisningsvärde</button></details>
+  <details><summary>Attributbibliotek</summary><p>Inbyggda attribut hämtas från projekt och ritning. Egna attribut kan ges ett värde i förhandsvisningen.</p><label>Namn<input data-ui="attributeName" placeholder="Exempel: Ritad av"></label><label>Gäller för<select data-ui="attributeScope"><option value="all">Alla ritningar</option><option value="GA">GA</option><option value="SP">Single Part</option></select></label><label>Datatyp<select data-ui="attributeType"><option value="text">Text</option><option value="date">Datum</option><option value="number">Tal</option></select></label><button data-action="attributeAdd">Lägg till attribut</button><label>Förhandsvisningsvärde för valt eget attribut<input data-ui="attributeValue"></label><button data-action="attributeValue">Sätt förhandsvisningsvärde</button></details>
   </section><details open><summary>Snappning</summary><label class="fe-check"><input type="checkbox" data-ui="boundary" checked>Arbetsytans kontur</label>${[
     ['endpoints', 'Ändpunkt'],
     ['midpoints', 'Mittpunkt'],
@@ -323,13 +324,21 @@ export class FrameEditor {
     this.$('status').textContent = text;
   }
   attrs() {
-    return [...builtInAttributes, ...this.custom];
+    return [...builtInAttributes, ...customAttributes()];
   }
   open() {
     this.beforeOpen?.();
     this.dialog.showModal();
     const selected = this.$('attribute').value;
-    this.$('attribute').replaceChildren(...this.attrs().map((a) => new Option(a.name, a.key)));
+    this.$('attribute').replaceChildren(
+      ...this.attrs().map(
+        (a) =>
+          new Option(
+            `${a.name} · ${a.scope === 'SP' ? 'Single Part' : a.scope === 'GA' ? 'GA' : 'Gemensamt'}`,
+            a.key,
+          ),
+      ),
+    );
     if (selected) this.$('attribute').value = selected;
     this.$('preview').replaceChildren(
       new Option('Attributnamn', ''),
@@ -993,11 +1002,22 @@ export class FrameEditor {
     if (name === 'attributeAdd') {
       const label = this.$('attributeName').value.trim();
       if (!label) return;
-      const a = { key: 'custom.' + crypto.randomUUID(), name: label };
+      const a = {
+        key: 'custom.' + crypto.randomUUID(),
+        name: label,
+        scope: this.$('attributeScope').value,
+        dataType: this.$('attributeType').value,
+      };
+      this.custom = customAttributes();
       try {
         localStorage.setItem(ATTRIBUTE_KEY, JSON.stringify([...this.custom, a]));
         this.custom.push(a);
-        this.$('attribute').add(new Option(a.name, a.key));
+        this.$('attribute').add(
+          new Option(
+            `${a.name} · ${a.scope === 'SP' ? 'Single Part' : a.scope === 'GA' ? 'GA' : 'Gemensamt'}`,
+            a.key,
+          ),
+        );
         this.$('attribute').value = a.key;
         this.$('attributeName').value = '';
         this.status('Eget attribut tillagt.');
@@ -1101,7 +1121,7 @@ export class FrameEditor {
       ctx = {
         project: context.project,
         drawing: drawing || {},
-        custom: this.frame.previewValues || {},
+        custom: drawing?.attributes || this.frame.previewValues || {},
       };
     const paint = (e, ghost = false) => {
       const group = svg('g', { 'data-entity': e.id, opacity: ghost ? 0.45 : 1 });

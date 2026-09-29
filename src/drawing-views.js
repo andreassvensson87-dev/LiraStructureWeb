@@ -55,7 +55,11 @@ export function ensurePartViews(record, config = record.sheet) {
       camera: old?.camera || { center: [0, 0] },
       settings: {
         ...old?.settings,
-        hiddenLines: old?.settings?.hiddenLines ?? config.hiddenLines?.[id] ?? true,
+        hiddenLines:
+          old?.settings?.hiddenLines ??
+          config.hiddenLines?.[id] ??
+          record.drawingPreset?.hiddenLines ??
+          true,
         ...(id === 'section' ? { section: config.section } : {}),
       },
     };

@@ -1,3 +1,5 @@
+import { TEMPLATE_KEY, readDrawingTemplates } from './drawing-templates.js';
+import { drawingPresetPicker, selectedDrawingPreset } from './drawing-presets.js';
 import {
   planDrawingNumbering,
   applyDrawingNumbering,
@@ -13,6 +15,7 @@ const element = (tag, text, className) => {
 function dialog(title) {
   const d = document.createElement('dialog');
   d.className = 'drawing-workflow';
+  d.setAttribute('aria-label', title);
   const header = element('header'),
     name = element('strong', title),
     close = element('button', '×');
@@ -129,11 +132,11 @@ export function showDrawingBatch(manager) {
   if (reopenManager) manager.dialog.close();
   const initial = manager.getState(),
     selection = new Set(initial.selected),
-    d = dialog('Single Part från markering');
+    d = dialog('Skapa Single Part-ritningar');
   d.classList.add('drawing-batch');
   const intro = element(
       'p',
-      `${selection.size} markerade objekt. En rad per detaljtyp. Klicka på raden för att framhäva objekten i modellen.`,
+      'En ritning per detaljtyp. Klicka på en detalj för att framhäva dess objekt i modellen.',
     ),
     content = element('div', null, 'workflow-content'),
     message = element('p'),
@@ -141,28 +144,112 @@ export function showDrawingBatch(manager) {
     all = element('button', 'Välj alla utan ritning'),
     number = element('button', 'Numrera detaljer'),
     create = element('button', 'Skapa valda', 'primary'),
-    close = element('button', 'Stäng');
+    close = element('button', 'Stäng'),
+    clear = element('button', 'Avmarkera alla'),
+    summary = element('div', null, 'batch-summary'),
+    selectionCount = element('span', null, 'batch-selection-count'),
+    setup = element('div', null, 'batch-setup'),
+    selectionBar = element('div', null, 'batch-selectionbar');
   message.setAttribute('role', 'status');
-  d.append(intro, content, message, footer);
-  footer.append(all, number, close, create);
-  let checked = new Set();
+  message.className = 'batch-feedback';
+  const preset = drawingPresetPicker('Inställningar för nya ritningar');
+  const templates = readDrawingTemplates();
+  const templateLabel = element('label', 'Ritningsmall'),
+    templateSelect = document.createElement('select');
+  templateSelect.setAttribute('aria-label', 'Ritningsmall');
+  templateSelect.append(
+    new Option('Ingen mall · standardvyer', ''),
+    ...templates.map((t) => new Option(t.name, t.id)),
+  );
+  templateLabel.append(templateSelect);
+  const removeTemplate = element('button', 'Ta bort mall');
+  removeTemplate.type = 'button';
+  removeTemplate.disabled = true;
+  templateSelect.onchange = () => {
+    preset.select.disabled = !!templateSelect.value;
+    removeTemplate.disabled = !templateSelect.value;
+    removeTemplate.textContent = 'Ta bort mall';
+  };
+  removeTemplate.onclick = () => {
+    const id = templateSelect.value;
+    if (!id) return;
+    if (removeTemplate.textContent !== 'Bekräfta borttagning') {
+      removeTemplate.textContent = 'Bekräfta borttagning';
+      message.textContent = 'Klicka igen för att ta bort mallen. Befintliga ritningar behålls.';
+      return;
+    }
+    try {
+      localStorage.setItem(
+        TEMPLATE_KEY,
+        JSON.stringify(readDrawingTemplates().filter((t) => t.id !== id)),
+      );
+      templateSelect.selectedOptions[0].remove();
+      templateSelect.value = '';
+      templateSelect.onchange();
+    } catch {
+      message.textContent = 'Mallen kunde inte tas bort.';
+    }
+  };
+  templateLabel.append(removeTemplate);
+  setup.append(templateLabel, preset.label, number);
+  selectionBar.append(selectionCount, all, clear);
+  d.append(summary, intro, setup, selectionBar, content, message, footer);
+  footer.append(close, create);
+  const availableKeys = () =>
+    new Set(
+      batchDrawingGroups(manager.getState(), selection)
+        .filter((g) => g.valid && !g.drawing)
+        .map((g) => g.key),
+    );
+  let checked = availableKeys();
   const render = () => {
     const state = manager.getState(),
       groups = batchDrawingGroups(state, selection);
     content.replaceChildren();
+    const unnumbered = groups.filter((g) => !g.valid).length;
+    summary.replaceChildren(
+      ...[
+        [groups.reduce((sum, g) => sum + g.objects.length, 0), 'objekt'],
+        [groups.length, 'detaljtyper'],
+        [groups.filter((g) => g.drawing).length, 'har ritning'],
+      ].map(([count, label]) => {
+        const item = element('span');
+        item.append(element('strong', String(count)), ' ' + label);
+        return item;
+      }),
+    );
+    number.textContent = unnumbered ? `Numrera detaljer (${unnumbered})` : 'Uppdatera numrering';
+    number.classList.toggle('batch-number-needed', !!unnumbered);
+    number.disabled = !groups.length;
+    all.disabled = !groups.some((g) => g.valid && !g.drawing);
+    preset.select.disabled = !groups.length || !!templateSelect.value;
     if (!groups.length) {
-      content.append(element('p', 'Markera sweeps eller plates i modellen först.'));
+      content.append(
+        element(
+          'p',
+          'Markera sweeps eller plates i modellen och öppna Single Part igen.',
+          'batch-empty',
+        ),
+      );
+      selectionCount.textContent = 'Inga detaljer valda';
+      clear.disabled = true;
+      create.textContent = 'Skapa ritningar';
       create.disabled = true;
       return;
     }
     const table = element('table', null, 'drawing-table');
     table.innerHTML =
-      '<thead><tr><th>Skapa</th><th>Detalj / profil</th><th>Valda / totalt</th><th>Ritning</th></tr></thead>';
+      '<thead><tr><th>Skapa</th><th>Detalj / profil</th><th>Antal i urval / modell</th><th>Ritning</th></tr></thead>';
     const tbody = element('tbody');
     table.append(tbody);
     const update = () => {
-      create.disabled = !groups.some((g) => g.valid && !g.drawing && checked.has(g.key));
-      create.textContent = `Skapa valda (${groups.filter((g) => g.valid && !g.drawing && checked.has(g.key)).length})`;
+      const count = groups.filter((g) => g.valid && !g.drawing && checked.has(g.key)).length;
+      create.disabled = count === 0;
+      clear.disabled = count === 0;
+      selectionCount.textContent = `${count} av ${groups.filter((g) => g.valid && !g.drawing).length} nya ritningar valda`;
+      create.textContent = count
+        ? `Skapa ${count} ${count === 1 ? 'ritning' : 'ritningar'}`
+        : 'Skapa ritningar';
     };
     for (const g of groups) {
       const row = element('tr'),
@@ -197,7 +284,14 @@ export function showDrawingBatch(manager) {
         const open = element('button', g.drawing.number + ' · Öppna');
         open.onclick = () => manager.open({ ...g.drawing, sourceId: g.source.id });
         drawingCell.append(open);
-      } else drawingCell.textContent = g.valid ? 'Saknas' : 'Numrering krävs';
+      } else
+        drawingCell.append(
+          element(
+            'span',
+            g.valid ? 'Ny ritning' : 'Numrering krävs',
+            g.valid ? 'batch-badge' : 'batch-badge batch-badge-warning',
+          ),
+        );
       row.append(cell, info, element('td', `${g.objects.length} / ${g.all.length}`), drawingCell);
       tbody.append(row);
     }
@@ -205,20 +299,20 @@ export function showDrawingBatch(manager) {
     update();
   };
   all.onclick = () => {
-    checked = new Set(
-      batchDrawingGroups(manager.getState(), selection)
-        .filter((g) => g.valid && !g.drawing)
-        .map((g) => g.key),
-    );
+    checked = availableKeys();
+    render();
+  };
+  clear.onclick = () => {
+    checked.clear();
     render();
   };
   number.onclick = async () => {
     number.disabled = true;
     try {
       if (await numberWithDrawings(manager)) {
-        checked.clear();
+        checked = availableKeys();
         render();
-        message.textContent = 'Numrering klar. Välj vilka ritningar som ska skapas.';
+        message.textContent = 'Numrering klar. Granska de valda detaljerna och skapa ritningarna.';
       }
     } catch (e) {
       message.textContent = e.message;
@@ -228,13 +322,20 @@ export function showDrawingBatch(manager) {
   };
   create.onclick = () => {
     const state = manager.getState(),
-      next = createBatchDrawings(state, selection, checked);
+      next = createBatchDrawings(
+        state,
+        selection,
+        checked,
+        undefined,
+        selectedDrawingPreset(preset.select.value),
+        templates.find((t) => t.id === templateSelect.value) || null,
+      );
     manager.change(next);
     checked.clear();
     render();
     manager.render();
     const count = next.length - state.drawings.length;
-    message.textContent = `${count} ${count === 1 ? 'ritning skapad' : 'ritningar skapade'}.`;
+    message.textContent = `${count} ${count === 1 ? 'ritning skapad' : 'ritningar skapade'}. Öppna en ritning från listan eller stäng för att återgå.`;
   };
   close.onclick = () => d.close();
   d.addEventListener(

@@ -1,4 +1,13 @@
-const fields = ['settings', 'levelId', 'view', 'viewport', 'sheet', 'annotations'];
+const fields = [
+  'settings',
+  'levelId',
+  'view',
+  'viewport',
+  'sheet',
+  'annotations',
+  'typography',
+  'drawingPreset',
+];
 /** Preserve numbering/source metadata owned by the drawing manager. */
 export function mergeDrawingEdit(drawings, edit) {
   if (!edit) return drawings;

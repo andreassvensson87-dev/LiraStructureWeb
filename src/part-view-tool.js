@@ -88,6 +88,7 @@ export class PartViewTool {
     e.cancelInteraction();
     const scale = e.config.views.find((v) => v.id === e.selectedView)?.scale || 10;
     this.pending = createStandardPartView(projection, e.bounds, scale, e.record.sourceId);
+    this.pending.settings.hiddenLines = e.record.drawingPreset?.hiddenLines ?? true;
     const view = this.pending,
       [w, h] = view.size;
     this.preview.replaceChildren();

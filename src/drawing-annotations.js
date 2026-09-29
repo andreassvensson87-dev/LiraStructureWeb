@@ -209,7 +209,14 @@ export class DrawingAnnotations {
         this.panel.append(label);
       };
       field('Kommentar', 'comment', 'text', item.comment || '');
-      field('Textstorlek · mm', 'textSize', 'number', item.textSize ?? 2.5);
+      field(
+        'Textstorlek · mm',
+        'textSize',
+        'number',
+        item.textSize ??
+          this.record?.drawingPreset?.[item.type === 'leader' ? 'leaderSize' : 'dimensionSize'] ??
+          2.5,
+      );
       if (item.type === 'dimension') {
         button('Lägg till måttpunkt', () => this.startAdding());
         const details = document.createElement('details');
@@ -731,13 +738,16 @@ export class DrawingAnnotations {
   paint(root, item, selected) {
     const project = (p) => this.adapter.project(p, item.view),
       unit = this.adapter.unit(),
-      fontSize = (item.textSize ?? 2.5) * unit,
+      fontSize =
+        (item.textSize ??
+          this.record?.drawingPreset?.[item.type === 'leader' ? 'leaderSize' : 'dimensionSize'] ??
+          2.5) * unit,
       g = el('g', {
         'data-annotation': item.id,
         class: 'drawing-annotation',
         fill: 'none',
         stroke: selected ? '#287c65' : '#263a42',
-        'stroke-width': 0.22 * unit,
+        'stroke-width': (this.record?.drawingPreset?.lineWidth ?? 0.22) * unit,
       });
     root.append(g);
     const line = (a, b, hit = false) =>
