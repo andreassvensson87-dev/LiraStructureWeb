@@ -1,3 +1,4 @@
+import { watchAppUpdate } from '../update-ui.js';
 export function setupPWA() {
   if (!import.meta.env.PROD) return;
   const footer = document.querySelector('body > footer');
@@ -9,6 +10,9 @@ export function setupPWA() {
   install.hidden = true;
   install.className = 'pwa-install';
   footer.append(status, install);
+  const updateButton = document.createElement('button');
+  updateButton.hidden = true;
+  document.querySelector('body > header .history').prepend(updateButton);
   let prompt;
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
@@ -34,16 +38,14 @@ export function setupPWA() {
   navigator.serviceWorker
     .register('./sw.js', { updateViaCache: 'none' })
     .then((reg) => {
-      const update = () => {
-        if (reg.waiting)
-          status.textContent =
-            'Ny version klar för nästa session. Modellen sparas inte när appen stängs.';
-      };
-      update();
-      reg.addEventListener('updatefound', () => {
-        reg.installing?.addEventListener('statechange', update);
+      watchAppUpdate(reg, updateButton, status, async () => {
+        if (
+          !window.confirm(
+            'Uppdatera och starta om appen? Den öppna modellen och osparade ändringar försvinner. Välj Avbryt om du vill fortsätta arbeta.',
+          )
+        )
+          return 'Uppdateringen väntar tills du är redo.';
       });
-      window.addEventListener('focus', () => reg.update().catch(() => {}));
     })
     .catch(() => {
       status.textContent = 'Offlinefunktion är inte tillgänglig.';

@@ -34,3 +34,13 @@ self.addEventListener('fetch', (event) => {
     caches.open(CACHE).then(async (cache) => (await cache.match(target)) || fetch(event.request)),
   );
 });
+
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'ACTIVATE_UPDATE') return;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const own = windows.filter(client => client.url.startsWith(self.registration.scope));
+    if (own.length > 1) { event.source?.postMessage({ type: 'UPDATE_BLOCKED' }); return; }
+    await self.skipWaiting();
+  })());
+});
