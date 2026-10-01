@@ -25,7 +25,6 @@ import { createObjectMesh } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
 import { ProjectHistory } from './project/project-history.js';
 import { FrameEditor } from './frame-editor.js';
-import { installViewportWheel } from './viewport-wheel.js';
 import { workPlaneFromPoints, drawingWorkPlane } from './work-plane.js';
 
 import { partStatus } from './part-marks.js';
@@ -55,7 +54,7 @@ import { isLineCut } from './line-cut.js';
 import { Inspector } from './inspector.js';
 let inspector = null;
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createModelViewport } from './model/viewport.js';
 
 import { InsertionPoints } from './insertion-points.js';
 import { endpointAtLength } from './length-input.js';
@@ -67,35 +66,10 @@ import { platePoint, plateNormal } from './plate.js';
 const $ = (id) => document.getElementById(id),
   fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
 
-const host = $('viewport'),
-  scene = new THREE.Scene();
-scene.background = new THREE.Color('#eaf0f2');
-let viewHeight = 10000;
-const projectionOffset = new THREE.Vector2();
-const camera = new THREE.OrthographicCamera(-5000, 5000, 5000, -5000, 1, 1e8);
-camera.up.set(0, 0, 1);
-camera.position.set(6500, -8000, 6500);
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-} catch {
-  $('status').textContent = '3D-vyn kräver WebGL. Aktivera grafikacceleration i webbläsaren.';
-  throw new Error('WebGL unavailable');
-}
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-host.appendChild(renderer.domElement);
-renderer.domElement.tabIndex = 0;
-installViewportWheel(host, renderer.domElement);
-let controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(1500, 0, 0);
-controls.enableDamping = true;
-controls.zoomToCursor = true;
-controls.minZoom = 0.001;
-controls.maxZoom = 1000;
-scene.add(new THREE.AmbientLight(0xffffff, 2));
-const sun = new THREE.DirectionalLight(0xffffff, 3);
-sun.position.set(4000, -3000, 7000);
-scene.add(sun);
+const host = $('viewport');
+const { scene, camera, renderer, navigation } = createModelViewport(host, (message) => {
+  $('status').textContent = message;
+});
 const project = createProject({ grid: defaultGrid, levels: initialLevels() });
 const projectHistory = new ProjectHistory();
 
@@ -269,23 +243,8 @@ document
   .querySelectorAll('[data-axis]')
   .forEach((b) => (b.onclick = () => toggleLock(b.dataset.axis)));
 
-function updateProjection() {
-  const aspect = host.clientWidth / Math.max(host.clientHeight, 1);
-  camera.left = projectionOffset.x - (viewHeight * aspect) / 2;
-  camera.right = projectionOffset.x + (viewHeight * aspect) / 2;
-  camera.top = projectionOffset.y + viewHeight / 2;
-  camera.bottom = projectionOffset.y - viewHeight / 2;
-  camera.updateProjectionMatrix();
-}
-const observer = new ResizeObserver(() => {
-  const { width, height } = host.getBoundingClientRect();
-  if (!width || !height) return;
-  renderer.setSize(width, height);
-  updateProjection();
-});
-observer.observe(host);
 renderer.setAnimationLoop(() => {
-  if (!ui.marquee && !rotationHandle.drag) controls.update();
+  if (!ui.marquee && !rotationHandle.drag) navigation.controls.update();
   // Project labels with the same camera transform used to render this frame.
   camera.updateMatrixWorld();
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
@@ -490,9 +449,9 @@ function setDrawing(value) {
   syncLocks();
   updateSnapOverlay();
   clearPreview();
-  controls.mouseButtons.LEFT = value ? null : THREE.MOUSE.ROTATE;
-  controls.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
-  controls.touches.ONE = value ? null : THREE.TOUCH.ROTATE;
+  navigation.controls.mouseButtons.LEFT = value ? null : THREE.MOUSE.ROTATE;
+  navigation.controls.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
+  navigation.controls.touches.ONE = value ? null : THREE.TOUCH.ROTATE;
   renderer.domElement.style.cursor = value ? 'crosshair' : 'default';
   $('draw').classList.toggle('active', value);
   $('select').classList.toggle('active', !value);
@@ -652,27 +611,13 @@ $('copy').onclick = () => startTransform('copy');
 $('draw').onclick = startDrawing;
 $('select').onclick = () => setDrawing(false);
 function fit(direction, referenceBounds = null) {
-  projectionOffset.set(0, 0);
   const bounds =
     referenceBounds ||
     new THREE.Box3()
       .setFromObject(objects)
       .union(grid.bounds)
       .union(referenceModels?.bounds() || new THREE.Box3());
-  const center = bounds.isEmpty()
-    ? new THREE.Vector3(1500, 0, 0)
-    : bounds.getCenter(new THREE.Vector3());
-  const size = bounds.isEmpty()
-    ? 4000
-    : Math.max(bounds.getSize(new THREE.Vector3()).length(), 500);
-  const d = direction || camera.position.clone().sub(controls.target).normalize();
-  controls.target.copy(center);
-  const aspect = host.clientWidth / Math.max(host.clientHeight, 1);
-  viewHeight = (size * 1.35) / Math.min(aspect, 1);
-  camera.zoom = 1;
-  updateProjection();
-  camera.position.copy(center).addScaledVector(d, Math.max(size * 2, 10000));
-  controls.update();
+  navigation.fit(bounds, direction);
 }
 $('transparent-view').onclick = () => {
   ui.transparentView = !ui.transparentView;
@@ -689,26 +634,6 @@ $('transparent-view').onclick = () => {
     o.material.needsUpdate = true;
   });
 };
-// OrbitControls caches camera.up at construction; recreate it when changing view axes.
-function setViewUp(up) {
-  const previous = controls,
-    target = previous.target.clone(),
-    position = camera.position.clone();
-  const options = Object.fromEntries(
-    ['enableDamping', 'enabled', 'zoomToCursor', 'minZoom', 'maxZoom'].map((key) => [
-      key,
-      previous[key],
-    ]),
-  );
-  const mouseButtons = { ...previous.mouseButtons },
-    touches = { ...previous.touches };
-  previous.dispose();
-  camera.up.copy(up);
-  controls = new OrbitControls(camera, renderer.domElement);
-  Object.assign(controls, options, { mouseButtons, touches });
-  controls.target.copy(target);
-  camera.position.copy(position);
-}
 planeViewButton.onclick = () => {
   const frame = tools.temporaryPlane ?? {
     origin: [0, 0, levelElevation(project.levels)],
@@ -720,15 +645,8 @@ planeViewButton.onclick = () => {
     ? tools.workPlanePoints
         .reduce((sum, p) => sum.add(new THREE.Vector3(...p)), new THREE.Vector3())
         .multiplyScalar(1 / tools.workPlanePoints.length)
-    : controls.target.clone().setZ(levelElevation(project.levels));
-  const distance = Math.max(camera.position.distanceTo(controls.target), 10000);
-  setViewUp(new THREE.Vector3(...frame.v));
-  projectionOffset.set(0, 0);
-  updateProjection();
-  controls.target.copy(center);
-  camera.position.copy(center).addScaledVector(normal, distance);
-  controls.update();
-  camera.updateMatrixWorld();
+    : navigation.controls.target.clone().setZ(levelElevation(project.levels));
+  navigation.lookAtPlane(center, normal, new THREE.Vector3(...frame.v));
   if (tools.lastPointer && tools.drawing) updatePointer(tools.lastPointer);
   $('status').textContent = tools.temporaryPlane
     ? 'Vy rakt mot arbetsplanet'
@@ -736,11 +654,11 @@ planeViewButton.onclick = () => {
 };
 $('fit').onclick = () => fit();
 $('top').onclick = () => {
-  setViewUp(new THREE.Vector3(0, 0, 1));
+  navigation.setViewUp(new THREE.Vector3(0, 0, 1));
   fit(new THREE.Vector3(0, -0.0001, 1).normalize());
 };
 $('iso').onclick = () => {
-  setViewUp(new THREE.Vector3(0, 0, 1));
+  navigation.setViewUp(new THREE.Vector3(0, 0, 1));
   fit(new THREE.Vector3(1, -1, 1).normalize());
 };
 function ray(e) {
@@ -941,13 +859,13 @@ function updatePointer(e) {
 function orbitAroundHit(e) {
   const modified = e.ctrlKey || e.metaKey || e.shiftKey;
   const action = [
-    controls.mouseButtons.LEFT,
-    controls.mouseButtons.MIDDLE,
-    controls.mouseButtons.RIGHT,
+    navigation.controls.mouseButtons.LEFT,
+    navigation.controls.mouseButtons.MIDDLE,
+    navigation.controls.mouseButtons.RIGHT,
   ][e.button];
   const rotates =
     e.pointerType === 'touch'
-      ? e.isPrimary && controls.touches.ONE === THREE.TOUCH.ROTATE
+      ? e.isPrimary && navigation.controls.touches.ONE === THREE.TOUCH.ROTATE
       : (!modified && action === THREE.MOUSE.ROTATE) || (modified && action === THREE.MOUSE.PAN);
   if (!rotates) return;
   ray(e);
@@ -956,16 +874,7 @@ function orbitAroundHit(e) {
     false,
   )[0];
   if (!hit) return;
-  const delta = hit.point.clone().sub(controls.target);
-  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-  const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-  // Shift the orthographic frustum to keep the image still while changing pivot.
-  projectionOffset.x -= delta.dot(right);
-  projectionOffset.y -= delta.dot(up);
-  camera.position.add(delta);
-  controls.target.copy(hit.point);
-  updateProjection();
-  camera.updateMatrixWorld();
+  navigation.movePivot(hit.point);
 }
 const { cancelBox, beginBox } = createSelectionController({
   host,
@@ -973,7 +882,7 @@ const { cancelBox, beginBox } = createSelectionController({
   camera,
   project,
   ui,
-  getControls: () => controls,
+  getControls: () => navigation.controls,
   setDrawing,
   ray,
   select,
@@ -992,7 +901,7 @@ const { rotationHandle, rotationLine, showRotationLine, pickRotationAxis } =
     tools,
     ui,
     objects,
-    getControls: () => controls,
+    getControls: () => navigation.controls,
     isVisible,
     clearPreview,
     validateSweep,
@@ -1532,7 +1441,7 @@ drawingManager = drawingController.manager;
 createGroupedToolbox(document.querySelector('.toolbox'));
 updateForm();
 render();
-controls.update();
+navigation.controls.update();
 fit();
 syncLocks();
 

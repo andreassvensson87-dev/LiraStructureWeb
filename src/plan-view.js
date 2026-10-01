@@ -1,3 +1,4 @@
+import { createGAShell } from './drawing/ui/ga-shell.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
 import { vectorDrawing, appendVectorDrawing } from './drawing-vector.js';
@@ -39,13 +40,20 @@ export class PlanView {
     this.getSnapSettings = getSnapSettings;
     this.selectedParts = new Set();
     this.getState = getState;
-    this.dialog = document.createElement('dialog');
-    this.dialog.id = 'plan-view';
-    this.dialog.innerHTML =
-      '<header><strong>Planritning</strong><button type="button" aria-label="Stäng planritning">×</button></header><div class="plan-toolbar"><label>Nivå<select id="plan-level"></select></label><label>Undre gräns · mm<input id="plan-lower" type="number" value="-1000" step="100"></label><label>Snitthöjd · mm<input id="plan-cut" type="number" value="1200" step="100"></label><label>Övre gräns · mm<input id="plan-upper" type="number" value="3000" step="100"></label><button type="button" id="plan-fit">Visa allt</button></div><p id="plan-error" role="alert"></p><div class="plan-canvas" aria-label="Planritning uppifrån"></div><div class="plan-legend"><span>Höjder relativt vald nivå</span><span>━ Snitt</span><span>─ Synlig kant under snitt</span><span>┄ Ovanför snitt</span><span>Dra för att panorera · scrolla för zoom</span></div>';
-    document.body.append(this.dialog);
-    this.$ = (id) => this.dialog.querySelector('#plan-' + id);
-    this.host = this.dialog.querySelector('.plan-canvas');
+    const shell = createGAShell();
+    const { body, inspector } = shell;
+    Object.assign(this, {
+      dialog: shell.dialog,
+      $: shell.$,
+      host: shell.host,
+      partViews: shell.partViews,
+      info: shell.info,
+      reviewButton: shell.reviewButton,
+      paperWorkspace: shell.paperWorkspace,
+      page: shell.page,
+      stage: shell.stage,
+      frameSVG: shell.frameSVG,
+    });
     this.dialog.addEventListener('close', () => {
       this.drag = null;
       this.clear();
@@ -59,48 +67,11 @@ export class PlanView {
         }, 120);
       };
     this.$('fit').onclick = () => this.navigation.fit(true);
-    const views = document.createElement('label');
-    views.id = 'part-view-control';
-    views.hidden = true;
-    views.innerHTML =
-      'Detaljvy<select id=part-view><option value=front>Framifrån</option><option value=top>Ovanifrån</option><option value=end>Ändvy</option></select>';
-    this.dialog.querySelector('.plan-toolbar').prepend(views);
-    this.partViews = views;
-    views.querySelector('select').onchange = () => this.rebuild(true);
-    this.info = document.createElement('span');
-    this.info.className = 'part-view-info';
-    this.dialog.querySelector('.plan-toolbar').append(this.info);
-    this.reviewButton = document.createElement('button');
-    this.reviewButton.textContent = 'Bekräfta aktuell';
-    this.reviewButton.hidden = true;
-    this.dialog.querySelector('.plan-toolbar').append(this.reviewButton);
+    this.partViews.querySelector('select').onchange = () => this.rebuild(true);
     this.dialog.addEventListener('close', () => {
       this.captureSettings();
       this.saveRecord?.(this.record);
     });
-    const body = document.createElement('div');
-    body.className = 'drawing-body';
-    this.host.before(body);
-    const inspector = document.createElement('aside');
-    inspector.className = 'drawing-inspector';
-    inspector.setAttribute('aria-label', 'Ritningsinspector');
-    inspector.innerHTML = '<h3>Planvy</h3>';
-    body.append(this.host, inspector);
-    for (const label of this.dialog.querySelectorAll('.plan-toolbar label'))
-      inspector.append(label);
-    this.paperWorkspace = document.createElement('div');
-    this.paperWorkspace.className = 'ga-paper-workspace';
-    this.host.before(this.paperWorkspace);
-    this.page = document.createElement('div');
-    this.page.className = 'ga-paper-page';
-    this.stage = document.createElement('div');
-    this.stage.className = 'sheet-stage';
-    this.paperWorkspace.append(this.stage);
-    this.stage.append(this.page);
-    this.page.append(this.host);
-    this.frameSVG = document.createElementNS(svgNS, 'svg');
-    this.frameSVG.classList.add('ga-frame-overlay');
-    this.page.append(this.frameSVG);
     this.layoutSelect = layoutPicker(inspector, 'plan-frame-layout', (id) => {
       this.record.sheet ??= {};
       this.record.sheet.layoutId = id;

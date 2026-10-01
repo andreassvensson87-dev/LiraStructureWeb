@@ -81,6 +81,11 @@ body[data-lira-app='structure'] .workspace > .toolbox {
   box-shadow: 0 3px 14px #172b3208;
   backdrop-filter: blur(8px);
 }
+/* Group flyouts extend beyond the rail; scrolling it would clip them. */
+body[data-lira-app='structure'] .workspace > .toolbox.grouped-toolbox {
+  overflow: visible;
+  max-height: none;
+}
 body[data-lira-app] .lira-rail > div {
   display: contents;
 }
