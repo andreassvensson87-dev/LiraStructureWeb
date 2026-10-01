@@ -74,6 +74,12 @@ test('manifest uses relative installation paths and standalone display', () => {
   );
   assert.equal(manifest.start_url, './');
   assert.equal(manifest.scope, './');
+  // Manifest id resolves against the origin, unlike start_url and scope.
+  const origin = 'https://andreassvensson87-dev.github.io';
+  const manifestUrl = origin + '/LiraStructureWeb/manifest.webmanifest';
+  assert.equal(new URL(manifest.id, origin).href, origin + '/LiraStructureWeb/');
+  assert.equal(new URL(manifest.start_url, manifestUrl).href, origin + '/LiraStructureWeb/');
+  assert.equal(new URL(manifest.scope, manifestUrl).href, origin + '/LiraStructureWeb/');
   assert.equal(manifest.display, 'standalone');
   assert.deepEqual(
     manifest.icons.map((i) => i.sizes),
