@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 const out = fileURLToPath(new URL('../dist/', import.meta.url));
 const files = (await readdir(out))
-  .filter((f) => /\.(html|js|css|png|webmanifest|wasm)$/.test(f) && f !== 'sw.js')
+  .filter((f) => /\.(html|js|css|svg|png|webmanifest|wasm)$/.test(f) && f !== 'sw.js')
   .sort();
 const hash = createHash('sha256');
 for (const file of files) hash.update(file).update(await readFile(join(out, file)));

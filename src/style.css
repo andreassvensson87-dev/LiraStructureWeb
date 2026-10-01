@@ -63,14 +63,11 @@ header {
   letter-spacing: -0.4px;
 }
 .mark {
-  display: grid;
-  place-items: center;
-  width: 30px;
+  display: block;
+  width: 32px;
   height: 32px;
-  background: #5cdfad;
-  color: #15362c;
-  border-radius: 5px;
-  font-size: 23px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 .brand span {
   font-size: 11px;
