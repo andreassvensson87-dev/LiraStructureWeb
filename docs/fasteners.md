@@ -5,8 +5,8 @@ ingången registreras i `src/main.js`; varje bibliotek behåller sin egen editor
 och lagring. Nya bibliotek kan läggas till med grupp, namn, beskrivning och
 öppningsfunktion. Skruvbiblioteket finns även direkt från skruvplaceringen.
 
-Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
-`feature/screws-and-holes`, i arbetskopian `LiraStructureWeb-screws`.
+Modulen finns i `src/fasteners/` och ingår i programmets huvudgren.
+Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
 
 ## Användning
 
@@ -35,6 +35,9 @@ Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
    **Hålmått · mm** för diameter, startläge längs skruvaxeln och djup. Försänkning har
    separat diameter och djup. **Beräkna genomgående hål** räknar läge och djup
    från delarnas faktiska ytor för frigångshål i den angivna riktningen.
+   Beräkningen går från första till sista ytan längs hela skruvaxeln och är
+   inte begränsad av skruvens ändpunkt. För rör ger det hål i båda väggarna.
+   Hål i en enda rörvägg eller I-profilfläns begränsas manuellt med start och djup.
 5. Skapa skruven. Vid markering redigeras skruven direkt i inspectorn med
    utfällbara grupper för placering och hål. Klicka **Spara skruv och hål** för
    att tillämpa ändringarna. En markerad del
@@ -78,8 +81,9 @@ Modellen och ritningarna är fortfarande sessionsdata.
 Modulen har små anslutningar i objekttypsregistret, modellens geometriutvärdering,
 numrering, transformationer/grepp, borttagning, verktygslåda och Single Part.
 Geometri och relationsregler är separerade från UI och bibliotekslagring.
-Grundprogrammet finns kvar i den ursprungliga arbetskopian. Försöket kan skrotas
-genom att inte föra in grenen. Ingen migrering av gamla projektformat ingår.
+Integrationen har en separat merge-commit som vid behov kan återställas med
+`git revert -m 1 <merge-commit>`. Tidigare biblioteksversioner finns kvar i
+webbläsarens separata lagring. Ingen migrering av gamla projektformat ingår.
 
 Automatisk dimensionering av skruvar, produktkataloger, skruvmönster, gängor,
 automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
