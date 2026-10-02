@@ -14,15 +14,18 @@ Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
    skruv med mutter. Ange diameter, längd under huvud och huvudmått. För skruv med
    mutter anges också mutterns nyckelvidd och tjocklek; nominell diameter är samma
    som skruvens. Biblioteket innehåller inga verifierade standardprodukter.
-2. Markera delarna som ska förbindas. Välj **Skapa → Skruv**. Delarna läggs till
-   i kopplingslistan. Fler delar kan läggas till i dialogen.
+2. Välj **Skapa → Skruv**, sedan **Välj objekt…** under **Objekt i förbandet**.
+   Bocka i delarna som ska förbindas och klicka **Använd valda objekt**. Redan
+   markerade delar förväljs när skruven skapas. Minst en del måste väljas.
 3. Välj biblioteksversion och ange skruvens punkt under huvudet samt en
    riktningspunkt. Avståndet mellan punkterna bestämmer riktningen; bibliotekets
    längd bestämmer skaftets längd. Alternativt välj **Placera med två klick** och
    använd modellens snap. Försänkta huvuden sträcker sig bakom referenspunkten;
    hålets startläge kan därför behöva vara negativt.
-4. Välj ingen borrning, förborrning/blindhål eller frigång/genomgående för varje
-   del. Ange håldiameter, startläge längs skruvaxeln och djup. Försänkning har
+4. Varje vald del visas med namn och egen håltyp. Nya delkopplingar börjar med
+   **Ingen borrning**. Välj förborrning/blindhål eller frigång/genomgående för
+   delarna som ska ha hål; övriga valda delar får ingen bearbetning. Öppna
+   **Hålmått · mm** för diameter, startläge längs skruvaxeln och djup. Försänkning har
    separat diameter och djup. **Beräkna genomgående hål** räknar läge och djup
    från delarnas faktiska ytor för frigångshål i den angivna riktningen.
 5. Skapa skruven. Vid markering redigeras skruven direkt i inspectorn med
