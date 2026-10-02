@@ -32,7 +32,7 @@
 }
 .fastener-library-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 290px minmax(0, 1fr);
 }
 .fastener-library-layout nav {
   padding: 16px 12px;
@@ -65,11 +65,14 @@
 }
 #fastener-library [data-records] button {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
-  margin: 3px 0;
-  padding: 9px 8px;
+  height: 28px;
+  margin: 1px 0;
+  padding: 4px 6px;
   background: transparent;
   border: 1px solid transparent;
 }
@@ -83,11 +86,17 @@
 }
 #fastener-library [data-records] strong {
   font-size: 12px;
-  overflow-wrap: anywhere;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #fastener-library [data-records] span {
   font-size: 11px;
   color: #73878e;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 #fastener-library [data-new] {
   width: 100%;

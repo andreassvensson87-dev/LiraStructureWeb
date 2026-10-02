@@ -170,7 +170,9 @@ export class FastenerUI {
         const name = document.createElement('strong');
         name.textContent = spec.name;
         const dimensions = document.createElement('span');
-        dimensions.textContent = `Ø${spec.diameter} × ${spec.length} mm · v${spec.revision}`;
+        dimensions.textContent = `Ø${spec.diameter} × ${spec.length}`;
+        entry.title = `${spec.name} · ${dimensions.textContent} mm · version ${spec.revision}`;
+        entry.setAttribute('aria-label', entry.title);
         entry.append(name, dimensions);
         root.append(entry);
         count++;
