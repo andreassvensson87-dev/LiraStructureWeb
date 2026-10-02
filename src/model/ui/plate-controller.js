@@ -398,7 +398,7 @@ export function createPlateController({
         error = validateSweep(next);
       if (error) throw Error(error);
       checkpoint();
-      project.objects = project.objects.map((s) => (s.id === next.id ? next : s));
+      project.objects = applyObjectBatch(project.objects, [next]).objects;
       fillPlate(next);
       render();
       if (removeVertex) $('status').textContent = 'Hörnet borttaget';
@@ -453,7 +453,7 @@ export function createPlateController({
       return;
     }
     checkpoint();
-    project.objects = project.objects.map((old) => (old.id === s.id ? s : old));
+    project.objects = applyObjectBatch(project.objects, [s]).objects;
     fillPlate(s);
     render();
     $('status').textContent = 'Plate uppdaterad';

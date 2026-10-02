@@ -1,0 +1,44 @@
+#fastener-library,
+#fastener-placement {
+  width: min(860px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 24px;
+}
+.fastener-library-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 2fr);
+  gap: 24px;
+}
+[data-records] button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 5px 0;
+}
+#fastener-placement fieldset {
+  margin: 14px 0;
+}
+.fastener-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+#fastener-panel {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+#fastener-panel[hidden] {
+  display: none;
+}
+#fastener-library [data-error],
+#fastener-placement [data-error] {
+  color: #b64230;
+}
+@media (max-width: 650px) {
+  .fastener-library-layout {
+    grid-template-columns: 1fr;
+  }
+}

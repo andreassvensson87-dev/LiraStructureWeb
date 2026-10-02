@@ -6,6 +6,11 @@ import { moveGripPoints } from './model/grips.js';
 import { createGroupedToolbox } from './model/ui/toolbox.js';
 import { createHelperController } from './model/ui/helper-controller.js';
 import { isHelper, isPhysical } from './model-object.js';
+import { FastenerUI } from './fasteners/ui.js';
+import { isFastener } from './fasteners/object-type.js';
+import { axisPlacement } from './fasteners/geometry.js';
+import { removeFastenerRelations, validateFastenerTargets } from './fasteners/relations.js';
+let fastenerUI = null;
 import { typeName } from './object-identity.js';
 import { createSweepForm } from './model/ui/sweep-form.js';
 import { createWorkplaneController } from './model/ui/workplane-controller.js';
@@ -341,6 +346,10 @@ function render() {
   renderCutRelations();
   syncMaterialPanel();
   helperController.sync();
+  fastenerUI?.sync(
+    project.objects.filter((s) => ui.selectedIds.has(s.id)),
+    tools.operation,
+  );
   planView?.sync();
   if (drawingManager?.dialog.open) drawingManager.render();
 }
@@ -373,9 +382,9 @@ function save(s) {
   }
   checkpoint();
   if (ui.selected) {
-    project.objects = project.objects.map((old) =>
-      old.id === ui.selected ? { ...old, ...s } : old,
-    );
+    project.objects = applyObjectBatch(project.objects, [
+      { ...project.objects.find((o) => o.id === ui.selected), ...s },
+    ]).objects;
   } else {
     const id = crypto.randomUUID();
     project.objects.push({
@@ -403,8 +412,7 @@ function remove() {
   if (!ui.selectedIds.size) return;
   setDrawing(false);
   checkpoint();
-  project.objects = project.objects
-    .filter((s) => !ui.selectedIds.has(s.id))
+  project.objects = removeFastenerRelations(project.objects, ui.selectedIds)
     .map((s) =>
       isCut(s) ? { ...s, targets: s.targets.filter((id) => !ui.selectedIds.has(id)) } : s,
     )
@@ -475,6 +483,10 @@ function setDrawing(value) {
   syncPlateUI();
   syncMaterialPanel();
   helperController.sync();
+  fastenerUI?.sync(
+    project.objects.filter((s) => ui.selectedIds.has(s.id)),
+    tools.operation,
+  );
 }
 function startDrawing() {
   select(null);
@@ -557,6 +569,13 @@ function startGrip(grip) {
   renderer.domElement.focus({ preventScroll: true });
 }
 function candidates(target) {
+  if (tools.operation?.mode === 'fastenerCreate')
+    return [
+      {
+        ...tools.operation.draft,
+        ...axisPlacement(tools.operation.draft.spec, tools.first, target),
+      },
+    ];
   if (tools.operation?.mode === 'grip')
     return moveGripPoints(tools.operation.sources, tools.operation.refs, target);
   if (tools.operation?.mode === 'helperline')
@@ -584,7 +603,7 @@ function commitPoint(target) {
     return false;
   }
   const mode = tools.operation?.mode;
-  if (!mode || mode === 'helperline') {
+  if (!mode || mode === 'helperline' || mode === 'fastenerCreate') {
     if (!save(batch[0])) return false;
     fillForm(project.objects.find((s) => s.id === ui.selected));
   } else {
@@ -597,13 +616,15 @@ function commitPoint(target) {
     render();
   }
   $('status').textContent =
-    mode === 'helperline'
-      ? 'Hjälplinje skapad'
-      : mode === 'copy'
-        ? 'Markeringen kopierad'
-        : mode
-          ? 'Markeringen flyttad'
-          : 'Sweep skapad';
+    mode === 'fastenerCreate'
+      ? 'Skruv och hål skapade'
+      : mode === 'helperline'
+        ? 'Hjälplinje skapad'
+        : mode === 'copy'
+          ? 'Markeringen kopierad'
+          : mode
+            ? 'Markeringen flyttad'
+            : 'Sweep skapad';
   return true;
 }
 $('move').onclick = () => startTransform('move');
@@ -962,6 +983,41 @@ const helperController = createHelperController({
   changeVisibility,
   renderer,
 });
+fastenerUI = new FastenerUI({
+  getObjects: () => project.objects,
+  getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
+  finish: () => {
+    inspector?.finish();
+    setDrawing(false);
+  },
+  beginPlacement: (draft) => {
+    select(null);
+    setDrawing(true);
+    tools.operation = { mode: 'fastenerCreate', draft };
+    syncOperationUI();
+    fastenerUI.sync([], tools.operation);
+    inspector.show('properties');
+    $('status').textContent = 'Skruv · Välj punkt under huvud, därefter riktning';
+    renderer.domElement.focus({ preventScroll: true });
+  },
+  commit: (draft) => {
+    const error = validateSweep(draft);
+    if (error) throw new Error(error);
+    checkpoint();
+    if (draft.id) project.objects = applyObjectBatch(project.objects, [draft]).objects;
+    else {
+      draft = {
+        ...draft,
+        ...nextIdentity(draft, project.objects),
+        id: crypto.randomUUID(),
+        name: draft.spec.name,
+      };
+      project.objects = [...project.objects, draft];
+    }
+    setSelection([draft.id]);
+    $('status').textContent = 'Skruv och hål sparade';
+  },
+});
 installModelPointer(renderer.domElement, {
   getState: () => ({
     mode: tools.operation?.mode,
@@ -1136,6 +1192,19 @@ inspector = new Inspector({
 function validateSweep(s) {
   const error = validateObject(s);
   if (error) return error;
+  if (isFastener(s)) {
+    try {
+      validateFastenerTargets(s, project.objects);
+      const model = [...project.objects.filter((old) => old.id !== s.id), s];
+      for (const h of s.holes)
+        geometryForModel(
+          model.find((o) => o.id === h.targetId),
+          model,
+        ).dispose();
+    } catch (e) {
+      return e.message;
+    }
+  }
   if (!isCut(s) && !cutsForModel(s, project.objects).length) return '';
   const model = project.objects.some((old) => old.id === s.id)
     ? project.objects.map((old) => (old.id === s.id ? s : old))
@@ -1149,12 +1218,21 @@ function validateSweep(s) {
   }
 }
 function previewModelBatch(batch, ghost = true) {
-  const updates = new Map(batch.filter((s) => s.id).map((s) => [s.id, s])),
-    model = project.objects.map((s) => updates.get(s.id) || s);
+  const model = applyObjectBatch(
+    project.objects,
+    batch.filter((s) => s.id),
+  ).objects;
   batch
     .filter((s) => !project.objects.some((old) => old.id === s.id))
     .forEach((s) => model.push(s));
   const affected = new Set(batch.map((s) => s.id));
+  for (const s of model) {
+    const old = project.objects.find((o) => o.id === s.id);
+    if (isFastener(s) && (s !== old || batch.some((o) => o.id === s.id))) {
+      affected.add(s.id);
+      for (const h of [...s.holes, ...(old?.holes || [])]) affected.add(h.targetId);
+    }
+  }
   for (const s of batch)
     if (isCut(s)) {
       s.targets.forEach((id) => affected.add(id));

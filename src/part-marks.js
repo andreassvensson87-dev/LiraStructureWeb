@@ -3,6 +3,7 @@ import { objectType } from './model/object-types/index.js';
 import { clean } from './model/object-types/shape-key.js';
 import { isCut, isPhysical } from './model-object.js';
 import { defaultPrefix } from './object-identity.js';
+import { holesForPart } from './fasteners/relations.js';
 export function partFrame(s) {
   return objectType(s).partFrame(s);
 }
@@ -21,17 +22,32 @@ export function partKey(s, objects) {
       return [v.dot(f.x), v.dot(f.y), v.dot(f.z)].map(clean);
     };
   const shape = objectType(s).partShape(s);
-  const cuts = objects
-    .filter((c) => isCut(c) && c.targets.includes(s.id))
-    .map((c) => ({
-      type: c.type,
-      origin: point(c.frame.origin),
-      u: direction(c.frame.u),
-      v: direction(c.frame.v),
-      polygon: c.polygon,
-      thickness: c.thickness,
-      side: c.side,
-    }))
+  const cuts = [
+    ...objects.filter((c) => isCut(c) && c.targets.includes(s.id)),
+    ...holesForPart(s, objects),
+  ]
+    .map((c) =>
+      c.type === 'linkedhole'
+        ? {
+            type: c.type,
+            origin: point(c.frame.origin),
+            axis: direction(
+              new THREE.Vector3(...c.frame.u).cross(new THREE.Vector3(...c.frame.v)).toArray(),
+            ),
+            diameter: c.diameter,
+            depth: c.depth,
+            countersink: c.countersink || null,
+          }
+        : {
+            type: c.type,
+            origin: point(c.frame.origin),
+            u: direction(c.frame.u),
+            v: direction(c.frame.v),
+            polygon: c.polygon,
+            thickness: c.thickness,
+            side: c.side,
+          },
+    )
     .map((c) => JSON.stringify(c, (_, v) => (typeof v === 'number' ? clean(v) : v)))
     .sort();
   // Profile placement matters only relative to machining; a free solid is translation invariant.

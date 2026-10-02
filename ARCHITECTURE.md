@@ -63,6 +63,15 @@ Single Part uses the same section geometry and tools, with a one-time legacy A�
 conversion in `part-section-migration.js`; its references stay within the part sheet.
 # Vektorlinjer i ritningsvyer
 
+Skruvar och kopplade hål finns i den avskilda modulen `src/fasteners/`.
+Biblioteket och relationsreglerna beskrivs i [docs/fasteners.md](docs/fasteners.md).
+Hålvolymer härleds från skruvposter och måldelarnas ID:n; de lagras inte som
+en andra lista av skärobjekt. Gemensam geometriutvärdering används av 3D,
+snappning och ritningar. Kopplade hål har en separat kantadapter som filtrerar
+CSG-trianguleringens T-korsningar på plana ytor. Övrig geometri behåller den
+befintliga kantberäkningen. Referensdelar följs i objektbatchens transaktion,
+med företräde för explicit transformerade skruvar.
+
 `drawing-vector.js` beräknar synliga och skymda kantsegment i ortografiska
 vykoordinater. Trianglar och kanter klipps mot samma snittplan; skymning delas
 analytiskt vid projekterade triangelgränser och djupövergångar. Ett spatialt

@@ -1,6 +1,7 @@
 import { transformObject } from '../../transform.js';
 import { rotateObject } from '../../rotation.js';
 import { nextIdentity, designation } from '../../object-identity.js';
+import { followFasteners, remapFastenerCopy } from '../../fasteners/relations.js';
 export function transformCandidates(operation, first, target, draft) {
   return operation
     ? operation.sources.map((s) => transformObject(s, operation.mode, first, target))
@@ -16,17 +17,25 @@ export function applyObjectBatch(
 ) {
   if (!copy) {
     const updates = new Map(batch.map((s) => [s.id, s]));
-    return { objects: objects.map((s) => updates.get(s.id) || s), ids: batch.map((s) => s.id) };
+    return {
+      objects: followFasteners(
+        objects,
+        objects.map((s) => updates.get(s.id) || s),
+        new Set(updates.keys()),
+      ),
+      ids: batch.map((s) => s.id),
+    };
   }
   const copies = [];
+  const ids = new Map(batch.map((s) => [s.id, newId()]));
   for (const s of batch) {
     const object = {
       ...structuredClone(s),
       ...nextIdentity(s, [...objects, ...copies]),
-      id: newId(),
+      id: ids.get(s.id),
     };
     object.name = designation(object);
-    copies.push(object);
+    copies.push(remapFastenerCopy(object, ids));
   }
   return { objects: [...objects, ...copies], ids: copies.map((s) => s.id) };
 }
