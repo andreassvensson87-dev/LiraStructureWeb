@@ -1140,6 +1140,62 @@ window.addEventListener('keydown', (e) => {
 const settingsController = createSettingsController({
   project,
   checkpoint,
+  libraries: [
+    {
+      group: 'Modell',
+      name: 'Material',
+      description: 'Materialtyper, densitet och standardfärg',
+      open: () => materialUI.openLibrary(),
+    },
+    {
+      group: 'Modell',
+      name: 'Profiler',
+      description: 'Tvärsnitt och profildimensioner',
+      open: () => sectionEditor.open(),
+    },
+    {
+      group: 'Modell',
+      name: 'Skruvar',
+      description: 'Träskruv och skruv med mutter',
+      open: () => fastenerUI.openLibrary(),
+    },
+    {
+      group: 'Modell',
+      name: 'Färger',
+      description: 'Färger för material och objekt',
+      open: () => materialUI.colors.open(),
+    },
+    {
+      group: 'Ritningar',
+      name: 'Ritningsinställningar',
+      description: 'Sparade uppsättningar för textstil, layout och visning',
+      open: () => drawingSettings.open(),
+    },
+    {
+      group: 'Ritningar',
+      name: 'Ramblock',
+      description: 'Ritningsramar och stämpelfält',
+      open: () => {
+        frameEditor.open();
+        frameEditor.switchMode('block');
+      },
+    },
+    {
+      group: 'Ritningar',
+      name: 'Layouter',
+      description: 'Placering av ramblock på ritningsblad',
+      open: () => {
+        frameEditor.open();
+        frameEditor.switchMode('layout');
+      },
+    },
+    {
+      group: 'Ritningar',
+      name: 'Pappersformat',
+      description: 'Bladstorlekar för ritningar',
+      open: () => drawingController.singleSheet.openLibrary(),
+    },
+  ],
   onClose: () => {
     if (tools.drawing) renderer.domElement.focus({ preventScroll: true });
   },
@@ -1534,7 +1590,7 @@ const frameEditor = new FrameEditor({
   },
 });
 
-installDrawingSettings(drawingController, frameEditor);
+const drawingSettings = installDrawingSettings(drawingController, frameEditor);
 setupPWA();
 
 referenceModels = new ReferenceModels({

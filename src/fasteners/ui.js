@@ -39,16 +39,28 @@ export class FastenerUI {
     tool.innerHTML =
       '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 5 3-3 5 5-3 3Zm5 5 9 9 3 1-1-3-9-9M12 12l3-3M15 15l3-3"/></svg><span>Skruv</span>';
     document.querySelector('.toolbox').append(tool);
-    const libraryButton = button('Skruvbibliotek', () => this.openLibrary());
-    libraryButton.id = 'fastener-library-open';
-    document.querySelector('header .history').prepend(libraryButton);
     this.panel = document.createElement('section');
     this.panel.id = 'fastener-panel';
     this.panel.hidden = true;
     document.getElementById('form').after(this.panel);
     this.library = document.createElement('dialog');
     this.library.id = 'fastener-library';
-    this.library.innerHTML = `<div class="panel-title"><h2>Skruvbibliotek</h2><button type="button" data-close aria-label="Stäng skruvbibliotek">×</button></div><div class="fastener-library-layout"><nav><label class="field">Sök<input type="search" data-search placeholder="Namn eller dimension"></label><div data-records></div><button type="button" data-new>Ny skruv</button></nav><form data-edit><label class="field">Typ<select name="kind">${FASTENER_KINDS.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select></label><label class="field">Namn<input name="name" maxlength="120" required></label><div class="dimensions">${numeric('diameter', 'Skruvdiameter · mm', 6, 0.001)}${numeric('length', 'Längd under huvud · mm', 100, 0.001)}</div><label class="field">Huvud<select name="headKind"><option value="countersunk">Försänkt</option><option value="cylinder">Cylindriskt</option><option value="hex">Sexkant</option></select></label><div class="dimensions">${numeric('headDiameter', 'Huvuddiameter / nyckelvidd · mm', 12, 0.001)}${numeric('headHeight', 'Huvudhöjd · mm', 4, 0.001)}</div><fieldset data-nut><legend>Tillhörande mutter · samma nominella diameter</legend><div class="dimensions">${numeric('nutAcrossFlats', 'Nyckelvidd · mm', 17, 0.001)}${numeric('nutThickness', 'Tjocklek · mm', 8, 0.001)}</div></fieldset><p data-version class="inspector-note"></p><button type="submit" class="primary">Spara ny version</button></form></div><p data-error role="alert"></p><footer><button type="button" data-export>Exportera bibliotek</button><button type="button" data-import>Importera bibliotek</button><input type="file" data-file accept=".json,application/json" hidden></footer><p class="inspector-note">Egna dimensioner. Inga verifierade standardprodukter ingår. Biblioteket sparas i denna webbläsare; exportera för säkerhetskopia. Placerade skruvar behåller sin version.</p>`;
+    this.library.setAttribute('aria-labelledby', 'fastener-library-title');
+    this.library.innerHTML = `
+      <div class="panel-title"><div><h2 id="fastener-library-title">Skruvbibliotek</h2><span class="fastener-subtitle">Egna skruvar och dimensioner · mm</span></div><button type="button" data-close aria-label="Stäng skruvbibliotek">×</button></div>
+      <div class="fastener-library-layout">
+        <nav aria-label="Skruvar i biblioteket"><input aria-label="Sök skruvar" type="search" data-search placeholder="Sök namn eller dimension…"><div data-records></div><button type="button" data-new>+ Ny skruv</button></nav>
+        <form data-edit>
+          <div class="fastener-edit-heading"><h3 data-edit-title>Ny skruv</h3><span data-version></span></div>
+          <div class="dimensions"><label class="field">Typ<select name="kind">${FASTENER_KINDS.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select></label><label class="field">Namn<input name="name" maxlength="120" placeholder="T.ex. Träskruv 6 × 100" required></label></div>
+          <div class="dimensions">${numeric('diameter', 'Diameter', 6, 0.001)}${numeric('length', 'Längd under huvud', 100, 0.001)}</div>
+          <fieldset><legend>Huvud</legend><div class="fastener-head-fields"><label class="field">Form<select name="headKind"><option value="countersunk">Försänkt</option><option value="cylinder">Cylindriskt</option><option value="hex">Sexkant</option></select></label>${numeric('headDiameter', 'Diameter / nyckelvidd', 12, 0.001)}${numeric('headHeight', 'Höjd', 4, 0.001)}</div></fieldset>
+          <fieldset data-nut><legend>Mutter</legend><div class="dimensions">${numeric('nutAcrossFlats', 'Nyckelvidd', 17, 0.001)}${numeric('nutThickness', 'Tjocklek', 8, 0.001)}</div></fieldset>
+          <div class="fastener-save"><span>Placerade skruvar behåller sin version.</span><button type="submit" class="primary">Spara skruv</button></div>
+          <p data-error role="alert"></p>
+        </form>
+      </div>
+      <footer><span>Sparas i webbläsaren · egna, ej verifierade produkter</span><div><button type="button" data-export title="Exportera bibliotek för säkerhetskopia">Exportera</button><button type="button" data-import>Importera</button><input type="file" data-file accept=".json,application/json" hidden></div></footer>`;
     document.body.append(this.library);
     this.library.addEventListener('keydown', (e) => e.stopPropagation());
     this.library.querySelector('[data-close]').onclick = () => this.library.close();
@@ -140,20 +152,37 @@ export class FastenerUI {
     const root = this.library.querySelector('[data-records]');
     root.replaceChildren();
     const query = this.library.querySelector('[data-search]').value.toLocaleLowerCase('sv');
+    let count = 0;
     for (const [kind, label] of FASTENER_KINDS) {
-      const heading = document.createElement('h3');
-      heading.textContent = label;
-      root.append(heading);
-      for (const spec of latestFasteners(this.records).filter(
+      const specs = latestFasteners(this.records).filter(
         (s) =>
           s.kind === kind &&
           `${s.name} ${s.diameter} ${s.length}`.toLocaleLowerCase('sv').includes(query),
-      ))
-        root.append(
-          button(`${spec.name} · Ø${spec.diameter} × ${spec.length} · v${spec.revision}`, () =>
-            this.editSpec(spec),
-          ),
-        );
+      );
+      if (!specs.length) continue;
+      const heading = document.createElement('h3');
+      heading.textContent = `${label} · ${specs.length}`;
+      root.append(heading);
+      for (const spec of specs) {
+        const entry = button('', () => this.editSpec(spec));
+        entry.dataset.specId = spec.id;
+        entry.setAttribute('aria-pressed', String(this.editingSpec?.id === spec.id));
+        const name = document.createElement('strong');
+        name.textContent = spec.name;
+        const dimensions = document.createElement('span');
+        dimensions.textContent = `Ø${spec.diameter} × ${spec.length} mm · v${spec.revision}`;
+        entry.append(name, dimensions);
+        root.append(entry);
+        count++;
+      }
+    }
+    if (!count) {
+      const empty = document.createElement('p');
+      empty.className = 'fastener-empty';
+      empty.textContent = query
+        ? 'Inga skruvar matchar sökningen.'
+        : 'Biblioteket är tomt. Lägg till din första skruv eller importera ett bibliotek.';
+      root.append(empty);
     }
   }
   editSpec(spec) {
@@ -171,9 +200,21 @@ export class FastenerUI {
     };
     for (const [name, value] of Object.entries(values))
       this.editForm.elements.namedItem(name).value = value;
+    this.library.querySelector('[data-edit-title]').textContent = spec
+      ? 'Redigera skruv'
+      : 'Ny skruv';
     this.library.querySelector('[data-version]').textContent = spec
-      ? `Version ${spec.revision}. Spara skapar en ny version.`
-      : 'Ny bibliotekspost.';
+      ? `Version ${spec.revision}`
+      : 'Ej sparad';
+    this.editForm.querySelector('[type=submit]').textContent = spec
+      ? 'Spara ny version'
+      : 'Spara skruv';
+    this.library
+      .querySelectorAll('[data-spec-id]')
+      .forEach((entry) =>
+        entry.setAttribute('aria-pressed', String(entry.dataset.specId === spec?.id)),
+      );
+    this.library.querySelector('[data-error]').textContent = '';
     this.syncNut();
   }
   syncNut() {

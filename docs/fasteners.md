@@ -1,11 +1,16 @@
 # Skruvar, bibliotek och kopplade hål
 
+Alla bibliotekseditorer nås från **Inställningar → Bibliotek**. Den gemensamma
+ingången registreras i `src/main.js`; varje bibliotek behåller sin egen editor
+och lagring. Nya bibliotek kan läggas till med grupp, namn, beskrivning och
+öppningsfunktion. Skruvbiblioteket finns även direkt från skruvplaceringen.
+
 Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
 `feature/screws-and-holes`, i arbetskopian `LiraStructureWeb-screws`.
 
 ## Användning
 
-1. Öppna **Skruvbibliotek** i huvudfältet. Skapa egna poster för träskruv eller
+1. Öppna **Inställningar → Bibliotek → Skruvar**. Skapa egna poster för träskruv eller
    skruv med mutter. Ange diameter, längd under huvud och huvudmått. För skruv med
    mutter anges också mutterns nyckelvidd och tjocklek; nominell diameter är samma
    som skruvens. Biblioteket innehåller inga verifierade standardprodukter.

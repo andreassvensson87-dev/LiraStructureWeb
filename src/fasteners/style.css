@@ -1,20 +1,195 @@
-#fastener-library,
 #fastener-placement {
   width: min(860px, 92vw);
   max-height: 90vh;
   overflow: auto;
   padding: 24px;
 }
+#fastener-library {
+  width: min(800px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 0;
+}
+#fastener-library .panel-title {
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e8e9;
+}
+#fastener-library h2 {
+  margin: 0 0 3px;
+  font-size: 18px;
+}
+.fastener-subtitle {
+  color: #73878e;
+  font-size: 12px;
+}
+#fastener-library [data-close] {
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  padding: 2px 6px;
+  color: #73878e;
+}
 .fastener-library-layout {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(260px, 2fr);
-  gap: 24px;
+  grid-template-columns: 220px minmax(0, 1fr);
 }
-[data-records] button {
-  display: block;
+.fastener-library-layout nav {
+  padding: 16px 12px;
+  background: #f5f8f8;
+  border-right: 1px solid #e0e8e9;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#fastener-library input,
+#fastener-library select {
+  margin-top: 4px;
+  padding: 7px 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+#fastener-library [data-search] {
+  margin: 0;
+}
+#fastener-library [data-records] {
+  max-height: 310px;
+  overflow-y: auto;
+  flex: 1;
+}
+#fastener-library [data-records] h3 {
+  margin: 12px 6px 6px;
+  color: #73878e;
+  font-size: 11px;
+  font-weight: 600;
+}
+#fastener-library [data-records] button {
+  display: grid;
+  gap: 4px;
   width: 100%;
   text-align: left;
-  margin: 5px 0;
+  margin: 3px 0;
+  padding: 9px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+#fastener-library [data-records] button:hover {
+  background: #edf2f2;
+}
+#fastener-library [data-records] button[aria-pressed='true'] {
+  background: #eaf3ef;
+  border-color: #bed9cd;
+  color: #17654f;
+}
+#fastener-library [data-records] strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#fastener-library [data-records] span {
+  font-size: 11px;
+  color: #73878e;
+}
+#fastener-library [data-new] {
+  width: 100%;
+  margin-top: auto;
+  font-size: 12px;
+}
+#fastener-library [data-edit] {
+  padding: 18px 20px;
+}
+.fastener-edit-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.fastener-edit-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.fastener-edit-heading span {
+  font-size: 11px;
+  color: #73878e;
+}
+#fastener-library .field {
+  margin: 0;
+  min-width: 0;
+  font-size: 11px;
+}
+#fastener-library .dimensions {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+#fastener-library fieldset {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid #e0e8e9;
+  border-radius: 6px;
+  min-width: 0;
+}
+#fastener-library legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: #405b63;
+  padding: 0 5px;
+}
+#fastener-library fieldset .dimensions {
+  margin-bottom: 0;
+}
+.fastener-head-fields {
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr 0.65fr;
+  gap: 10px;
+}
+.fastener-save {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+.fastener-save span {
+  color: #73878e;
+  font-size: 11px;
+  max-width: 180px;
+}
+.fastener-save button {
+  white-space: nowrap;
+  font-size: 12px;
+}
+#fastener-library footer {
+  position: static;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #e0e8e9;
+  background: #fff;
+  height: auto;
+}
+#fastener-library footer span {
+  font-size: 11px;
+  color: #73878e;
+}
+#fastener-library footer button {
+  font-size: 11px;
+  padding: 5px 8px;
+}
+#fastener-library .fastener-empty {
+  font-size: 12px;
+  color: #73878e;
+  line-height: 1.5;
+  padding: 0 6px;
+}
+#fastener-library [data-error]:empty {
+  display: none;
+}
+#fastener-library [data-error] {
+  margin: 12px 0 0;
+  font-size: 12px;
 }
 #fastener-placement fieldset {
   margin: 14px 0;
@@ -40,5 +215,21 @@
 @media (max-width: 650px) {
   .fastener-library-layout {
     grid-template-columns: 1fr;
+  }
+  .fastener-library-layout nav {
+    border-right: 0;
+    border-bottom: 1px solid #e0e8e9;
+  }
+  #fastener-library [data-records] {
+    max-height: 120px;
+  }
+  #fastener-library [data-edit] {
+    padding: 16px;
+  }
+  .fastener-head-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fastener-head-fields .field:first-child {
+    grid-column: 1 / -1;
   }
 }
