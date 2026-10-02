@@ -81,6 +81,24 @@ export function fastenerGeometry(s) {
     nut.translate(0, 0, s.nutOffset);
     pieces.push(nut);
   }
+  for (const offset of [
+    ...(s.washers?.head ? [0] : []),
+    ...(s.washers?.nut ? [s.nutOffset - spec.washer.thickness] : []),
+  ]) {
+    const washer = spec.washer;
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, washer.outerDiameter / 2, 0, Math.PI * 2, false);
+    const bore = new THREE.Path();
+    bore.absarc(0, 0, washer.innerDiameter / 2, 0, Math.PI * 2, true);
+    shape.holes.push(bore);
+    const ring = new THREE.ExtrudeGeometry(shape, {
+      depth: washer.thickness,
+      bevelEnabled: false,
+      curveSegments: 24,
+    });
+    ring.translate(0, 0, offset);
+    pieces.push(ring);
+  }
   const geometry = mergeGeometries(pieces);
   pieces.forEach((g) => g.dispose());
   const f = fastenerFrame(s);

@@ -242,3 +242,111 @@
     grid-column: 1 / -1;
   }
 }
+
+#fastener-placement {
+  width: min(430px, calc(100vw - 32px));
+  padding: 18px;
+}
+#fastener-placement .panel-title {
+  margin-bottom: 14px;
+}
+.fastener-editor .field {
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+.fastener-editor input,
+.fastener-editor select {
+  margin-top: 4px;
+  padding: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+.fastener-editor .coordinates,
+.fastener-editor .dimensions {
+  gap: 6px;
+  margin-bottom: 0;
+}
+.fastener-editor .coordinates .field,
+.fastener-editor .dimensions .field {
+  margin-bottom: 0;
+}
+.fastener-editor fieldset,
+#fastener-placement .fastener-editor fieldset {
+  margin: 10px 0;
+  padding: 8px;
+  border: 1px solid #e0e8e9;
+  border-radius: 6px;
+  min-width: 0;
+}
+.fastener-editor legend {
+  font-size: 11px;
+  color: #60737a;
+  padding: 0 4px;
+}
+.fastener-editor details {
+  border-top: 1px solid #e0e8e9;
+  margin: 10px 0;
+  padding-top: 10px;
+}
+.fastener-editor summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #405b63;
+  margin-bottom: 8px;
+}
+.fastener-editor .inspector-note {
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 5px 0 10px;
+}
+.fastener-spec-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.fastener-spec-row .field {
+  flex: 1;
+  min-width: 0;
+}
+.fastener-spec-row button {
+  padding: 6px 9px;
+  margin-bottom: 10px;
+}
+.fastener-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #405b63;
+}
+#fastener-library .fastener-check input,
+.fastener-editor .fastener-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #17654f;
+}
+.fastener-washer-options {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.fastener-editor .fastener-actions {
+  gap: 6px;
+  margin-top: 12px;
+}
+.fastener-editor button {
+  font-size: 11px;
+}
+.fastener-editor [data-error] {
+  font-size: 12px;
+  color: #b64230;
+}
+.fastener-editor [data-error]:empty {
+  display: none;
+}
+.fastener-editor [hidden],
+#fastener-library [data-washer-dimensions][hidden] {
+  display: none;
+}

@@ -23,8 +23,26 @@ const button = (text, action) => {
   return b;
 };
 export class FastenerUI {
-  constructor({ getObjects, getSelection, commit, beginPlacement, finish }) {
-    Object.assign(this, { getObjects, getSelection, commit, beginPlacement, finish });
+  constructor({
+    getObjects,
+    getSelection,
+    commit,
+    beginPlacement,
+    finish,
+    selectSource,
+    showInspector,
+    getOperation,
+  }) {
+    Object.assign(this, {
+      getObjects,
+      getSelection,
+      commit,
+      beginPlacement,
+      finish,
+      selectSource,
+      showInspector,
+      getOperation,
+    });
     this.records = [];
     try {
       const raw = localStorage.getItem(FASTENER_LIBRARY_KEY);
@@ -56,6 +74,7 @@ export class FastenerUI {
           <div class="dimensions">${numeric('diameter', 'Diameter', 6, 0.001)}${numeric('length', 'Längd under huvud', 100, 0.001)}</div>
           <fieldset><legend>Huvud</legend><div class="fastener-head-fields"><label class="field">Form<select name="headKind"><option value="countersunk">Försänkt</option><option value="cylinder">Cylindriskt</option><option value="hex">Sexkant</option></select></label>${numeric('headDiameter', 'Diameter / nyckelvidd', 12, 0.001)}${numeric('headHeight', 'Höjd', 4, 0.001)}</div></fieldset>
           <fieldset data-nut><legend>Mutter</legend><div class="dimensions">${numeric('nutAcrossFlats', 'Nyckelvidd', 17, 0.001)}${numeric('nutThickness', 'Tjocklek', 8, 0.001)}</div></fieldset>
+          <fieldset><legend><label class="fastener-check"><input type="checkbox" name="hasWasher">Brickmått</label></legend><div class="fastener-head-fields" data-washer-dimensions>${numeric('washerInner', 'Innerdiameter', 11, 0.001)}${numeric('washerOuter', 'Ytterdiameter', 22, 0.001)}${numeric('washerThickness', 'Tjocklek', 2, 0.001)}</div></fieldset>
           <div class="fastener-save"><span>Placerade skruvar behåller sin version.</span><button type="submit" class="primary">Spara skruv</button></div>
           <p data-error role="alert"></p>
         </form>
@@ -68,6 +87,7 @@ export class FastenerUI {
     this.library.querySelector('[data-search]').oninput = () => this.renderLibrary();
     this.editForm = this.library.querySelector('[data-edit]');
     this.editForm.elements.kind.onchange = () => this.syncNut();
+    this.editForm.elements.hasWasher.onchange = () => this.syncNut();
     this.editForm.onsubmit = (e) => {
       e.preventDefault();
       this.run(this.library, () => this.saveSpec());
@@ -91,15 +111,26 @@ export class FastenerUI {
     };
     this.placement = document.createElement('dialog');
     this.placement.id = 'fastener-placement';
-    this.placement.innerHTML = `<div class="panel-title"><h2>Skruv och hål</h2><button type="button" data-close aria-label="Stäng skruvplacering">×</button></div><form data-placement><label class="field">Biblioteksversion<select name="spec" required></select></label><p data-spec-info class="inspector-note"></p><button type="button" data-library>Öppna skruvbibliotek</button><fieldset><legend>Under huvud · XYZ i mm</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend>Riktningspunkt · XYZ i mm</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset><label class="field" data-nut-offset>Mutterläge från under huvud · mm<input name="nutOffset" type="number" step="any" min="0"></label><h3>Berörda delar och hål</h3><p class="inspector-note">Skruven följer referensdelens läge och riktning. Varje del har egna hålmått. Frigångshål kan beräknas genom delen längs skruvaxeln. Förborrningens djup anges separat.</p><label class="field">Lägg till del<select name="target"><option value="">Välj del…</option></select></label><button type="button" data-add>Lägg till del</button><div data-holes></div><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><p data-error role="alert"></p><div class="fastener-actions"><button type="button" data-calculate>Beräkna genomgående hål</button><button type="button" data-pick>Placera med två klick</button><button type="submit" class="primary">Skapa skruv</button></div></form><p class="inspector-note">Skruvlängden kommer från biblioteket; den andra punkten anger riktningen. Geometrin visar huvud, skaft och eventuell mutter utan gängor.</p>`;
+    this.placement.innerHTML = `<div class="panel-title"><h2>Skruv och hål</h2><button type="button" data-close aria-label="Stäng skruvplacering">×</button></div><form data-placement class="fastener-editor">
+      <div class="fastener-spec-row"><label class="field">Skruv ur bibliotek<select name="spec" required></select></label><button type="button" data-library title="Öppna skruvbibliotek" aria-label="Öppna skruvbibliotek">↗</button></div><p data-spec-info class="inspector-note"></p>
+      <details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend>Under huvud</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend>Riktningspunkt</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
+      <label class="field" data-nut-offset>Mutterläge · mm från under huvud<input name="nutOffset" type="number" step="any" min="0"></label>
+      <fieldset data-washers><legend>Brickor</legend><div class="fastener-washer-options"><label class="fastener-check"><input type="checkbox" name="washerHead">Under huvud</label><label class="fastener-check" data-washer-nut><input type="checkbox" name="washerNut">Vid mutter</label></div><p data-washer-info class="inspector-note"></p></fieldset>
+      <details data-connections><summary>Delkopplingar och hål <span data-hole-count></span></summary><div class="fastener-spec-row"><label class="field">Lägg till del<select name="target"><option value="">Välj del…</option></select></label><button type="button" data-add aria-label="Lägg till del">+</button></div><div data-holes></div><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-calculate>Beräkna genomgående hål</button></details>
+      <p data-error role="alert"></p><div class="fastener-actions"><button type="button" data-pick>Placera med två klick</button><button type="submit" class="primary">Skapa skruv</button><button type="button" data-delete class="danger">Ta bort skruv</button></div></form>`;
     document.body.append(this.placement);
     this.placement.addEventListener('keydown', (e) => e.stopPropagation());
     this.placement.querySelector('[data-close]').onclick = () => this.placement.close();
     this.placeForm = this.placement.querySelector('[data-placement]');
-    this.placement.querySelector('[data-library]').onclick = () => this.openLibrary();
+    this.placeForm.dataset.independentEditor = '';
+    for (const event of ['input', 'change'])
+      this.placeForm.addEventListener(event, (e) => e.stopPropagation());
+    this.placeForm.querySelector('[data-library]').onclick = () => this.openLibrary();
     this.placeForm.elements.spec.onchange = () => this.specChanged();
-    this.placement.querySelector('[data-add]').onclick = () =>
-      this.run(this.placement, () => {
+    this.placeForm.querySelector('[data-delete]').onclick = () =>
+      document.getElementById('delete').click();
+    this.placeForm.querySelector('[data-add]').onclick = () =>
+      this.run(this.placeForm, () => {
         const targetId = this.placeForm.elements.target.value;
         if (!targetId || this.holeRows.some((h) => h.targetId === targetId))
           throw new Error('Välj en del som inte redan finns i listan.');
@@ -107,18 +138,18 @@ export class FastenerUI {
         this.holeRows.push(this.defaultHole(targetId));
         this.renderHoles();
       });
-    this.placement.querySelector('[data-calculate]').onclick = () =>
-      this.run(this.placement, () => this.calculateHoles());
+    this.placeForm.querySelector('[data-calculate]').onclick = () =>
+      this.run(this.placeForm, () => this.calculateHoles());
     this.placeForm.onsubmit = (e) => {
       e.preventDefault();
-      this.run(this.placement, () => {
+      this.run(this.placeForm, () => {
         const draft = this.readPlacement();
         this.commit(draft);
-        this.placement.close();
+        if (this.placement.open) this.placement.close();
       });
     };
-    this.placement.querySelector('[data-pick]').onclick = () =>
-      this.run(this.placement, () => {
+    this.placeForm.querySelector('[data-pick]').onclick = () =>
+      this.run(this.placeForm, () => {
         if (this.editingObject)
           throw new Error('Flytta eller rotera den befintliga skruven i modellen.');
         const draft = this.readPlacement();
@@ -126,8 +157,11 @@ export class FastenerUI {
         this.beginPlacement(draft);
       });
     this.library.addEventListener('close', () => {
-      if (this.placement.open) this.refreshSpecs(this.placeForm.elements.spec.value);
+      if (this.placeForm.isConnected) this.refreshSpecs(this.placeForm.elements.spec.value);
     });
+    this.placement.addEventListener('close', () =>
+      this.sync(this.getSelection(), this.getOperation()),
+    );
     this.editSpec(null);
   }
   run(dialog, action) {
@@ -199,9 +233,13 @@ export class FastenerUI {
       headHeight: spec?.head.height || 4,
       nutAcrossFlats: spec?.nut?.acrossFlats || 17,
       nutThickness: spec?.nut?.thickness || 8,
+      washerInner: spec?.washer?.innerDiameter || (spec?.diameter || 10) + 1,
+      washerOuter: spec?.washer?.outerDiameter || (spec?.diameter || 10) * 2.2,
+      washerThickness: spec?.washer?.thickness || 2,
     };
     for (const [name, value] of Object.entries(values))
       this.editForm.elements.namedItem(name).value = value;
+    this.editForm.elements.hasWasher.checked = !!spec?.washer;
     this.library.querySelector('[data-edit-title]').textContent = spec
       ? 'Redigera skruv'
       : 'Ny skruv';
@@ -221,6 +259,10 @@ export class FastenerUI {
   }
   syncNut() {
     this.library.querySelector('[data-nut]').hidden = this.editForm.elements.kind.value !== 'bolt';
+    const enabled = this.editForm.elements.hasWasher.checked;
+    this.library.querySelector('[data-washer-dimensions]').hidden = !enabled;
+    for (const name of ['washerInner', 'washerOuter', 'washerThickness'])
+      this.editForm.elements.namedItem(name).disabled = !enabled;
   }
   saveSpec() {
     const f = this.editForm.elements,
@@ -241,6 +283,15 @@ export class FastenerUI {
           diameter: Number(f.headDiameter.value),
           height: Number(f.headHeight.value),
         },
+        ...(f.hasWasher.checked
+          ? {
+              washer: {
+                innerDiameter: Number(f.washerInner.value),
+                outerDiameter: Number(f.washerOuter.value),
+                thickness: Number(f.washerThickness.value),
+              },
+            }
+          : {}),
         ...(f.kind.value === 'bolt'
           ? {
               nut: {
@@ -284,7 +335,7 @@ export class FastenerUI {
     records.forEach((s) =>
       select.append(
         new Option(
-          `${FASTENER_KINDS.find(([k]) => k === s.kind)[1]} · ${s.name} · Ø${s.diameter} × ${s.length} · v${s.revision}`,
+          `${s.name} · Ø${s.diameter} × ${s.length} · v${s.revision}`,
           `${s.id}:${s.revision}`,
         ),
       ),
@@ -300,12 +351,22 @@ export class FastenerUI {
   }
   specChanged(resetNut = true) {
     const spec = this.currentSpec();
-    this.placement.querySelector('[data-nut-offset]').hidden = spec?.kind !== 'bolt';
+    this.placeForm.querySelector('[data-nut-offset]').hidden = spec?.kind !== 'bolt';
+    this.placeForm.querySelector('[data-washer-nut]').hidden = spec?.kind !== 'bolt';
+    const head = this.placeForm.elements.washerHead,
+      nut = this.placeForm.elements.washerNut;
+    head.disabled = !spec?.washer || spec.head.kind === 'countersunk';
+    nut.disabled = !spec?.washer || spec.kind !== 'bolt';
+    if (head.disabled) head.checked = false;
+    if (nut.disabled) nut.checked = false;
+    this.placeForm.querySelector('[data-washer-info]').textContent = spec?.washer
+      ? `Ø${spec.washer.innerDiameter} / Ø${spec.washer.outerDiameter} × ${spec.washer.thickness} mm${head.disabled ? ' · plan bricka passar inte försänkt huvud' : ''}`
+      : 'Lägg till brickmått i skruvbiblioteket.';
     if (resetNut)
       this.placeForm.elements.nutOffset.value =
         spec?.kind === 'bolt' ? spec.length - spec.nut.thickness : '';
-    this.placement.querySelector('[data-spec-info]').textContent = spec
-      ? `${spec.name} · ${spec.head.kind === 'hex' ? 'Sexkantshuvud' : spec.head.kind === 'countersunk' ? 'Försänkt huvud' : 'Cylindriskt huvud'}${spec.nut ? ` · Mutter ${spec.nut.acrossFlats} × ${spec.nut.thickness} mm` : ''}`
+    this.placeForm.querySelector('[data-spec-info]').textContent = spec
+      ? `${spec.head.kind === 'hex' ? 'Sexkantshuvud' : spec.head.kind === 'countersunk' ? 'Försänkt huvud' : 'Cylindriskt huvud'}${spec.nut ? ` · Mutter ${spec.nut.acrossFlats} × ${spec.nut.thickness} mm` : ''}`
       : 'Skapa först en bibliotekspost om biblioteket är tomt.';
   }
   defaultHole(targetId) {
@@ -320,6 +381,20 @@ export class FastenerUI {
   openPlacement(source = null) {
     this.finish();
     if (!source) source = this.getSelection().find(isFastener) || null;
+    if (source) {
+      this.selectSource(source.id);
+      this.showInspector();
+      return;
+    }
+    this.placement.append(this.placeForm);
+    this.loadPlacement(null);
+    this.placeForm.querySelector('[data-position]').open = true;
+    this.placement.showModal();
+  }
+  loadPlacement(source) {
+    if (source && this.loadedSource?.id !== source.id)
+      this.placeForm.querySelector('[data-position]').open = false;
+    this.loadedSource = source;
     this.editingObject = source;
     const f = this.placeForm.elements;
     this.refreshSpecs();
@@ -327,7 +402,13 @@ export class FastenerUI {
       end = source?.end || [0, 0, -100];
     start.forEach((v, i) => (f[`start${i}`].value = v));
     end.forEach((v, i) => (f[`direction${i}`].value = v));
-    f.nutOffset.value = source?.nutOffset ?? '';
+    f.nutOffset.value =
+      source?.nutOffset ??
+      (this.currentSpec()?.kind === 'bolt'
+        ? this.currentSpec().length - this.currentSpec().nut.thickness
+        : '');
+    f.washerHead.checked = !!source?.washers?.head;
+    f.washerNut.checked = !!source?.washers?.nut;
     this.holeRows = source
       ? structuredClone(source.holes)
       : this.getSelection()
@@ -337,16 +418,20 @@ export class FastenerUI {
     this.availableParts().forEach((s) => f.target.append(new Option(s.name || s.id, s.id)));
     this.anchor = source?.anchorId ?? this.holeRows[0]?.targetId ?? '';
     this.renderHoles();
-    this.placement.querySelector('[data-pick]').hidden = !!source;
+    this.placeForm.querySelector('[data-pick]').hidden = !!source;
+    this.placeForm.querySelector('[data-delete]').hidden = !source;
+    this.placeForm.querySelector('[data-connections]').open = this.holeRows.length > 0;
     this.placeForm.querySelector('[type=submit]').textContent = source
       ? 'Spara skruv och hål'
       : 'Skapa skruv';
-    this.placement.querySelector('[data-error]').textContent = '';
-    this.placement.showModal();
+    this.placeForm.querySelector('[data-error]').textContent = '';
   }
   renderHoles() {
-    const root = this.placement.querySelector('[data-holes]');
+    const root = this.placeForm.querySelector('[data-holes]');
     root.replaceChildren();
+    this.placeForm.querySelector('[data-hole-count]').textContent = this.holeRows.length
+      ? `(${this.holeRows.length})`
+      : '';
     this.holeRows.forEach((h, i) => {
       const row = document.createElement('fieldset');
       row.dataset.hole = i;
@@ -354,8 +439,17 @@ export class FastenerUI {
       legend.textContent = this.getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del';
       row.append(legend);
       const fields = document.createElement('div');
-      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><div class="dimensions">${numeric('offset', 'Startläge från under huvud · mm', h.offset, -1e7)}${numeric('diameter', 'Håldiameter · mm', h.diameter, 0.001)}${numeric('depth', 'Håldjup · mm', h.depth, 0.001)}</div><div class="dimensions">${numeric('csDiameter', 'Försänkningsdiameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Försänkningsdjup · mm', h.countersink?.depth || 0)}</div>`;
-      fields.querySelector('[name=holeKind]').value = h.kind;
+      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><div data-hole-dimensions><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></div>`;
+      const kind = fields.querySelector('[name=holeKind]');
+      kind.value = h.kind;
+      const syncDimensions = () => {
+        fields.querySelector('[data-hole-dimensions]').hidden = kind.value === 'none';
+        fields
+          .querySelectorAll('input')
+          .forEach((input) => (input.disabled = kind.value === 'none'));
+      };
+      kind.onchange = syncDimensions;
+      syncDimensions();
       row.append(
         fields,
         button('Ta bort delkoppling', () => {
@@ -381,7 +475,7 @@ export class FastenerUI {
     select.onchange = () => (this.anchor = select.value);
   }
   readHoles() {
-    this.holeRows = [...this.placement.querySelectorAll('[data-hole]')].map((row, i) => {
+    this.holeRows = [...this.placeForm.querySelectorAll('[data-hole]')].map((row, i) => {
       const value = (name) => Number(row.querySelector(`[name=${name}]`).value);
       return {
         targetId: this.holeRows[i].targetId,
@@ -409,6 +503,7 @@ export class FastenerUI {
       spec: structuredClone(spec),
       ...axisPlacement(spec, start, direction),
       holes: structuredClone(this.holeRows),
+      washers: { head: f.washerHead.checked, nut: f.washerNut.checked },
       anchorId: this.anchor || null,
       ...(spec.kind === 'bolt'
         ? {
@@ -441,10 +536,10 @@ export class FastenerUI {
     this.renderHoles();
   }
   sync(selected, operation) {
-    this.panel.replaceChildren();
     const creating = operation?.mode === 'fastenerCreate';
     document.getElementById('fastener').setAttribute('aria-pressed', String(creating));
     if (creating) {
+      this.panel.replaceChildren();
       this.panel.hidden = false;
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent = 'Placera skruv';
@@ -463,17 +558,15 @@ export class FastenerUI {
         : [];
     this.panel.hidden = !source && !related.length;
     if (source) {
+      if (this.placement.open) return;
+      if (this.loadedSource !== source) this.loadPlacement(source);
+      if (this.placeForm.parentElement !== this.panel) this.panel.replaceChildren(this.placeForm);
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent =
         source.spec.kind === 'wood' ? 'Träskruv' : 'Skruv med mutter';
-      const p = document.createElement('p');
-      p.textContent = `${source.spec.name} · Ø${source.spec.diameter} × ${source.spec.length} mm · v${source.spec.revision}`;
-      this.panel.append(
-        p,
-        button('Redigera skruv och hål', () => this.openPlacement(source)),
-        button('Ta bort skruv', () => document.getElementById('delete').click()),
-      );
-    } else
+    } else {
+      if (!this.placement.open) this.loadedSource = null;
+      this.panel.replaceChildren();
       for (const s of related) {
         const count = holesForPart(selected[0], [s]).length;
         this.panel.append(
@@ -482,6 +575,7 @@ export class FastenerUI {
           ),
         );
       }
+    }
     this.panel.inert = !!operation;
   }
 }

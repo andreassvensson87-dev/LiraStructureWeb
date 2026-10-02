@@ -25,7 +25,9 @@ Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
    del. Ange håldiameter, startläge längs skruvaxeln och djup. Försänkning har
    separat diameter och djup. **Beräkna genomgående hål** räknar läge och djup
    från delarnas faktiska ytor för frigångshål i den angivna riktningen.
-5. Skapa skruven. Vid markering visas **Redigera skruv och hål**. En markerad del
+5. Skapa skruven. Vid markering redigeras skruven direkt i inspectorn med
+   utfällbara grupper för placering och hål. Klicka **Spara skruv och hål** för
+   att tillämpa ändringarna. En markerad del
    visar också sina skruvkopplingar. Hålen visas i 3D och Single Part. Ritnings-
    inspectorn visar hålmått och centrum i detaljens lokala koordinater.
 
@@ -37,7 +39,13 @@ Modellen och ritningarna är fortfarande sessionsdata.
 ## Relationsregler
 
 - Skruv och mutter är ett modellobjekt. Mutterns läge längs skaftet kan ändras.
-  Visningsgeometrin har skaft, huvud och en mutter med borrning; inga gängor.
+  Visningsgeometrin har skaft, huvud, mutter och valbara plana brickor med hål;
+  inga gängor. Ange brickans innerdiameter, ytterdiameter och tjocklek i
+  biblioteket, och välj **Under huvud** och/eller **Vid mutter** i inspectorn.
+  Brickan under huvudet börjar vid skruvens referenspunkt och bygger inåt längs
+  skaftet. Brickan vid muttern ligger direkt framför muttern. Mutterläge och
+  hålstart mäts fortfarande från under huvudet; bricktjocklek kan därför kräva
+  ändrade lägen. Plan bricka under huvudet kräver cylinder- eller sexkantshuvud.
 - Hål är parametrisk bearbetningsinformation på skruven, med måldelens ID.
   Modellens gemensamma geometriutvärdering subtraherar dessa volymer från delen.
   Hål skapar inga separata skärvolymer i modellträdet.
@@ -64,6 +72,6 @@ Grundprogrammet finns kvar i den ursprungliga arbetskopian. Försöket kan skrot
 genom att inte föra in grenen. Ingen migrering av gamla projektformat ingår.
 
 Automatisk dimensionering av skruvar, produktkataloger, skruvmönster, gängor,
-brickor, automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
+automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
 inte i denna första implementation. Hålens konturer finns i ritningsgeometrin;
 befintliga ritningsverktyg kan användas för lägesmått.

@@ -294,3 +294,68 @@ test('machined beam outlines contain no internal top-face triangulation seams', 
   edges.dispose();
   g.dispose();
 });
+
+test('flat washer dimensions and side selections reject impossible assemblies', () => {
+  const spec = { ...bolt, washer: { innerDiameter: 11, outerDiameter: 24, thickness: 2 } };
+  const assembly = { ...screw, spec, nutOffset: 90, washers: { head: true, nut: true } };
+  assert.equal(validateFastener(assembly), '');
+  assert.throws(() =>
+    validateFastenerSpec({ ...spec, washer: { ...spec.washer, innerDiameter: 9 } }),
+  );
+  assert.throws(() =>
+    validateFastenerSpec({ ...spec, washer: { ...spec.washer, outerDiameter: 10 } }),
+  );
+  assert.match(validateFastener({ ...assembly, nutOffset: 3 }), /överlappar/);
+  assert.match(validateFastener({ ...assembly, spec: bolt }), /brickmått/);
+  const woodWasher = { ...wood, washer: spec.washer };
+  assert.match(
+    validateFastener({ ...assembly, spec: woodWasher, washers: { head: true, nut: false } }),
+    /försänkt|försänk|cylindriskt/,
+  );
+  assert.match(
+    validateFastener({ ...assembly, spec: woodWasher, washers: { head: false, nut: true } }),
+    /mutter/,
+  );
+});
+test('each selected washer adds a bored ring with correct volume and follows screw rotation', () => {
+  const spec = { ...bolt, washer: { innerDiameter: 11, outerDiameter: 24, thickness: 2 } };
+  const base = { ...screw, spec, nutOffset: 90 };
+  const g = geometryForModel(base, [base]);
+  const ringVolume = Math.PI * (12 ** 2 - 5.5 ** 2) * 2;
+  for (const washers of [
+    { head: true, nut: false },
+    { head: false, nut: true },
+    { head: true, nut: true },
+  ]) {
+    const assembly = { ...base, washers };
+    const ga = geometryForModel(assembly, [assembly]);
+    const count = Number(washers.head) + Number(washers.nut);
+    assert.ok(Math.abs(volume(ga) - volume(g) - count * ringVolume) < count * ringVolume * 0.003);
+    const turned = rotateObject(assembly, [0, 0, 0], 'Y', 35);
+    const gb = geometryForModel(turned, [turned]);
+    assert.ok(Math.abs(volume(gb) - volume(ga)) < 0.1);
+    assert.deepEqual(turned.washers, washers);
+    ga.dispose();
+    gb.dispose();
+  }
+  g.dispose();
+});
+test('washer choices affect screw identity and survive history and joint copies', () => {
+  const spec = { ...bolt, washer: { innerDiameter: 11, outerDiameter: 24, thickness: 2 } };
+  const plain = { ...screw, spec, nutOffset: 90 };
+  const assembly = { ...plain, washers: { head: true, nut: true } };
+  assert.notEqual(partKey(plain, [plain]), partKey(assembly, [assembly]));
+  const model = [plate, lower, assembly];
+  const copies = applyObjectBatch(
+    model,
+    model.map((s) => transformObject(s, 'copy', [0, 0, 0], [300, 0, 0])),
+    { copy: true },
+  ).objects;
+  assert.deepEqual(copies.at(-1).washers, assembly.washers);
+  const project = createProject({ grid: {}, levels: {} });
+  const history = new ProjectHistory();
+  project.objects = model;
+  history.checkpoint(project);
+  project.objects = [plate, lower, plain];
+  assert.deepEqual(history.undo(project).objects[2].washers, assembly.washers);
+});

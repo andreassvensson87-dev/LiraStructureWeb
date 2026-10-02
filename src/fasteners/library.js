@@ -26,6 +26,18 @@ export function validateFastenerSpec(spec) {
     if (spec.nut.acrossFlats <= spec.diameter)
       throw new Error('Mutterns nyckelvidd måste vara större än skruvdiametern.');
   } else if (spec.nut != null) throw new Error('Träskruv har ingen tillhörande mutter.');
+  if (spec.washer != null) {
+    dimension(spec.washer.innerDiameter, 'Brickans innerdiameter', 2000);
+    dimension(spec.washer.outerDiameter, 'Brickans ytterdiameter', 3000);
+    dimension(spec.washer.thickness, 'Bricktjocklek', spec.length);
+    if (
+      spec.washer.innerDiameter < spec.diameter ||
+      spec.washer.outerDiameter <= spec.washer.innerDiameter
+    )
+      throw new Error(
+        'Brickans hål måste rymma skruven och ytterdiametern måste vara större än hålet.',
+      );
+  }
   return spec;
 }
 export function validateFastenerLibrary(data) {

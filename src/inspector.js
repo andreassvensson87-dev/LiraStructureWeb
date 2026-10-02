@@ -40,6 +40,7 @@ export class Inspector {
     $('inspector-properties').addEventListener(
       'submit',
       (e) => {
+        if (e.target.hasAttribute('data-independent-editor')) return;
         if (this.getState().selected.length && !this.getState().operation) {
           e.preventDefault();
           e.stopImmediatePropagation();

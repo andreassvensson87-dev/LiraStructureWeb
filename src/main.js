@@ -986,6 +986,9 @@ const helperController = createHelperController({
 fastenerUI = new FastenerUI({
   getObjects: () => project.objects,
   getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
+  selectSource: (id) => setSelection([id]),
+  getOperation: () => tools.operation,
+  showInspector: () => inspector.show('properties'),
   finish: () => {
     inspector?.finish();
     setDrawing(false);
