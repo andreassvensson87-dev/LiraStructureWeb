@@ -32,6 +32,7 @@ export class FastenerUI {
     selectSource,
     showInspector,
     getOperation,
+    beginTargets,
   }) {
     Object.assign(this, {
       getObjects,
@@ -42,6 +43,7 @@ export class FastenerUI {
       selectSource,
       showInspector,
       getOperation,
+      beginTargets,
     });
     this.records = [];
     try {
@@ -50,7 +52,7 @@ export class FastenerUI {
     } catch (e) {
       this.loadError = e.message;
     }
-    const tool = button('Skruv', () => this.openPlacement());
+    const tool = button('Skruv', () => this.startCreation());
     tool.id = 'fastener';
     tool.setAttribute('aria-label', 'Skruv och hål');
     tool.setAttribute('aria-pressed', 'false');
@@ -109,20 +111,17 @@ export class FastenerUI {
       }
       e.target.value = '';
     };
-    this.placement = document.createElement('dialog');
-    this.placement.id = 'fastener-placement';
-    this.placement.innerHTML = `<div class="panel-title"><h2>Skruv och hål</h2><button type="button" data-close aria-label="Stäng skruvplacering">×</button></div><form data-placement class="fastener-editor">
+    this.placeForm = document.createElement('form');
+    this.placeForm.className = 'fastener-editor';
+    this.placeForm.dataset.placement = '';
+    this.placeForm.innerHTML = `
       <div class="fastener-spec-row"><label class="field">Skruv ur bibliotek<select name="spec" required></select></label><button type="button" data-library title="Öppna skruvbibliotek" aria-label="Öppna skruvbibliotek">↗</button></div><p data-spec-info class="inspector-note"></p>
       <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Referensdel och hålberäkning</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-calculate>Beräkna genomgående hål</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
       <details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend>Under huvud</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend>Riktningspunkt</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
       <label class="field" data-nut-offset>Mutterläge · mm från under huvud<input name="nutOffset" type="number" step="any" min="0"></label>
       <fieldset data-washers><legend>Brickor</legend><div class="fastener-washer-options"><label class="fastener-check"><input type="checkbox" name="washerHead">Under huvud</label><label class="fastener-check" data-washer-nut><input type="checkbox" name="washerNut">Vid mutter</label></div><p data-washer-info class="inspector-note"></p></fieldset>
 
-      <p data-error role="alert"></p><div class="fastener-actions"><button type="button" data-pick>Placera med två klick</button><button type="submit" class="primary">Skapa skruv</button><button type="button" data-delete class="danger">Ta bort skruv</button></div></form>`;
-    document.body.append(this.placement);
-    this.placement.addEventListener('keydown', (e) => e.stopPropagation());
-    this.placement.querySelector('[data-close]').onclick = () => this.placement.close();
-    this.placeForm = this.placement.querySelector('[data-placement]');
+      <p data-error role="alert"></p><div class="fastener-actions"><button type="submit" class="primary">Skapa skruv</button><button type="button" data-delete class="danger">Ta bort skruv</button></div>`;
     this.placeForm.dataset.independentEditor = '';
     for (const event of ['input', 'change'])
       this.placeForm.addEventListener(event, (e) => e.stopPropagation());
@@ -130,52 +129,23 @@ export class FastenerUI {
     this.placeForm.elements.spec.onchange = () => this.specChanged();
     this.placeForm.querySelector('[data-delete]').onclick = () =>
       document.getElementById('delete').click();
-    this.placeForm.querySelector('[data-select-targets]').onclick = () => this.openTargets();
-    this.targetsDialog = document.createElement('dialog');
-    this.targetsDialog.id = 'fastener-targets';
-    this.targetsDialog.setAttribute('aria-labelledby', 'fastener-targets-title');
-    this.targetsDialog.innerHTML = `<div class="panel-title"><h2 id="fastener-targets-title">Välj objekt i förbandet</h2><button type="button" data-close aria-label="Stäng objektval">×</button></div><p class="inspector-note">Markera de delar som skruven ska tillhöra. Håltyp och hålmått anges sedan för varje vald del.</p><input type="search" data-target-search aria-label="Sök objekt till förbandet" placeholder="Sök namn eller objekt-ID…"><div data-target-list></div><p data-target-status class="inspector-note" role="status"></p><div class="fastener-actions"><button type="button" data-cancel>Avbryt</button><button type="button" data-apply class="primary">Använd valda objekt</button></div>`;
-    document.body.append(this.targetsDialog);
-    this.targetsDialog.addEventListener('keydown', (e) => e.stopPropagation());
-    this.targetsDialog.querySelector('[data-close]').onclick = this.targetsDialog.querySelector(
-      '[data-cancel]',
-    ).onclick = () => this.targetsDialog.close();
-    this.targetsDialog.querySelector('[data-target-search]').oninput = () => this.filterTargets();
-    this.targetsDialog.querySelector('[data-apply]').onclick = () => {
-      this.readHoles();
-      const existing = new Map(this.holeRows.map((h) => [h.targetId, h]));
-      this.holeRows = this.availableParts()
-        .filter((s) => this.targetSelection.has(s.id))
-        .map((s) => existing.get(s.id) || this.defaultHole(s.id));
-      if (!this.holeRows.some((h) => h.targetId === this.anchor))
-        this.anchor = this.holeRows[0]?.targetId || '';
-      this.renderHoles();
-      this.targetsDialog.close();
-    };
+    this.placeForm.querySelector('[data-select-targets]').onclick = () => this.pickTargets();
     this.placeForm.querySelector('[data-calculate]').onclick = () =>
       this.run(this.placeForm, () => this.calculateHoles());
     this.placeForm.onsubmit = (e) => {
       e.preventDefault();
+      if (this.getOperation()?.mode === 'fastenerTargets') {
+        this.confirmTargets();
+        return;
+      }
       this.run(this.placeForm, () => {
         const draft = this.readPlacement();
         this.commit(draft);
-        if (this.placement.open) this.placement.close();
       });
     };
-    this.placeForm.querySelector('[data-pick]').onclick = () =>
-      this.run(this.placeForm, () => {
-        if (this.editingObject)
-          throw new Error('Flytta eller rotera den befintliga skruven i modellen.');
-        const draft = this.readPlacement();
-        this.placement.close();
-        this.beginPlacement(draft);
-      });
     this.library.addEventListener('close', () => {
       if (this.placeForm.isConnected) this.refreshSpecs(this.placeForm.elements.spec.value);
     });
-    this.placement.addEventListener('close', () =>
-      this.sync(this.getSelection(), this.getOperation()),
-    );
     this.editSpec(null);
   }
   run(dialog, action) {
@@ -332,46 +302,33 @@ export class FastenerUI {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  openTargets() {
-    this.targetSelection = new Set(this.holeRows.map((h) => h.targetId));
-    const root = this.targetsDialog.querySelector('[data-target-list]');
-    root.replaceChildren();
-    for (const source of this.availableParts()) {
-      const label = document.createElement('label');
-      label.className = 'fastener-target-row';
-      label.dataset.search = `${source.name || ''} ${source.id}`.toLocaleLowerCase('sv');
-      const check = document.createElement('input');
-      check.type = 'checkbox';
-      check.checked = this.targetSelection.has(source.id);
-      const name = document.createElement('span');
-      name.textContent = source.name || source.id;
-      const type = document.createElement('small');
-      type.textContent = source.type === 'plate' ? 'Plate' : 'Sweep';
-      label.title = `${name.textContent} · ${source.id}`;
-      check.onchange = () => {
-        if (check.checked) this.targetSelection.add(source.id);
-        else this.targetSelection.delete(source.id);
-        this.filterTargets();
-      };
-      label.append(check, name, type);
-      root.append(label);
-    }
-    this.targetsDialog.querySelector('[data-target-search]').value = '';
-    this.filterTargets();
-    this.targetsDialog.showModal();
+  startCreation() {
+    this.finish();
+    this.loadPlacement(null);
+    this.holeRows = [];
+    this.anchor = '';
+    this.renderHoles();
+    this.beginTargets([]);
   }
-  filterTargets() {
-    const query = this.targetsDialog
-      .querySelector('[data-target-search]')
-      .value.toLocaleLowerCase('sv')
-      .trim();
-    let matches = 0;
-    this.targetsDialog.querySelectorAll('[data-search]').forEach((row) => {
-      row.hidden = !row.dataset.search.includes(query);
-      if (!row.hidden) matches++;
+  pickTargets() {
+    this.readHoles();
+    this.beginTargets(this.holeRows.map((h) => h.targetId));
+  }
+  setTargets(ids) {
+    this.readHoles();
+    const existing = new Map(this.holeRows.map((h) => [h.targetId, h]));
+    this.holeRows = ids.map((id) => existing.get(id) || this.defaultHole(id));
+    if (!ids.includes(this.anchor)) this.anchor = ids[0] || '';
+    this.renderHoles();
+  }
+  confirmTargets() {
+    this.run(this.placeForm, () => {
+      const draft = this.readPlacement();
+      if (this.editingObject) {
+        this.finish();
+        this.commit(draft);
+      } else this.beginPlacement(draft);
     });
-    this.targetsDialog.querySelector('[data-target-status]').textContent =
-      `${this.targetSelection.size} objekt valda${!this.availableParts().length ? ' · Skapa Sweep eller Plate i modellen först.' : !matches ? ' · Inga objekt matchar sökningen.' : ''}`;
   }
   availableParts() {
     return this.getObjects().filter((s) => isPhysical(s) && !isFastener(s));
@@ -441,10 +398,7 @@ export class FastenerUI {
       this.showInspector();
       return;
     }
-    this.placement.append(this.placeForm);
-    this.loadPlacement(null);
-    this.placeForm.querySelector('[data-position]').open = true;
-    this.placement.showModal();
+    this.startCreation();
   }
   loadPlacement(source) {
     if (source && this.loadedSource?.id !== source.id)
@@ -452,7 +406,13 @@ export class FastenerUI {
     this.loadedSource = source;
     this.editingObject = source;
     const f = this.placeForm.elements;
-    this.refreshSpecs();
+    const previousSpec = this.placeForm.elements.spec.value;
+    this.refreshSpecs(source ? null : previousSpec);
+    if (!source && !this.currentSpec() && this.specOptions.length) {
+      const spec = this.specOptions[0];
+      this.placeForm.elements.spec.value = `${spec.id}:${spec.revision}`;
+      this.specChanged();
+    }
     const start = source?.start || [0, 0, 0],
       end = source?.end || [0, 0, -100];
     start.forEach((v, i) => (f[`start${i}`].value = v));
@@ -471,7 +431,6 @@ export class FastenerUI {
           .map((s) => this.defaultHole(s.id));
     this.anchor = source?.anchorId ?? this.holeRows[0]?.targetId ?? '';
     this.renderHoles();
-    this.placeForm.querySelector('[data-pick]').hidden = !!source;
     this.placeForm.querySelector('[data-delete]').hidden = !source;
     this.placeForm.querySelector('[type=submit]').textContent = source
       ? 'Spara skruv och hål'
@@ -591,13 +550,36 @@ export class FastenerUI {
     this.renderHoles();
   }
   sync(selected, operation) {
+    const choosing = operation?.mode === 'fastenerTargets';
     const creating = operation?.mode === 'fastenerCreate';
-    document.getElementById('fastener').setAttribute('aria-pressed', String(creating));
+    document.getElementById('fastener').setAttribute('aria-pressed', String(creating || choosing));
+    if (choosing) {
+      this.panel.hidden = false;
+      this.placeForm.dataset.pickingTargets = '';
+      if (this.placeForm.parentElement !== this.panel) this.panel.replaceChildren(this.placeForm);
+      document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
+      document.getElementById('object-heading').textContent = 'Skruv · Välj delar';
+      document.getElementById('mode-label').textContent = 'Välj → Enter → Placera';
+      this.placeForm.querySelector('[data-select-targets]').hidden = true;
+      this.placeForm.querySelector('[data-position]').hidden = true;
+      this.placeForm.querySelector('[data-calculate]').disabled = true;
+      this.placeForm.querySelector('[data-delete]').hidden = true;
+      this.placeForm.querySelector('[type=submit]').textContent = 'Bekräfta delar ↵';
+      this.placeForm.querySelector('[data-target-empty]').textContent =
+        'Klicka på delarna i modellen. Enter bekräftar, Escape avbryter.';
+      this.panel.inert = false;
+      return;
+    }
+    delete this.placeForm.dataset.pickingTargets;
+    this.placeForm.querySelector('[data-select-targets]').hidden = false;
+    this.placeForm.querySelector('[data-position]').hidden = false;
+    this.placeForm.querySelector('[data-calculate]').disabled = false;
     if (creating) {
       this.panel.replaceChildren();
       this.panel.hidden = false;
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent = 'Placera skruv';
+      document.getElementById('mode-label').textContent = 'Under huvud → riktning';
       const p = document.createElement('p');
       p.textContent = `${operation.draft.spec.name} · Klicka under huvud och sedan i skruvens riktning. Längd ${operation.draft.spec.length} mm. Escape avbryter.`;
       this.panel.append(p);
@@ -613,14 +595,13 @@ export class FastenerUI {
         : [];
     this.panel.hidden = !source && !related.length;
     if (source) {
-      if (this.placement.open) return;
       if (this.loadedSource !== source) this.loadPlacement(source);
       if (this.placeForm.parentElement !== this.panel) this.panel.replaceChildren(this.placeForm);
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent =
         source.spec.kind === 'wood' ? 'Träskruv' : 'Skruv med mutter';
     } else {
-      if (!this.placement.open) this.loadedSource = null;
+      this.loadedSource = null;
       this.panel.replaceChildren();
       for (const s of related) {
         const count = holesForPart(selected[0], [s]).length;

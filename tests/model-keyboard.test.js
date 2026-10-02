@@ -14,3 +14,12 @@ test('active tools own their keys before global model shortcuts', () => {
   assert.equal(command({ key: 'x' }, { drawing: true, hasStart: true }), 'axis');
   assert.equal(command({ key: 'z', ctrlKey: true, shiftKey: true }, {}), 'redo');
 });
+
+test('fastener part picking confirms with Enter and consumes model deletion shortcuts', () => {
+  const state = { mode: 'fastenerTargets', drawing: true };
+  assert.equal(command({ key: 'Enter' }, state), 'confirm-fastener-targets');
+  assert.equal(command({ key: 'Escape' }, state), 'cancel');
+  assert.equal(command({ key: 'Delete' }, state), null);
+  assert.equal(command({ key: 'Backspace' }, state), null);
+  assert.equal(command({ key: 'Enter' }, { ...state, editing: true }), null);
+});

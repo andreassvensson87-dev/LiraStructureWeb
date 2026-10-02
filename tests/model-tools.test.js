@@ -89,3 +89,33 @@ test('cancel clears transient operation but retains active workplane', () => {
   assert.equal(s.typedPoint, null);
   assert.deepEqual(s.temporaryPlane.origin, [1, 2, 3]);
 });
+
+test('fastener part picks receive pointer events without interpreting them as placement points', () => {
+  const surface = new EventTarget();
+  let picked = 0;
+  const dispose = installModelPointer(surface, {
+    getState: () => ({ mode: 'fastenerTargets', drawing: true }),
+    beginBox() {},
+    orbit() {},
+    point() {
+      assert.fail('target selection must use ray hits, not snapped placement points');
+    },
+    actions: {
+      'fastener-target': (e) => {
+        assert.equal(e.clientX, 10);
+        picked++;
+      },
+    },
+    move() {},
+    leave() {},
+  });
+  for (const type of ['pointerdown', 'pointerup']) {
+    const e = new Event(type);
+    Object.assign(e, { button: 0, pointerId: 1, clientX: 10, clientY: 20 });
+    surface.dispatchEvent(e);
+  }
+  assert.equal(picked, 1);
+  dispose();
+  assert.equal(pointerCommand({ mode: 'fastenerCreate', drawing: true, hasStart: false }), 'start');
+  assert.equal(pointerCommand({ mode: 'fastenerCreate', drawing: true, hasStart: true }), 'finish');
+});

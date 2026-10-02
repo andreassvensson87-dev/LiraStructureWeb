@@ -308,7 +308,10 @@ function clearPreview() {
 function mesh(s, ghost = false, model = project.objects) {
   return createObjectMesh(s, {
     model,
-    selectedIds: ui.selectedIds,
+    selectedIds:
+      tools.operation?.mode === 'fastenerTargets'
+        ? new Set(tools.operation.targetIds)
+        : ui.selectedIds,
     transparentView: ui.transparentView,
     ghost,
   });
@@ -698,7 +701,7 @@ function selectionHit() {
   );
   let best = null,
     distance = 7;
-  const project = (p, i) => {
+  const projectToScreen = (p, i) => {
     const v = new THREE.Vector3().fromBufferAttribute(p, i).project(camera);
     return {
       point: new THREE.Vector2(
@@ -709,14 +712,15 @@ function selectionHit() {
     };
   };
   for (const object of objects.children) {
+    if (tools.operation?.mode === 'fastenerTargets') continue;
     if (!object.visible || !object.userData.cut) continue;
     const attributes = [object.children[0].geometry.attributes.position];
     if (object.children[2]?.isLine)
       attributes.push(object.children[2].geometry.attributes.position);
     for (const p of attributes)
       for (let i = 0; i < p.count; i += 2) {
-        const a = project(p, i),
-          b = project(p, i + 1);
+        const a = projectToScreen(p, i),
+          b = projectToScreen(p, i + 1);
         if (Math.abs(a.z) > 1 && Math.abs(b.z) > 1) continue;
         const delta = b.point.clone().sub(a.point),
           t = delta.lengthSq()
@@ -732,7 +736,14 @@ function selectionHit() {
   return (
     best ??
     raycaster.intersectObjects(
-      objects.children.filter((o) => o.visible && !o.userData.cut),
+      objects.children.filter(
+        (o) =>
+          o.visible &&
+          !o.userData.cut &&
+          (tools.operation?.mode !== 'fastenerTargets' ||
+            (isPhysical(project.objects.find((s) => s.id === o.userData.id)) &&
+              project.objects.find((s) => s.id === o.userData.id)?.type !== 'fastener')),
+      ),
       false,
     )[0]?.object.userData.id ??
     null
@@ -835,6 +846,7 @@ function showPreview(p) {
 function updatePointer(e) {
   tools.lastPointer = { clientX: e.clientX, clientY: e.clientY };
   if (!tools.drawing) return;
+  if (tools.operation?.mode === 'fastenerTargets') return;
   if (tools.operation?.mode === 'workPlane') {
     const p = point(e),
       points = [...tools.operation.points, ...(p ? [p] : [])];
@@ -989,6 +1001,15 @@ fastenerUI = new FastenerUI({
   selectSource: (id) => setSelection([id]),
   getOperation: () => tools.operation,
   showInspector: () => inspector.show('properties'),
+  beginTargets: (targetIds) => {
+    select(null);
+    setDrawing(true);
+    tools.operation = { mode: 'fastenerTargets', targetIds };
+    render();
+    inspector.show('properties');
+    $('status').textContent = 'Skruv · Klicka på delar, Enter bekräftar, Escape avbryter';
+    renderer.domElement.focus({ preventScroll: true });
+  },
   finish: () => {
     inspector?.finish();
     setDrawing(false);
@@ -1048,6 +1069,20 @@ installModelPointer(renderer.domElement, {
     clearPreview();
   },
   actions: {
+    'fastener-target': (e) => {
+      ray(e);
+      const id = selectionHit();
+      const source = project.objects.find((s) => s.id === id);
+      if (!source || !isPhysical(source) || source.type === 'fastener') return;
+      const ids = new Set(tools.operation.targetIds);
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      tools.operation.targetIds = [...ids];
+      fastenerUI.setTargets(tools.operation.targetIds);
+      render();
+      $('status').textContent = `Skruv · ${ids.size} delar valda · Klicka fler, Enter bekräftar`;
+      renderer.domElement.focus({ preventScroll: true });
+    },
     helperpoint: (p) => save({ type: 'helperpoint', start: p }),
     workplane: pickWorkPlane,
     plate: (p) => pickPlatePoint(p),
@@ -1093,6 +1128,9 @@ window.addEventListener('keydown', (e) => {
   if (!command) return;
   e.preventDefault();
   switch (command) {
+    case 'confirm-fastener-targets':
+      fastenerUI.confirmTargets();
+      break;
     case 'cancel':
       cancelBox();
       setDrawing(false);

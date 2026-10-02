@@ -1,5 +1,6 @@
 /** Routes completed clicks to the active tool. Pointer capture/box selection stays in its adapter. */
 export function pointerCommand({ mode, picking, drawing, hasStart, plateLength, hasLength }) {
+  if (mode === 'fastenerTargets') return 'fastener-target';
   if (mode === 'helperpoint') return 'helperpoint';
   if (mode === 'workPlane') return 'workplane';
   if (mode === 'plateCreate' || mode === 'plateVertex')
@@ -37,7 +38,7 @@ export function installModelPointer(
       return;
     const command = pointerCommand(getState());
     if (!command) return;
-    if (['select', 'length', 'plate-length'].includes(command)) {
+    if (['select', 'length', 'plate-length', 'fastener-target'].includes(command)) {
       actions[command](e);
       return;
     }
