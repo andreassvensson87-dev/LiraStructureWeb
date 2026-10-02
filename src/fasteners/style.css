@@ -357,3 +357,39 @@
 .fastener-editor[data-picking-targets] [data-hole] > button {
   display: none;
 }
+
+#fastener-library [data-default-countersink][hidden] {
+  display: none;
+}
+#fastener-library [data-library-holes] {
+  border: 1px solid #e0e8e9;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+#fastener-library [data-library-holes] summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #405b63;
+}
+#fastener-library [data-hole-summary] {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #73878e;
+}
+#fastener-library [data-library-holes][open] summary {
+  margin-bottom: 12px;
+}
+#fastener-library .fastener-default-cs {
+  margin: 12px 0;
+}
+#fastener-library .inspector-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #73878e;
+  margin-bottom: 0;
+}
+.fastener-editor [data-apply-hole-defaults] {
+  margin-bottom: 6px;
+}

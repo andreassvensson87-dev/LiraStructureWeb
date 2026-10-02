@@ -13,7 +13,10 @@ Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
 1. Öppna **Inställningar → Bibliotek → Skruvar**. Skapa egna poster för träskruv eller
    skruv med mutter. Ange diameter, längd under huvud och huvudmått. För skruv med
    mutter anges också mutterns nyckelvidd och tjocklek; nominell diameter är samma
-   som skruvens. Biblioteket innehåller inga verifierade standardprodukter.
+   som skruvens. Under **Hålstandard** väljs ingen borrning, förborrning/blindhål
+   eller frigång/genomgående, med diameter och djup samt valfri försänkning.
+   Dessa mått är egna värden, inte automatiskt dimensionerade rekommendationer.
+   Biblioteket innehåller inga verifierade standardprodukter.
 2. Välj **Skapa → Skruv** och bibliotekspost i inspectorn. Klicka på delarna
    direkt i modellen; de markeras och visas under **Objekt i förbandet**.
    Ett nytt klick på en vald del tar bort den. Tryck **Enter** för att bekräfta
@@ -24,7 +27,10 @@ Modulen finns i `src/fasteners/`. Den är ett avgränsat försök på grenen
    och modellens snap: först under huvud, sedan riktning. Försänkta huvuden sträcker sig bakom referenspunkten;
    hålets startläge kan därför behöva vara negativt.
 4. Varje vald del visas med namn och egen håltyp. Nya delkopplingar börjar med
-   **Ingen borrning**. Välj förborrning/blindhål eller frigång/genomgående för
+   bibliotekets **Hålstandard** (utan standard används **Ingen borrning**).
+   Vid byte av skruv under skapandet hämtas den nya standarden för valda delar.
+   Befintliga skruvars hål behålls vid versionsbyte; **Hämta hålstandard från bibliotek**
+   ersätter uttryckligen deras värden. Välj förborrning/blindhål eller frigång/genomgående för
    delarna som ska ha hål; övriga valda delar får ingen bearbetning. Öppna
    **Hålmått · mm** för diameter, startläge längs skruvaxeln och djup. Försänkning har
    separat diameter och djup. **Beräkna genomgående hål** räknar läge och djup

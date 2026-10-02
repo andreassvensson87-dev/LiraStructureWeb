@@ -38,6 +38,21 @@ export function validateFastenerSpec(spec) {
         'Brickans hål måste rymma skruven och ytterdiametern måste vara större än hålet.',
       );
   }
+  if (spec.holeDefaults != null) {
+    const h = spec.holeDefaults;
+    if (!['none', 'pilot', 'clearance'].includes(h.kind))
+      throw new Error('Välj en giltig håltyp i biblioteket.');
+    if (h.kind !== 'none') {
+      dimension(h.diameter, 'Håldiameter', 1000);
+      dimension(h.depth, 'Håldjup');
+      if (h.countersink != null) {
+        dimension(h.countersink.diameter, 'Försänkningens diameter', 2000);
+        dimension(h.countersink.depth, 'Försänkningens djup', h.depth);
+        if (h.countersink.diameter <= h.diameter || h.countersink.depth >= h.depth)
+          throw new Error('Försänkningen måste vara bredare än hålet och grundare än håldjupet.');
+      }
+    }
+  }
   return spec;
 }
 export function validateFastenerLibrary(data) {
@@ -78,4 +93,19 @@ export function latestFasteners(records) {
     if (!result.has(spec.id) || result.get(spec.id).revision < spec.revision)
       result.set(spec.id, spec);
   return [...result.values()].sort((a, b) => a.name.localeCompare(b.name, 'sv', { numeric: true }));
+}
+
+/** Each connection owns its hole values; library edits never mutate placed holes. */
+export function defaultHoleForSpec(spec, targetId) {
+  const defaults = spec?.holeDefaults;
+  return {
+    targetId,
+    kind: defaults?.kind || 'none',
+    offset: 0,
+    diameter: defaults?.diameter ?? spec?.diameter ?? 6,
+    depth: defaults?.depth ?? 50,
+    ...(defaults?.kind !== 'none' && defaults?.countersink
+      ? { countersink: structuredClone(defaults.countersink) }
+      : {}),
+  };
 }

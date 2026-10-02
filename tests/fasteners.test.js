@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
   validateFastenerSpec,
+  defaultHoleForSpec,
   validateFastenerLibrary,
   mergeFasteners,
   latestFasteners,
@@ -358,4 +359,58 @@ test('washer choices affect screw identity and survive history and joint copies'
   history.checkpoint(project);
   project.objects = [plate, lower, plain];
   assert.deepEqual(history.undo(project).objects[2].washers, assembly.washers);
+});
+
+test('library hole defaults validate dimensions and survive export/import without sharing values', () => {
+  const spec = {
+    ...wood,
+    holeDefaults: {
+      kind: 'pilot',
+      diameter: 4,
+      depth: 30,
+      countersink: { diameter: 12, depth: 4 },
+    },
+  };
+  validateFastenerSpec(spec);
+  const [imported] = validateFastenerLibrary(
+    JSON.parse(JSON.stringify({ schema: 1, fasteners: [spec] })),
+  );
+  assert.deepEqual(imported.holeDefaults, spec.holeDefaults);
+  const a = defaultHoleForSpec(imported, 'a');
+  const b = defaultHoleForSpec(imported, 'b');
+  a.countersink.depth = 2;
+  a.diameter = 5;
+  assert.equal(b.countersink.depth, 4);
+  assert.equal(imported.holeDefaults.diameter, 4);
+  assert.deepEqual(defaultHoleForSpec(wood, 'a'), {
+    targetId: 'a',
+    kind: 'none',
+    offset: 0,
+    diameter: 6,
+    depth: 50,
+  });
+  for (const holeDefaults of [
+    { ...spec.holeDefaults, kind: 'bad' },
+    { ...spec.holeDefaults, diameter: 0 },
+    { ...spec.holeDefaults, depth: NaN },
+    { ...spec.holeDefaults, countersink: { diameter: 4, depth: 2 } },
+    { ...spec.holeDefaults, countersink: { diameter: 12, depth: 30 } },
+  ])
+    assert.throws(() => validateFastenerSpec({ ...wood, holeDefaults }));
+});
+
+test('inherited library holes cut parts and retain their values after a new library version', () => {
+  const spec = { ...wood, holeDefaults: { kind: 'clearance', diameter: 8, depth: 20 } };
+  const placed = { ...screw, spec: structuredClone(spec), holes: [defaultHoleForSpec(spec, 'a')] };
+  assert.equal(validateFastener(placed), '');
+  const plain = geometryForModel(plate, [plate]);
+  const drilled = geometryForModel(plate, [plate, placed]);
+  assert.ok(volume(drilled) < volume(plain) - 900);
+  const next = { ...spec, revision: 2, holeDefaults: { kind: 'pilot', diameter: 4, depth: 10 } };
+  const records = mergeFasteners([spec], [next]);
+  assert.equal(latestFasteners(records)[0].holeDefaults.diameter, 4);
+  assert.equal(placed.holes[0].diameter, 8);
+  assert.equal(placed.spec.holeDefaults.kind, 'clearance');
+  plain.dispose();
+  drilled.dispose();
 });

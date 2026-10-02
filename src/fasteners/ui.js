@@ -1,5 +1,6 @@
 import {
   FASTENER_LIBRARY_KEY,
+  defaultHoleForSpec,
   FASTENER_KINDS,
   latestFasteners,
   mergeFasteners,
@@ -77,6 +78,11 @@ export class FastenerUI {
           <fieldset><legend>Huvud</legend><div class="fastener-head-fields"><label class="field">Form<select name="headKind"><option value="countersunk">Försänkt</option><option value="cylinder">Cylindriskt</option><option value="hex">Sexkant</option></select></label>${numeric('headDiameter', 'Diameter / nyckelvidd', 12, 0.001)}${numeric('headHeight', 'Höjd', 4, 0.001)}</div></fieldset>
           <fieldset data-nut><legend>Mutter</legend><div class="dimensions">${numeric('nutAcrossFlats', 'Nyckelvidd', 17, 0.001)}${numeric('nutThickness', 'Tjocklek', 8, 0.001)}</div></fieldset>
           <fieldset><legend><label class="fastener-check"><input type="checkbox" name="hasWasher">Brickmått</label></legend><div class="fastener-head-fields" data-washer-dimensions>${numeric('washerInner', 'Innerdiameter', 11, 0.001)}${numeric('washerOuter', 'Ytterdiameter', 22, 0.001)}${numeric('washerThickness', 'Tjocklek', 2, 0.001)}</div></fieldset>
+          <details data-library-holes><summary>Hålstandard <span data-hole-summary></span></summary>
+            <div class="fastener-head-fields"><label class="field">Håltyp<select name="defaultHoleKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label>${numeric('defaultHoleDiameter', 'Diameter', 6, 0.001)}${numeric('defaultHoleDepth', 'Djup', 50, 0.001)}</div>
+            <label class="fastener-check fastener-default-cs"><input type="checkbox" name="defaultHasCountersink">Försänkning</label><div class="dimensions" data-default-countersink>${numeric('defaultCsDiameter', 'Diameter', 12, 0.001)}${numeric('defaultCsDepth', 'Djup', 4, 0.001)}</div>
+            <p class="inspector-note">Standard för nya delkopplingar. Varje del kan ändras i inspectorn. Genomgående håls läge och djup beräknas där från delens ytor.</p>
+          </details>
           <div class="fastener-save"><span>Placerade skruvar behåller sin version.</span><button type="submit" class="primary">Spara skruv</button></div>
           <p data-error role="alert"></p>
         </form>
@@ -90,6 +96,13 @@ export class FastenerUI {
     this.editForm = this.library.querySelector('[data-edit]');
     this.editForm.elements.kind.onchange = () => this.syncNut();
     this.editForm.elements.hasWasher.onchange = () => this.syncNut();
+    for (const name of [
+      'defaultHoleKind',
+      'defaultHasCountersink',
+      'defaultHoleDiameter',
+      'defaultHoleDepth',
+    ])
+      this.editForm.elements.namedItem(name).oninput = () => this.syncHoleDefaults();
     this.editForm.onsubmit = (e) => {
       e.preventDefault();
       this.run(this.library, () => this.saveSpec());
@@ -116,7 +129,7 @@ export class FastenerUI {
     this.placeForm.dataset.placement = '';
     this.placeForm.innerHTML = `
       <div class="fastener-spec-row"><label class="field">Skruv ur bibliotek<select name="spec" required></select></label><button type="button" data-library title="Öppna skruvbibliotek" aria-label="Öppna skruvbibliotek">↗</button></div><p data-spec-info class="inspector-note"></p>
-      <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Referensdel och hålberäkning</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-calculate>Beräkna genomgående hål</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
+      <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Referensdel och hålberäkning</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-apply-hole-defaults>Hämta hålstandard från bibliotek</button><button type="button" data-calculate>Beräkna genomgående hål</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
       <details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend>Under huvud</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend>Riktningspunkt</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
       <label class="field" data-nut-offset>Mutterläge · mm från under huvud<input name="nutOffset" type="number" step="any" min="0"></label>
       <fieldset data-washers><legend>Brickor</legend><div class="fastener-washer-options"><label class="fastener-check"><input type="checkbox" name="washerHead">Under huvud</label><label class="fastener-check" data-washer-nut><input type="checkbox" name="washerNut">Vid mutter</label></div><p data-washer-info class="inspector-note"></p></fieldset>
@@ -130,6 +143,10 @@ export class FastenerUI {
     this.placeForm.querySelector('[data-delete]').onclick = () =>
       document.getElementById('delete').click();
     this.placeForm.querySelector('[data-select-targets]').onclick = () => this.pickTargets();
+    this.placeForm.querySelector('[data-apply-hole-defaults]').onclick = () => {
+      this.holeRows = this.holeRows.map((h) => this.defaultHole(h.targetId));
+      this.renderHoles();
+    };
     this.placeForm.querySelector('[data-calculate]').onclick = () =>
       this.run(this.placeForm, () => this.calculateHoles());
     this.placeForm.onsubmit = (e) => {
@@ -220,10 +237,18 @@ export class FastenerUI {
       washerInner: spec?.washer?.innerDiameter || (spec?.diameter || 10) + 1,
       washerOuter: spec?.washer?.outerDiameter || (spec?.diameter || 10) * 2.2,
       washerThickness: spec?.washer?.thickness || 2,
+      defaultHoleKind: spec?.holeDefaults?.kind || 'none',
+      defaultHoleDiameter: spec?.holeDefaults?.diameter ?? spec?.diameter ?? 6,
+      defaultHoleDepth: spec?.holeDefaults?.depth ?? 50,
+      defaultCsDiameter: spec?.holeDefaults?.countersink?.diameter ?? spec?.head.diameter ?? 12,
+      defaultCsDepth: spec?.holeDefaults?.countersink?.depth ?? spec?.head.height ?? 4,
     };
     for (const [name, value] of Object.entries(values))
       this.editForm.elements.namedItem(name).value = value;
     this.editForm.elements.hasWasher.checked = !!spec?.washer;
+    this.editForm.elements.defaultHasCountersink.checked = !!spec?.holeDefaults?.countersink;
+    this.library.querySelector('[data-library-holes]').open = false;
+    this.syncHoleDefaults();
     this.library.querySelector('[data-edit-title]').textContent = spec
       ? 'Redigera skruv'
       : 'Ny skruv';
@@ -248,6 +273,19 @@ export class FastenerUI {
     for (const name of ['washerInner', 'washerOuter', 'washerThickness'])
       this.editForm.elements.namedItem(name).disabled = !enabled;
   }
+  syncHoleDefaults() {
+    const f = this.editForm.elements;
+    const enabled = f.defaultHoleKind.value !== 'none';
+    for (const name of ['defaultHoleDiameter', 'defaultHoleDepth', 'defaultHasCountersink'])
+      f.namedItem(name).disabled = !enabled;
+    const countersink = enabled && f.defaultHasCountersink.checked;
+    this.library.querySelector('[data-default-countersink]').hidden = !countersink;
+    for (const name of ['defaultCsDiameter', 'defaultCsDepth'])
+      f.namedItem(name).disabled = !countersink;
+    this.library.querySelector('[data-hole-summary]').textContent = enabled
+      ? `${f.defaultHoleKind.value === 'pilot' ? 'Förborrning' : 'Frigång'} · Ø${f.defaultHoleDiameter.value} × ${f.defaultHoleDepth.value}`
+      : 'Ingen borrning';
+  }
   saveSpec() {
     const f = this.editForm.elements,
       spec = {
@@ -262,6 +300,23 @@ export class FastenerUI {
         name: f.namedItem('name').value.trim(),
         diameter: Number(f.diameter.value),
         length: Number(f.namedItem('length').value),
+        holeDefaults: {
+          kind: f.defaultHoleKind.value,
+          ...(f.defaultHoleKind.value !== 'none'
+            ? {
+                diameter: Number(f.defaultHoleDiameter.value),
+                depth: Number(f.defaultHoleDepth.value),
+                ...(f.defaultHasCountersink.checked
+                  ? {
+                      countersink: {
+                        diameter: Number(f.defaultCsDiameter.value),
+                        depth: Number(f.defaultCsDepth.value),
+                      },
+                    }
+                  : {}),
+              }
+            : {}),
+        },
         head: {
           kind: f.headKind.value,
           diameter: Number(f.headDiameter.value),
@@ -377,18 +432,16 @@ export class FastenerUI {
     if (resetNut)
       this.placeForm.elements.nutOffset.value =
         spec?.kind === 'bolt' ? spec.length - spec.nut.thickness : '';
+    if (resetNut && !this.editingObject && this.holeRows) {
+      this.holeRows = this.holeRows.map((h) => this.defaultHole(h.targetId));
+      this.renderHoles();
+    }
     this.placeForm.querySelector('[data-spec-info]').textContent = spec
       ? `${spec.head.kind === 'hex' ? 'Sexkantshuvud' : spec.head.kind === 'countersunk' ? 'Försänkt huvud' : 'Cylindriskt huvud'}${spec.nut ? ` · Mutter ${spec.nut.acrossFlats} × ${spec.nut.thickness} mm` : ''}`
       : 'Skapa först en bibliotekspost om biblioteket är tomt.';
   }
   defaultHole(targetId) {
-    return {
-      targetId,
-      kind: 'none',
-      offset: 0,
-      diameter: this.currentSpec()?.diameter || 6,
-      depth: 50,
-    };
+    return defaultHoleForSpec(this.currentSpec(), targetId);
   }
   openPlacement(source = null) {
     this.finish();
