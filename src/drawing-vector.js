@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { geometryEdges } from './fasteners/edges.js';
 import { clipSectionSegment } from './section-extents.js';
 
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -161,7 +162,7 @@ export function vectorDrawing(surfaces, edgeSets) {
 }
 
 export function geometryVectors(geometry, planes = []) {
-  const edges = new THREE.EdgesGeometry(geometry, 5);
+  const edges = geometryEdges(geometry, 5);
   const result = vectorDrawing([{ geometry, planes }], [{ geometry: edges, planes }]);
   edges.dispose();
   return result;

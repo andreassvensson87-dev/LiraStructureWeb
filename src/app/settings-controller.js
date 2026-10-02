@@ -5,8 +5,43 @@ export function createSettingsController({
   onClose,
   onGridChanged,
   onChange,
+  libraries = [],
 }) {
   const $ = (id) => document.getElementById(id);
+  if (libraries.length) {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.dataset.settings = 'libraries';
+    tab.setAttribute('aria-pressed', 'false');
+    tab.textContent = 'Bibliotek';
+    document.querySelector('.settings-nav').append(tab);
+    const panel = document.createElement('section');
+    panel.dataset.settingsPanel = 'libraries';
+    panel.hidden = true;
+    panel.className = 'settings-libraries';
+    for (const group of new Set(libraries.map((library) => library.group))) {
+      const heading = document.createElement('h3');
+      heading.textContent = group;
+      panel.append(heading);
+      for (const library of libraries.filter((entry) => entry.group === group)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'settings-library';
+        const title = document.createElement('strong');
+        title.textContent = library.name;
+        const description = document.createElement('span');
+        description.textContent = library.description;
+        const arrow = document.createElement('span');
+        arrow.className = 'settings-library-arrow';
+        arrow.textContent = '↗';
+        arrow.setAttribute('aria-hidden', 'true');
+        button.append(title, description, arrow);
+        button.onclick = library.open;
+        panel.append(button);
+      }
+    }
+    $('settings-error').before(panel);
+  }
   function settingsCategory(name) {
     document
       .querySelectorAll('[data-settings]')
@@ -14,6 +49,7 @@ export function createSettingsController({
     document
       .querySelectorAll('[data-settings-panel]')
       .forEach((p) => (p.hidden = p.dataset.settingsPanel !== name));
+    document.querySelector('.settings-actions').hidden = name === 'libraries';
   }
   document
     .querySelectorAll('[data-settings]')

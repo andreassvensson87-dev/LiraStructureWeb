@@ -1,4 +1,5 @@
 import { appendVectorDrawing } from './drawing-vector.js';
+import { geometryEdges } from './fasteners/edges.js';
 import { referenceCandidates } from './annotation-references.js';
 import { partViewFrame } from './part-view-frame.js';
 import { migratePartOrientation } from './part-section-orientation.js';
@@ -71,7 +72,7 @@ export class PartSections {
     if (section) data = sectionDrawing([this.e.geometry], frame, section.depth);
     else {
       const g = this.e.geometry.clone().applyMatrix4(frameMatrix(frame)),
-        edges = new THREE.EdgesGeometry(g, 5),
+        edges = geometryEdges(g, 5),
         p = edges.attributes.position,
         behind = [];
       for (let i = 0; i < p.count; i += 2)

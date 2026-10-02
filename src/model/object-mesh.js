@@ -6,6 +6,8 @@ import { isLineCut, lineCutFrame } from '../line-cut.js';
 import { roundProfile } from '../round-profile.js';
 import { objectColor } from '../materials.js';
 import { plateVertices } from '../plate.js';
+import { isFastener } from '../fasteners/object-type.js';
+import { geometryEdges } from '../fasteners/edges.js';
 export function createObjectMesh(
   s,
   { model, selectedIds, transparentView = false, ghost = false },
@@ -42,9 +44,9 @@ export function createObjectMesh(
   m.userData.id = s.id;
   m.userData.ghost = ghost;
   const lines = new THREE.LineSegments(
-    new THREE.EdgesGeometry(
+    geometryEdges(
       geometry,
-      !cut && !cutsForModel(s, model).length && roundProfile(s) ? 5 : 1,
+      isFastener(s) ? 10 : !cut && !cutsForModel(s, model).length && roundProfile(s) ? 5 : 1,
     ),
     new THREE.LineBasicMaterial({
       color: cut

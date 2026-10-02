@@ -51,11 +51,7 @@ export class MaterialUI {
     options(this.$('category'));
     this.dialog.addEventListener('keydown', (e) => e.stopPropagation());
     this.$('close').onclick = () => this.dialog.close();
-    root.querySelector('#material-library-open').onclick = () => {
-      this.tree();
-      this.$('error').textContent = this.loadError;
-      this.dialog.showModal();
-    };
+    root.querySelector('#material-library-open').onclick = () => this.openLibrary();
     this.dialog.addEventListener('close', () => this.refresh());
     this.$('new').onclick = () => this.edit(null);
     this.$('edit').onsubmit = (e) => {
@@ -111,6 +107,11 @@ export class MaterialUI {
       this.$('import').value = '';
     };
     this.edit(null);
+  }
+  openLibrary() {
+    this.tree();
+    this.$('error').textContent = this.loadError;
+    this.dialog.showModal();
   }
   persist(records) {
     localStorage.setItem(MATERIAL_KEY, JSON.stringify({ schema: 1, materials: records }));

@@ -4,6 +4,9 @@ Lokal, nedskalad prototyp med raka profilsweeps, Plate och separata skärobjekt.
 
 ## Kör
 
+Skruvmodulen med träskruv, skruv med mutter och kopplade hål beskrivs i
+[docs/fasteners.md](docs/fasteners.md).
+
 ```sh
 npm ci
 npm run dev

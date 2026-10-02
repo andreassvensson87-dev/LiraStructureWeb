@@ -1,6 +1,7 @@
 import { geometryVectors } from './drawing-vector.js';
 import { sectionClipPlanes, clipSectionSegment } from './section-extents.js';
 import * as THREE from 'three';
+import { geometryEdges } from './fasteners/edges.js';
 import { sectionSegments } from './plan-section.js';
 const vec = (a) => new THREE.Vector3(...a);
 export function sectionFrame(parent, points, side = 1, orientation = 'upright') {
@@ -94,7 +95,7 @@ export function sectionDrawing(geometries, frame, depth) {
       const line = clipSectionSegment(a, b, planes);
       if (line) cut.push(line.map((p) => p.slice(0, 2)));
     }
-    const edges = new THREE.EdgesGeometry(g, 5),
+    const edges = geometryEdges(g, 5),
       p = edges.attributes.position;
     for (let i = 0; i < p.count; i += 2) {
       const line = clipSectionSegment(

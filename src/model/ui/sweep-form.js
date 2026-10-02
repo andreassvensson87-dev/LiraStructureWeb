@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { isRound, hasWall, normalizeForm } from '../../profile-forms.js';
 import { isPlate, isHelper } from '../../model-object.js';
 import { contours, profileAnchor } from '../../sweep.js';
+import { isFastener } from '../../fasteners/object-type.js';
 export function createSweepForm({
   project,
   tools,
@@ -41,7 +42,7 @@ export function createSweepForm({
     });
   }
   function fillForm(s) {
-    if (isHelper(s)) return;
+    if (isHelper(s) || isFastener(s)) return;
     ui.libraryMode = s.profile === 'custom';
     if (isPlate(s)) {
       fillPlate(s);

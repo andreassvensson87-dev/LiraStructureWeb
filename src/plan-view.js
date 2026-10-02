@@ -1,4 +1,5 @@
 import { createGAShell } from './drawing/ui/ga-shell.js';
+import { geometryEdges } from './fasteners/edges.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
 import { vectorDrawing, appendVectorDrawing } from './drawing-vector.js';
@@ -472,7 +473,7 @@ export class PlanView {
       );
       this.group.add(fill);
       const edge = new THREE.LineSegments(
-        new THREE.EdgesGeometry(g, roundProfile(s) ? 5 : 1),
+        geometryEdges(g, roundProfile(s) ? 5 : 1),
         new THREE.LineBasicMaterial({ color: 0x20343b }),
       );
       edge.renderOrder = 1;
@@ -627,7 +628,7 @@ export class PlanView {
           continue;
         }
         this.bounds.union(b);
-        const edge = new THREE.EdgesGeometry(g, roundProfile(s) ? 5 : 1);
+        const edge = geometryEdges(g, roundProfile(s) ? 5 : 1);
         const fill = new THREE.Mesh(
           g,
           new THREE.MeshBasicMaterial({
@@ -779,7 +780,7 @@ export class PlanView {
       );
       mesh.userData.sourceId = object.id;
       this.group.add(mesh);
-      const edges = new THREE.EdgesGeometry(g, roundProfile(object) ? 5 : 1),
+      const edges = geometryEdges(g, roundProfile(object) ? 5 : 1),
         lines = new THREE.LineSegments(
           edges,
           new THREE.LineBasicMaterial({ color: 0x53666d, clippingPlanes: planes }),

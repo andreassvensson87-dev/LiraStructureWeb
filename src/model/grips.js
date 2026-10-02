@@ -1,5 +1,7 @@
 import { isPlate, objectAnchors } from '../model-object.js';
 import { plateLocal, platePoint } from '../plate.js';
+import { isFastener } from '../fasteners/object-type.js';
+import { objectType } from './object-types/index.js';
 /** Group only selected, coincident world points; never merge by screen position. */
 export function selectionGrips(objects, selectedIds, drawing = false) {
   if (drawing || !selectedIds.size || selectedIds.size >= 5) return [];
@@ -19,7 +21,7 @@ export function selectionGrips(objects, selectedIds, drawing = false) {
 }
 export function moveGripPoints(sources, refs, target) {
   return sources.map((source) => {
-    const result = structuredClone(source);
+    let result = structuredClone(source);
     for (const ref of refs.filter((r) => r.id === source.id)) {
       if (typeof ref.kind === 'number') {
         const local = plateLocal(source, target);
@@ -27,7 +29,9 @@ export function moveGripPoints(sources, refs, target) {
         if (Math.hypot(...target.map((v, i) => v - projected[i])) > 0.01)
           throw new Error('Hörnet måste ligga i objektets plan.');
         result.polygon[ref.kind] = local;
-      } else result[ref.kind] = [...target];
+      } else if (isFastener(source))
+        result = objectType(source).moveAnchor(result, ref.kind, target);
+      else result[ref.kind] = [...target];
     }
     return result;
   });

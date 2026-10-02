@@ -4,6 +4,7 @@ import { sweepType } from './sweep-type.js';
 import { plateType } from './plate-type.js';
 import { polygonCutType } from './polygon-cut-type.js';
 import { lineCutType } from './line-cut-type.js';
+import { fastenerType } from '../../fasteners/object-type.js';
 export const objectTypes = createObjectRegistry([
   sweepType,
   plateType,
@@ -11,5 +12,6 @@ export const objectTypes = createObjectRegistry([
   lineCutType,
   helperLineType,
   helperPointType,
+  fastenerType,
 ]);
 export const objectType = (object) => objectTypes.get(object);

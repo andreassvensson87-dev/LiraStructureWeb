@@ -29,6 +29,7 @@ import { DrawingAnnotations } from './drawing-annotations.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { objectGeometry } from './model-object.js';
 import { partMatrix } from './part-marks.js';
+import { updatePartHolePanel } from './fasteners/drawing.js';
 import {
   PAPER_KEY,
   standardPapers,
@@ -363,6 +364,12 @@ export class SinglePartSheet {
     if (!source) return;
     this.geometry = objectGeometry(source, this.getObjects());
     const localMatrix = partMatrix(source);
+    updatePartHolePanel(
+      this.dialog.querySelector('.drawing-inspector'),
+      source,
+      this.getObjects(),
+      localMatrix,
+    );
     this.drawingReflection = partDrawingReflection(localMatrix);
     this.geometryInDrawingFrame = false;
     this.geometry.applyMatrix4(localMatrix);

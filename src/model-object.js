@@ -1,14 +1,19 @@
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { objectType, objectTypes } from './model/object-types/index.js';
+import { holesForPart } from './fasteners/relations.js';
+import { holeGeometry } from './fasteners/geometry.js';
+import { geometryEdges } from './fasteners/edges.js';
 export const isHelper = (s) => !!s && objectTypes.find(s)?.family === 'helper';
 export const isPhysical = (s) =>
   !!s && !!objectTypes.find(s) && !isCut(s) && objectTypes.find(s).physical !== false;
 export const isCut = (s) => !!s && !!objectTypes.find(s)?.cut;
 export const isPlate = (s) => !!s && objectTypes.find(s)?.family === 'plate';
 const baseGeometry = (s) => objectType(s).geometry(s);
-export const cutsForModel = (s, model) =>
-  model.filter((c) => isCut(c) && c.targets?.includes(s.id));
+export const cutsForModel = (s, model) => [
+  ...model.filter((c) => isCut(c) && c.targets?.includes(s.id)),
+  ...holesForPart(s, model),
+];
 export const objectAnchors = (s) => objectType(s).anchors(s);
 export function validateObject(s) {
   if (!s || !objectTypes.find(s)) return `Okänd objekttyp: ${s?.type}`;
@@ -48,8 +53,12 @@ function evaluated(s, model = []) {
   try {
     for (const cut of cuts) {
       if (!geometry.attributes.position.count) break;
-      const tool = objectType(cut).cutGeometry(cut, geometry);
+      const tool =
+        cut.type === 'linkedhole' ? holeGeometry(cut) : objectType(cut).cutGeometry(cut, geometry);
       if (!tool) continue;
+      const offset = cut.type === 'linkedhole' ? cut.frame.origin : [0, 0, 0];
+      geometry.translate(-offset[0], -offset[1], -offset[2]);
+      tool.translate(-offset[0], -offset[1], -offset[2]);
       geometry.clearGroups();
       tool.clearGroups();
       const a = new Brush(geometry),
@@ -60,6 +69,7 @@ function evaluated(s, model = []) {
       try {
         result = evaluator.evaluate(a, b, SUBTRACTION);
         const next = compact(result.geometry);
+        next.translate(...offset);
         geometry.dispose();
         geometry = next;
       } finally {
@@ -69,6 +79,7 @@ function evaluated(s, model = []) {
         result?.geometry.dispose();
       }
     }
+    geometry.userData.linkedHoles = cuts.some((c) => c.type === 'linkedhole');
     entry = { cuts, geometry };
     cache.set(s, entry);
     return entry;
@@ -83,7 +94,7 @@ export function objectCorners(s, model = []) {
   const entry = evaluated(s, model);
   if (!entry.cuts.length) return objectType(s).corners(s);
   if (entry.corners) return entry.corners;
-  const edges = new THREE.EdgesGeometry(entry.geometry),
+  const edges = geometryEdges(entry.geometry),
     p = edges.attributes.position,
     nodes = new Map();
   function add(i, j) {
@@ -120,7 +131,7 @@ export function objectSegments(s, model = []) {
     if (!targets.includeEdges) return (entry.segments = segments);
   }
 
-  const edges = new THREE.EdgesGeometry(entry.geometry),
+  const edges = geometryEdges(entry.geometry),
     p = edges.attributes.position,
     nodes = new Map(),
     links = new Map();
