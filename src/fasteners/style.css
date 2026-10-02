@@ -393,3 +393,15 @@
 .fastener-editor [data-apply-hole-defaults] {
   margin-bottom: 6px;
 }
+
+#fastener-library [data-default-extent][hidden] {
+  display: none;
+}
+.fastener-editor input[readonly] {
+  background: #f5f8f8;
+  color: #73878e;
+}
+
+#fastener-library [data-library-holes] label[hidden] {
+  display: none;
+}

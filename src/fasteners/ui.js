@@ -10,7 +10,7 @@ import {
 import { isFastener, validateFastener } from './object-type.js';
 import { axisPlacement } from './geometry.js';
 import { validateFastenerTargets, holesForPart } from './relations.js';
-import { partAxisInterval } from './placement.js';
+import { holeExtent, resolveFastenerHoles } from './placement.js';
 import { isPhysical } from '../model-object.js';
 import './style.css';
 
@@ -80,8 +80,9 @@ export class FastenerUI {
           <fieldset><legend><label class="fastener-check"><input type="checkbox" name="hasWasher">Brickmått</label></legend><div class="fastener-head-fields" data-washer-dimensions>${numeric('washerInner', 'Innerdiameter', 11, 0.001)}${numeric('washerOuter', 'Ytterdiameter', 22, 0.001)}${numeric('washerThickness', 'Tjocklek', 2, 0.001)}</div></fieldset>
           <details data-library-holes><summary>Hålstandard <span data-hole-summary></span></summary>
             <div class="fastener-head-fields"><label class="field">Håltyp<select name="defaultHoleKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label>${numeric('defaultHoleDiameter', 'Diameter', 6, 0.001)}${numeric('defaultHoleDepth', 'Djup', 50, 0.001)}</div>
+            <label class="field" data-default-extent>Omfattning<select name="defaultHoleExtent"><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option></select></label>
             <label class="fastener-check fastener-default-cs"><input type="checkbox" name="defaultHasCountersink">Försänkning</label><div class="dimensions" data-default-countersink>${numeric('defaultCsDiameter', 'Diameter', 12, 0.001)}${numeric('defaultCsDepth', 'Djup', 4, 0.001)}</div>
-            <p class="inspector-note">Standard för nya delkopplingar. Varje del kan ändras i inspectorn. Genomgående håls läge och djup beräknas där från delens ytor.</p>
+            <p class="inspector-note">Standard för nya delkopplingar. Varje del kan ändras i inspectorn. Startläget beräknas från delens ytor vid placering. För genomgående hål beräknas även djupet.</p>
           </details>
           <div class="fastener-save"><span>Placerade skruvar behåller sin version.</span><button type="submit" class="primary">Spara skruv</button></div>
           <p data-error role="alert"></p>
@@ -129,7 +130,7 @@ export class FastenerUI {
     this.placeForm.dataset.placement = '';
     this.placeForm.innerHTML = `
       <div class="fastener-spec-row"><label class="field">Skruv ur bibliotek<select name="spec" required></select></label><button type="button" data-library title="Öppna skruvbibliotek" aria-label="Öppna skruvbibliotek">↗</button></div><p data-spec-info class="inspector-note"></p>
-      <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Referensdel och hålberäkning</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-apply-hole-defaults>Hämta hålstandard från bibliotek</button><button type="button" data-calculate>Beräkna genomgående hål</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
+      <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Referensdel och hålberäkning</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-apply-hole-defaults>Hämta hålstandard från bibliotek</button><button type="button" data-calculate>Beräkna hål från delarnas ytor</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
       <details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend>Under huvud</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend>Riktningspunkt</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
       <label class="field" data-nut-offset>Mutterläge · mm från under huvud<input name="nutOffset" type="number" step="any" min="0"></label>
       <fieldset data-washers><legend>Brickor</legend><div class="fastener-washer-options"><label class="fastener-check"><input type="checkbox" name="washerHead">Under huvud</label><label class="fastener-check" data-washer-nut><input type="checkbox" name="washerNut">Vid mutter</label></div><p data-washer-info class="inspector-note"></p></fieldset>
@@ -156,7 +157,7 @@ export class FastenerUI {
         return;
       }
       this.run(this.placeForm, () => {
-        const draft = this.readPlacement();
+        const draft = this.readPlacement(true);
         this.commit(draft);
       });
     };
@@ -237,6 +238,7 @@ export class FastenerUI {
       washerInner: spec?.washer?.innerDiameter || (spec?.diameter || 10) + 1,
       washerOuter: spec?.washer?.outerDiameter || (spec?.diameter || 10) * 2.2,
       washerThickness: spec?.washer?.thickness || 2,
+      defaultHoleExtent: spec?.holeDefaults?.extent === 'wall' ? 'wall' : 'profile',
       defaultHoleKind: spec?.holeDefaults?.kind || 'none',
       defaultHoleDiameter: spec?.holeDefaults?.diameter ?? spec?.diameter ?? 6,
       defaultHoleDepth: spec?.holeDefaults?.depth ?? 50,
@@ -278,12 +280,16 @@ export class FastenerUI {
     const enabled = f.defaultHoleKind.value !== 'none';
     for (const name of ['defaultHoleDiameter', 'defaultHoleDepth', 'defaultHasCountersink'])
       f.namedItem(name).disabled = !enabled;
+    this.library.querySelector('[data-default-extent]').hidden =
+      f.defaultHoleKind.value !== 'clearance';
+    f.defaultHoleExtent.disabled = f.defaultHoleKind.value !== 'clearance';
+    f.defaultHoleDepth.closest('label').hidden = f.defaultHoleKind.value === 'clearance';
     const countersink = enabled && f.defaultHasCountersink.checked;
     this.library.querySelector('[data-default-countersink]').hidden = !countersink;
     for (const name of ['defaultCsDiameter', 'defaultCsDepth'])
       f.namedItem(name).disabled = !countersink;
     this.library.querySelector('[data-hole-summary]').textContent = enabled
-      ? `${f.defaultHoleKind.value === 'pilot' ? 'Förborrning' : 'Frigång'} · Ø${f.defaultHoleDiameter.value} × ${f.defaultHoleDepth.value}`
+      ? `${f.defaultHoleKind.value === 'pilot' ? 'Förborrning' : 'Frigång'} · Ø${f.defaultHoleDiameter.value}${f.defaultHoleKind.value === 'pilot' ? ` × ${f.defaultHoleDepth.value}` : ''}`
       : 'Ingen borrning';
   }
   saveSpec() {
@@ -304,6 +310,7 @@ export class FastenerUI {
           kind: f.defaultHoleKind.value,
           ...(f.defaultHoleKind.value !== 'none'
             ? {
+                extent: f.defaultHoleKind.value === 'pilot' ? 'blind' : f.defaultHoleExtent.value,
                 diameter: Number(f.defaultHoleDiameter.value),
                 depth: Number(f.defaultHoleDepth.value),
                 ...(f.defaultHasCountersink.checked
@@ -378,7 +385,7 @@ export class FastenerUI {
   }
   confirmTargets() {
     this.run(this.placeForm, () => {
-      const draft = this.readPlacement();
+      const draft = this.readPlacement(!!this.editingObject);
       if (this.editingObject) {
         this.finish();
         this.commit(draft);
@@ -478,7 +485,7 @@ export class FastenerUI {
     f.washerHead.checked = !!source?.washers?.head;
     f.washerNut.checked = !!source?.washers?.nut;
     this.holeRows = source
-      ? structuredClone(source.holes)
+      ? source.holes.map((h) => ({ ...structuredClone(h), extent: h.extent || 'manual' }))
       : this.getSelection()
           .filter((s) => isPhysical(s) && !isFastener(s))
           .map((s) => this.defaultHole(s.id));
@@ -505,16 +512,29 @@ export class FastenerUI {
       legend.textContent = this.getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del';
       row.append(legend);
       const fields = document.createElement('div');
-      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
+      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><p class="inspector-note">Automatiska lägen beräknas vid placering och sparande. Välj manuellt för egna start- och djupmått.</p><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
       const kind = fields.querySelector('[name=holeKind]');
       kind.value = h.kind;
+      const extent = fields.querySelector('[name=extent]');
+      extent.value = holeExtent(h);
       const syncDimensions = () => {
+        fields.querySelector('[data-extent]').hidden = kind.value === 'none';
+        fields.querySelector('[name=offset]').readOnly = extent.value !== 'manual';
+        fields.querySelector('[name=depth]').readOnly = !['blind', 'manual'].includes(extent.value);
         fields.querySelector('[data-hole-dimensions]').hidden = kind.value === 'none';
         fields
           .querySelectorAll('input')
           .forEach((input) => (input.disabled = kind.value === 'none'));
       };
-      kind.onchange = syncDimensions;
+      kind.onchange = () => {
+        extent.value = kind.value === 'pilot' ? 'blind' : 'profile';
+        syncDimensions();
+      };
+      extent.onchange = () => {
+        if (extent.value === 'blind') kind.value = 'pilot';
+        else if (extent.value !== 'manual') kind.value = 'clearance';
+        syncDimensions();
+      };
       syncDimensions();
       row.append(
         fields,
@@ -546,6 +566,7 @@ export class FastenerUI {
       return {
         targetId: this.holeRows[i].targetId,
         kind: row.querySelector('[name=holeKind]').value,
+        extent: row.querySelector('[name=extent]').value,
         offset: value('offset'),
         diameter: value('diameter'),
         depth: value('depth'),
@@ -556,7 +577,7 @@ export class FastenerUI {
     });
     this.anchor = this.placeForm.elements.anchor.value;
   }
-  readPlacement() {
+  readPlacement(resolve = false) {
     const spec = this.currentSpec();
     if (!spec) throw new Error('Välj en skruv ur biblioteket.');
     this.readHoles();
@@ -564,7 +585,7 @@ export class FastenerUI {
     const f = this.placeForm.elements;
     const start = [0, 1, 2].map((i) => Number(f[`start${i}`].value));
     const direction = [0, 1, 2].map((i) => Number(f[`direction${i}`].value));
-    const draft = {
+    let draft = {
       ...(this.editingObject || {}),
       type: 'fastener',
       spec: structuredClone(spec),
@@ -581,6 +602,7 @@ export class FastenerUI {
           }
         : { nutOffset: null }),
     };
+    if (resolve) draft = resolveFastenerHoles(draft, this.getObjects());
     const error = validateFastener(draft);
     if (error) throw new Error(error);
     validateFastenerTargets(draft, this.getObjects());
@@ -588,18 +610,7 @@ export class FastenerUI {
   }
   calculateHoles() {
     const draft = this.readPlacement();
-    this.holeRows = draft.holes.map((h) =>
-      h.kind === 'clearance'
-        ? {
-            ...h,
-            ...partAxisInterval(
-              draft,
-              this.getObjects().find((s) => s.id === h.targetId),
-              this.getObjects().filter((s) => s.id !== draft.id),
-            ),
-          }
-        : h,
-    );
+    this.holeRows = resolveFastenerHoles(draft, this.getObjects()).holes;
     this.renderHoles();
   }
   sync(selected, operation) {

@@ -42,6 +42,8 @@ export function validateFastenerSpec(spec) {
     const h = spec.holeDefaults;
     if (!['none', 'pilot', 'clearance'].includes(h.kind))
       throw new Error('Välj en giltig håltyp i biblioteket.');
+    if (h.extent != null && !['wall', 'profile', 'blind', 'manual'].includes(h.extent))
+      throw new Error('Ogiltig hålomfattning.');
     if (h.kind !== 'none') {
       dimension(h.diameter, 'Håldiameter', 1000);
       dimension(h.depth, 'Håldjup');
@@ -101,6 +103,9 @@ export function defaultHoleForSpec(spec, targetId) {
   return {
     targetId,
     kind: defaults?.kind || 'none',
+    ...(defaults?.kind && defaults.kind !== 'none'
+      ? { extent: defaults.extent || (defaults.kind === 'pilot' ? 'blind' : 'profile') }
+      : {}),
     offset: 0,
     diameter: defaults?.diameter ?? spec?.diameter ?? 6,
     depth: defaults?.depth ?? 50,

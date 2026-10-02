@@ -33,11 +33,16 @@ Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
    ersätter uttryckligen deras värden. Välj förborrning/blindhål eller frigång/genomgående för
    delarna som ska ha hål; övriga valda delar får ingen bearbetning. Öppna
    **Hålmått · mm** för diameter, startläge längs skruvaxeln och djup. Försänkning har
-   separat diameter och djup. **Beräkna genomgående hål** räknar läge och djup
+   separat diameter och djup. **Beräkna hål från delarnas ytor** räknar läge och djup
    från delarnas faktiska ytor för frigångshål i den angivna riktningen.
-   Beräkningen går från första till sista ytan längs hela skruvaxeln och är
-   inte begränsad av skruvens ändpunkt. För rör ger det hål i båda väggarna.
-   Hål i en enda rörvägg eller I-profilfläns begränsas manuellt med start och djup.
+   Välj **Närmaste vägg / fläns**, **Hela profilen** eller **Blindhål från ingångsytan**.
+   Startläget räknas från första materialintervallet i skruvens riktning.
+   Väggläget stannar vid dess utgångsyta; hela profilen går till sista ytan
+   (båda rörväggarna). Blindhål behåller angivet djup och får inte överskrida
+   den första väggens tjocklek. Skruvens ändpunkt begränsar inte beräkningen.
+   Välj **Manuellt startläge och djup** för fria mått. Äldre placerade hål
+   behåller sina manuella mått tills ett automatiskt läge väljs.
+   Automatiska hål beräknas vid placering och när skruven sparas i inspectorn.
 5. Skapa skruven. Vid markering redigeras skruven direkt i inspectorn med
    utfällbara grupper för placering och hål. Klicka **Spara skruv och hål** för
    att tillämpa ändringarna. En markerad del

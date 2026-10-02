@@ -15,7 +15,11 @@ import {
   removeFastenerRelations,
   validateFastenerTargets,
 } from '../src/fasteners/relations.js';
-import { partAxisInterval } from '../src/fasteners/placement.js';
+import {
+  partAxisInterval,
+  partAxisIntervals,
+  resolveFastenerHoles,
+} from '../src/fasteners/placement.js';
 import { geometryForModel, objectAnchors } from '../src/model-object.js';
 import { transformObject } from '../src/transform.js';
 import { rotateObject } from '../src/rotation.js';
@@ -413,4 +417,75 @@ test('inherited library holes cut parts and retain their values after a new libr
   assert.equal(placed.spec.holeDefaults.kind, 'clearance');
   plain.dispose();
   drilled.dispose();
+});
+
+const tube = {
+  id: 'tube',
+  name: 'Rör',
+  type: 'sweep',
+  profile: 'rhs',
+  width: 200,
+  height: 300,
+  thickness: 12,
+  rotation: 0,
+  start: [0, 0, 0],
+  end: [1000, 0, 0],
+};
+const axialScrew = (part, extent, depth = 30) => ({
+  ...screw,
+  anchorId: part.id,
+  start: [500, 60, 160],
+  end: [500, 60, 60],
+  holes: [
+    {
+      targetId: part.id,
+      kind: extent === 'blind' ? 'pilot' : 'clearance',
+      extent,
+      offset: 0,
+      depth,
+      diameter: 8,
+    },
+  ],
+});
+test('tube wall and whole-profile modes preserve the cavity and drill only the requested walls', () => {
+  const draft = axialScrew(tube, 'wall');
+  const intervals = partAxisIntervals(draft, tube, [tube]);
+  assert.equal(intervals.length, 2);
+  assert.ok(Math.abs(intervals[0].depth - 12) < 0.001);
+  const wall = resolveFastenerHoles(draft, [tube]);
+  const whole = resolveFastenerHoles(axialScrew(tube, 'profile'), [tube]);
+  assert.ok(Math.abs(wall.holes[0].offset - 10) < 0.001);
+  assert.ok(Math.abs(wall.holes[0].depth - 12) < 0.001);
+  assert.ok(Math.abs(whole.holes[0].depth - 300) < 0.001);
+  const plain = geometryForModel(tube, [tube]);
+  const one = geometryForModel(tube, [tube, wall]);
+  const both = geometryForModel(tube, [tube, whole]);
+  assert.ok(Math.abs((volume(plain) - volume(both)) / (volume(plain) - volume(one)) - 2) < 0.01);
+  for (const g of [plain, one, both]) g.dispose();
+});
+test('I-profile flanges are separate intervals; rotation and existing holes do not change resolution', () => {
+  const beam = { ...tube, id: 'i', profile: 'i' };
+  const draft = axialScrew(beam, 'wall');
+  const intervals = partAxisIntervals(draft, beam, [beam]);
+  assert.equal(intervals.length, 2);
+  const placed = resolveFastenerHoles(draft, [beam]);
+  assert.ok(Math.abs(placed.holes[0].depth - 12) < 0.001);
+  assert.deepEqual(resolveFastenerHoles(draft, [beam, placed]).holes, placed.holes);
+  const turned = rotateObject(beam, [0, 0, 0], 'Y', 35);
+  const turnedDraft = rotateObject(draft, [0, 0, 0], 'Y', 35);
+  const rotated = resolveFastenerHoles(turnedDraft, [turned]);
+  assert.ok(Math.abs(rotated.holes[0].depth - 12) < 0.001);
+});
+test('blind holes start at the entrance, reject a cavity crossing; manual holes stay unchanged', () => {
+  const blind = resolveFastenerHoles(axialScrew(tube, 'blind', 8), [tube]);
+  assert.ok(Math.abs(blind.holes[0].offset - 10) < 0.001);
+  assert.equal(blind.holes[0].depth, 8);
+  assert.throws(() => resolveFastenerHoles(axialScrew(tube, 'blind', 30), [tube]), /djupare/);
+  const manual = axialScrew(tube, 'manual', 7);
+  manual.holes[0].offset = 22;
+  assert.deepEqual(resolveFastenerHoles(manual, [tube]), manual);
+  const missed = { ...axialScrew(tube, 'wall'), start: [500, 500, 160], end: [500, 500, 60] };
+  assert.throws(() => resolveFastenerHoles(missed, [tube]), /träffar inte/);
+  const behind = { ...axialScrew(tube, 'wall'), start: [500, 60, -160], end: [500, 60, -260] };
+  assert.throws(() => resolveFastenerHoles(behind, [tube]), /bakom/);
 });

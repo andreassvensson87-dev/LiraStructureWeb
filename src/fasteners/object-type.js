@@ -71,6 +71,8 @@ export function validateFastener(s) {
       targets.add(h.targetId);
       if (!['none', 'pilot', 'clearance'].includes(h.kind))
         throw new Error('Välj en giltig håltyp.');
+      if (h.extent != null && !['wall', 'profile', 'blind', 'manual'].includes(h.extent))
+        throw new Error('Ogiltig hålomfattning.');
       if (h.kind === 'none') continue;
       if (
         !Number.isFinite(h.offset) ||

@@ -8,6 +8,7 @@ import { createHelperController } from './model/ui/helper-controller.js';
 import { isHelper, isPhysical } from './model-object.js';
 import { FastenerUI } from './fasteners/ui.js';
 import { isFastener } from './fasteners/object-type.js';
+import { resolveFastenerHoles } from './fasteners/placement.js';
 import { axisPlacement } from './fasteners/geometry.js';
 import { removeFastenerRelations, validateFastenerTargets } from './fasteners/relations.js';
 let fastenerUI = null;
@@ -594,8 +595,11 @@ function commitPoint(target) {
   let batch;
   try {
     batch = candidates(target);
+    if (tools.operation?.mode === 'fastenerCreate')
+      batch = batch.map((s) => resolveFastenerHoles(s, project.objects));
   } catch (error) {
     $('draw-length-error').textContent = error.message;
+    $('status').textContent = error.message;
     return false;
   }
   const error = batch.map(validateSweep).find(Boolean);
