@@ -81,10 +81,65 @@ export function spanPlacement(s, entry, exit) {
   };
 }
 
+/** Insertion points define an axis; a separate forward range selects material layers. */
+export function insertionPlacement(s, start, direction, depth, model) {
+  if (!Number.isFinite(depth) || depth <= 0 || depth > 1e7)
+    throw new Error('Ange ett borravstånd större än 0 och högst 10 000 000 mm.');
+  const axisDraft = { ...s, ...axisPlacement(s.spec, start, direction) };
+  const f = fastenerFrame(axisDraft),
+    materialModel = model.filter((o) => !isFastener(o));
+  const layers = [];
+  for (const h of s.holes) {
+    const part = materialModel.find((o) => o.id === h.targetId);
+    if (!part) throw new Error('Hålets måldel saknas.');
+    let intervals;
+    try {
+      intervals = partAxisIntervals(axisDraft, part, materialModel);
+    } catch (e) {
+      if (e.message.includes('träffar inte')) continue;
+      throw e;
+    }
+    for (const v of intervals) {
+      const from =
+          h.kind === 'clearance' || s.spec.kind === 'bolt' ? v.offset : Math.max(0, v.offset),
+        to = Math.min(depth, v.offset + v.depth);
+      if (v.offset + v.depth <= 0 || v.offset >= depth || to - from <= 0.001) continue;
+      if (
+        (h.kind === 'clearance' || s.spec.kind === 'bolt') &&
+        (from > v.offset + 0.001 || to < v.offset + v.depth - 0.001)
+      )
+        throw new Error(
+          `Borravståndet slutar eller börjar inne i ${part.name || part.id}. Öka avståndet för genomgående hål, eller välj blindhål.`,
+        );
+      layers.push({ targetId: h.targetId, offset: from, depth: to - from });
+    }
+  }
+  if (!layers.length) throw new Error('Inga materiallager träffas inom borravståndet.');
+  const from = Math.min(...layers.map((v) => v.offset));
+  const to = Math.max(...layers.map((v) => v.offset + v.depth));
+  const entry = f.origin.clone().addScaledVector(f.z, from).toArray();
+  const exit = f.origin.clone().addScaledVector(f.z, to).toArray();
+  const fitted = spanPlacement(s, entry, exit);
+  fitted.placementMode = 'range';
+  fitted.insertion = { start: [...start], direction: [...direction], depth };
+  fitted.layerCount = layers.length;
+  fitted.holes = fitted.holes.map((h) => {
+    const local = layers.filter((v) => v.targetId === h.targetId);
+    return {
+      ...h,
+      layers: local.map((v) => ({
+        offset: millimeters(v.offset - from + (s.washers?.head ? s.spec.washer.thickness : 0)),
+        depth: millimeters(v.depth),
+      })),
+    };
+  });
+  return resolveFastenerHoles(fitted, model);
+}
+
 /** Evaluate automatic holes only when committing, against material without screw bores. */
 export function resolveFastenerHoles(s, model) {
   const materialModel = model.filter((o) => !isFastener(o));
-  if (s.span) {
+  if (s.span && !s.insertion) {
     const f = fastenerFrame(s);
     const from = new THREE.Vector3(...s.span.start).sub(f.origin).dot(f.z);
     const to = new THREE.Vector3(...s.span.end).sub(f.origin).dot(f.z);
@@ -123,6 +178,8 @@ export function resolveFastenerHoles(s, model) {
       h = boreFeature({ ...h, id: h.id || `bore-${h.targetId}` });
       const extent = holeExtent(h);
       if (h.kind === 'none' || extent === 'manual') return { ...h };
+      if (s.insertion && !h.layers?.length) return { ...h, active: false };
+      h.active = true;
       const part = materialModel.find((o) => o.id === h.targetId);
       if (!part) throw new Error('Hålets måldel saknas.');
       const intervals = partAxisIntervals(s, part, materialModel).filter(

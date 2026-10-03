@@ -1,5 +1,6 @@
 /** Routes completed clicks to the active tool. Pointer capture/box selection stays in its adapter. */
 export function pointerCommand({ mode, picking, drawing, hasStart, plateLength, hasLength }) {
+  if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return 'fastener-target';
   if (mode === 'helperpoint') return 'helperpoint';
   if (mode === 'workPlane') return 'workplane';

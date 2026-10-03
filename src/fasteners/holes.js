@@ -6,5 +6,16 @@ export function boreIdentity(s, h) {
   return `${s.id}:bore:${h.id || h.targetId}`;
 }
 export function transformSpan(s, turn) {
-  return s.span ? { span: { start: turn(s.span.start), end: turn(s.span.end) } } : {};
+  return {
+    ...(s.span ? { span: { start: turn(s.span.start), end: turn(s.span.end) } } : {}),
+    ...(s.insertion
+      ? {
+          insertion: {
+            ...s.insertion,
+            start: turn(s.insertion.start),
+            direction: turn(s.insertion.direction),
+          },
+        }
+      : {}),
+  };
 }

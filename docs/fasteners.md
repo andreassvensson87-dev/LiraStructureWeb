@@ -21,12 +21,12 @@ Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
    direkt i modellen; de markeras och visas under **Objekt i förbandet**.
    Ett nytt klick på en vald del tar bort den. Tryck **Enter** för att bekräfta
    och börja placera. Minst en del måste väljas. **Escape** avbryter.
-3. Nya skruvar använder två anliggningspunkter. Efter Enter väljs ingångsytan
-   och utgångsytan på valda delar; **Alt** väljer bortre ytan längs siktriktningen.
-   Sträckan styr hålen och anliggningen för mutter/brickor. Bibliotekets längd
-   bestämmer fortfarande skaftets längd. Kryssrutan **Två anliggningspunkter styr
-   förbandet** kan stängas av för den tidigare placeringen med punkt under huvud
-   och riktningspunkt. Punkterna kan redigeras i inspectorn efter placering.
+3. Klicka två insättningspunkter i skruvens längdriktning. Första punkten är
+   referens för borravståndet, andra punkten anger enbart riktningen. Vanlig snap
+   används; punkterna behöver inte ligga på ytor. Efter andra klicket anges
+   **Borravstånd från första punkten** i inspectorn. Förhandsvisningen och antalet
+   materiallager uppdateras när avståndet ändras. Klicka **Skapa skruv och hål**
+   eller tryck Enter i avståndsfältet. Biblioteket anger fysisk skruvlängd.
 4. Varje vald del visas med namn och egen håltyp. Nya delkopplingar börjar med
    bibliotekets **Hålstandard** (utan standard används **Ingen borrning**).
    Vid byte av skruv under skapandet hämtas den nya standarden för valda delar.
@@ -96,26 +96,24 @@ automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
 inte i denna första implementation. Hålens konturer finns i ritningsgeometrin;
 befintliga ritningsverktyg kan användas för lägesmått.
 
-## Försök med anliggningspunkter och borrhål som underobjekt
+## Insättningspunkter, borravstånd och borrhål som underobjekt
 
-Nya skruvar använder **Två anliggningspunkter styr förbandet**. Efter delval
-och Enter väljs ingångsyta och utgångsyta på valda delar. Ytsnap används direkt;
-håll **Alt** för bortre ytan längs siktriktningen. En vägg i ett rör väljs med
-ytter- och inneryta, hela röret med två motsatta ytterytor. För att välja en
-inneryta kan vyn behöva roteras så att ytan är åtkomlig. Förhandsvisningen visar
-förbandets geometri före sista klicket.
+Nya skruvar använder **Borravstånd styr vilka lager som ingår**. Två punkter
+anger axeln; ett separat avstånd anger hur långt programmet söker i riktningen
+från den första punkten. Inga ytklick eller Alt-val behövs. Punkter och avstånd
+kan ändras efteråt i inspectorn. Avmarkera kryssrutan för manuellt axelläge.
 
-Punkterna sparas separat från skaftets start/slut. Brickan under huvudet ligger
-utanför ingångsytan, mutterbrickan utanför utgångsytan och muttern därefter.
-Skruvlängden hämtas fortfarande från biblioteket; för kort skruv ger fel.
-Plan anliggning kräver ytor vinkelräta mot skruvaxeln. Sneda ytor kräver manuell
-placering eller framtida stöd för andra brickor.
+Materialintervall inom borravståndet identifieras per vald del. Tomrum räknas
+inte som materiallager. Ett kort avstånd kan omfatta en rörvägg, ett längre även
+nästa vägg. Delar utanför intervallet behåller delkopplingen men får inga
+aktiva automatiska hål. Genomgående hål kräver att avståndet når genom det valda
+lagret; ett slut mitt i lagret ger ett fel och kan ersättas med blindhål.
 
-**Mellan anliggningspunkterna** begränsar hålen till punktsträckan. Även övriga
-automatiska hållägen begränsas av sträckan när punktplacering är på. Blindhål
-behåller sitt angivna djup inom materialet och sträckan. Manuella hålmått är
-ett uttryckligt undantag. I inspectorns **Placering** kan punkterna ändras och
-sparas, och kryssrutan kan stängas av för placering med enbart riktning.
+Mutter och brickor placeras vid första och sista ingående materiallagret.
+Bibliotekets skruvlängd ändras inte. För kort skruv ger fel. Plana brickors
+anliggning på sneda ytor är inte löst av denna placering och måste kontrolleras.
+Borravståndet är en separat parameter, inte ett försök att välja närmaste ytor
+utifrån de två punkterna. Interna förbandsgränser härleds från materialet.
 
 Borrhålen är parametriska underobjekt i skruvens `holes`-lista, med typen `bore`,
 beständigt ID och måldel. De redigeras per del i skruvinspectorn. Geometrin och

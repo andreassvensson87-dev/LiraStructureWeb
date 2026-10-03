@@ -16,6 +16,7 @@ import {
   validateFastenerTargets,
 } from '../src/fasteners/relations.js';
 import {
+  insertionPlacement,
   spanPlacement,
   partAxisInterval,
   partAxisIntervals,
@@ -567,4 +568,44 @@ test('bore identities survive hole reordering, removing other holes and edits', 
   assert.ok(
     validateFastener({ ...source, holes: source.holes.map((h) => ({ ...h, id: 'duplicate' })) }),
   );
+});
+
+test('insertion axis and forward distance detect one or both tube walls without surface points', () => {
+  const draft = {
+    ...axialScrew(tube, 'span'),
+    spec: { ...bolt, length: 350 },
+    washers: { head: false, nut: false },
+  };
+  const one = insertionPlacement(draft, [500, 60, 160], [500, 60, 60], 30, [tube]);
+  assert.equal(one.layerCount, 1);
+  assert.equal(one.holes[0].depth, 12);
+  assert.deepEqual(one.start, [500, 60, 150]);
+  assert.equal(one.nutOffset, 12);
+  const both = insertionPlacement(draft, [500, 60, 160], [500, 60, 60], 330, [tube]);
+  assert.equal(both.layerCount, 2);
+  assert.equal(both.holes[0].depth, 300);
+  assert.equal(both.nutOffset, 300);
+  assert.equal(both.insertion.depth, 330);
+  assert.throws(() => insertionPlacement(draft, [500, 60, 160], [500, 60, 60], 15, [tube]), /inne/);
+  assert.throws(() => insertionPlacement(draft, [500, 60, 160], [500, 60, 60], 5, [tube]), /Inga/);
+  const changed = insertionPlacement(one, one.insertion.start, one.insertion.direction, 330, [
+    tube,
+  ]);
+  assert.equal(changed.holes[0].id, one.holes[0].id);
+  const moved = transformObject(both, 'move', [0, 0, 0], [10, 20, 30]);
+  assert.deepEqual(moved.insertion.start, [510, 80, 190]);
+});
+test('selected parts beyond the drilling range remain undrilled and inside insertion points find the first layer', () => {
+  const second = { ...tube, id: 'later', start: [0, 0, -400], end: [1000, 0, -400] };
+  const draft = {
+    ...axialScrew(tube, 'span'),
+    spec: { ...bolt, length: 350 },
+    holes: [...axialScrew(tube, 'span').holes, { ...axialScrew(second, 'span').holes[0] }],
+  };
+  const placed = insertionPlacement(draft, [500, 60, 160], [500, 60, 60], 30, [tube, second]);
+  assert.equal(placed.holes[1].active, false);
+  assert.equal(holesForPart(second, [placed]).length, 0);
+  const inside = insertionPlacement(draft, [500, 60, 145], [500, 60, 60], 20, [tube, second]);
+  assert.equal(inside.holes[0].depth, 12);
+  assert.deepEqual(inside.start, [500, 60, 150]);
 });

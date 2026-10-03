@@ -11,7 +11,7 @@ import { isFastener, validateFastener } from './object-type.js';
 import { axisPlacement } from './geometry.js';
 import { validateFastenerTargets, holesForPart } from './relations.js';
 import { boreFeature } from './holes.js';
-import { spanPlacement, holeExtent, resolveFastenerHoles } from './placement.js';
+import { insertionPlacement, holeExtent, resolveFastenerHoles } from './placement.js';
 import { isPhysical } from '../model-object.js';
 import './style.css';
 
@@ -35,6 +35,7 @@ export class FastenerUI {
     showInspector,
     getOperation,
     beginTargets,
+    previewPlacement,
   }) {
     Object.assign(this, {
       getObjects,
@@ -46,6 +47,7 @@ export class FastenerUI {
       showInspector,
       getOperation,
       beginTargets,
+      previewPlacement,
     });
     this.records = [];
     try {
@@ -132,8 +134,8 @@ export class FastenerUI {
     this.placeForm.innerHTML = `
       <div class="fastener-spec-row"><label class="field">Skruv ur bibliotek<select name="spec" required></select></label><button type="button" data-library title="Öppna skruvbibliotek" aria-label="Öppna skruvbibliotek">↗</button></div><p data-spec-info class="inspector-note"></p>
       <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Referensdel och hålberäkning</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-apply-hole-defaults>Hämta hålstandard från bibliotek</button><button type="button" data-calculate>Beräkna hål från delarnas ytor</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
-      <label class="fastener-check"><input type="checkbox" name="placementSpan" checked>Två anliggningspunkter styr förbandet</label><p class="inspector-note">Punkterna anger ingångs- och utgångsyta. Mutter och brickor placeras utanför dem. Biblioteket anger skruvlängden.</p>
-      <details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend data-entry-label>Ingångsyta</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend data-exit-label>Utgångsyta</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
+      <label class="fastener-check"><input type="checkbox" name="placementSpan" checked>Borravstånd styr vilka lager som ingår</label><p class="inspector-note">Två insättningspunkter anger riktningen. Borravståndet mäts från första punkten. Materiallagren hittas automatiskt.</p>
+      <label class="field" data-drill-depth>Borravstånd från första punkten · mm<input name="drillDepth" type="number" min="0.001" step="any" value="100" required></label><p class="inspector-note" data-layer-info></p><details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend data-entry-label>Ingångsyta</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend data-exit-label>Utgångsyta</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
       <label class="field" data-nut-offset>Mutterläge · mm från under huvud<input name="nutOffset" type="number" step="any" min="0"></label>
       <fieldset data-washers><legend>Brickor</legend><div class="fastener-washer-options"><label class="fastener-check"><input type="checkbox" name="washerHead">Under huvud</label><label class="fastener-check" data-washer-nut><input type="checkbox" name="washerNut">Vid mutter</label></div><p data-washer-info class="inspector-note"></p></fieldset>
 
@@ -152,6 +154,7 @@ export class FastenerUI {
       this.renderHoles();
       this.syncPlacementMode();
     };
+    this.placeForm.elements.drillDepth.oninput = () => this.previewRange();
     this.placeForm.elements.spec.onchange = () => this.specChanged();
     this.placeForm.querySelector('[data-delete]').onclick = () =>
       document.getElementById('delete').click();
@@ -487,10 +490,18 @@ export class FastenerUI {
       this.placeForm.elements.spec.value = `${spec.id}:${spec.revision}`;
       this.specChanged();
     }
-    f.placementSpan.checked = source ? !!source.span : true;
+    f.placementSpan.checked = source ? !!source.insertion || !!source.span : true;
+    f.drillDepth.value =
+      source?.insertion?.depth ||
+      (source?.span
+        ? Math.hypot(...source.span.end.map((v, i) => v - source.span.start[i]))
+        : this.currentSpec()?.length || 100);
+    this.placeForm.querySelector('[data-layer-info]').textContent = source?.layerCount
+      ? `${source.layerCount} materiallager inom borravståndet`
+      : '';
     this.syncPlacementMode();
-    const start = source?.span?.start || source?.start || [0, 0, 0],
-      end = source?.span?.end || source?.end || [0, 0, -100];
+    const start = source?.insertion?.start || source?.span?.start || source?.start || [0, 0, 0],
+      end = source?.insertion?.direction || source?.span?.end || source?.end || [0, 0, -100];
     start.forEach((v, i) => (f[`start${i}`].value = v));
     end.forEach((v, i) => (f[`direction${i}`].value = v));
     f.nutOffset.value =
@@ -526,10 +537,10 @@ export class FastenerUI {
       row.dataset.hole = i;
       row.dataset.boreId = h.id;
       const legend = document.createElement('legend');
-      legend.textContent = `Borrhål ${i + 1} · ${this.getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del'}`;
+      legend.textContent = `Borrhål ${i + 1} · ${this.getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del'}${h.layers ? ` · ${h.layers.length} lager` : ''}`;
       row.append(legend);
       const fields = document.createElement('div');
-      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="span">Mellan anliggningspunkterna</option><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><p class="inspector-note">Automatiska lägen beräknas vid placering och sparande. Välj manuellt för egna start- och djupmått.</p><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
+      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="span">Inom borravståndet</option><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><p class="inspector-note">Automatiska lägen beräknas vid placering och sparande. Välj manuellt för egna start- och djupmått.</p><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
       const kind = fields.querySelector('[name=holeKind]');
       kind.value = h.kind;
       const extent = fields.querySelector('[name=extent]');
@@ -609,7 +620,8 @@ export class FastenerUI {
       type: 'fastener',
       spec: structuredClone(spec),
       ...axisPlacement(spec, start, direction),
-      placementMode: f.placementSpan.checked ? 'span' : 'axis',
+      placementMode: f.placementSpan.checked ? 'range' : 'axis',
+      drillDepth: Number(f.drillDepth.value),
       holes: structuredClone(this.holeRows),
       washers: { head: f.washerHead.checked, nut: f.washerNut.checked },
       anchorId: this.anchor || null,
@@ -623,26 +635,49 @@ export class FastenerUI {
         : { nutOffset: null }),
     };
     delete draft.span;
+    delete draft.insertion;
     if (
       f.placementSpan.checked &&
       (this.editingObject || this.getOperation()?.mode !== 'fastenerTargets')
     )
-      draft = spanPlacement(draft, start, direction);
+      draft = insertionPlacement(
+        draft,
+        start,
+        direction,
+        Number(f.drillDepth.value),
+        this.getObjects(),
+      );
     if (resolve) draft = resolveFastenerHoles(draft, this.getObjects());
     const error = validateFastener(draft);
     if (error) throw new Error(error);
     validateFastenerTargets(draft, this.getObjects());
     return draft;
   }
+  previewRange() {
+    if (this.getOperation()?.mode !== 'fastenerDepth') return;
+    try {
+      const draft = this.readPlacement(true);
+      this.previewPlacement(draft);
+      this.placeForm.querySelector('[data-layer-info]').textContent =
+        `${draft.layerCount} materiallager inom borravståndet`;
+      this.placeForm.querySelector('[data-error]').textContent = '';
+    } catch (e) {
+      this.previewPlacement(null);
+      this.placeForm.querySelector('[data-error]').textContent = e.message;
+      this.placeForm.querySelector('[data-layer-info]').textContent = '';
+    }
+  }
   syncPlacementMode() {
     const span = this.placeForm.elements.placementSpan.checked;
     this.placeForm.querySelector('[data-entry-label]').textContent = span
-      ? 'Ingångsyta'
+      ? 'Insättningspunkt'
       : 'Under huvud';
     this.placeForm.querySelector('[data-exit-label]').textContent = span
-      ? 'Utgångsyta'
+      ? 'Riktningspunkt'
       : 'Riktningspunkt';
     this.placeForm.querySelector('[data-nut-offset] input').readOnly = span;
+    this.placeForm.querySelector('[data-drill-depth]').hidden = !span;
+    this.placeForm.elements.drillDepth.disabled = !span;
   }
   calculateHoles() {
     const draft = this.readPlacement();
@@ -680,16 +715,21 @@ export class FastenerUI {
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent = 'Placera skruv';
       document.getElementById('mode-label').textContent =
-        operation.draft.placementMode === 'span'
-          ? 'Ingångsyta → utgångsyta'
+        operation.draft.placementMode === 'range'
+          ? 'Insättningspunkt → riktning'
           : 'Under huvud → riktning';
       const p = document.createElement('p');
-      p.textContent = `${operation.draft.spec.name} · ${operation.draft.placementMode === 'span' ? 'Välj ingångsyta och utgångsyta. Alt väljer bortre ytan. Förbandet styr hål, mutter och brickor.' : 'Klicka under huvud och sedan i skruvens riktning.'} Skruvlängd ${operation.draft.spec.length} mm. Escape avbryter.`;
+      p.textContent = `${operation.draft.spec.name} · ${operation.draft.placementMode === 'range' ? 'Välj två insättningspunkter i skruvens längdriktning. Ange sedan borravstånd i inspectorn.' : 'Klicka under huvud och sedan i skruvens riktning.'} Skruvlängd ${operation.draft.spec.length} mm. Escape avbryter.`;
       this.panel.append(p);
       this.panel.inert = false;
       return;
     }
-    const source = selected.length === 1 && isFastener(selected[0]) ? selected[0] : null;
+    const source =
+      operation?.mode === 'fastenerDepth'
+        ? operation.draft
+        : selected.length === 1 && isFastener(selected[0])
+          ? selected[0]
+          : null;
     const related =
       selected.length === 1
         ? this.getObjects()
@@ -715,6 +755,13 @@ export class FastenerUI {
         );
       }
     }
-    this.panel.inert = !!operation;
+    this.panel.inert = !!operation && operation.mode !== 'fastenerDepth';
+    if (operation?.mode === 'fastenerDepth') {
+      this.placeForm.querySelector('[data-delete]').hidden = true;
+      this.placeForm.querySelector('[data-select-targets]').hidden = true;
+      this.placeForm.querySelector('[type=submit]').textContent = 'Skapa skruv och hål';
+      document.getElementById('object-heading').textContent = 'Skruv · Ange borravstånd';
+      this.previewRange();
+    }
   }
 }

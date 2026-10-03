@@ -60,6 +60,19 @@ export function validateFastener(s) {
           throw new Error('Brickorna och muttern överlappar. Öka mutterläget.');
       }
     }
+    if (
+      s.insertion &&
+      (![s.insertion.start, s.insertion.direction].every(
+        (p) =>
+          Array.isArray(p) &&
+          p.length === 3 &&
+          p.every((v) => Number.isFinite(v) && Math.abs(v) <= 1e7),
+      ) ||
+        !Number.isFinite(s.insertion.depth) ||
+        s.insertion.depth <= 0 ||
+        s.insertion.depth > 1e7)
+    )
+      throw new Error('Ogiltiga insättningspunkter eller borravstånd.');
     if (s.span) {
       const f = fastenerFrame(s);
       const coordinates = [s.span.start, s.span.end];

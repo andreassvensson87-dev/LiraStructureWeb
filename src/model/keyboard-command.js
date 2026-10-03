@@ -8,6 +8,7 @@ export function modelKeyboardCommand(
   if (editing) return null;
   const modifier = e.ctrlKey || e.metaKey,
     axis = ['x', 'y', 'z'].includes(e.key.toLowerCase());
+  if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return e.key === 'Enter' ? 'confirm-fastener-targets' : null;
   if (mode === 'workPlane') return e.key === 'Backspace' ? 'remove-workplane-point' : null;
   if (['plateCreate', 'plateVertex'].includes(mode) && !modifier) {

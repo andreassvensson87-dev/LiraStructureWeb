@@ -11,7 +11,7 @@ export function holesForPart(part, model) {
     if (!holes) {
       const f = fastenerFrame(s);
       holes = s.holes
-        .filter((h) => h.kind !== 'none')
+        .filter((h) => h.kind !== 'none' && h.active !== false)
         .map((h) => ({
           ...structuredClone(h),
           id: boreIdentity(s, h),

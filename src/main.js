@@ -8,7 +8,7 @@ import { createHelperController } from './model/ui/helper-controller.js';
 import { isHelper, isPhysical } from './model-object.js';
 import { FastenerUI } from './fasteners/ui.js';
 import { isFastener } from './fasteners/object-type.js';
-import { spanPlacement, resolveFastenerHoles } from './fasteners/placement.js';
+import { resolveFastenerHoles } from './fasteners/placement.js';
 import { axisPlacement } from './fasteners/geometry.js';
 import { removeFastenerRelations, validateFastenerTargets } from './fasteners/relations.js';
 let fastenerUI = null;
@@ -576,9 +576,19 @@ function candidates(target) {
   if (tools.operation?.mode === 'fastenerCreate') {
     const draft = tools.operation.draft;
     return [
-      draft.placementMode === 'span'
-        ? resolveFastenerHoles(spanPlacement(draft, tools.first, target), project.objects)
-        : { ...draft, ...axisPlacement(draft.spec, tools.first, target) },
+      {
+        ...draft,
+        ...axisPlacement(draft.spec, tools.first, target),
+        ...(draft.placementMode === 'range'
+          ? {
+              insertion: {
+                start: [...tools.first],
+                direction: [...target],
+                depth: draft.drillDepth,
+              },
+            }
+          : {}),
+      },
     ];
   }
   if (tools.operation?.mode === 'grip')
@@ -596,6 +606,21 @@ function commitPoint(target) {
   let batch;
   try {
     batch = candidates(target);
+    if (
+      tools.operation?.mode === 'fastenerCreate' &&
+      tools.operation.draft.placementMode === 'range'
+    ) {
+      clearPreview();
+      tools.first = null;
+      tools.operation = { mode: 'fastenerDepth', draft: batch[0] };
+      $('draw-length-form').hidden = true;
+      fastenerUI.sync([], tools.operation);
+      inspector.show('properties');
+      $('status').textContent = 'Ange borravstånd från första insättningspunkten och skapa skruven';
+      fastenerUI.placeForm.elements.drillDepth.focus();
+      fastenerUI.placeForm.elements.drillDepth.select();
+      return true;
+    }
     if (tools.operation?.mode === 'fastenerCreate')
       batch = batch.map((s) => resolveFastenerHoles(s, project.objects));
   } catch (error) {
@@ -758,37 +783,6 @@ function point(e) {
   camera.updateMatrixWorld();
   ray(e);
   const r = host.getBoundingClientRect();
-  if (
-    tools.operation?.mode === 'fastenerCreate' &&
-    tools.operation.draft.placementMode === 'span'
-  ) {
-    const ids = new Set(tools.operation.draft.holes.map((h) => h.targetId));
-    const surfaces = objects.children.filter((o) => o.visible && ids.has(o.userData.id));
-    const sides = surfaces.map((o) => o.material.side);
-    let hits;
-    try {
-      surfaces.forEach((o) => (o.material.side = THREE.DoubleSide));
-      hits = raycaster.intersectObjects(surfaces, false);
-    } finally {
-      surfaces.forEach((o, i) => (o.material.side = sides[i]));
-    }
-    const hit = e.altKey ? hits.at(-1) : hits[0];
-    if (!hit) {
-      $('status').textContent = 'Välj en yta på en del i förbandet';
-      return null;
-    }
-    tools.activeSnap = {
-      point: hit.point.toArray(),
-      kind: 'point',
-      symbol: 'cross',
-      label: e.altKey ? 'Bortre anliggningsyta · Alt' : 'Anliggningsyta',
-    };
-    $('status').textContent = tools.first
-      ? 'Välj utgångsyta · Alt för bortre ytan'
-      : 'Välj ingångsyta';
-    updateSnapOverlay();
-    return tools.activeSnap.point;
-  }
   tools.activeSnap = resolveSnap({
     pointer: [e.clientX - r.left, e.clientY - r.top],
     camera,
@@ -882,7 +876,7 @@ function showPreview(p) {
 function updatePointer(e) {
   tools.lastPointer = { clientX: e.clientX, clientY: e.clientY };
   if (!tools.drawing) return;
-  if (tools.operation?.mode === 'fastenerTargets') return;
+  if (['fastenerTargets', 'fastenerDepth'].includes(tools.operation?.mode)) return;
   if (tools.operation?.mode === 'workPlane') {
     const p = point(e),
       points = [...tools.operation.points, ...(p ? [p] : [])];
@@ -1036,6 +1030,12 @@ fastenerUI = new FastenerUI({
   getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
   selectSource: (id) => setSelection([id]),
   getOperation: () => tools.operation,
+  previewPlacement: (draft) => {
+    clearPreview();
+    if (!draft) return;
+    ui.preview = previewModelBatch([draft]);
+    scene.add(ui.preview);
+  },
   showInspector: () => inspector.show('properties'),
   beginTargets: (targetIds) => {
     select(null);
@@ -1058,8 +1058,8 @@ fastenerUI = new FastenerUI({
     fastenerUI.sync([], tools.operation);
     inspector.show('properties');
     $('status').textContent =
-      draft.placementMode === 'span'
-        ? 'Skruv · Välj ingångsyta, därefter utgångsyta · Alt för bortre ytan'
+      draft.placementMode === 'range'
+        ? 'Skruv · Välj första insättningspunkten, därefter riktning'
         : 'Skruv · Välj punkt under huvud, därefter riktning';
     renderer.domElement.focus({ preventScroll: true });
   },
