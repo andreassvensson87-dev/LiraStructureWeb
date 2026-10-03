@@ -108,11 +108,38 @@ export function selectionGeometryReader(model) {
     evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])]).geometry;
 }
 /** Seed repeated, already evaluated assemblies; changed cut identities invalidate this cache. */
-export function cacheObjectGeometry(s, model, geometry, edges, knownCuts = null) {
+export function cacheObjectGeometry(s, model, geometry, edges, knownCuts = null, instance = null) {
   const previous = cache.get(s);
   previous?.geometry.dispose();
   previous?.edges?.dispose();
-  cache.set(s, { cuts: knownCuts ?? cutsForModel(s, model), geometry, edges });
+  cache.set(s, { cuts: knownCuts ?? cutsForModel(s, model), geometry, edges, instance });
+}
+/** Called after geometryForModel has validated the cached cut identities. */
+export function objectInstanceDescriptor(s) {
+  const entry = cache.get(s);
+  if (!entry || !['sweep', 'plate'].includes(s.type || 'sweep')) return null;
+  if (entry.instance) return entry.instance;
+  if (entry.cuts.length) return null;
+  const f = objectType(s).partFrame(s);
+  const matrix = new THREE.Matrix4().makeBasis(f.x, f.y, f.z).setPosition(f.origin);
+  // Keep exact modelling dimensions; display and world placement do not change the shape.
+  const shape = { ...s };
+  for (const key of [
+    'id',
+    'name',
+    'prefix',
+    'number',
+    'material',
+    'colorOverride',
+    'start',
+    'end',
+    'rotation',
+    'profileUp',
+    'frame',
+  ])
+    delete shape[key];
+  if (s.start && s.end) shape.length = Math.hypot(...s.end.map((v, i) => v - s.start[i]));
+  return { key: JSON.stringify(shape), matrix, geometry: entry.geometry, local: false };
 }
 export function edgesForModel(s, model, threshold = 1) {
   const entry = evaluated(s, model);

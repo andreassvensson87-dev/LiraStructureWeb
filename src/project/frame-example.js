@@ -351,6 +351,13 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
           source.geometry.clone().applyMatrix4(matrix),
           source.edges.clone().applyMatrix4(matrix),
           holes.get(item.object.id) || [],
+          {
+            key: source.geometry,
+            geometry: source.geometry,
+            edges: source.edges,
+            matrix,
+            local: true,
+          },
         );
       }
     } finally {

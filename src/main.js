@@ -29,6 +29,7 @@ import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
 import { createObjectMesh, updateObjectMeshSelection } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
+import { InstanceBatches } from './model/instance-batches.js';
 import { FrameGate } from './model/frame-gate.js';
 import { updateFastenerDetail } from './model/fastener-detail.js';
 import { createFrameExample } from './project/frame-example.js';
@@ -50,7 +51,9 @@ let modelTree = null;
 let referenceModels = null;
 const hiddenObjects = new Set();
 const isVisible = (id) =>
-  !hiddenObjects.has(id) && (ui.showHelpers || !isHelper(project.objects.find((s) => s.id === id)));
+  !hiddenObjects.has(id) &&
+  (ui.showHelpers ||
+    !isHelper(renderedById.get(id)?.source ?? project.objects.find((s) => s.id === id)));
 import { MaterialUI } from './material-ui.js';
 let materialUI = null;
 import './style.css';
@@ -86,6 +89,7 @@ const grid = new GridLines(scene, host);
 grid.set({ ...project.grid, z: levelElevation(project.levels) });
 const objects = new THREE.Group();
 scene.add(objects);
+const instanceBatches = new InstanceBatches(scene);
 const insertionPoints = new InsertionPoints(
   host,
   (kind) =>
@@ -106,6 +110,7 @@ const insertionPoints = new InsertionPoints(
 );
 const raycaster = new THREE.Raycaster(),
   mouse = new THREE.Vector2();
+raycaster.layers.enable(3);
 
 const { workPlaneGuide, planeViewButton, syncWorkPlane, workPlanePrompt, pickWorkPlane } =
   createWorkplaneController({
@@ -270,7 +275,9 @@ renderer.setAnimationLoop(() => {
   // Project labels with the same camera transform used to render this frame.
   camera.updateMatrixWorld();
   if (!frameGate.consume(camera)) return;
+  const frameStarted = performance.now();
   updateFastenerDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
+  instanceBatches.sync();
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
   insertionPoints.update(
     camera,
@@ -296,6 +303,10 @@ renderer.setAnimationLoop(() => {
   rotationHandle.update();
   updatePlateNormal();
   renderer.render(scene, camera);
+  if (import.meta.env.DEV) {
+    host.dataset.renderCalls = renderer.info.render.calls;
+    host.dataset.renderMs = (performance.now() - frameStarted).toFixed(1);
+  }
 });
 
 const { readForm, fillForm, updateForm } = createSweepForm({
@@ -354,6 +365,7 @@ function render({ selectionOnly = false } = {}) {
       if (entry) updateObjectMeshSelection(entry.child, entry.source, selectedIds);
     }
   } else {
+    instanceBatches.clear();
     for (const child of [...objects.children]) {
       objects.remove(child);
       dispose(child);
@@ -370,6 +382,7 @@ function render({ selectionOnly = false } = {}) {
       objects.add(child);
     });
     renderedObjects = [...project.objects];
+    instanceBatches.rebuild(objects.children);
   }
   renderedSelection = new Set(selectedIds);
   $('count').textContent = project.objects.length;
@@ -814,7 +827,7 @@ function selectionHit() {
       objects.children.filter(
         (o) =>
           o.visible &&
-          camera.layers.test(o.layers) &&
+          (camera.layers.test(o.layers) || o.userData.instanced) &&
           !o.userData.cut &&
           (tools.operation?.mode !== 'fastenerTargets' ||
             (isPhysical(renderedById.get(o.userData.id)?.source) &&

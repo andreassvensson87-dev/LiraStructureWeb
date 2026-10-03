@@ -1,7 +1,13 @@
 import { helperMesh } from './helper-mesh.js';
 import { isHelper } from '../model-object.js';
 import * as THREE from 'three';
-import { isCut, cutsForModel, geometryForModel, edgesForModel } from '../model-object.js';
+import {
+  isCut,
+  cutsForModel,
+  geometryForModel,
+  edgesForModel,
+  objectInstanceDescriptor,
+} from '../model-object.js';
 import { isLineCut, lineCutFrame } from '../line-cut.js';
 import { roundProfile } from '../round-profile.js';
 import { objectColor } from '../materials.js';
@@ -92,6 +98,8 @@ export function createObjectMesh(
   );
   lines.renderOrder = cut ? 20 : 0;
   m.userData.cut = cut;
+  if (!ghost && !cut && !transparentView)
+    m.userData.instanceDescriptor = objectInstanceDescriptor(s);
   m.add(lines);
   if (isLineCut(s)) {
     const f = lineCutFrame(s),
