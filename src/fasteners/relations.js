@@ -1,3 +1,4 @@
+import { boreFeature, boreIdentity, transformSpan } from './holes.js';
 import * as THREE from 'three';
 import { objectType } from '../model/object-types/index.js';
 import { isFastener } from './object-type.js';
@@ -11,9 +12,10 @@ export function holesForPart(part, model) {
       const f = fastenerFrame(s);
       holes = s.holes
         .filter((h) => h.kind !== 'none')
-        .map((h, i) => ({
+        .map((h) => ({
           ...structuredClone(h),
-          id: `${s.id}:hole:${i}`,
+          id: boreIdentity(s, h),
+          ownerId: s.id,
           type: 'linkedhole',
           targets: [h.targetId],
           frame: {
@@ -44,6 +46,7 @@ export function followFasteners(before, after, explicitlyChanged = new Set()) {
     const turn = (p) => new THREE.Vector3(...p).applyMatrix4(delta).toArray();
     return {
       ...s,
+      ...transformSpan(s, turn),
       start: turn(s.start),
       end: turn(s.end),
       radial: fastenerFrame(s).x.transformDirection(delta).toArray(),
@@ -55,7 +58,9 @@ export function remapFastenerCopy(s, ids) {
   return {
     ...s,
     anchorId: ids.get(s.anchorId) || s.anchorId,
-    holes: s.holes.map((h) => ({ ...h, targetId: ids.get(h.targetId) || h.targetId })),
+    holes: s.holes.map((h) =>
+      boreFeature({ ...h, id: crypto.randomUUID(), targetId: ids.get(h.targetId) || h.targetId }),
+    ),
   };
 }
 export function removeFastenerRelations(objects, deleted) {

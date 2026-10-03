@@ -8,7 +8,7 @@ import { createHelperController } from './model/ui/helper-controller.js';
 import { isHelper, isPhysical } from './model-object.js';
 import { FastenerUI } from './fasteners/ui.js';
 import { isFastener } from './fasteners/object-type.js';
-import { resolveFastenerHoles } from './fasteners/placement.js';
+import { spanPlacement, resolveFastenerHoles } from './fasteners/placement.js';
 import { axisPlacement } from './fasteners/geometry.js';
 import { removeFastenerRelations, validateFastenerTargets } from './fasteners/relations.js';
 let fastenerUI = null;
@@ -573,13 +573,14 @@ function startGrip(grip) {
   renderer.domElement.focus({ preventScroll: true });
 }
 function candidates(target) {
-  if (tools.operation?.mode === 'fastenerCreate')
+  if (tools.operation?.mode === 'fastenerCreate') {
+    const draft = tools.operation.draft;
     return [
-      {
-        ...tools.operation.draft,
-        ...axisPlacement(tools.operation.draft.spec, tools.first, target),
-      },
+      draft.placementMode === 'span'
+        ? resolveFastenerHoles(spanPlacement(draft, tools.first, target), project.objects)
+        : { ...draft, ...axisPlacement(draft.spec, tools.first, target) },
     ];
+  }
   if (tools.operation?.mode === 'grip')
     return moveGripPoints(tools.operation.sources, tools.operation.refs, target);
   if (tools.operation?.mode === 'helperline')
@@ -757,6 +758,37 @@ function point(e) {
   camera.updateMatrixWorld();
   ray(e);
   const r = host.getBoundingClientRect();
+  if (
+    tools.operation?.mode === 'fastenerCreate' &&
+    tools.operation.draft.placementMode === 'span'
+  ) {
+    const ids = new Set(tools.operation.draft.holes.map((h) => h.targetId));
+    const surfaces = objects.children.filter((o) => o.visible && ids.has(o.userData.id));
+    const sides = surfaces.map((o) => o.material.side);
+    let hits;
+    try {
+      surfaces.forEach((o) => (o.material.side = THREE.DoubleSide));
+      hits = raycaster.intersectObjects(surfaces, false);
+    } finally {
+      surfaces.forEach((o, i) => (o.material.side = sides[i]));
+    }
+    const hit = e.altKey ? hits.at(-1) : hits[0];
+    if (!hit) {
+      $('status').textContent = 'Välj en yta på en del i förbandet';
+      return null;
+    }
+    tools.activeSnap = {
+      point: hit.point.toArray(),
+      kind: 'point',
+      symbol: 'cross',
+      label: e.altKey ? 'Bortre anliggningsyta · Alt' : 'Anliggningsyta',
+    };
+    $('status').textContent = tools.first
+      ? 'Välj utgångsyta · Alt för bortre ytan'
+      : 'Välj ingångsyta';
+    updateSnapOverlay();
+    return tools.activeSnap.point;
+  }
   tools.activeSnap = resolveSnap({
     pointer: [e.clientX - r.left, e.clientY - r.top],
     camera,
@@ -1025,7 +1057,10 @@ fastenerUI = new FastenerUI({
     syncOperationUI();
     fastenerUI.sync([], tools.operation);
     inspector.show('properties');
-    $('status').textContent = 'Skruv · Välj punkt under huvud, därefter riktning';
+    $('status').textContent =
+      draft.placementMode === 'span'
+        ? 'Skruv · Välj ingångsyta, därefter utgångsyta · Alt för bortre ytan'
+        : 'Skruv · Välj punkt under huvud, därefter riktning';
     renderer.domElement.focus({ preventScroll: true });
   },
   commit: (draft) => {

@@ -5,6 +5,8 @@ const fmt = (v) =>
   (Math.abs(v) < 0.005 ? 0 : v).toLocaleString('sv-SE', { maximumFractionDigits: 2 });
 export function partHoleSchedule(source, model, localMatrix) {
   return holesForPart(source, model).map((h, i) => ({
+    id: h.id,
+    ownerId: h.ownerId,
     label: `H${i + 1} · Ø${fmt(h.diameter)} · ${h.kind === 'pilot' ? 'borrdjup' : 'håldjup'} ${fmt(h.depth)} mm${h.countersink ? ` · försänkning Ø${fmt(h.countersink.diameter)} / ${fmt(h.countersink.depth)} mm` : ''}`,
     center: new THREE.Vector3(...h.frame.origin).applyMatrix4(localMatrix).toArray(),
     direction: new THREE.Vector3(...h.frame.u)

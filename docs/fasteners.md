@@ -21,11 +21,12 @@ Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
    direkt i modellen; de markeras och visas under **Objekt i förbandet**.
    Ett nytt klick på en vald del tar bort den. Tryck **Enter** för att bekräfta
    och börja placera. Minst en del måste väljas. **Escape** avbryter.
-3. Välj biblioteksversion och ange skruvens punkt under huvudet samt en
-   riktningspunkt. Avståndet mellan punkterna bestämmer riktningen; bibliotekets
-   längd bestämmer skaftets längd. Efter Enter placeras skruven med två klick
-   och modellens snap: först under huvud, sedan riktning. Försänkta huvuden sträcker sig bakom referenspunkten;
-   hålets startläge kan därför behöva vara negativt.
+3. Nya skruvar använder två anliggningspunkter. Efter Enter väljs ingångsytan
+   och utgångsytan på valda delar; **Alt** väljer bortre ytan längs siktriktningen.
+   Sträckan styr hålen och anliggningen för mutter/brickor. Bibliotekets längd
+   bestämmer fortfarande skaftets längd. Kryssrutan **Två anliggningspunkter styr
+   förbandet** kan stängas av för den tidigare placeringen med punkt under huvud
+   och riktningspunkt. Punkterna kan redigeras i inspectorn efter placering.
 4. Varje vald del visas med namn och egen håltyp. Nya delkopplingar börjar med
    bibliotekets **Hålstandard** (utan standard används **Ingen borrning**).
    Vid byte av skruv under skapandet hämtas den nya standarden för valda delar.
@@ -94,3 +95,31 @@ Automatisk dimensionering av skruvar, produktkataloger, skruvmönster, gängor,
 automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
 inte i denna första implementation. Hålens konturer finns i ritningsgeometrin;
 befintliga ritningsverktyg kan användas för lägesmått.
+
+## Försök med anliggningspunkter och borrhål som underobjekt
+
+Nya skruvar använder **Två anliggningspunkter styr förbandet**. Efter delval
+och Enter väljs ingångsyta och utgångsyta på valda delar. Ytsnap används direkt;
+håll **Alt** för bortre ytan längs siktriktningen. En vägg i ett rör väljs med
+ytter- och inneryta, hela röret med två motsatta ytterytor. För att välja en
+inneryta kan vyn behöva roteras så att ytan är åtkomlig. Förhandsvisningen visar
+förbandets geometri före sista klicket.
+
+Punkterna sparas separat från skaftets start/slut. Brickan under huvudet ligger
+utanför ingångsytan, mutterbrickan utanför utgångsytan och muttern därefter.
+Skruvlängden hämtas fortfarande från biblioteket; för kort skruv ger fel.
+Plan anliggning kräver ytor vinkelräta mot skruvaxeln. Sneda ytor kräver manuell
+placering eller framtida stöd för andra brickor.
+
+**Mellan anliggningspunkterna** begränsar hålen till punktsträckan. Även övriga
+automatiska hållägen begränsas av sträckan när punktplacering är på. Blindhål
+behåller sitt angivna djup inom materialet och sträckan. Manuella hålmått är
+ett uttryckligt undantag. I inspectorns **Placering** kan punkterna ändras och
+sparas, och kryssrutan kan stängas av för placering med enbart riktning.
+
+Borrhålen är parametriska underobjekt i skruvens `holes`-lista, med typen `bore`,
+beständigt ID och måldel. De redigeras per del i skruvinspectorn. Geometrin och
+Single Part härleds från samma poster. Omordning eller borttagning av ett annat
+hål ändrar inte deras identitet; kopiering ger nya ID:n. De är inte separata
+objekt i huvudmodellistan. IFC-export ingår inte ännu; underobjekten ger en grund
+för att senare exportera hål med stabil identitet och koppling till borrad del.

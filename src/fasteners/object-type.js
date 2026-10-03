@@ -1,3 +1,4 @@
+import { transformSpan } from './holes.js';
 import * as THREE from 'three';
 import { validateFastenerSpec } from './library.js';
 import { fastenerGeometry, fastenerFrame } from './geometry.js';
@@ -59,8 +60,33 @@ export function validateFastener(s) {
           throw new Error('Brickorna och muttern överlappar. Öka mutterläget.');
       }
     }
+    if (s.span) {
+      const f = fastenerFrame(s);
+      const coordinates = [s.span.start, s.span.end];
+      if (
+        coordinates.some(
+          (p) =>
+            !Array.isArray(p) ||
+            p.length !== 3 ||
+            p.some((v) => !Number.isFinite(v) || Math.abs(v) > 1e7),
+        )
+      )
+        throw new Error('Ogiltiga anliggningspunkter.');
+      const a = new THREE.Vector3(...s.span.start).sub(f.origin),
+        b = new THREE.Vector3(...s.span.end).sub(f.origin);
+      if (
+        a.clone().cross(f.z).length() > 0.001 ||
+        b.clone().cross(f.z).length() > 0.001 ||
+        b.dot(f.z) - a.dot(f.z) < 0.001
+      )
+        throw new Error('Anliggningspunkterna måste ligga längs skruvaxeln i rätt ordning.');
+    }
+    const holeIds = new Set();
     const targets = new Set();
     for (const h of s.holes) {
+      if (h.id != null && (typeof h.id !== 'string' || !h.id || holeIds.has(h.id)))
+        throw new Error('Borrhål måste ha unika ID:n.');
+      if (h.id) holeIds.add(h.id);
       if (
         typeof h.targetId !== 'string' ||
         !h.targetId ||
@@ -71,7 +97,7 @@ export function validateFastener(s) {
       targets.add(h.targetId);
       if (!['none', 'pilot', 'clearance'].includes(h.kind))
         throw new Error('Välj en giltig håltyp.');
-      if (h.extent != null && !['wall', 'profile', 'blind', 'manual'].includes(h.extent))
+      if (h.extent != null && !['span', 'wall', 'profile', 'blind', 'manual'].includes(h.extent))
         throw new Error('Ogiltig hålomfattning.');
       if (h.kind === 'none') continue;
       if (
@@ -124,6 +150,7 @@ export const fastenerType = {
   }),
   translate: (s, d) => ({
     ...s,
+    ...transformSpan(s, (p) => p.map((v, i) => v + d[i])),
     start: s.start.map((v, i) => v + d[i]),
     end: s.end.map((v, i) => v + d[i]),
   }),
@@ -131,12 +158,14 @@ export const fastenerType = {
     const delta = target.map((v, i) => v - s[key][i]);
     return {
       ...s,
+      ...transformSpan(s, (p) => p.map((v, i) => v + delta[i])),
       start: s.start.map((v, i) => v + delta[i]),
       end: s.end.map((v, i) => v + delta[i]),
     };
   },
   rotate: (s, { turn, quaternion }) => ({
     ...s,
+    ...transformSpan(s, turn),
     start: turn(s.start),
     end: turn(s.end),
     radial: fastenerFrame(s).x.applyQuaternion(quaternion).toArray(),

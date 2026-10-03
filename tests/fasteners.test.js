@@ -16,6 +16,7 @@ import {
   validateFastenerTargets,
 } from '../src/fasteners/relations.js';
 import {
+  spanPlacement,
   partAxisInterval,
   partAxisIntervals,
   resolveFastenerHoles,
@@ -438,6 +439,8 @@ const axialScrew = (part, extent, depth = 30) => ({
   end: [500, 60, 60],
   holes: [
     {
+      id: `bore-${part.id}`,
+      type: 'bore',
       targetId: part.id,
       kind: extent === 'blind' ? 'pilot' : 'clearance',
       extent,
@@ -488,4 +491,80 @@ test('blind holes start at the entrance, reject a cavity crossing; manual holes 
   assert.throws(() => resolveFastenerHoles(missed, [tube]), /träffar inte/);
   const behind = { ...axialScrew(tube, 'wall'), start: [500, 60, -160], end: [500, 60, -260] };
   assert.throws(() => resolveFastenerHoles(behind, [tube]), /bakom/);
+});
+
+test('contact points restrict drilling to one tube wall or the entire tube and seat hardware outside', () => {
+  const spec = {
+    ...bolt,
+    length: 350,
+    washer: { innerDiameter: 11, outerDiameter: 22, thickness: 2 },
+  };
+  const draft = { ...axialScrew(tube, 'span'), spec, washers: { head: true, nut: true } };
+  const entry = [500, 60, 150];
+  const one = resolveFastenerHoles(spanPlacement(draft, entry, [500, 60, 138]), [tube]);
+  assert.equal(validateFastener(one), '');
+  assert.deepEqual(one.start, [500, 60, 152]);
+  assert.equal(one.holes[0].offset, 2);
+  assert.equal(one.holes[0].depth, 12);
+  assert.equal(one.nutOffset, 16);
+  const both = resolveFastenerHoles(spanPlacement(draft, entry, [500, 60, -150]), [tube]);
+  assert.equal(both.holes[0].depth, 300);
+  assert.equal(both.nutOffset, 304);
+  assert.throws(
+    () => spanPlacement({ ...draft, spec: { ...spec, length: 100 } }, entry, [500, 60, -150]),
+    /för kort/,
+  );
+  assert.throws(
+    () => resolveFastenerHoles(spanPlacement(draft, [500, 60, 160], [500, 60, 138]), [tube]),
+    /måste ligga/,
+  );
+  assert.throws(
+    () => resolveFastenerHoles(spanPlacement(draft, entry, [510, 60, 138]), [tube]),
+    /vinkelräta/,
+  );
+});
+test('contact spans follow translation, rotation, reference movement, history and copies', () => {
+  const source = resolveFastenerHoles(
+    spanPlacement({ ...axialScrew(tube, 'span'), spec: bolt }, [500, 60, 150], [500, 60, 138]),
+    [tube],
+  );
+  const moved = transformObject(source, 'move', [0, 0, 0], [10, 20, 30]);
+  assert.deepEqual(moved.span.start, [510, 80, 180]);
+  const turned = rotateObject(source, [0, 0, 0], 'Y', 30);
+  assert.ok(
+    Math.abs(
+      new THREE.Vector3(...turned.span.start).distanceTo(new THREE.Vector3(...turned.span.end)) -
+        12,
+    ) < 0.001,
+  );
+  const movedTube = transformObject(tube, 'move', [0, 0, 0], [10, 20, 30]);
+  const followed = applyObjectBatch([tube, source], [movedTube]).objects[1];
+  assert.deepEqual(followed.span, moved.span);
+  const copy = applyObjectBatch([tube, source], [tube, source], { copy: true }).objects[3];
+  assert.notEqual(copy.holes[0].id, source.holes[0].id);
+  assert.notEqual(copy.holes[0].targetId, source.holes[0].targetId);
+  assert.deepEqual(copy.span, source.span);
+  const project = createProject({ grid: {}, levels: {} });
+  project.objects = [tube, source];
+  const history = new ProjectHistory();
+  history.checkpoint(project);
+  project.objects = [tube, moved];
+  const restored = history.undo(project);
+  assert.deepEqual(restored.objects[1].span, source.span);
+  assert.equal(restored.objects[1].holes[0].id, source.holes[0].id);
+});
+test('bore identities survive hole reordering, removing other holes and edits', () => {
+  const source = {
+    ...screw,
+    holes: screw.holes.map((h, i) => ({ ...h, id: `stable-${i}`, type: 'bore' })),
+  };
+  const first = holesForPart(plate, [source])[0];
+  const reordered = { ...source, holes: [...source.holes].reverse() };
+  assert.equal(holesForPart(plate, [reordered])[0].id, first.id);
+  const edited = { ...source, holes: [{ ...source.holes[0], diameter: 9 }] };
+  assert.equal(holesForPart(plate, [edited])[0].id, first.id);
+  assert.equal(holesForPart(plate, [edited])[0].ownerId, source.id);
+  assert.ok(
+    validateFastener({ ...source, holes: source.holes.map((h) => ({ ...h, id: 'duplicate' })) }),
+  );
 });
