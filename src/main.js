@@ -29,6 +29,8 @@ import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
 import { createObjectMesh, updateObjectMeshSelection } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
+import { SnapIndex } from './model/snap-index.js';
+import { selectionGeometryReader } from './model-object.js';
 import { InstanceBatches } from './model/instance-batches.js';
 import { FrameGate } from './model/frame-gate.js';
 import { updateFastenerDetail } from './model/fastener-detail.js';
@@ -257,6 +259,7 @@ document
   .querySelectorAll('[data-axis]')
   .forEach((b) => (b.onclick = () => toggleLock(b.dataset.axis)));
 
+let pendingPointer = null;
 const frameGate = new FrameGate();
 for (const event of ['click', 'input', 'change', 'keydown', 'pointerup', 'pointercancel'])
   document.addEventListener(event, () => frameGate.invalidate(), { capture: true });
@@ -271,6 +274,11 @@ host.addEventListener(
 host.addEventListener('pointerleave', () => frameGate.invalidate());
 new ResizeObserver(() => frameGate.invalidate()).observe(host);
 renderer.setAnimationLoop(() => {
+  if (pendingPointer) {
+    const pointer = pendingPointer;
+    pendingPointer = null;
+    updatePointer(pointer);
+  }
   if (!ui.marquee && !rotationHandle.drag) navigation.controls.update();
   // Project labels with the same camera transform used to render this frame.
   camera.updateMatrixWorld();
@@ -349,6 +357,7 @@ function mesh(s, ghost = false, model = project.objects) {
 let renderedObjects = [];
 let renderedById = new Map();
 let renderedSelection = new Set();
+let snapIndex = null;
 function render({ selectionOnly = false } = {}) {
   frameGate.invalidate();
   selectionOnly &&=
@@ -366,23 +375,41 @@ function render({ selectionOnly = false } = {}) {
     }
   } else {
     instanceBatches.clear();
-    for (const child of [...objects.children]) {
-      objects.remove(child);
-      dispose(child);
-    }
+    const previous = renderedById;
+    const geometry = selectionGeometryReader(project.objects);
+    const children = [];
+    let reused = 0;
     renderedById = new Map();
-    project.objects.forEach((s) => {
-      const child = mesh(s);
+    for (const s of project.objects) {
+      const old = previous.get(s.id);
+      const reuse =
+        old?.source === s &&
+        old.child.userData.transparentView === ui.transparentView &&
+        old.child.userData.geometryIdentity === geometry(s);
+      const child = reuse ? old.child : mesh(s);
+      if (reuse) {
+        reused++;
+        updateObjectMeshSelection(child, s, selectedIds);
+      }
       renderedById.set(s.id, { child, source: s });
       child.visible =
         isVisible(s.id) &&
         (tools.operation?.mode !== 'rotate' ||
           tools.operation.picking ||
           !ui.selectedIds.has(s.id));
-      objects.add(child);
-    });
+      children.push(child);
+    }
+    for (const [id, entry] of previous)
+      if (renderedById.get(id)?.child !== entry.child) dispose(entry.child);
+    objects.clear();
+    for (const child of children) objects.add(child);
     renderedObjects = [...project.objects];
     instanceBatches.rebuild(objects.children);
+    snapIndex = new SnapIndex(project.objects);
+    if (import.meta.env.DEV) {
+      host.dataset.reusedMeshes = reused;
+      host.dataset.createdMeshes = children.length - reused;
+    }
   }
   renderedSelection = new Set(selectedIds);
   $('count').textContent = project.objects.length;
@@ -842,6 +869,11 @@ function point(e) {
   camera.updateMatrixWorld();
   ray(e);
   const r = host.getBoundingClientRect();
+  const snapStarted = performance.now();
+  const snapObjects = (
+    snapIndex?.query(camera, r.width, r.height, [e.clientX - r.left, e.clientY - r.top]) ??
+    project.objects
+  ).filter((s) => isVisible(s.id) && (!isCut(s) || ui.selectedIds.has(s.id)));
   tools.activeSnap = resolveSnap({
     pointer: [e.clientX - r.left, e.clientY - r.top],
     camera,
@@ -855,9 +887,16 @@ function point(e) {
         ? tools.operation.pivot[2]
         : levelElevation(project.levels),
     model: project.objects,
-    sweeps: project.objects.filter(
-      (s) => isVisible(s.id) && (!isCut(s) || ui.selectedIds.has(s.id)),
+    geometryContext: snapIndex?.nearbyContext(
+      camera,
+      r.width,
+      r.height,
+      [e.clientX - r.left, e.clientY - r.top],
+      tools.first,
+      project.snap.midpoints,
+      project.snap.perpendicular,
     ),
+    sweeps: snapObjects,
     grid: { ...project.grid, z: levelElevation(project.levels) },
     referencePoints:
       referenceModels?.candidates({
@@ -882,6 +921,10 @@ function point(e) {
     workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
     constrainToPlane: ['plateCreate', 'plateVertex'].includes(tools.operation?.mode),
   });
+  if (import.meta.env.DEV) {
+    host.dataset.snapObjects = snapObjects.length;
+    host.dataset.snapMs = (performance.now() - snapStarted).toFixed(1);
+  }
   if (tools.operation?.mode === 'workPlane' && tools.activeSnap.kind === 'free') {
     const hit = raycaster.intersectObjects(
       objects.children.filter((o) => o.visible && !o.userData.cut),
@@ -1153,8 +1196,12 @@ installModelPointer(renderer.domElement, {
   beginBox,
   orbit: orbitAroundHit,
   point,
-  move: updatePointer,
+  move: (e) => {
+    pendingPointer = { clientX: e.clientX, clientY: e.clientY };
+    if (tools.drawing || tools.operation) frameGate.invalidate();
+  },
   leave: () => {
+    pendingPointer = null;
     if (
       ['rotate', 'plateCreate', 'plateVertex'].includes(tools.operation?.mode) ||
       $('draw-length').value.trim()
@@ -1431,17 +1478,17 @@ function validateSweep(s) {
   }
 }
 function previewModelBatch(batch, ghost = true) {
+  const previous = new Map(project.objects.map((s) => [s.id, s]));
+  const batchIds = new Set(batch.map((s) => s.id));
   const model = applyObjectBatch(
     project.objects,
     batch.filter((s) => s.id),
   ).objects;
-  batch
-    .filter((s) => !project.objects.some((old) => old.id === s.id))
-    .forEach((s) => model.push(s));
+  batch.filter((s) => !previous.has(s.id)).forEach((s) => model.push(s));
   const affected = new Set(batch.map((s) => s.id));
   for (const s of model) {
-    const old = project.objects.find((o) => o.id === s.id);
-    if (isFastener(s) && (s !== old || batch.some((o) => o.id === s.id))) {
+    const old = previous.get(s.id);
+    if (isFastener(s) && (s !== old || batchIds.has(s.id))) {
       affected.add(s.id);
       for (const h of [...s.holes, ...(old?.holes || [])]) affected.add(h.targetId);
     }

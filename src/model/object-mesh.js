@@ -7,6 +7,7 @@ import {
   geometryForModel,
   edgesForModel,
   objectInstanceDescriptor,
+  cachedGeometryIdentity,
 } from '../model-object.js';
 import { isLineCut, lineCutFrame } from '../line-cut.js';
 import { roundProfile } from '../round-profile.js';
@@ -74,6 +75,8 @@ export function createObjectMesh(
     );
   // Pay the initial bounds cost while building, rather than on the first click.
   geometry.computeBoundingSphere();
+  m.userData.geometryIdentity = cachedGeometryIdentity(s);
+  m.userData.transparentView = transparentView;
   m.userData.id = s.id;
   m.userData.ghost = ghost;
   m.userData.selected = selectedIds.has(s.id);

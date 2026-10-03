@@ -96,7 +96,7 @@ export const geometryForModel = (s, model) => evaluated(s, model).geometry.clone
 export function selectionGeometry(s, model) {
   return evaluated(s, model).geometry;
 }
-export function selectionGeometryReader(model) {
+function indexedEntries(model) {
   const holes = holesByTarget(model),
     cuts = new Map();
   for (const cut of model.filter(isCut))
@@ -104,8 +104,40 @@ export function selectionGeometryReader(model) {
       if (!cuts.has(target)) cuts.set(target, []);
       cuts.get(target).push(cut);
     }
-  return (s) =>
-    evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])]).geometry;
+  return (s) => evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])]);
+}
+export function selectionGeometryReader(model) {
+  const entry = indexedEntries(model);
+  return (s) => entry(s).geometry;
+}
+export const cachedGeometryIdentity = (s) => cache.get(s)?.geometry;
+const snapTemplates = new WeakMap();
+export function createSnapGeometryContext(model) {
+  const entry = indexedEntries(model);
+  const features = (s) => {
+    const evaluated = entry(s),
+      instance = evaluated.instance;
+    if (!instance?.local) return { entry: evaluated, matrix: null };
+    let template = snapTemplates.get(instance.geometry);
+    if (!template) {
+      template = { geometry: instance.geometry, edges: instance.edges, cuts: [{}] };
+      snapTemplates.set(instance.geometry, template);
+    }
+    return { entry: template, matrix: instance.matrix };
+  };
+  return {
+    cornerFeatures(s) {
+      const f = features(s);
+      return { points: objectCorners(s, model, f.entry), matrix: f.matrix };
+    },
+    segmentFeatures(s) {
+      const f = features(s);
+      return { segments: objectSegments(s, model, f.entry), matrix: f.matrix };
+    },
+    geometry: (s) => entry(s).geometry,
+    objectCorners: (s) => objectCorners(s, model, entry(s)),
+    objectSegments: (s) => objectSegments(s, model, entry(s)),
+  };
 }
 /** Seed repeated, already evaluated assemblies; changed cut identities invalidate this cache. */
 export function cacheObjectGeometry(s, model, geometry, edges, knownCuts = null, instance = null) {
@@ -147,11 +179,11 @@ export function edgesForModel(s, model, threshold = 1) {
   entry.edges ??= geometryEdges(entry.geometry, threshold);
   return entry.edges.clone();
 }
-export function objectCorners(s, model = []) {
-  const entry = evaluated(s, model);
-  if (!entry.cuts.length) return objectType(s).corners(s);
+export function objectCorners(s, model = [], preparedEntry = null) {
+  const entry = preparedEntry ?? evaluated(s, model);
   if (entry.corners) return entry.corners;
-  const edges = geometryEdges(entry.geometry),
+  if (!entry.cuts.length) return (entry.corners = objectType(s).corners(s));
+  const edges = (entry.edges ??= geometryEdges(entry.geometry)),
     p = edges.attributes.position,
     nodes = new Map();
   function add(i, j) {
@@ -168,7 +200,6 @@ export function objectCorners(s, model = []) {
     add(i, i + 1);
     add(i + 1, i);
   }
-  edges.dispose();
   entry.corners = [...nodes.values()]
     .filter((n) =>
       n.directions.some((a) => n.directions.some((b) => a.clone().cross(b).length() > 0.001)),
@@ -178,8 +209,8 @@ export function objectCorners(s, model = []) {
 }
 
 // Segment targets are cached with the evaluated geometry, including cut revisions.
-export function objectSegments(s, model = []) {
-  const entry = evaluated(s, model);
+export function objectSegments(s, model = [], preparedEntry = null) {
+  const entry = preparedEntry ?? evaluated(s, model);
   if (entry.segments) return entry.segments;
   const segments = [];
   if (!entry.cuts.length) {
@@ -188,7 +219,7 @@ export function objectSegments(s, model = []) {
     if (!targets.includeEdges) return (entry.segments = segments);
   }
 
-  const edges = geometryEdges(entry.geometry),
+  const edges = (entry.edges ??= geometryEdges(entry.geometry)),
     p = edges.attributes.position,
     nodes = new Map(),
     links = new Map();
@@ -206,7 +237,6 @@ export function objectSegments(s, model = []) {
     links.get(ka).add(kb);
     links.get(kb).add(ka);
   }
-  edges.dispose();
   // Remove collinear subdivisions so a midpoint belongs to the whole edge.
   for (const [k, neighbors] of links) {
     if (neighbors.size !== 2) continue;

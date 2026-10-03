@@ -14,6 +14,7 @@ export function resolveSnap({
   z,
   sweeps,
   model = sweeps,
+  geometryContext = null,
   referencePoints = [],
   grid,
   endpoints = true,
@@ -70,7 +71,7 @@ export function resolveSnap({
         }))
       : []),
     ...((roundProfile(s) ? quadrantSnap : cornerSnap)
-      ? corners(s, model).map((coords) => ({
+      ? (geometryContext ? geometryContext.objectCorners(s) : corners(s, model)).map((coords) => ({
           coords,
           symbol: roundProfile(s) ? 'diamond' : 'square',
           label: roundProfile(s) ? 'Kvadrant' : 'Hörn',
@@ -80,7 +81,9 @@ export function resolveSnap({
   const segmentPoints = [];
   if (midpointSnap || (perpendicularSnap && origin))
     for (const s of sweeps)
-      for (const [a, b] of objectSegments(s, model)) {
+      for (const [a, b] of geometryContext
+        ? geometryContext.objectSegments(s)
+        : objectSegments(s, model)) {
         const av = new THREE.Vector3(...a),
           delta = new THREE.Vector3(...b).sub(av),
           lengthSq = delta.lengthSq();
