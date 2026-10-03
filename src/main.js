@@ -29,6 +29,7 @@ import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
 import { createObjectMesh } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
+import { createFastenerExample } from './project/example-model.js';
 import { ProjectHistory } from './project/project-history.js';
 import { FrameEditor } from './frame-editor.js';
 import { workPlaneFromPoints, drawingWorkPlane } from './work-plane.js';
@@ -1219,6 +1220,20 @@ window.addEventListener('keydown', (e) => {
 const settingsController = createSettingsController({
   project,
   checkpoint,
+  loadExample: () => {
+    const example = createFastenerExample();
+    inspector?.finish();
+    checkpoint();
+    setDrawing(false);
+    Object.assign(project, example);
+    hiddenObjects.clear();
+    ui.sequence = project.objects.length;
+    levelsUI?.sync();
+    grid.set({ ...project.grid, z: levelElevation(project.levels) });
+    select(null);
+    inspector.show('model');
+    fit(new THREE.Vector3(1, -1, 1).normalize(), new THREE.Box3().setFromObject(objects));
+  },
   libraries: [
     {
       group: 'Modell',

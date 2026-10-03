@@ -8,6 +8,15 @@ och lagring. Nya bibliotek kan läggas till med grupp, namn, beskrivning och
 Modulen finns i `src/fasteners/` och ingår i programmets huvudgren.
 Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
 
+## Exempelmodell
+
+**Inställningar → Projekt → Läs in skruvexempel** läser in tre färdiga förband:
+trä med frigångshål och förborrning, två plåtar med M12 och brickor på båda sidor,
+samt en anslutningsplåt mot RHS med både två rörväggar och endast övre väggen.
+Modellen har 17 numrerade objekt, varav 11 skruvar, med fristående material- och
+skruvspecifikationer. Ingen biblioteksimport behövs. Måtten är demonstrationsvärden.
+Inläsningen ersätter sessionsmodellen och kan ångras som en enda operation.
+
 ## Användning
 
 1. Öppna **Inställningar → Bibliotek → Skruvar**. Skapa egna poster för träskruv eller

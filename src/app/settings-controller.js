@@ -6,8 +6,26 @@ export function createSettingsController({
   onGridChanged,
   onChange,
   libraries = [],
+  loadExample,
 }) {
   const $ = (id) => document.getElementById(id);
+  if (loadExample) {
+    const section = document.createElement('section');
+    section.innerHTML =
+      '<h3>Exempelmodell</h3><p>Träförband, plåtförband och rörprofil med skruvar, muttrar, brickor och hål. Måtten är exempel för att testa programmet.</p><p>Modellen ersätts vid inläsning. Du kan återställa den med Ångra.</p><button type="button" class="primary" data-load-example>Läs in skruvexempel</button>';
+    document.querySelector('[data-settings-panel="project"]').append(section);
+    section.querySelector('[data-load-example]').onclick = () => {
+      try {
+        loadExample();
+        fillSettings();
+        $('settings-dialog').close();
+        $('status').textContent =
+          'Skruvexempel inläst · 3 förband · Ångra återställer föregående modell';
+      } catch (error) {
+        $('settings-error').textContent = error.message;
+      }
+    };
+  }
   if (libraries.length) {
     const tab = document.createElement('button');
     tab.type = 'button';
