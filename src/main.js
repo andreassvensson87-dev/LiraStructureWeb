@@ -27,7 +27,7 @@ import { createSettingsController } from './app/settings-controller.js';
 import { transformCandidates, applyObjectBatch } from './model/tools/transform-tool.js';
 import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
-import { createObjectMesh } from './model/object-mesh.js';
+import { createObjectMesh, updateObjectMeshSelection } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
 import { createFastenerExample } from './project/example-model.js';
 import { createFrameExample } from './project/frame-example.js';
@@ -319,20 +319,41 @@ function mesh(s, ghost = false, model = project.objects) {
     ghost,
   });
 }
-function render() {
-  for (const child of [...objects.children]) {
-    objects.remove(child);
-    dispose(child);
+let renderedObjects = [];
+function render({ selectionOnly = false } = {}) {
+  selectionOnly &&=
+    project.objects.length === renderedObjects.length &&
+    project.objects.every((s, i) => s === renderedObjects[i]);
+  if (selectionOnly) {
+    const byId = new Map(project.objects.map((s) => [s.id, s]));
+    const selectedIds =
+      tools.operation?.mode === 'fastenerTargets'
+        ? new Set(tools.operation.targetIds)
+        : ui.selectedIds;
+    for (const child of objects.children) {
+      const s = byId.get(child.userData.id);
+      updateObjectMeshSelection(child, s, selectedIds);
+      child.visible = isVisible(s.id);
+    }
+  } else {
+    for (const child of [...objects.children]) {
+      objects.remove(child);
+      dispose(child);
+    }
+    project.objects.forEach((s) => {
+      const child = mesh(s);
+      child.visible =
+        isVisible(s.id) &&
+        (tools.operation?.mode !== 'rotate' ||
+          tools.operation.picking ||
+          !ui.selectedIds.has(s.id));
+      objects.add(child);
+    });
+    renderedObjects = [...project.objects];
   }
-  project.objects.forEach((s) => {
-    const child = mesh(s);
-    child.visible =
-      isVisible(s.id) &&
-      (tools.operation?.mode !== 'rotate' || tools.operation.picking || !ui.selectedIds.has(s.id));
-    objects.add(child);
-  });
   $('count').textContent = project.objects.length;
-  modelTree?.render(project.objects, ui.selectedIds);
+  if (selectionOnly) modelTree?.setSelection(ui.selectedIds);
+  else modelTree?.render(project.objects, ui.selectedIds);
   syncIdentity();
   $('undo').disabled = !projectHistory.canUndo;
   $('redo').disabled = !projectHistory.canRedo;
@@ -356,8 +377,10 @@ function render() {
     project.objects.filter((s) => ui.selectedIds.has(s.id)),
     tools.operation,
   );
-  planView?.sync();
-  if (drawingManager?.dialog.open) drawingManager.render();
+  if (!selectionOnly) {
+    planView?.sync();
+    if (drawingManager?.dialog.open) drawingManager.render();
+  }
 }
 function setSelection(ids, keepTab = false) {
   inspector?.rollback();
@@ -365,7 +388,7 @@ function setSelection(ids, keepTab = false) {
   ui.selectedIds = new Set(ids);
   ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
   if (ui.selected) fillForm(project.objects.find((s) => s.id === ui.selected));
-  render();
+  render({ selectionOnly: true });
   if (ui.selectedIds.size && !keepTab) inspector.show('properties');
 }
 function select(id, additive = false, keepTab = false) {
@@ -1119,7 +1142,7 @@ installModelPointer(renderer.domElement, {
       else ids.add(id);
       tools.operation.targetIds = [...ids];
       fastenerUI.setTargets(tools.operation.targetIds);
-      render();
+      render({ selectionOnly: true });
       $('status').textContent = `Skruv · ${ids.size} delar valda · Klicka fler, Enter bekräftar`;
       renderer.domElement.focus({ preventScroll: true });
     },

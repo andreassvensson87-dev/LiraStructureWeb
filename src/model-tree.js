@@ -21,6 +21,7 @@ export class ModelTree {
     this.selected = selected;
     this.isolateButton.disabled = !selected.size;
     this.root.replaceChildren();
+    this.rows = new Map();
     const query = this.search.value.toLocaleLowerCase('sv');
     const matches = objects.filter((s) =>
       `${designation(s)} ${s.name} ${typeName(s)} ${s.material?.name || ''} ${s.section?.name || ''}`
@@ -70,6 +71,7 @@ export class ModelTree {
         row.classList.toggle('muted', !shown);
         row.append(pick, eye);
         target.append(row);
+        this.rows.set(s.id, pick);
       }
     }
     if (!matches.length) {
@@ -78,5 +80,11 @@ export class ModelTree {
       p.textContent = objects.length ? 'Inga träffar.' : 'Inga objekt ännu.';
       this.root.append(p);
     }
+  }
+  setSelection(selected) {
+    this.isolateButton.disabled = !selected.size;
+    for (const id of new Set([...(this.selected || []), ...selected]))
+      this.rows?.get(id)?.classList.toggle('selected', selected.has(id));
+    this.selected = selected;
   }
 }

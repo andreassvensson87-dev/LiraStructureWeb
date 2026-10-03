@@ -7,6 +7,23 @@ import { roundProfile } from '../round-profile.js';
 import { objectColor } from '../materials.js';
 import { plateVertices } from '../plate.js';
 import { isFastener } from '../fasteners/object-type.js';
+
+/** Selection changes only appearance; keep geometries and GPU buffers intact. */
+export function updateObjectMeshSelection(object, s, selectedIds) {
+  const selected = selectedIds.has(s.id);
+  if (object.userData.helper) {
+    object.material.color.set(selected || object.userData.ghost ? 0x258e79 : 0x8765ad);
+    return;
+  }
+  const cut = object.userData.cut;
+  object.material.color.set(cut ? 0xd57c40 : selected ? 0x359e83 : objectColor(s));
+  if (cut) object.material.opacity = selected ? 0.2 : 0;
+  const outline = object.children[0];
+  outline.material.color.set(
+    cut ? (selected ? 0xe87924 : 0xb77a48) : selected ? 0x145d4d : 0x3e5663,
+  );
+  if (cut) outline.material.opacity = selected ? 1 : 0.8;
+}
 export function createObjectMesh(
   s,
   { model, selectedIds, transparentView = false, ghost = false },
