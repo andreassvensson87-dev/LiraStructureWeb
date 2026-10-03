@@ -15,6 +15,24 @@ import { objectColor } from '../materials.js';
 import { plateVertices } from '../plate.js';
 import { isFastener } from '../fasteners/object-type.js';
 
+/** Change display mode without replacing model geometry or selection state. */
+export function updateObjectMeshTransparency(object, transparentView) {
+  if (object.userData.helper || object.userData.cut || object.userData.ghost) return;
+  object.userData.transparentView = transparentView;
+  const material = object.material;
+  material.transparent = transparentView;
+  material.opacity = transparentView ? 0.3 : 1;
+  material.depthWrite = !transparentView;
+  material.needsUpdate = true;
+  const outline = object.children[0]?.material;
+  if (outline) {
+    outline.transparent = transparentView;
+    outline.opacity = transparentView ? 0.35 : 0.55;
+    outline.depthWrite = !transparentView;
+    outline.needsUpdate = true;
+  }
+}
+
 /** Selection changes only appearance; keep geometries and GPU buffers intact. */
 export function updateObjectMeshSelection(object, s, selectedIds) {
   const selected = selectedIds.has(s.id);
@@ -101,9 +119,9 @@ export function createObjectMesh(
   );
   lines.renderOrder = cut ? 20 : 0;
   m.userData.cut = cut;
-  if (!ghost && !cut && !transparentView)
-    m.userData.instanceDescriptor = objectInstanceDescriptor(s);
+  if (!ghost && !cut) m.userData.instanceDescriptor = objectInstanceDescriptor(s);
   m.add(lines);
+  if (!ghost && !cut) updateObjectMeshTransparency(m, transparentView);
   if (isLineCut(s)) {
     const f = lineCutFrame(s),
       arrow = new THREE.ArrowHelper(

@@ -27,7 +27,11 @@ import { createSettingsController } from './app/settings-controller.js';
 import { transformCandidates, applyObjectBatch } from './model/tools/transform-tool.js';
 import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
-import { createObjectMesh, updateObjectMeshSelection } from './model/object-mesh.js';
+import {
+  createObjectMesh,
+  updateObjectMeshSelection,
+  updateObjectMeshTransparency,
+} from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
 import { SnapIndex } from './model/snap-index.js';
 import { selectionGeometryReader } from './model-object.js';
@@ -285,7 +289,7 @@ renderer.setAnimationLoop(() => {
   if (!frameGate.consume(camera)) return;
   const frameStarted = performance.now();
   updateFastenerDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
-  instanceBatches.sync();
+  instanceBatches.sync(camera);
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
   insertionPoints.update(
     camera,
@@ -765,13 +769,9 @@ $('transparent-view').onclick = () => {
   button.title = ui.transparentView
     ? 'Transparent · byt till homogent'
     : 'Homogent · byt till transparent';
-  scene.traverse((o) => {
-    if (!o.isMesh || !o.userData.id || o.userData.cut || o.userData.ghost) return;
-    o.material.transparent = ui.transparentView;
-    o.material.opacity = ui.transparentView ? 0.3 : 1;
-    o.material.depthWrite = !ui.transparentView;
-    o.material.needsUpdate = true;
-  });
+  for (const object of objects.children) updateObjectMeshTransparency(object, ui.transparentView);
+  instanceBatches.setTransparentView(ui.transparentView);
+  frameGate.invalidate();
 };
 planeViewButton.onclick = () => {
   const frame = tools.temporaryPlane ?? {

@@ -14,9 +14,10 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * placement * vec4(position, 1.0);
 }`;
 const lineFragment = `
+uniform float opacity;
 varying vec3 tint;
 void main() {
-  gl_FragColor = vec4(tint, 1.0);
+  gl_FragColor = vec4(tint, opacity);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -50,7 +51,7 @@ export class InstanceBatches {
     const shapes = new Map();
     for (const object of objects) {
       const descriptor = object.userData.instanceDescriptor;
-      if (!descriptor || object.material.transparent) continue;
+      if (!descriptor) continue;
       if (!shapes.has(descriptor.key)) shapes.set(descriptor.key, []);
       shapes.get(descriptor.key).push({ object, descriptor });
     }
@@ -85,7 +86,13 @@ export class InstanceBatches {
       lineGeometry.instanceCount = copies.length;
       const lines = new THREE.LineSegments(
         lineGeometry,
-        new THREE.ShaderMaterial({ vertexShader: lineVertex, fragmentShader: lineFragment }),
+        new THREE.ShaderMaterial({
+          vertexShader: lineVertex,
+          fragmentShader: lineFragment,
+          uniforms: { opacity: { value: first.object.material.transparent ? 0.35 : 1 } },
+          transparent: first.object.material.transparent,
+          depthWrite: !first.object.material.transparent,
+        }),
       );
       // Bounds of the small template cannot bound all the transformed copies.
       lines.frustumCulled = false;
@@ -97,6 +104,10 @@ export class InstanceBatches {
           object,
           matrix: descriptor.matrix,
           index,
+          center: geometry.boundingBox
+            .getCenter(new THREE.Vector3())
+            .applyMatrix4(descriptor.matrix),
+          depth: 0,
           visible: null,
           bodyColor: new THREE.Color(-1, -1, -1),
           edgeColor: new THREE.Color(-1, -1, -1),
@@ -105,33 +116,60 @@ export class InstanceBatches {
       // Retain conservative bounds when individual copies are hidden and restored.
       mesh.computeBoundingBox();
       mesh.computeBoundingSphere();
-      const batch = { mesh, lines, buffer, colors, entries };
+      const batch = { mesh, lines, buffer, colors, entries, cameraSignature: '' };
       this.batches.push(batch);
       this.group.add(mesh, lines);
       this.syncBatch(batch);
       edges.dispose();
     }
   }
-  syncBatch(batch) {
+  setTransparentView(transparentView) {
+    for (const batch of this.batches) {
+      batch.mesh.material.transparent = transparentView;
+      batch.mesh.material.opacity = transparentView ? 0.3 : 1;
+      batch.mesh.material.depthWrite = !transparentView;
+      batch.mesh.material.needsUpdate = true;
+      batch.lines.material.transparent = transparentView;
+      batch.lines.material.depthWrite = !transparentView;
+      batch.lines.material.uniforms.opacity.value = transparentView ? 0.35 : 1;
+      batch.lines.material.needsUpdate = true;
+      batch.cameraSignature = '';
+    }
+  }
+  syncBatch(batch, camera = null) {
+    let reordered = false;
+    if (camera && batch.mesh.material.transparent) {
+      const signature = camera.matrixWorldInverse.elements.join(',');
+      if (signature !== batch.cameraSignature) {
+        batch.cameraSignature = signature;
+        const e = camera.matrixWorldInverse.elements;
+        for (const entry of batch.entries)
+          entry.depth =
+            e[2] * entry.center.x + e[6] * entry.center.y + e[10] * entry.center.z + e[14];
+        batch.entries.sort((a, b) => a.depth - b.depth);
+        reordered = batch.entries.some((entry, index) => entry.index !== index);
+        for (let i = 0; i < batch.entries.length; i++) batch.entries[i].index = i;
+      }
+    }
     let matricesChanged = false,
       bodyChanged = false,
       edgesChanged = false;
     for (const entry of batch.entries) {
       const { object, index } = entry;
-      if (entry.visible !== object.visible) {
+      if (reordered || entry.visible !== object.visible) {
         entry.visible = object.visible;
         const matrix = object.visible ? entry.matrix : emptyMatrix;
         batch.mesh.setMatrixAt(index, matrix);
         matrix.toArray(batch.buffer.array, index * 16);
         matricesChanged = true;
       }
-      if (!entry.bodyColor.equals(object.material.color)) {
+      if (reordered || !entry.bodyColor.equals(object.material.color)) {
         entry.bodyColor.copy(object.material.color);
         batch.mesh.setColorAt(index, entry.bodyColor);
         bodyChanged = true;
       }
       const edge = object.children[0].material.color;
-      if (!entry.edgeColor.equals(edge)) {
+      if (reordered || !entry.edgeColor.equals(edge)) {
         entry.edgeColor.copy(edge);
         batch.colors.setXYZ(index, edge.r, edge.g, edge.b);
         edgesChanged = true;
@@ -144,7 +182,7 @@ export class InstanceBatches {
     if (bodyChanged) batch.mesh.instanceColor.needsUpdate = true;
     if (edgesChanged) batch.colors.needsUpdate = true;
   }
-  sync() {
-    for (const batch of this.batches) this.syncBatch(batch);
+  sync(camera = null) {
+    for (const batch of this.batches) this.syncBatch(batch, camera);
   }
 }
