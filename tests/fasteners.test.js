@@ -16,6 +16,7 @@ import {
   validateFastenerTargets,
 } from '../src/fasteners/relations.js';
 import {
+  automaticPlacement,
   insertionPlacement,
   spanPlacement,
   partAxisInterval,
@@ -112,6 +113,56 @@ test('library validates both families, versions and detached merge without modif
   next[0].head.height = 3;
   assert.equal(wood.head.height, 4);
   assert.equal(screw.spec.length, 100);
+});
+
+test('automatic placement ignores click distance and only drills explicitly selected parts', () => {
+  const other = { ...tube, id: 'unselected' };
+  const draft = { ...axialScrew(tube, 'profile'), spec: { ...bolt, length: 350 } };
+  for (const z of [10000, 145, -10000]) {
+    const placed = automaticPlacement(draft, [500, 60, z], [500, 60, z - 10], [tube, other]);
+    assert.equal(placed.layerCount, 2);
+    assert.deepEqual(placed.start, [500, 60, 150]);
+    assert.equal(placed.nutOffset, 300);
+    assert.equal(placed.holes[0].depth, 300);
+    assert.equal(validateFastener(placed), '');
+    assert.equal(holesForPart(other, [placed]).length, 0);
+  }
+});
+test('automatic layer limits start at material and complete a wall; wall defaults are respected', () => {
+  const draft = { ...axialScrew(tube, 'profile'), spec: { ...bolt, length: 350 } };
+  const limited = automaticPlacement(draft, [500, 60, 10000], [500, 60, 9000], [tube], 5);
+  assert.equal(limited.layerCount, 1);
+  assert.equal(limited.holes[0].depth, 12);
+  const wall = automaticPlacement(
+    { ...draft, holes: axialScrew(tube, 'wall').holes },
+    [500, 60, 10000],
+    [500, 60, 9000],
+    [tube],
+  );
+  assert.equal(wall.layerCount, 1);
+  assert.equal(wall.nutOffset, 12);
+  assert.throws(
+    () => automaticPlacement(draft, [500, 500, 160], [500, 500, 60], [tube]),
+    /träffar inte/,
+  );
+  assert.throws(
+    () => automaticPlacement({ ...draft, spec: bolt }, [500, 60, 160], [500, 60, 60], [tube]),
+    /för kort/,
+  );
+});
+test('automatic wood holes stop within material and the physical shaft', () => {
+  const draft = { ...axialScrew(tube, 'blind', 50), spec: wood };
+  const placed = automaticPlacement(draft, [500, 60, 10000], [500, 60, 9000], [tube]);
+  assert.equal(placed.holes[0].depth, 12);
+  assert.equal(placed.layerCount, 1);
+  assert.equal(validateFastener(placed), '');
+  const shallow = automaticPlacement(
+    { ...draft, spec: { ...wood, length: 8 } },
+    [500, 60, 10000],
+    [500, 60, 9000],
+    [tube],
+  );
+  assert.equal(shallow.holes[0].depth, 8);
 });
 test('placement uses library length and rejects invalid holes, nut positions and targets', () => {
   assert.deepEqual(axisPlacement(wood, [10, 20, 30], [10, 20, 31]).end, [10, 20, 130]);

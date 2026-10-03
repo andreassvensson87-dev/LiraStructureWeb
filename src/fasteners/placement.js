@@ -59,6 +59,76 @@ export function partAxisInterval(s, part, model) {
 const millimeters = (v) => Math.round(v * 1e6) / 1e6;
 export const holeExtent = (h) => h.extent || (h.kind === 'pilot' ? 'blind' : 'profile');
 
+/** Search the selected parts along the whole axis, independently of click distance. */
+export function automaticPlacement(s, start, direction, model, limit = null) {
+  if (limit != null && (!Number.isFinite(limit) || limit <= 0 || limit > 1e7))
+    throw new Error('Ange en söklängd större än 0 och högst 10 000 000 mm.');
+  const axisDraft = { ...s, ...axisPlacement(s.spec, start, direction) };
+  const f = fastenerFrame(axisDraft);
+  const materialModel = model.filter((o) => !isFastener(o));
+  const candidates = s.holes.flatMap((h) => {
+    const part = materialModel.find((o) => o.id === h.targetId);
+    if (!part) throw new Error('Hålets måldel saknas.');
+    const intervals = partAxisIntervals(axisDraft, part, materialModel);
+    const chosen = ['wall', 'blind'].includes(holeExtent(h)) ? intervals.slice(0, 1) : intervals;
+    return chosen.map((v) => ({ ...v, targetId: h.targetId }));
+  });
+  if (!candidates.length) throw new Error('Välj minst ett objekt i förbandet.');
+  const first = Math.min(...candidates.map((v) => v.offset));
+  const reach =
+    s.spec.kind === 'wood'
+      ? first + s.spec.length - (s.washers?.head ? s.spec.washer.thickness : 0)
+      : Infinity;
+  // A search limit selects complete layers from the first material surface.
+  const layers = candidates
+    .filter((v) => v.offset < first + (limit ?? Infinity) - 0.001)
+    .map((v) => ({ ...v, depth: Math.min(v.depth, reach - v.offset) }))
+    .filter((v) => v.depth > 0.001);
+  if (
+    s.spec.kind === 'wood' &&
+    layers.some((v) => {
+      const h = s.holes.find((h) => h.targetId === v.targetId);
+      const original = candidates.find((c) => c.targetId === v.targetId && c.offset === v.offset);
+      return h.kind === 'clearance' && v.depth < original.depth - 0.001;
+    })
+  )
+    throw new Error(
+      'Skruven är för kort för genomgående hål. Välj en längre skruv eller förborrning.',
+    );
+  if (limit == null) {
+    const missed = s.holes.find((h) => !layers.some((v) => v.targetId === h.targetId));
+    if (missed)
+      throw new Error(
+        `Skruven är för kort för att nå ${materialModel.find((o) => o.id === missed.targetId)?.name || missed.targetId}. Välj en längre skruv.`,
+      );
+  }
+  const last = Math.max(...layers.map((v) => v.offset + v.depth));
+  const fitted = spanPlacement(
+    s,
+    f.origin.clone().addScaledVector(f.z, first).toArray(),
+    f.origin.clone().addScaledVector(f.z, last).toArray(),
+  );
+  fitted.placementMode = 'range';
+  fitted.insertion = {
+    start: [...start],
+    direction: [...direction],
+    depth: limit ?? last - first,
+    automatic: true,
+    limited: limit != null,
+  };
+  fitted.layerCount = layers.length;
+  fitted.holes = fitted.holes.map((h) => ({
+    ...h,
+    layers: layers
+      .filter((v) => v.targetId === h.targetId)
+      .map((v) => ({
+        offset: millimeters(v.offset - first + (s.washers?.head ? s.spec.washer.thickness : 0)),
+        depth: millimeters(v.depth),
+      })),
+  }));
+  return resolveFastenerHoles(fitted, model);
+}
+
 /** Contact points describe the grip; shaft length remains a library dimension. */
 export function spanPlacement(s, entry, exit) {
   const axis = new THREE.Vector3(...exit).sub(new THREE.Vector3(...entry));
@@ -204,7 +274,7 @@ export function resolveFastenerHoles(s, model) {
       }
       const first = selected[0],
         last = selected.at(-1);
-      if (extent === 'blind' && h.depth > first.depth + 0.001)
+      if (extent === 'blind' && !s.insertion?.automatic && h.depth > first.depth + 0.001)
         throw new Error(
           `Blindhålet i ${part.name || part.id} är djupare än väggen/flänsen (${first.depth.toFixed(2)} mm).`,
         );
@@ -214,7 +284,9 @@ export function resolveFastenerHoles(s, model) {
         offset: millimeters(first.offset),
         depth: millimeters(
           extent === 'blind'
-            ? h.depth
+            ? s.insertion?.automatic
+              ? Math.min(h.depth, first.depth)
+              : h.depth
             : extent === 'wall'
               ? first.depth
               : last.offset + last.depth - first.offset,

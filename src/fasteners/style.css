@@ -402,6 +402,19 @@
   color: #73878e;
 }
 
+.fastener-editor [data-hole] {
+  padding: 6px 0;
+  border-bottom: 1px solid #e0e8e9;
+}
+.fastener-editor [data-hole] > summary {
+  font-size: 11px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.fastener-editor [data-hole][open] > summary {
+  margin-bottom: 8px;
+}
+
 #fastener-library [data-library-holes] label[hidden] {
   display: none;
 }

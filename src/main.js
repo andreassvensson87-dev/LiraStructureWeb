@@ -616,9 +616,8 @@ function commitPoint(target) {
       $('draw-length-form').hidden = true;
       fastenerUI.sync([], tools.operation);
       inspector.show('properties');
-      $('status').textContent = 'Ange borravstånd från första insättningspunkten och skapa skruven';
-      fastenerUI.placeForm.elements.drillDepth.focus();
-      fastenerUI.placeForm.elements.drillDepth.select();
+      $('status').textContent = 'Kontrollera förbandet · Enter skapar skruv och hål';
+      fastenerUI.placeForm.querySelector('[type=submit]').focus();
       return true;
     }
     if (tools.operation?.mode === 'fastenerCreate')

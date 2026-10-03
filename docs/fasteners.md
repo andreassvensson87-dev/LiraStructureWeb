@@ -21,29 +21,21 @@ Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
    direkt i modellen; de markeras och visas under **Objekt i förbandet**.
    Ett nytt klick på en vald del tar bort den. Tryck **Enter** för att bekräfta
    och börja placera. Minst en del måste väljas. **Escape** avbryter.
-3. Klicka två insättningspunkter i skruvens längdriktning. Första punkten är
-   referens för borravståndet, andra punkten anger enbart riktningen. Vanlig snap
-   används; punkterna behöver inte ligga på ytor. Efter andra klicket anges
-   **Borravstånd från första punkten** i inspectorn. Förhandsvisningen och antalet
-   materiallager uppdateras när avståndet ändras. Klicka **Skapa skruv och hål**
-   eller tryck Enter i avståndsfältet. Biblioteket anger fysisk skruvlängd.
-4. Varje vald del visas med namn och egen håltyp. Nya delkopplingar börjar med
-   bibliotekets **Hålstandard** (utan standard används **Ingen borrning**).
-   Vid byte av skruv under skapandet hämtas den nya standarden för valda delar.
-   Befintliga skruvars hål behålls vid versionsbyte; **Hämta hålstandard från bibliotek**
-   ersätter uttryckligen deras värden. Välj förborrning/blindhål eller frigång/genomgående för
-   delarna som ska ha hål; övriga valda delar får ingen bearbetning. Öppna
-   **Hålmått · mm** för diameter, startläge längs skruvaxeln och djup. Försänkning har
-   separat diameter och djup. **Beräkna hål från delarnas ytor** räknar läge och djup
-   från delarnas faktiska ytor för frigångshål i den angivna riktningen.
-   Välj **Närmaste vägg / fläns**, **Hela profilen** eller **Blindhål från ingångsytan**.
-   Startläget räknas från första materialintervallet i skruvens riktning.
-   Väggläget stannar vid dess utgångsyta; hela profilen går till sista ytan
-   (båda rörväggarna). Blindhål behåller angivet djup och får inte överskrida
-   den första väggens tjocklek. Skruvens ändpunkt begränsar inte beräkningen.
-   Välj **Manuellt startläge och djup** för fria mått. Äldre placerade hål
-   behåller sina manuella mått tills ett automatiskt läge väljs.
-   Automatiska hål beräknas vid placering och när skruven sparas i inspectorn.
+3. Klicka två punkter längs skruvaxeln. Punkterna anger riktningen och får ligga
+   utanför materialet. Programmet hittar ytorna i de uttryckligen valda delarna,
+   placerar huvud, mutter och brickor och visar förbandet. Bekräfta med **Skapa
+   skruv och hål** eller Enter. Biblioteket anger fysisk skruvlängd; för kort
+   skruv ger ett fel med möjlighet att välja en längre post.
+4. Valda delar visas som hopfällda rader med håltyp och diameter. Bibliotekets
+   hålstandard används automatiskt. Öppna en rad för egna hålmått eller **Närmaste
+   vägg / fläns** för endast en rörvägg. **Hela profilen** omfattar båda väggarna.
+   Träskruvens automatiska hål begränsas av materialet och skaftets längd.
+   Blindhålets biblioteksdjup är ett maximalt djup och kortas vid materialets slut.
+   Manuella start- och djupmått är en uttrycklig överstyrning.
+   Under **Begränsa vilka lager som ingår** finns en valfri söklängd som mäts
+   från första materialytan, oberoende av klickpunktens avstånd. Väggar som
+   träffas tas med i sin helhet. Delar bortom denna begränsning behåller sin
+   koppling men får inga aktiva automatiska hål.
 5. Skapa skruven. Vid markering redigeras skruven direkt i inspectorn med
    utfällbara grupper för placering och hål. Klicka **Spara skruv och hål** för
    att tillämpa ändringarna. En markerad del
@@ -96,24 +88,17 @@ automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
 inte i denna första implementation. Hålens konturer finns i ritningsgeometrin;
 befintliga ritningsverktyg kan användas för lägesmått.
 
-## Insättningspunkter, borravstånd och borrhål som underobjekt
+## Automatisk placering och borrhål som underobjekt
 
-Nya skruvar använder **Borravstånd styr vilka lager som ingår**. Två punkter
-anger axeln; ett separat avstånd anger hur långt programmet söker i riktningen
-från den första punkten. Inga ytklick eller Alt-val behövs. Punkter och avstånd
-kan ändras efteråt i inspectorn. Avmarkera kryssrutan för manuellt axelläge.
-
-Materialintervall inom borravståndet identifieras per vald del. Tomrum räknas
-inte som materiallager. Ett kort avstånd kan omfatta en rörvägg, ett längre även
-nästa vägg. Delar utanför intervallet behåller delkopplingen men får inga
-aktiva automatiska hål. Genomgående hål kräver att avståndet når genom det valda
-lagret; ett slut mitt i lagret ger ett fel och kan ersättas med blindhål.
+Nya skruvar söker längs hela axeln i valda delar. Klickavståndet begränsar inte
+sökningen. Skruvaxeln måste skära varje vald del; ett verkligt missat objekt
+anges i felmeddelandet. Tomrum räknas inte som materiallager. Valfri söklängd
+mäts från första materialytan och väljer kompletta lager. För träskruv gäller
+också skaftets fysiska räckvidd. Ingen automatisk längdändring görs.
 
 Mutter och brickor placeras vid första och sista ingående materiallagret.
-Bibliotekets skruvlängd ändras inte. För kort skruv ger fel. Plana brickors
-anliggning på sneda ytor är inte löst av denna placering och måste kontrolleras.
-Borravståndet är en separat parameter, inte ett försök att välja närmaste ytor
-utifrån de två punkterna. Interna förbandsgränser härleds från materialet.
+Plana brickors anliggning på sneda ytor måste fortfarande kontrolleras.
+Punkter, brickor och särskilda hålinställningar kan ändras i inspectorn.
 
 Borrhålen är parametriska underobjekt i skruvens `holes`-lista, med typen `bore`,
 beständigt ID och måldel. De redigeras per del i skruvinspectorn. Geometrin och
