@@ -30,6 +30,7 @@ import { modelKeyboardCommand } from './model/keyboard-command.js';
 import { createObjectMesh } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
 import { createFastenerExample } from './project/example-model.js';
+import { createFrameExample } from './project/frame-example.js';
 import { ProjectHistory } from './project/project-history.js';
 import { FrameEditor } from './frame-editor.js';
 import { workPlaneFromPoints, drawingWorkPlane } from './work-plane.js';
@@ -1220,8 +1221,12 @@ window.addEventListener('keydown', (e) => {
 const settingsController = createSettingsController({
   project,
   checkpoint,
-  loadExample: () => {
-    const example = createFastenerExample();
+  loadExample: (kind, size) => {
+    const started = performance.now();
+    const example =
+      kind === 'frame'
+        ? createFrameExample(size, { prepareGeometry: true })
+        : createFastenerExample();
     inspector?.finish();
     checkpoint();
     setDrawing(false);
@@ -1233,6 +1238,9 @@ const settingsController = createSettingsController({
     select(null);
     inspector.show('model');
     fit(new THREE.Vector3(1, -1, 1).normalize(), new THREE.Box3().setFromObject(objects));
+    const screws = project.objects.filter(isFastener);
+    const holes = screws.reduce((n, s) => n + s.holes.length, 0);
+    return `Exempel inläst · ${project.objects.length} objekt · ${screws.length} skruvar · ${holes} hål · uppbyggnad ${((performance.now() - started) / 1000).toFixed(1)} s`;
   },
   libraries: [
     {

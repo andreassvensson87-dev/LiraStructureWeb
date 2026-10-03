@@ -49,6 +49,7 @@ function evaluated(s, model = []) {
   if (entry && entry.cuts.length === cuts.length && entry.cuts.every((c, i) => c === cuts[i]))
     return entry;
   entry?.geometry.dispose();
+  entry?.edges?.dispose();
   let geometry = baseGeometry(s);
   try {
     for (const cut of cuts) {
@@ -90,6 +91,19 @@ function evaluated(s, model = []) {
 }
 export const objectGeometry = (s, model = []) => evaluated(s, model).geometry.clone();
 export const geometryForModel = (s, model) => evaluated(s, model).geometry.clone();
+/** Seed repeated, already evaluated assemblies; changed cut identities invalidate this cache. */
+export function cacheObjectGeometry(s, model, geometry, edges) {
+  const previous = cache.get(s);
+  previous?.geometry.dispose();
+  previous?.edges?.dispose();
+  cache.set(s, { cuts: cutsForModel(s, model), geometry, edges });
+}
+export function edgesForModel(s, model, threshold = 1) {
+  const entry = evaluated(s, model);
+  if (threshold !== 1) return geometryEdges(entry.geometry, threshold);
+  entry.edges ??= geometryEdges(entry.geometry, threshold);
+  return entry.edges.clone();
+}
 export function objectCorners(s, model = []) {
   const entry = evaluated(s, model);
   if (!entry.cuts.length) return objectType(s).corners(s);

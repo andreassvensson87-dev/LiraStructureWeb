@@ -1,4 +1,5 @@
 import { parsePositions } from '../grid-lines.js';
+import { FRAME_EXAMPLE_SIZES, frameExampleCounts } from '../project/frame-example.js';
 export function createSettingsController({
   project,
   checkpoint,
@@ -12,19 +13,39 @@ export function createSettingsController({
   if (loadExample) {
     const section = document.createElement('section');
     section.innerHTML =
-      '<h3>Exempelmodell</h3><p>Träförband, plåtförband och rörprofil med skruvar, muttrar, brickor och hål. Måtten är exempel för att testa programmet.</p><p>Modellen ersätts vid inläsning. Du kan återställa den med Ångra.</p><button type="button" class="primary" data-load-example>Läs in skruvexempel</button>';
+      '<h3>Exempelmodeller</h3><p>Stålstomme med pelare, I-balkar, bjälklag, väggpaneler, grundplintar och skruvförband. Demonstrationsmått för funktion och prestanda.</p><label class="field">Storlek<select data-example-size></select></label><p data-example-count></p><button type="button" class="primary" data-load-frame>Läs in stommodell</button><details><summary>Mindre skruvexempel</summary><p>Tre förband: trä, plåt och rör. 17 objekt.</p><button type="button" data-load-example>Läs in skruvexempel</button></details><p>Modellen ersätts vid inläsning. Du kan återställa den med Ångra. Stora modeller kan ta längre tid att bygga upp.</p>';
+    const sizeSelect = section.querySelector('[data-example-size]');
+    for (const size of FRAME_EXAMPLE_SIZES)
+      sizeSelect.append(
+        new Option(`${size.name} · ${size.x * 6} × ${size.y * 6} m · ${size.floors} plan`, size.id),
+      );
+    sizeSelect.value = 'small';
+    const updateCount = () => {
+      const counts = frameExampleCounts(FRAME_EXAMPLE_SIZES.find((s) => s.id === sizeSelect.value));
+      section.querySelector('[data-example-count]').textContent =
+        `${counts.objects.toLocaleString('sv-SE')} objekt · ${counts.screws.toLocaleString('sv-SE')} skruvar · ${counts.holes.toLocaleString('sv-SE')} borrhål`;
+    };
+    sizeSelect.onchange = updateCount;
+    updateCount();
     document.querySelector('[data-settings-panel="project"]').append(section);
-    section.querySelector('[data-load-example]').onclick = () => {
+    const load = async (kind, button) => {
+      button.disabled = true;
+      $('settings-error').textContent = 'Bygger exempelmodellen…';
+      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
       try {
-        loadExample();
+        const result = loadExample(kind, sizeSelect.value);
         fillSettings();
         $('settings-dialog').close();
-        $('status').textContent =
-          'Skruvexempel inläst · 3 förband · Ångra återställer föregående modell';
+        $('status').textContent = `${result} · Ångra återställer föregående modell`;
       } catch (error) {
         $('settings-error').textContent = error.message;
+      } finally {
+        button.disabled = false;
       }
     };
+    section.querySelector('[data-load-example]').onclick = (e) =>
+      load('fasteners', e.currentTarget);
+    section.querySelector('[data-load-frame]').onclick = (e) => load('frame', e.currentTarget);
   }
   if (libraries.length) {
     const tab = document.createElement('button');

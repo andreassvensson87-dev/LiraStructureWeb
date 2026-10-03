@@ -17,6 +17,28 @@ Modellen har 17 numrerade objekt, varav 11 skruvar, med fristående material- oc
 skruvspecifikationer. Ingen biblioteksimport behövs. Måtten är demonstrationsvärden.
 Inläsningen ersätter sessionsmodellen och kan ångras som en enda operation.
 
+## Stommodell för prestandatest
+
+**Inställningar → Projekt → Storlek → Läs in stommodell** skapar en stålstomme
+med pelare, I-balkar, förbandsplåtar, M20-skruvar, brickor, bjälklag, väggpaneler
+samt grundplintar och fotplåtar. Varje balk har två skruvförband med fyra skruvar
+per ände. Hålen bearbetar både plåten och balkflänsarna.
+
+| Storlek | Mått | Plan | Objekt | Skruvar | Borrhål |
+| --- | --- | --- | --- | --- | --- |
+| Liten | 18 × 12 m | 2 | 454 | 272 | 544 |
+| Stor | 30 × 24 m | 3 | 1 881 | 1 176 | 2 352 |
+| Prestandamodell | 48 × 36 m | 4 | 5 522 | 3 520 | 7 040 |
+
+Identiska balkförband delar förberäknad bearbetad geometri vid inläsningen.
+Varje del, skruv och borrhål har ändå egen identitet. Ändrade hålkopplingar
+invaliderar den förberedda geometrin.
+
+Statusraden visar uppbyggnadstiden för modellskapande och scenens geometri,
+inte ett FPS-mått. Rotera, zooma, markera, isolera, redigera och skapa ritningar
+för att testa andra arbetsmoment. Numrering körs separat för dessa modeller.
+Måtten och förbanden är demonstrationer; inga konstruktionsberäkningar görs.
+
 ## Användning
 
 1. Öppna **Inställningar → Bibliotek → Skruvar**. Skapa egna poster för träskruv eller
