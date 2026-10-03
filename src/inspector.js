@@ -295,8 +295,13 @@ export class Inspector {
       this.$('inspector-error').textContent = session.error;
     } else if (JSON.stringify(session.sources) !== JSON.stringify(session.batch)) {
       this.cancel();
-      this.commit(session.batch);
-      this.$('inspector-error').textContent = '';
+      try {
+        this.commit(session.batch);
+        this.$('inspector-error').textContent = '';
+      } catch (error) {
+        this.fill(session.sources);
+        this.$('inspector-error').textContent = error.message;
+      }
     } else this.cancel();
     this.busy = false;
   }

@@ -11,6 +11,7 @@ import { isFastener } from './fasteners/object-type.js';
 import { resolveFastenerHoles } from './fasteners/placement.js';
 import { axisPlacement } from './fasteners/geometry.js';
 import { removeFastenerRelations, validateFastenerTargets } from './fasteners/relations.js';
+import { updateAutomaticJoints } from './fasteners/update-joints.js';
 let fastenerUI = null;
 import { typeName } from './object-identity.js';
 import { createSweepForm } from './model/ui/sweep-form.js';
@@ -32,7 +33,8 @@ import {
   updateObjectMeshSelection,
   updateObjectMeshTransparency,
 } from './model/object-mesh.js';
-import { createProject } from './project/project-state.js';
+import { createProject, captureProject } from './project/project-state.js';
+import { installProjectFiles } from './app/project-files.js';
 import { SnapIndex } from './model/snap-index.js';
 import { selectionGeometryReader } from './model-object.js';
 import { InstanceBatches } from './model/instance-batches.js';
@@ -468,17 +470,25 @@ function checkpoint() {
   projectHistory.checkpoint(project);
 }
 function save(s) {
+  if (ui.selected) s = { ...project.objects.find((o) => o.id === ui.selected), ...s };
   const error = validateSweep(s);
   if (error) {
     $('error').textContent = error;
     $('inspector-error').textContent = error;
     return false;
   }
+  let edited;
+  if (ui.selected) {
+    try {
+      edited = applyObjectBatch(project.objects, [s]).objects;
+    } catch (error) {
+      $('inspector-error').textContent = $('error').textContent = error.message;
+      return false;
+    }
+  }
   checkpoint();
   if (ui.selected) {
-    project.objects = applyObjectBatch(project.objects, [
-      { ...project.objects.find((o) => o.id === ui.selected), ...s },
-    ]).objects;
+    project.objects = edited;
   } else {
     const id = crypto.randomUUID();
     project.objects.push({
@@ -505,12 +515,19 @@ $('deselect').onclick = () => select(null);
 function remove() {
   if (!ui.selectedIds.size) return;
   setDrawing(false);
-  checkpoint();
-  project.objects = removeFastenerRelations(project.objects, ui.selectedIds)
+  let next = removeFastenerRelations(project.objects, ui.selectedIds)
     .map((s) =>
       isCut(s) ? { ...s, targets: s.targets.filter((id) => !ui.selectedIds.has(id)) } : s,
     )
     .filter((s) => !isCut(s) || s.targets.length);
+  try {
+    next = updateAutomaticJoints(project.objects, next);
+  } catch (error) {
+    $('status').textContent = $('inspector-error').textContent = error.message;
+    return;
+  }
+  checkpoint();
+  project.objects = next;
   ui.selected = null;
   ui.selectedIds.clear();
   clearPreview();
@@ -729,8 +746,14 @@ function commitPoint(target) {
     if (!save(batch[0])) return false;
     fillForm(project.objects.find((s) => s.id === ui.selected));
   } else {
+    let result;
+    try {
+      result = applyObjectBatch(project.objects, batch, { copy: mode === 'copy' });
+    } catch (error) {
+      $('draw-length-error').textContent = $('status').textContent = error.message;
+      return false;
+    }
     checkpoint();
-    const result = applyObjectBatch(project.objects, batch, { copy: mode === 'copy' });
     project.objects = result.objects;
     if (mode === 'copy') ui.selectedIds = new Set(result.ids);
     ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
@@ -1168,8 +1191,9 @@ fastenerUI = new FastenerUI({
   commit: (draft) => {
     const error = validateSweep(draft);
     if (error) throw new Error(error);
+    const updated = draft.id ? applyObjectBatch(project.objects, [draft]).objects : null;
     checkpoint();
-    if (draft.id) project.objects = applyObjectBatch(project.objects, [draft]).objects;
+    if (draft.id) project.objects = updated;
     else {
       draft = {
         ...draft,
@@ -1413,6 +1437,35 @@ const settingsController = createSettingsController({
 function fillSettings() {
   settingsController.fill();
 }
+installProjectFiles({
+  project,
+  finishEditing: () => inspector?.finish(),
+  onLoaded: fillSettings,
+  loadProject: (next) => {
+    const previous = captureProject(project);
+    const apply = (state) => {
+      setDrawing(false);
+      Object.assign(project, state);
+      hiddenObjects.clear();
+      ui.sequence = project.objects.length;
+      levelsUI?.sync();
+      grid.set({ ...project.grid, z: levelElevation(project.levels) });
+      select(null);
+      inspector.show('model');
+      fillSettings();
+      fit(new THREE.Vector3(1, -1, 1).normalize(), new THREE.Box3().setFromObject(objects));
+    };
+    try {
+      apply(next);
+    } catch (error) {
+      apply(previous);
+      throw error;
+    }
+    projectHistory.checkpoint(previous);
+    $('undo').disabled = false;
+    $('redo').disabled = true;
+  },
+});
 function cancelInspectorPreview() {
   if (ui.inspectorPreview) {
     scene.remove(ui.inspectorPreview);
@@ -1436,8 +1489,9 @@ inspector = new Inspector({
   },
   cancel: cancelInspectorPreview,
   commit: (batch) => {
+    const next = applyObjectBatch(project.objects, batch).objects;
     checkpoint();
-    project.objects = applyObjectBatch(project.objects, batch).objects;
+    project.objects = next;
     render();
     $('status').textContent = 'Egenskaper uppdaterade';
   },
@@ -1452,6 +1506,18 @@ inspector = new Inspector({
 function validateSweep(s) {
   const error = validateObject(s);
   if (error) return error;
+  if (
+    s.id &&
+    project.objects.some((o) => o.id === s.id) &&
+    ui.selectedIds.size <= 1 &&
+    (tools.operation?.sources?.length || 0) <= 1
+  ) {
+    try {
+      applyObjectBatch(project.objects, [s]);
+    } catch (error) {
+      return error.message;
+    }
+  }
   if (isFastener(s)) {
     try {
       validateFastenerTargets(s, project.objects);
@@ -1557,8 +1623,9 @@ function applyLibrarySection(section) {
     const batch = sources.map(apply),
       error = batch.map(validateSweep).find(Boolean);
     if (error) throw new Error(error);
+    const next = applyObjectBatch(project.objects, batch).objects;
     checkpoint();
-    project.objects = applyObjectBatch(project.objects, batch).objects;
+    project.objects = next;
     setDrawing(false);
     if (ui.selected) fillForm(project.objects.find((s) => s.id === ui.selected));
     render();

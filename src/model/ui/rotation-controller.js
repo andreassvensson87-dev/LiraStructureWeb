@@ -60,8 +60,15 @@ export function createRotationController({
         setDrawing(false);
         return;
       }
+      let next;
+      try {
+        next = applyObjectBatch(project.objects, batch).objects;
+      } catch (error) {
+        rotationHandle.error.textContent = error.message;
+        return;
+      }
       checkpoint();
-      project.objects = applyObjectBatch(project.objects, batch).objects;
+      project.objects = next;
       setDrawing(false);
       render();
       $('status').textContent = 'Markeringen roterad';

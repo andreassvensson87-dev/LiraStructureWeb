@@ -24,7 +24,9 @@ Kör `npm run check` före ändringar lämnas vidare: formatering, lint, tester 
 - Stomlinjer med ändbubblor (1, 2, 3 / A, B, C), redigerbara X/Y-lägen, 1 500 mm förlängning och snapp till korsningar inom 14 skärmpixlar. Stomlinjeändringar ingår i ångra/gör om. Visa allt omfattar både stomlinjer och sweeps.
 - Ortografisk kamera i alla vyer, med orbit, panorering, zoom, ovanifrån och anpassa vy.
 
-Modellen finns endast i minnet under sessionen. Modellen saknar filimport/export, molnlagring och kompatibilitet med Mac-appens projektfiler. Tvärsnittsbiblioteket sparas separat lokalt och kan importeras/exporteras. Inga verifierade standardprofiler medföljer. Ingen dimensioneringsberäkning.
+Spara och öppna projekt under Inställningar → Projekt. `.lira.json` innehåller objekt, använda material-/profil-/skruvvärden, hål, nivåer, numrering, ritningar och snapinställningar. Öppna ingår i ångra/gör om. Geometri och kameravy härleds på nytt; ingen automatisk sparning eller molnlagring finns. Formatet är separat från Mac-appens projektfiler. Tvärsnittsbiblioteket sparas separat lokalt och kan importeras/exporteras. Inga verifierade standardprofiler medföljer. Ingen dimensioneringsberäkning.
+
+[examples/forbandstest.lira.json](examples/forbandstest.lira.json) innehåller ett isolerat förband från stomexemplet: ändplåt, I-balk, skruv med två brickor och mutter samt två redigerbara Single Part-ritningar. Öppna filen via Inställningar → Projekt för att kontrollera hål och detaljritningar.
 
 `src/sweep.js` separerar geometri och validering från UI. Orienteringen följer `ProfileSweepEntity.localFrame()` i Mac-appen: Z upp, profil-X via längdaxel × Z, med X som reserv vid vertikal axel. Profilens placering styrs av insättningspunkten och 3×3-väljaren.
 

@@ -406,13 +406,11 @@ export class FastenerUI {
   refreshSpecs(selected) {
     const select = this.placeForm.elements.spec;
     select.replaceChildren(new Option('Välj skruv…', ''));
-    const records = latestFasteners(this.records);
     const snapshot = this.editingObject?.spec;
-    if (
-      snapshot &&
-      !records.some((s) => `${s.id}:${s.revision}` === `${snapshot.id}:${snapshot.revision}`)
-    )
-      records.unshift(snapshot);
+    const records = latestFasteners(this.records).filter(
+      (s) => !snapshot || `${s.id}:${s.revision}` !== `${snapshot.id}:${snapshot.revision}`,
+    );
+    if (snapshot) records.unshift(snapshot);
     this.specOptions = records;
     records.forEach((s) =>
       select.append(

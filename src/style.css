@@ -3615,3 +3615,9 @@ body > footer .pwa-install {
   font-size: 18px;
   color: #17654f;
 }
+/* Project file actions live with project settings. */
+.project-file-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

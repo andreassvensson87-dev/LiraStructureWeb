@@ -1,6 +1,16 @@
 import { updateDetailArea, syncDetailCrop } from './drawing-details.js';
 // Paper coordinates are millimetres; camera coordinates are model millimetres.
 export const DRAWING_VIEWS_VERSION = 2;
+/** Unpainted space inside a view must still accept machining/dimension points. */
+export function drawingViewAtPoint(views, point, selectedId = null) {
+  const contains = (v) =>
+    point.every((n, i) => n >= v.position[i] && n <= v.position[i] + v.size[i]);
+  return (
+    views.find((v) => v.id === selectedId && contains(v)) ||
+    [...views].reverse().find(contains) ||
+    null
+  );
+}
 export function ensureGAViews(record, paper, center, scale) {
   const sheet = (record.sheet ??= {});
   if (!sheet.views?.length)

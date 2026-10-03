@@ -34,6 +34,15 @@ export function surfaceReference(point, source, candidates) {
 }
 
 export function resolveReference(ref, candidates, grid) {
+  if (ref.kind === 'bore') {
+    const point = candidates.find(
+      (p) =>
+        p.reference?.kind === 'bore' &&
+        p.reference.source === ref.source &&
+        p.reference.featureId === ref.featureId,
+    );
+    return point ? [...point] : null;
+  }
   if (ref.kind === 'grid') {
     if (!grid || ref.counts.some((n, i) => n !== grid[['x', 'y'][i]].length)) return null;
     return ref.indices.map((index, i) =>

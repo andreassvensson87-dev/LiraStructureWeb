@@ -2,14 +2,14 @@
 
 ## Ownership
 
-- `src/project/`: serializable project data, history and drawing edit merging. No DOM, rendering, localStorage or editor imports. `schemaVersion` identifies the in-memory project schema; file import/migration is not implemented yet.
+- `src/project/`: serializable project data, history and drawing edit merging. No DOM, rendering, localStorage or editor imports. `schemaVersion` identifies the in-memory project schema; `project-file.js` validates and serializes versioned `.lira.json` files; browser file handling belongs to `app/project-files.js`. No legacy migration is provided.
 - `src/app/`: application-level wiring and settings UI. `drawing-controller.js` connects both drawing editors and the manager to the project through explicit callbacks.
 - `src/model/ui/`: controllers for selection, rotation, Plate/cuts, workplanes and sweep forms. Controllers receive state and callbacks explicitly. `editor-state.js` owns selection, previews and form state; these never enter project history.
 - `src/model/`: model interaction and presentation helpers. Keyboard routing and tool transitions are pure. `tool-session.js` owns transient interaction state, `pointer-controller.js` owns click routing and listener cleanup, and `tools/` contains plate and transform rules. Mesh construction receives model, selection and display options explicitly.
 - `src/main.js`: application startup and UI adapters for the model canvas. It coordinates rendering and existing DOM controls; new domain rules belong in `project/` or `model/tools/`, not in the DOM handlers.
 - Existing geometry modules (`sweep`, `plate`, `line-cut`, `snap`, etc.) retain their paths to keep this migration reviewable.
 - Shared `drawing-*` modules own workspace interactions, annotations, sections, details and titles. GA and Single Part retain different projection/rendering adapters.
-- `frame-*` and `section-*` modules implement frame/layout and profile editors. Libraries are browser-local resources, not yet embedded in project snapshots.
+- `frame-*` and `section-*` modules implement frame/layout and profile editors. Libraries are browser-local resources. Values referenced by model objects are embedded snapshots; project files retain those snapshots, not the unused library catalogues.
 
 ## State and changes
 

@@ -1,6 +1,7 @@
 import { appendVectorDrawing } from './drawing-vector.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { referenceCandidates } from './annotation-references.js';
+import { partHoleCandidates } from './fasteners/drawing.js';
 import { partViewFrame } from './part-view-frame.js';
 import { migratePartOrientation } from './part-section-orientation.js';
 import { detailSource } from './drawing-details.js';
@@ -104,12 +105,16 @@ export class PartSections {
     for (const view of this.items) {
       const data = this.data(view);
       data.vectors = sectionVectors(this.e.geometry, data.frame, data.section);
+      data.holeCenters = !data.section
+        ? partHoleCandidates(this.e.holeSchedule || [], data.frame, this.e.drawingReflection)
+        : [];
       this.cache.set(view.id, data);
       this.e.annotationCandidates[view.id] = referenceCandidates(
         data.candidates || [...data.cut, ...data.behind].flat(),
         'part',
         data.identities,
       );
+      this.e.annotationCandidates[view.id].push(...data.holeCenters.map((h) => h.point));
     }
   }
   commit(view) {
@@ -171,6 +176,20 @@ export class PartSections {
         h / 2 - (p[1] - view.camera.center[1]) / view.scale,
       ];
       appendVectorDrawing(content, data.vectors, project, { hidden: view.settings.hiddenLines });
+      for (const hole of data.holeCenters) {
+        const [x, y] = project(hole.point);
+        const r = hole.diameter / (2 * view.scale) + 1;
+        content.append(
+          node('path', {
+            'data-bore-center': hole.point.reference.featureId,
+            d: `M${x - r},${y}H${x + r}M${x},${y - r}V${y + r}`,
+            fill: 'none',
+            stroke: '#506974',
+            'stroke-width': 0.12,
+            'pointer-events': 'none',
+          }),
+        );
+      }
       content.append(
         node('path', {
           d: data.cut.map(([a, b]) => `M${project(a)}L${project(b)}`).join(''),

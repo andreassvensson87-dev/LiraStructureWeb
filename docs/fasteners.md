@@ -137,3 +137,27 @@ Single Part härleds från samma poster. Omordning eller borttagning av ett anna
 hål ändrar inte deras identitet; kopiering ger nya ID:n. De är inte separata
 objekt i huvudmodellistan. IFC-export ingår inte ännu; underobjekten ger en grund
 för att senare exportera hål med stabil identitet och koppling till borrad del.
+
+## Kontrollerat projektflöde
+
+Automatiska förband räknas om mot hela den föreslagna ändringen när skruven,
+anslutna delar eller skärningar ändras. Håldjup och mutter-/brickläge följer
+materiallagren. Referensdelens flytt och rotation bär skruvens insättningsaxel;
+explicit skruvflytt har företräde. Om axeln missar en vald del eller skruven blir
+för kort avvisas ändringen innan den sparas. Manuella hål behåller sina mått.
+
+Single Part visar centrumkors i vyer vinkelräta mot hålen. Måttkedjor kan snappa
+till dessa centrum med referenser till hålens beständiga ID, oberoende av hålets
+triangulering och diameter. Borttagna hål ger brutna måttreferenser. Automatisk
+hålmåttsättning och diametertext på själva bladet återstår; diameter, håldjup
+och lokala centrumkoordinater visas i ritningsinspectorns hållista.
+
+Inställningar → Projekt har Spara projekt och Öppna projekt. Projektfilerna
+innehåller skruvspecifikationerna som faktiskt används, underobjektens ID:n och
+ritningarnas redigerbara data. Filen valideras före inläsning. Öppna kan ångras.
+Separata oanvända bibliotek, referens-IFC-filer och kameravy ingår inte.
+
+`tests/joint-workflow.test.js` täcker lager och brickor, tjockleksändring,
+flytt/rotation, kopiering, borttagning, numreringsstatus, borrkonturer,
+centrumreferenser, filåteröppning och ångra/gör om. En isolerad koppling från
+stomexemplet kontrolleras också genom projektfil och detaljritningsdata.

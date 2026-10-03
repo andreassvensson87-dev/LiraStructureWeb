@@ -2,6 +2,7 @@ import { transformObject } from '../../transform.js';
 import { rotateObject } from '../../rotation.js';
 import { nextIdentity, designation } from '../../object-identity.js';
 import { followFasteners, remapFastenerCopy } from '../../fasteners/relations.js';
+import { updateAutomaticJoints } from '../../fasteners/update-joints.js';
 export function transformCandidates(operation, first, target, draft) {
   return operation
     ? operation.sources.map((s) => transformObject(s, operation.mode, first, target))
@@ -18,10 +19,13 @@ export function applyObjectBatch(
   if (!copy) {
     const updates = new Map(batch.map((s) => [s.id, s]));
     return {
-      objects: followFasteners(
+      objects: updateAutomaticJoints(
         objects,
-        objects.map((s) => updates.get(s.id) || s),
-        new Set(updates.keys()),
+        followFasteners(
+          objects,
+          objects.map((s) => updates.get(s.id) || s),
+          new Set(updates.keys()),
+        ),
       ),
       ids: batch.map((s) => s.id),
     };
@@ -37,5 +41,8 @@ export function applyObjectBatch(
     object.name = designation(object);
     copies.push(remapFastenerCopy(object, ids));
   }
-  return { objects: [...objects, ...copies], ids: copies.map((s) => s.id) };
+  return {
+    objects: updateAutomaticJoints(objects, [...objects, ...copies]),
+    ids: copies.map((s) => s.id),
+  };
 }

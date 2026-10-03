@@ -16,7 +16,13 @@ import { DrawingDetailTool } from './drawing-detail-tool.js';
 import { appendViewTitle } from './drawing-view-title.js';
 import { DrawingSectionTool } from './drawing-section-tool.js';
 import { PartSections } from './part-sections.js';
-import { ensurePartViews, partViewScales, viewById, setDrawingViewScale } from './drawing-views.js';
+import {
+  ensurePartViews,
+  partViewScales,
+  viewById,
+  setDrawingViewScale,
+  drawingViewAtPoint,
+} from './drawing-views.js';
 import { DrawingWorkspace, drawingEditorShell } from './drawing-workspace.js';
 import { pasteboardBounds } from './drawing-pasteboard.js';
 import {
@@ -29,7 +35,7 @@ import { DrawingAnnotations } from './drawing-annotations.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { objectGeometry } from './model-object.js';
 import { partMatrix } from './part-marks.js';
-import { updatePartHolePanel } from './fasteners/drawing.js';
+import { updatePartHolePanel, partHoleSchedule } from './fasteners/drawing.js';
 import {
   PAPER_KEY,
   standardPapers,
@@ -364,6 +370,7 @@ export class SinglePartSheet {
     if (!source) return;
     this.geometry = objectGeometry(source, this.getObjects());
     const localMatrix = partMatrix(source);
+    this.holeSchedule = partHoleSchedule(source, this.getObjects(), localMatrix);
     updatePartHolePanel(
       this.dialog.querySelector('.drawing-inspector'),
       source,
@@ -490,12 +497,14 @@ export class SinglePartSheet {
   }
 
   locateAnnotation(e, view) {
-    view ??= e.target.closest('[data-view]')?.dataset.view;
-    if (!view) return null;
     const r = this.svg.getBoundingClientRect(),
       x = ((e.clientX - r.left) * this.paper[0]) / r.width,
-      y = ((e.clientY - r.top) * this.paper[1]) / r.height,
-      origin = this.projectAnnotation([0, 0], view),
+      y = ((e.clientY - r.top) * this.paper[1]) / r.height;
+    view ??=
+      e.target.closest('[data-view]')?.dataset.view ||
+      drawingViewAtPoint(this.config.views, [x, y], this.selectedView)?.id;
+    if (!view) return null;
+    const origin = this.projectAnnotation([0, 0], view),
       s =
         partViewScales(this.config)[view] ||
         this.extraSections.items.find((v) => v.id === view)?.scale;
