@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { objectType, objectTypes } from './model/object-types/index.js';
-import { holesForPart } from './fasteners/relations.js';
+import { holesForPart, holesByTarget } from './fasteners/relations.js';
 import { holeGeometry } from './fasteners/geometry.js';
 import { geometryEdges } from './fasteners/edges.js';
 export const isHelper = (s) => !!s && objectTypes.find(s)?.family === 'helper';
@@ -43,8 +43,8 @@ function compact(geometry) {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   return g;
 }
-function evaluated(s, model = []) {
-  const cuts = isCut(s) ? [] : cutsForModel(s, model);
+function evaluated(s, model = [], knownCuts = null) {
+  const cuts = isCut(s) ? [] : (knownCuts ?? cutsForModel(s, model));
   let entry = cache.get(s);
   if (entry && entry.cuts.length === cuts.length && entry.cuts.every((c, i) => c === cuts[i]))
     return entry;
@@ -81,6 +81,7 @@ function evaluated(s, model = []) {
       }
     }
     geometry.userData.linkedHoles = cuts.some((c) => c.type === 'linkedhole');
+    geometry.computeBoundingBox();
     entry = { cuts, geometry };
     cache.set(s, entry);
     return entry;
@@ -91,6 +92,21 @@ function evaluated(s, model = []) {
 }
 export const objectGeometry = (s, model = []) => evaluated(s, model).geometry.clone();
 export const geometryForModel = (s, model) => evaluated(s, model).geometry.clone();
+/** Borrow cached geometry for read-only selection, avoiding large typed-array copies. */
+export function selectionGeometry(s, model) {
+  return evaluated(s, model).geometry;
+}
+export function selectionGeometryReader(model) {
+  const holes = holesByTarget(model),
+    cuts = new Map();
+  for (const cut of model.filter(isCut))
+    for (const target of cut.targets || []) {
+      if (!cuts.has(target)) cuts.set(target, []);
+      cuts.get(target).push(cut);
+    }
+  return (s) =>
+    evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])]).geometry;
+}
 /** Seed repeated, already evaluated assemblies; changed cut identities invalidate this cache. */
 export function cacheObjectGeometry(s, model, geometry, edges) {
   const previous = cache.get(s);

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { enclosedSweeps } from '../src/selection.js';
+import { selectionGeometry } from '../src/model-object.js';
 const camera = new THREE.OrthographicCamera(-1000, 1000, 1000, -1000, 1, 10000);
 camera.up.set(0, 1, 0);
 camera.position.set(0, 0, 5000);
@@ -17,6 +18,35 @@ const s = {
   start: [-500, 0, 0],
   end: [500, 0, 0],
 };
+test('fully enclosed and disjoint objects are selected without cloning or projecting their triangles', () => {
+  const source = { ...s, id: 'cached-selection' };
+  const geometry = selectionGeometry(source, [source]);
+  const attribute = geometry.attributes.position;
+  const original = attribute.array,
+    clone = geometry.clone;
+  geometry.clone = () => {
+    throw new Error('Selection must not clone geometry');
+  };
+  attribute.array = new Proxy(original, {
+    get: (target, key) => {
+      if (key === 'subarray') throw new Error('Broad phase must not project triangles');
+      return Reflect.get(target, key, target);
+    },
+  });
+  try {
+    assert.deepEqual(
+      enclosedSweeps([source], camera, 1000, 1000, { x: 0, y: 0 }, { x: 1000, y: 1000 }),
+      [source.id],
+    );
+    assert.deepEqual(
+      enclosedSweeps([source], camera, 1000, 1000, { x: 0, y: 0 }, { x: 100, y: 100 }),
+      [],
+    );
+  } finally {
+    attribute.array = original;
+    geometry.clone = clone;
+  }
+});
 test('window selection requires whole sweep and works in either drag direction', () => {
   const a = { x: 200, y: 400 },
     b = { x: 800, y: 600 };
@@ -86,5 +116,41 @@ test('crossing catches a thin edge touch and all overlapping objects', () => {
   assert.deepEqual(
     enclosedSweeps([s, second], camera, 1000, 1000, { x: 749, y: 480 }, { x: 800, y: 530 }),
     [],
+  );
+});
+
+test('bulk selection uses current linked bore geometry and sees material restored after hole removal', () => {
+  const plate = {
+    id: 'drilled',
+    type: 'plate',
+    frame: { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] },
+    polygon: [
+      [-200, -200],
+      [200, -200],
+      [200, 200],
+      [-200, 200],
+    ],
+    thickness: 20,
+    side: 'positive',
+  };
+  const screw = {
+    id: 'screw',
+    type: 'fastener',
+    spec: {
+      kind: 'wood',
+      length: 200,
+      diameter: 20,
+      head: { kind: 'cylinder', diameter: 30, height: 10 },
+    },
+    start: [0, 0, 100],
+    end: [0, 0, -100],
+    holes: [{ targetId: plate.id, kind: 'clearance', diameter: 100, offset: 80, depth: 20 }],
+  };
+  const a = { x: 510, y: 510 },
+    b = { x: 490, y: 490 };
+  assert.deepEqual(enclosedSweeps([plate], camera, 1000, 1000, a, b, [plate, screw]), []);
+  assert.deepEqual(
+    enclosedSweeps([plate], camera, 1000, 1000, a, b, [plate, { ...screw, holes: [] }]),
+    [plate.id],
   );
 });

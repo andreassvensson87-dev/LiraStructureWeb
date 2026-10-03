@@ -46,7 +46,7 @@ export function helperMesh(s, { selectedIds, ghost = false }) {
           }),
         );
   if (object.isLine) object.computeLineDistances();
-  object.userData = { id: s.id, helper: true, ghost };
+  object.userData = { id: s.id, helper: true, ghost, selected: selectedIds.has(s.id) };
   object.renderOrder = 15;
   return object;
 }

@@ -11,6 +11,8 @@ import { isFastener } from '../fasteners/object-type.js';
 /** Selection changes only appearance; keep geometries and GPU buffers intact. */
 export function updateObjectMeshSelection(object, s, selectedIds) {
   const selected = selectedIds.has(s.id);
+  if (object.userData.selected === selected) return;
+  object.userData.selected = selected;
   if (object.userData.helper) {
     object.material.color.set(selected || object.userData.ghost ? 0x258e79 : 0x8765ad);
     return;
@@ -59,6 +61,7 @@ export function createObjectMesh(
     );
   m.userData.id = s.id;
   m.userData.ghost = ghost;
+  m.userData.selected = selectedIds.has(s.id);
   const lines = new THREE.LineSegments(
     edgesForModel(
       s,

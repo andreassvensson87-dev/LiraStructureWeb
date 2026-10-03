@@ -48,7 +48,8 @@ test('cut selection preserves its shape and toggles visibility; helpers keep the
       [20, 20],
       [0, 20],
     ],
-    depth: 100,
+    thickness: 100,
+    side: 'positive',
     targets: ['beam'],
   };
   const mesh = createObjectMesh(cut, { model: [beam, cut], selectedIds: new Set() });

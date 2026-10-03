@@ -1,11 +1,5 @@
 import * as THREE from 'three';
-import { isHelper, objectAnchors, objectGeometry as sweepGeometry } from './model-object.js';
-function triangles(s, model) {
-  const geometry = sweepGeometry(s, model),
-    vertices = geometry.attributes.position.array;
-  geometry.dispose();
-  return vertices;
-}
+import { isHelper, objectAnchors, selectionGeometryReader } from './model-object.js';
 function triangleIntersectsRect(points, rect) {
   const corners = [
     [rect.left, rect.top],
@@ -33,14 +27,16 @@ function triangleIntersectsRect(points, rect) {
 }
 // Left-to-right contains the complete sweep; right-to-left crosses actual surfaces.
 export function enclosedSweeps(sweeps, camera, width, height, a, b, model = sweeps) {
+  const geometryForSelection = selectionGeometryReader(model);
   const rect = {
     left: Math.min(a.x, b.x),
     right: Math.max(a.x, b.x),
     top: Math.min(a.y, b.y),
     bottom: Math.max(a.y, b.y),
   };
+  const vector = new THREE.Vector3();
   const project = (point) => {
-    const p = new THREE.Vector3(...point).project(camera);
+    const p = vector.fromArray(point).project(camera);
     return { x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2, z: p.z };
   };
   const inside = (p) =>
@@ -58,17 +54,40 @@ export function enclosedSweeps(sweeps, camera, width, height, a, b, model = swee
         if (points.every((p) => p.z < -1) || points.every((p) => p.z > 1)) return false;
         return triangleIntersectsRect([points[0], points[1], points[1]], rect);
       }
-      const vertices = triangles(s, model);
+      const geometry = geometryForSelection(s);
+      const vertices = geometry.attributes.position.array;
+      if (!vertices.length) return false;
+      // Orthographic projection is affine: eight box corners bound every surface point.
+      // Accept fully enclosed objects and reject disjoint ones before examining triangles.
+      if (camera.isOrthographicCamera) {
+        const box = geometry.boundingBox;
+        const corners = [];
+        for (const x of [box.min.x, box.max.x])
+          for (const y of [box.min.y, box.max.y])
+            for (const z of [box.min.z, box.max.z]) corners.push(project([x, y, z]));
+        if (corners.every(inside)) return true;
+        if (
+          Math.max(...corners.map((p) => p.x)) < rect.left ||
+          Math.min(...corners.map((p) => p.x)) > rect.right ||
+          Math.max(...corners.map((p) => p.y)) < rect.top ||
+          Math.min(...corners.map((p) => p.y)) > rect.bottom ||
+          corners.every((p) => p.z < -1) ||
+          corners.every((p) => p.z > 1)
+        )
+          return false;
+      }
       if (b.x >= a.x) {
         if (!vertices.length) return false;
         for (let i = 0; i < vertices.length; i += 3)
           if (!inside(project(vertices.subarray(i, i + 3)))) return false;
         return true;
       }
-      for (let i = 0; i < vertices.length; i += 9) {
-        const points = [0, 3, 6].map((offset) =>
-          project(vertices.subarray(i + offset, i + offset + 3)),
-        );
+      const index = geometry.index;
+      for (let i = 0; i < (index?.count ?? vertices.length / 3); i += 3) {
+        const points = [0, 1, 2].map((offset) => {
+          const start = (index ? index.getX(i + offset) : i + offset) * 3;
+          return project(vertices.subarray(start, start + 3));
+        });
         if (points.every((p) => p.z < -1) || points.every((p) => p.z > 1)) continue;
         if (triangleIntersectsRect(points, rect)) return true;
       }

@@ -5,29 +5,42 @@ import { isFastener } from './object-type.js';
 import { fastenerFrame } from './geometry.js';
 
 const holesCache = new WeakMap();
+function derivedHoles(s) {
+  let holes = holesCache.get(s);
+  if (!holes) {
+    const f = fastenerFrame(s);
+    holes = s.holes
+      .filter((h) => h.kind !== 'none' && h.active !== false)
+      .map((h) => ({
+        ...structuredClone(h),
+        id: boreIdentity(s, h),
+        ownerId: s.id,
+        type: 'linkedhole',
+        targets: [h.targetId],
+        frame: {
+          origin: f.origin.clone().addScaledVector(f.z, h.offset).toArray(),
+          u: f.x.toArray(),
+          v: f.y.toArray(),
+        },
+      }));
+    holesCache.set(s, holes);
+  }
+  return holes;
+}
 export function holesForPart(part, model) {
-  return model.filter(isFastener).flatMap((s) => {
-    let holes = holesCache.get(s);
-    if (!holes) {
-      const f = fastenerFrame(s);
-      holes = s.holes
-        .filter((h) => h.kind !== 'none' && h.active !== false)
-        .map((h) => ({
-          ...structuredClone(h),
-          id: boreIdentity(s, h),
-          ownerId: s.id,
-          type: 'linkedhole',
-          targets: [h.targetId],
-          frame: {
-            origin: f.origin.clone().addScaledVector(f.z, h.offset).toArray(),
-            u: f.x.toArray(),
-            v: f.y.toArray(),
-          },
-        }));
-      holesCache.set(s, holes);
+  return model
+    .filter(isFastener)
+    .flatMap((s) => derivedHoles(s).filter((h) => h.targetId === part.id));
+}
+/** Build once for a bulk operation, preserving the same cached bore identities. */
+export function holesByTarget(model) {
+  const result = new Map();
+  for (const s of model.filter(isFastener))
+    for (const hole of derivedHoles(s)) {
+      if (!result.has(hole.targetId)) result.set(hole.targetId, []);
+      result.get(hole.targetId).push(hole);
     }
-    return holes.filter((h) => h.targetId === part.id);
-  });
+  return result;
 }
 const matrix = (s) => {
   const f = objectType(s).partFrame(s);

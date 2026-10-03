@@ -325,13 +325,13 @@ function render({ selectionOnly = false } = {}) {
     project.objects.length === renderedObjects.length &&
     project.objects.every((s, i) => s === renderedObjects[i]);
   if (selectionOnly) {
-    const byId = new Map(project.objects.map((s) => [s.id, s]));
     const selectedIds =
       tools.operation?.mode === 'fastenerTargets'
         ? new Set(tools.operation.targetIds)
         : ui.selectedIds;
-    for (const child of objects.children) {
-      const s = byId.get(child.userData.id);
+    for (let i = 0; i < objects.children.length; i++) {
+      const child = objects.children[i],
+        s = renderedObjects[i];
       updateObjectMeshSelection(child, s, selectedIds);
       child.visible = isVisible(s.id);
     }
