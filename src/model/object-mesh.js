@@ -59,6 +59,15 @@ export function createObjectMesh(
               : 1,
       }),
     );
+  if (isFastener(s))
+    m.userData.detailDiameter = Math.max(
+      s.spec.head.diameter,
+      s.spec.diameter,
+      s.spec.nut?.acrossFlats || 0,
+      s.spec.washer?.outerDiameter || 0,
+    );
+  // Pay the initial bounds cost while building, rather than on the first click.
+  geometry.computeBoundingSphere();
   m.userData.id = s.id;
   m.userData.ghost = ghost;
   m.userData.selected = selectedIds.has(s.id);

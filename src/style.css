@@ -1854,6 +1854,8 @@ aside {
   cursor: pointer;
 }
 .model-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 30px;
   gap: 4px;

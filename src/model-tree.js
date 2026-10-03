@@ -83,8 +83,10 @@ export class ModelTree {
   }
   setSelection(selected) {
     this.isolateButton.disabled = !selected.size;
-    for (const id of new Set([...(this.selected || []), ...selected]))
+    for (const id of new Set([...(this.selected || []), ...selected])) {
+      if (this.selected?.has(id) === selected.has(id)) continue;
       this.rows?.get(id)?.classList.toggle('selected', selected.has(id));
+    }
     this.selected = selected;
   }
 }

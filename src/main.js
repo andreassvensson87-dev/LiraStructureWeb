@@ -29,6 +29,8 @@ import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
 import { createObjectMesh, updateObjectMeshSelection } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
+import { FrameGate } from './model/frame-gate.js';
+import { updateFastenerDetail } from './model/fastener-detail.js';
 import { createFrameExample } from './project/frame-example.js';
 import { ProjectHistory } from './project/project-history.js';
 import { FrameEditor } from './frame-editor.js';
@@ -250,10 +252,25 @@ document
   .querySelectorAll('[data-axis]')
   .forEach((b) => (b.onclick = () => toggleLock(b.dataset.axis)));
 
+const frameGate = new FrameGate();
+for (const event of ['click', 'input', 'change', 'keydown', 'pointerup', 'pointercancel'])
+  document.addEventListener(event, () => frameGate.invalidate(), { capture: true });
+host.addEventListener(
+  'pointermove',
+  () => {
+    if (tools.drawing || tools.operation || ui.preview || rotationHandle.drag)
+      frameGate.invalidate();
+  },
+  { capture: true },
+);
+host.addEventListener('pointerleave', () => frameGate.invalidate());
+new ResizeObserver(() => frameGate.invalidate()).observe(host);
 renderer.setAnimationLoop(() => {
   if (!ui.marquee && !rotationHandle.drag) navigation.controls.update();
   // Project labels with the same camera transform used to render this frame.
   camera.updateMatrixWorld();
+  if (!frameGate.consume(camera)) return;
+  updateFastenerDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
   insertionPoints.update(
     camera,
@@ -319,28 +336,32 @@ function mesh(s, ghost = false, model = project.objects) {
   });
 }
 let renderedObjects = [];
+let renderedById = new Map();
+let renderedSelection = new Set();
 function render({ selectionOnly = false } = {}) {
+  frameGate.invalidate();
   selectionOnly &&=
     project.objects.length === renderedObjects.length &&
     project.objects.every((s, i) => s === renderedObjects[i]);
+  const selectedIds =
+    tools.operation?.mode === 'fastenerTargets'
+      ? new Set(tools.operation.targetIds)
+      : ui.selectedIds;
   if (selectionOnly) {
-    const selectedIds =
-      tools.operation?.mode === 'fastenerTargets'
-        ? new Set(tools.operation.targetIds)
-        : ui.selectedIds;
-    for (let i = 0; i < objects.children.length; i++) {
-      const child = objects.children[i],
-        s = renderedObjects[i];
-      updateObjectMeshSelection(child, s, selectedIds);
-      child.visible = isVisible(s.id);
+    for (const id of new Set([...renderedSelection, ...selectedIds])) {
+      if (renderedSelection.has(id) === selectedIds.has(id)) continue;
+      const entry = renderedById.get(id);
+      if (entry) updateObjectMeshSelection(entry.child, entry.source, selectedIds);
     }
   } else {
     for (const child of [...objects.children]) {
       objects.remove(child);
       dispose(child);
     }
+    renderedById = new Map();
     project.objects.forEach((s) => {
       const child = mesh(s);
+      renderedById.set(s.id, { child, source: s });
       child.visible =
         isVisible(s.id) &&
         (tools.operation?.mode !== 'rotate' ||
@@ -350,6 +371,7 @@ function render({ selectionOnly = false } = {}) {
     });
     renderedObjects = [...project.objects];
   }
+  renderedSelection = new Set(selectedIds);
   $('count').textContent = project.objects.length;
   if (selectionOnly) modelTree?.setSelection(ui.selectedIds);
   else modelTree?.render(project.objects, ui.selectedIds);
@@ -792,10 +814,11 @@ function selectionHit() {
       objects.children.filter(
         (o) =>
           o.visible &&
+          camera.layers.test(o.layers) &&
           !o.userData.cut &&
           (tools.operation?.mode !== 'fastenerTargets' ||
-            (isPhysical(project.objects.find((s) => s.id === o.userData.id)) &&
-              project.objects.find((s) => s.id === o.userData.id)?.type !== 'fastener')),
+            (isPhysical(renderedById.get(o.userData.id)?.source) &&
+              renderedById.get(o.userData.id)?.source.type !== 'fastener')),
       ),
       false,
     )[0]?.object.userData.id ??
