@@ -29,7 +29,6 @@ import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
 import { createObjectMesh, updateObjectMeshSelection } from './model/object-mesh.js';
 import { createProject } from './project/project-state.js';
-import { createFastenerExample } from './project/example-model.js';
 import { createFrameExample } from './project/frame-example.js';
 import { ProjectHistory } from './project/project-history.js';
 import { FrameEditor } from './frame-editor.js';
@@ -1244,12 +1243,9 @@ window.addEventListener('keydown', (e) => {
 const settingsController = createSettingsController({
   project,
   checkpoint,
-  loadExample: (kind, size) => {
+  loadExample: (size) => {
     const started = performance.now();
-    const example =
-      kind === 'frame'
-        ? createFrameExample(size, { prepareGeometry: true })
-        : createFastenerExample();
+    const example = createFrameExample(size, { prepareGeometry: true });
     inspector?.finish();
     checkpoint();
     setDrawing(false);

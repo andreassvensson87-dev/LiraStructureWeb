@@ -13,7 +13,7 @@ export function createSettingsController({
   if (loadExample) {
     const section = document.createElement('section');
     section.innerHTML =
-      '<h3>Exempelmodeller</h3><p>Stålstomme med pelare, I-balkar, bjälklag, väggpaneler, grundplintar och skruvförband. Demonstrationsmått för funktion och prestanda.</p><label class="field">Storlek<select data-example-size></select></label><p data-example-count></p><button type="button" class="primary" data-load-frame>Läs in stommodell</button><details><summary>Mindre skruvexempel</summary><p>Tre förband: trä, plåt och rör. 17 objekt.</p><button type="button" data-load-example>Läs in skruvexempel</button></details><p>Modellen ersätts vid inläsning. Du kan återställa den med Ångra. Stora modeller kan ta längre tid att bygga upp.</p>';
+      '<h3>Exempelmodeller</h3><p>Stålstomme med pelare, I-balkar, bjälklag, väggpaneler, grundplintar och skruvförband. De utökade modellerna har även sekundärbalkar, uppdelade bjälklag och fasadstag. Demonstrationsmått för funktion och prestanda.</p><label class="field">Storlek<select data-example-size></select></label><p data-example-count></p><button type="button" class="primary" data-load-frame>Läs in stommodell</button><p>Modellen ersätts vid inläsning. Du kan återställa den med Ångra. Stora modeller kan ta längre tid att bygga upp.</p>';
     const sizeSelect = section.querySelector('[data-example-size]');
     for (const size of FRAME_EXAMPLE_SIZES)
       sizeSelect.append(
@@ -28,12 +28,12 @@ export function createSettingsController({
     sizeSelect.onchange = updateCount;
     updateCount();
     document.querySelector('[data-settings-panel="project"]').append(section);
-    const load = async (kind, button) => {
+    const load = async (button) => {
       button.disabled = true;
       $('settings-error').textContent = 'Bygger exempelmodellen…';
       await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
       try {
-        const result = loadExample(kind, sizeSelect.value);
+        const result = loadExample(sizeSelect.value);
         fillSettings();
         $('settings-dialog').close();
         $('status').textContent = `${result} · Ångra återställer föregående modell`;
@@ -43,9 +43,7 @@ export function createSettingsController({
         button.disabled = false;
       }
     };
-    section.querySelector('[data-load-example]').onclick = (e) =>
-      load('fasteners', e.currentTarget);
-    section.querySelector('[data-load-frame]').onclick = (e) => load('frame', e.currentTarget);
+    section.querySelector('[data-load-frame]').onclick = (e) => load(e.currentTarget);
   }
   if (libraries.length) {
     const tab = document.createElement('button');

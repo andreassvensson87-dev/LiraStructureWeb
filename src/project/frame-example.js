@@ -1,4 +1,5 @@
 import { createProject } from './project-state.js';
+import { holesByTarget } from '../fasteners/relations.js';
 import { automaticPlacement } from '../fasteners/placement.js';
 import { transformObject } from '../transform.js';
 import { rotateObject } from '../rotation.js';
@@ -9,6 +10,8 @@ export const FRAME_EXAMPLE_SIZES = [
   { id: 'small', name: 'Liten stomme', x: 3, y: 2, floors: 2 },
   { id: 'medium', name: 'Stor stomme', x: 5, y: 4, floors: 3 },
   { id: 'large', name: 'Prestandamodell', x: 8, y: 6, floors: 4 },
+  { id: 'extended', name: 'Utökad stomme', x: 8, y: 6, floors: 6, secondary: 1 },
+  { id: 'stress', name: 'Stresstest', x: 10, y: 8, floors: 6, secondary: 1 },
 ];
 const material = (id, name, category, density, color) => ({
   id,
@@ -118,16 +121,20 @@ function beamAssembly() {
 }
 
 export function frameExampleCounts(size) {
-  const beams = size.floors * (size.x * (size.y + 1) + size.y * (size.x + 1));
+  const secondaryBeams = size.floors * size.x * size.y * (size.secondary || 0);
+  const beams = size.floors * (size.x * (size.y + 1) + size.y * (size.x + 1)) + secondaryBeams;
   const columns = (size.x + 1) * (size.y + 1) * size.floors;
   const foundations = (size.x + 1) * (size.y + 1) * 2;
-  const floors = size.x * size.y * size.floors;
+  const floors = size.x * size.y * size.floors * ((size.secondary || 0) + 1);
   const walls = 2 * (size.x + size.y) * size.floors;
+  const braces = size.secondary ? walls : 0;
   return {
-    objects: beams * 11 + columns + foundations + floors + walls,
+    objects: beams * 11 + columns + foundations + floors + walls + braces,
     screws: beams * 8,
     holes: beams * 16,
     beams,
+    secondaryBeams,
+    braces,
     columns,
     floors,
     walls,
@@ -241,22 +248,60 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
     for (let x = 0; x <= size.x; x++)
       for (let y = 0; y < size.y; y++)
         addBeam(yTemplate, [x * 6000, y * 6000, z], `Plan ${floor} · Y-balk`);
+    const strips = (size.secondary || 0) + 1;
     for (let x = 0; x < size.x; x++)
-      for (let y = 0; y < size.y; y++)
-        add(
-          plate(
-            `frame-floor-${floor}-${x}-${y}`,
-            `Plan ${floor} · Bjälklag`,
-            [x * 6000 + 250, y * 6000 + 250, z + 190],
-            [1, 0, 0],
-            [0, 1, 0],
-            5500,
-            5500,
-            120,
-            concrete,
-          ),
-        );
+      for (let y = 0; y < size.y; y++) {
+        for (let i = 1; i < strips; i++)
+          addBeam(
+            xTemplate,
+            [x * 6000, y * 6000 + (i * 6000) / strips, z],
+            `Plan ${floor} · Sekundärbalk`,
+          );
+        for (let strip = 0; strip < strips; strip++)
+          add(
+            plate(
+              `frame-floor-${floor}-${x}-${y}-${strip}`,
+              `Plan ${floor} · Bjälklag${strips > 1 ? ' · element ' + (strip + 1) : ''}`,
+              [x * 6000 + 250, y * 6000 + (strip * 6000) / strips + 250, z + 190],
+              [1, 0, 0],
+              [0, 1, 0],
+              5500,
+              6000 / strips - 500,
+              120,
+              concrete,
+            ),
+          );
+      }
+    function addBrace(id, start, end) {
+      add({
+        id,
+        name: `Plan ${floor} · Fasadstag RHS 100 × 100 × 6`,
+        type: 'sweep',
+        profile: 'rhs',
+        width: 100,
+        height: 100,
+        thickness: 6,
+        rotation: 0,
+        start,
+        end,
+        material: steel,
+      });
+    }
     for (let side = 0; side < 2; side++) {
+      if (size.secondary) {
+        for (let x = 0; x < size.x; x++)
+          addBrace(
+            `frame-brace-x-${floor}-${side}-${x}`,
+            [x * 6000 + 250, side * size.y * 6000, z - 3200],
+            [(x + 1) * 6000 - 250, side * size.y * 6000, z - 200],
+          );
+        for (let y = 0; y < size.y; y++)
+          addBrace(
+            `frame-brace-y-${floor}-${side}-${y}`,
+            [side * size.x * 6000, y * 6000 + 250, z - 3200],
+            [side * size.x * 6000, (y + 1) * 6000 - 250, z - 200],
+          );
+      }
       for (let x = 0; x < size.x; x++)
         add(
           plate(
@@ -289,6 +334,7 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
   }
   if (prepareGeometry) {
     const templates = new Map();
+    const holes = holesByTarget(project.objects);
     try {
       for (const original of xTemplate.filter((o) => o.type !== 'fastener'))
         templates.set(original.id, {
@@ -304,6 +350,7 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
           project.objects,
           source.geometry.clone().applyMatrix4(matrix),
           source.edges.clone().applyMatrix4(matrix),
+          holes.get(item.object.id) || [],
         );
       }
     } finally {

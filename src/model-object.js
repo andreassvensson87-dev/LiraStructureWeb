@@ -108,11 +108,11 @@ export function selectionGeometryReader(model) {
     evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])]).geometry;
 }
 /** Seed repeated, already evaluated assemblies; changed cut identities invalidate this cache. */
-export function cacheObjectGeometry(s, model, geometry, edges) {
+export function cacheObjectGeometry(s, model, geometry, edges, knownCuts = null) {
   const previous = cache.get(s);
   previous?.geometry.dispose();
   previous?.edges?.dispose();
-  cache.set(s, { cuts: cutsForModel(s, model), geometry, edges });
+  cache.set(s, { cuts: knownCuts ?? cutsForModel(s, model), geometry, edges });
 }
 export function edgesForModel(s, model, threshold = 1) {
   const entry = evaluated(s, model);
