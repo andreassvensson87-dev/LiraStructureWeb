@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { objectType, objectTypes } from './model/object-types/index.js';
 import { holesForPart, holesByTarget } from './fasteners/relations.js';
-import { holeGeometry } from './fasteners/geometry.js';
+import { holeGeometry, fastenerDisplayTemplate, fastenerGeometry } from './fasteners/geometry.js';
 import { geometryEdges } from './fasteners/edges.js';
 export const isHelper = (s) => !!s && objectTypes.find(s)?.family === 'helper';
 export const isPhysical = (s) =>
@@ -22,6 +22,7 @@ export function validateObject(s) {
   return objectType(s).validate(s);
 }
 const cache = new WeakMap(),
+  displayCache = new WeakMap(),
   evaluator = new Evaluator();
 evaluator.useGroups = false;
 evaluator.attributes = ['position', 'normal'];
@@ -43,13 +44,54 @@ function compact(geometry) {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   return g;
 }
-function evaluated(s, model = [], knownCuts = null) {
-  const cuts = isCut(s) ? [] : (knownCuts ?? cutsForModel(s, model));
-  let entry = cache.get(s);
+// Display, picking and broad-phase snap use the local shared screw template.
+// Keep world-space vertex copies lazy for consumers that actually request them.
+// This separate scope retains only the screw, not a whole evaluation/model context.
+function lazyFastenerEntry(source, instance) {
+  let geometry = null;
+  return {
+    cuts: [],
+    instance,
+    identity: instance.geometry,
+    bounds: instance.geometry.boundingBox.clone().applyMatrix4(instance.matrix),
+    get geometry() {
+      if (!geometry) {
+        geometry = fastenerGeometry(source);
+        geometry.computeBoundingBox();
+        geometry.userData.linkedHoles = false;
+      }
+      return geometry;
+    },
+    dispose() {
+      geometry?.dispose();
+    },
+  };
+}
+function disposeEntry(entry) {
+  if (!entry) return;
+  if (entry.dispose) entry.dispose();
+  else entry.geometry.dispose();
+  entry.edges?.dispose();
+}
+function evaluated(s, model = [], knownCuts = null, simplified = false) {
+  const store = simplified ? displayCache : cache;
+  const cuts = isCut(s)
+    ? []
+    : (
+        knownCuts ??
+        (simplified
+          ? model.filter((c) => isCut(c) && c.targets?.includes(s.id))
+          : cutsForModel(s, model))
+      ).filter((c) => !simplified || c.type !== 'linkedhole');
+  let entry = store.get(s);
   if (entry && entry.cuts.length === cuts.length && entry.cuts.every((c, i) => c === cuts[i]))
     return entry;
-  entry?.geometry.dispose();
-  entry?.edges?.dispose();
+  disposeEntry(entry);
+  if (simplified && s.type === 'fastener' && !cuts.length) {
+    entry = lazyFastenerEntry(s, fastenerDisplayTemplate(s));
+    store.set(s, entry);
+    return entry;
+  }
   let geometry = baseGeometry(s);
   try {
     for (const cut of cuts) {
@@ -83,7 +125,7 @@ function evaluated(s, model = [], knownCuts = null) {
     geometry.userData.linkedHoles = cuts.some((c) => c.type === 'linkedhole');
     geometry.computeBoundingBox();
     entry = { cuts, geometry };
-    cache.set(s, entry);
+    store.set(s, entry);
     return entry;
   } catch (error) {
     geometry.dispose();
@@ -92,32 +134,68 @@ function evaluated(s, model = [], knownCuts = null) {
 }
 export const objectGeometry = (s, model = []) => evaluated(s, model).geometry.clone();
 export const geometryForModel = (s, model) => evaluated(s, model).geometry.clone();
+/** Model display and picking retain ordinary cuts but do not subtract bores. */
+export const displayGeometry = (s, model = []) => evaluated(s, model, null, true).geometry.clone();
 /** Borrow cached geometry for read-only selection, avoiding large typed-array copies. */
 export function selectionGeometry(s, model) {
-  return evaluated(s, model).geometry;
+  return evaluated(s, model, null, true).geometry;
 }
-function indexedEntries(model) {
-  const holes = holesByTarget(model),
+function indexedEntries(model, simplified = false) {
+  const holes = simplified ? new Map() : holesByTarget(model),
     cuts = new Map();
   for (const cut of model.filter(isCut))
     for (const target of cut.targets || []) {
       if (!cuts.has(target)) cuts.set(target, []);
       cuts.get(target).push(cut);
     }
-  return (s) => evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])]);
+  return (s) =>
+    evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])], simplified);
+}
+/** One immutable index per render transaction, including all linked bore identities. */
+export function createDisplayGeometryContext(model) {
+  const entry = indexedEntries(model, true);
+  const holes = holesByTarget(model);
+  return {
+    fastenerTemplate: (s) => entry(s).instance || null,
+    geometry: (s) => entry(s).geometry.clone(),
+    holes: (s) => holes.get(s.id) || [],
+    edges(s, threshold = 1) {
+      return entryEdges(entry(s), threshold);
+    },
+  };
 }
 export function selectionGeometryReader(model) {
-  const entry = indexedEntries(model);
-  return (s) => entry(s).geometry;
+  const entry = indexedEntries(model, true);
+  const reader = (s) => entry(s).geometry;
+  reader.bounds = (s) => {
+    const value = entry(s);
+    return value.bounds || value.geometry.boundingBox;
+  };
+  return reader;
+}
+export function displayGeometryIdentityReader(model) {
+  const entry = indexedEntries(model, true);
+  return (s) => {
+    const value = entry(s);
+    return value.identity || value.geometry;
+  };
 }
 export const cachedGeometryIdentity = (s) => cache.get(s)?.geometry;
+export const cachedDisplayHasCuts = (s) => !!displayCache.get(s)?.cuts.length;
+export const cachedDisplayGeometryIdentity = (s) => {
+  const entry = displayCache.get(s);
+  return entry?.identity || entry?.geometry;
+};
+export const displayFastenerTemplate = (s, model) =>
+  evaluated(s, model, null, true).instance || null;
 const snapTemplates = new WeakMap();
 export function createSnapGeometryContext(model) {
-  const entry = indexedEntries(model);
+  const entry = indexedEntries(model, true);
+  const holes = holesByTarget(model);
   const features = (s) => {
     const evaluated = entry(s),
       instance = evaluated.instance;
-    if (!instance?.local) return { entry: evaluated, matrix: null };
+    if (!instance?.local || !evaluated.cuts.length) return { entry: evaluated, matrix: null };
     let template = snapTemplates.get(instance.geometry);
     if (!template) {
       template = { geometry: instance.geometry, edges: instance.edges, cuts: [{}] };
@@ -126,6 +204,10 @@ export function createSnapGeometryContext(model) {
     return { entry: template, matrix: instance.matrix };
   };
   return {
+    bounds: (s) => {
+      const value = entry(s);
+      return value.bounds || value.geometry.boundingBox;
+    },
     cornerFeatures(s) {
       const f = features(s);
       return { points: objectCorners(s, model, f.entry), matrix: f.matrix };
@@ -137,19 +219,43 @@ export function createSnapGeometryContext(model) {
     geometry: (s) => entry(s).geometry,
     objectCorners: (s) => objectCorners(s, model, entry(s)),
     objectSegments: (s) => objectSegments(s, model, entry(s)),
+    holeCenters: (s) =>
+      (holes.get(s.id) || []).map((h) => ({
+        coords: h.frame.origin,
+        featureId: h.id,
+        label: 'Hålcentrum',
+        symbol: 'cross',
+      })),
   };
 }
 /** Seed repeated, already evaluated assemblies; changed cut identities invalidate this cache. */
-export function cacheObjectGeometry(s, model, geometry, edges, knownCuts = null, instance = null) {
-  const previous = cache.get(s);
-  previous?.geometry.dispose();
-  previous?.edges?.dispose();
-  cache.set(s, { cuts: knownCuts ?? cutsForModel(s, model), geometry, edges, instance });
+export function cacheObjectGeometry(
+  s,
+  model,
+  geometry,
+  edges,
+  knownCuts = null,
+  instance = null,
+  simplified = false,
+) {
+  const store = simplified ? displayCache : cache;
+  const previous = store.get(s);
+  disposeEntry(previous);
+  store.set(s, {
+    cuts: (knownCuts ?? cutsForModel(s, model)).filter(
+      (c) => !simplified || c.type !== 'linkedhole',
+    ),
+    geometry,
+    edges,
+    instance,
+  });
 }
 /** Called after geometryForModel has validated the cached cut identities. */
-export function objectInstanceDescriptor(s) {
-  const entry = cache.get(s);
-  if (!entry || !['sweep', 'plate'].includes(s.type || 'sweep')) return null;
+export function objectInstanceDescriptor(s, simplified = false) {
+  const entry = (simplified ? displayCache : cache).get(s);
+  if (!entry) return null;
+  if (s.type === 'fastener') return entry.cuts.length ? null : fastenerDisplayTemplate(s);
+  if (!['sweep', 'plate'].includes(s.type || 'sweep')) return null;
   if (entry.instance) return entry.instance;
   if (entry.cuts.length) return null;
   const f = objectType(s).partFrame(s);
@@ -173,8 +279,11 @@ export function objectInstanceDescriptor(s) {
   if (s.start && s.end) shape.length = Math.hypot(...s.end.map((v, i) => v - s.start[i]));
   return { key: JSON.stringify(shape), matrix, geometry: entry.geometry, local: false };
 }
-export function edgesForModel(s, model, threshold = 1) {
-  const entry = evaluated(s, model);
+export function edgesForModel(s, model, threshold = 1, simplified = false) {
+  const entry = evaluated(s, model, null, simplified);
+  return entryEdges(entry, threshold);
+}
+function entryEdges(entry, threshold) {
   if (threshold !== 1) return geometryEdges(entry.geometry, threshold);
   entry.edges ??= geometryEdges(entry.geometry, threshold);
   return entry.edges.clone();

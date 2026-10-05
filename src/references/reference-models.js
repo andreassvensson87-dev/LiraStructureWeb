@@ -41,11 +41,7 @@ export class ReferenceModels {
       this.cancel();
       this.message('Import avbruten.');
     };
-    $('[data-remove]').onclick = () => {
-      this.clear();
-      $('[data-model]').hidden = true;
-      this.message('Referensen borttagen.');
-    };
+    $('[data-remove]').onclick = () => this.remove();
     $('[data-visible]').onchange = () => {
       this.group.visible = $('[data-visible]').checked;
     };
@@ -86,6 +82,13 @@ export class ReferenceModels {
     this.parts = [];
     this.group.clear();
   }
+  remove() {
+    // Removing the visible reference also cancels its unfinished replacement.
+    this.cancel();
+    this.clear();
+    this.$('[data-model]').hidden = true;
+    this.message('Referensen borttagen.');
+  }
   cancel() {
     this.worker?.terminate();
     this.worker = null;
@@ -107,6 +110,7 @@ export class ReferenceModels {
     this.worker = worker;
     this.pending = [];
     const fail = (message) => {
+      if (this.worker !== worker) return;
       this.cancel();
       this.message(message);
     };

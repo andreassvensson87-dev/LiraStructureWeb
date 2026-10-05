@@ -1,11 +1,8 @@
 import { TEMPLATE_KEY, readDrawingTemplates } from './drawing-templates.js';
 import { drawingPresetPicker, selectedDrawingPreset } from './drawing-presets.js';
-import {
-  planDrawingNumbering,
-  applyDrawingNumbering,
-  batchDrawingGroups,
-  createBatchDrawings,
-} from './single-part-drawings.js';
+import { planDrawingNumbering, applyDrawingNumbering } from './single-part-drawings.js';
+import { drawingCreationGroups, createSelectedDrawings } from './drawing-creation.js';
+import { numberAssembliesWithDrawings } from './assembly-numbering-workflow.js';
 const element = (tag, text, className) => {
   const e = document.createElement(tag);
   if (text) e.textContent = text;
@@ -127,16 +124,19 @@ function chooseMerges(plan, merges, manager) {
     d.showModal();
   });
 }
-export function showDrawingBatch(manager) {
-  const reopenManager = manager.dialog.open;
+export function showDrawingBatch(manager, initialType = 'all', initialSelection = null) {
+  manager.beforeNumber?.();
+  let reopenManager = manager.dialog.open,
+    openingDrawing = false;
   if (reopenManager) manager.dialog.close();
   const initial = manager.getState(),
-    selection = new Set(initial.selected),
-    d = dialog('Skapa Single Part-ritningar');
+    selectedIds = new Set(initialSelection || initial.selected),
+    d = dialog('Skapa ritningar');
+  let selection = selectedIds.size ? selectedIds : new Set(initial.objects.map((o) => o.id));
   d.classList.add('drawing-batch');
   const intro = element(
       'p',
-      'En ritning per detaljtyp. Klicka på en detalj för att framhäva dess objekt i modellen.',
+      'Single Part och Assembly i samma lista. En ritning per typ. Klicka på en rad för att framhäva delarna i modellen.',
     ),
     content = element('div', null, 'workflow-content'),
     message = element('p'),
@@ -154,7 +154,7 @@ export function showDrawingBatch(manager) {
   message.className = 'batch-feedback';
   const preset = drawingPresetPicker('Inställningar för nya ritningar');
   const templates = readDrawingTemplates();
-  const templateLabel = element('label', 'Ritningsmall'),
+  const templateLabel = element('label', 'Single Part · Ritningsmall'),
     templateSelect = document.createElement('select');
   templateSelect.setAttribute('aria-label', 'Ritningsmall');
   templateSelect.append(
@@ -166,7 +166,7 @@ export function showDrawingBatch(manager) {
   removeTemplate.type = 'button';
   removeTemplate.disabled = true;
   templateSelect.onchange = () => {
-    preset.select.disabled = !!templateSelect.value;
+    preset.select.disabled = typeSelect.value === 'SP' && !!templateSelect.value;
     removeTemplate.disabled = !templateSelect.value;
     removeTemplate.textContent = 'Ta bort mall';
   };
@@ -191,26 +191,46 @@ export function showDrawingBatch(manager) {
     }
   };
   templateLabel.append(removeTemplate);
-  setup.append(templateLabel, preset.label, number);
+  const typeLabel = element('label', 'Ritningstyp'),
+    typeSelect = document.createElement('select');
+  typeSelect.setAttribute('aria-label', 'Ritningstyp att skapa');
+  typeSelect.append(
+    new Option('Alla typer', 'all'),
+    new Option('Single Part', 'SP'),
+    new Option('Assembly', 'AS'),
+  );
+  typeSelect.value = initialType;
+  typeLabel.append(typeSelect);
+  const scopeLabel = element('label', 'Urval'),
+    scopeSelect = document.createElement('select');
+  scopeSelect.setAttribute('aria-label', 'Urval för ritningar');
+  scopeSelect.append(
+    new Option('Hela modellen', 'all'),
+    new Option('Markerade objekt', 'selected'),
+  );
+  scopeSelect.value = selectedIds.size ? 'selected' : 'all';
+  scopeLabel.append(scopeSelect);
+  setup.append(typeLabel, scopeLabel, templateLabel, preset.label, number);
+  const groupsForList = () =>
+    drawingCreationGroups(manager.getState(), selection, typeSelect.value);
   selectionBar.append(selectionCount, all, clear);
   d.append(summary, intro, setup, selectionBar, content, message, footer);
   footer.append(close, create);
   const availableKeys = () =>
     new Set(
-      batchDrawingGroups(manager.getState(), selection)
+      groupsForList()
         .filter((g) => g.valid && !g.drawing)
         .map((g) => g.key),
     );
   let checked = availableKeys();
   const render = () => {
-    const state = manager.getState(),
-      groups = batchDrawingGroups(state, selection);
+    const groups = groupsForList();
     content.replaceChildren();
     const unnumbered = groups.filter((g) => !g.valid).length;
     summary.replaceChildren(
       ...[
-        [groups.reduce((sum, g) => sum + g.objects.length, 0), 'objekt'],
-        [groups.length, 'detaljtyper'],
+        [groups.filter((g) => g.type === 'SP').length, 'Single Part-typer'],
+        [groups.filter((g) => g.type === 'AS').length, 'assemblytyper'],
         [groups.filter((g) => g.drawing).length, 'har ritning'],
       ].map(([count, label]) => {
         const item = element('span');
@@ -218,16 +238,18 @@ export function showDrawingBatch(manager) {
         return item;
       }),
     );
-    number.textContent = unnumbered ? `Numrera detaljer (${unnumbered})` : 'Uppdatera numrering';
+    number.textContent = unnumbered ? `Numrera (${unnumbered})` : 'Uppdatera numrering';
+    templateLabel.hidden = typeSelect.value === 'AS';
     number.classList.toggle('batch-number-needed', !!unnumbered);
     number.disabled = !groups.length;
     all.disabled = !groups.some((g) => g.valid && !g.drawing);
-    preset.select.disabled = !groups.length || !!templateSelect.value;
+    preset.select.disabled =
+      !groups.length || (typeSelect.value === 'SP' && !!templateSelect.value);
     if (!groups.length) {
       content.append(
         element(
           'p',
-          'Markera sweeps eller plates i modellen och öppna Single Part igen.',
+          'Inga typer i detta urval. Byt filter eller urval. Assemblygrupper skapas under Assemblies.',
           'batch-empty',
         ),
       );
@@ -239,7 +261,7 @@ export function showDrawingBatch(manager) {
     }
     const table = element('table', null, 'drawing-table');
     table.innerHTML =
-      '<thead><tr><th>Skapa</th><th>Detalj / profil</th><th>Antal i urval / modell</th><th>Ritning</th></tr></thead>';
+      '<thead><tr><th>Skapa</th><th>Typ</th><th>Detalj / assembly</th><th>Antal i urval / modell</th><th>Ritning</th></tr></thead>';
     const tbody = element('tbody');
     table.append(tbody);
     const update = () => {
@@ -258,7 +280,10 @@ export function showDrawingBatch(manager) {
       check.type = 'checkbox';
       check.disabled = !g.valid || !!g.drawing;
       check.checked = !check.disabled && checked.has(g.key);
-      check.setAttribute('aria-label', 'Skapa ritning ' + g.mark);
+      check.setAttribute(
+        'aria-label',
+        `Skapa ${g.type === 'AS' ? 'Assembly' : 'Single Part'} ${g.mark}`,
+      );
       check.onchange = () => {
         check.checked ? checked.add(g.key) : checked.delete(g.key);
         update();
@@ -271,7 +296,9 @@ export function showDrawingBatch(manager) {
         title,
         element(
           'small',
-          `${g.source.name || ''} · ${g.source.type === 'plate' ? 'Plate' : g.source.section?.name || g.source.profile || 'Sweep'}`,
+          g.type === 'AS'
+            ? `${g.name} · ${g.source.memberIds.length} delar per assembly`
+            : `${g.source.name || ''} · ${g.source.type === 'plate' ? 'Plate' : g.source.section?.name || g.source.profile || 'Sweep'}`,
         ),
       );
       row.onclick = (e) => {
@@ -282,8 +309,16 @@ export function showDrawingBatch(manager) {
       const drawingCell = element('td');
       if (g.drawing) {
         const open = element('button', g.drawing.number + ' · Öppna');
-        open.onclick = () => manager.open({ ...g.drawing, sourceId: g.source.id });
+        open.disabled = !g.valid;
+        open.onclick = () => {
+          reopenManager = false;
+          openingDrawing = true;
+          d.close();
+          manager.open(g.type === 'AS' ? g.drawing : { ...g.drawing, sourceId: g.sourceId });
+        };
         drawingCell.append(open);
+        if (!g.valid)
+          drawingCell.append(element('span', 'Numrering krävs', 'batch-badge batch-badge-warning'));
       } else
         drawingCell.append(
           element(
@@ -292,7 +327,16 @@ export function showDrawingBatch(manager) {
             g.valid ? 'batch-badge' : 'batch-badge batch-badge-warning',
           ),
         );
-      row.append(cell, info, element('td', `${g.objects.length} / ${g.all.length}`), drawingCell);
+      row.append(
+        cell,
+        element('td', g.type === 'AS' ? 'Assembly' : 'Single Part'),
+        info,
+        element(
+          'td',
+          `${g.type === 'AS' ? g.assemblyIds.length : g.objects.length} / ${g.all.length}`,
+        ),
+        drawingCell,
+      );
       tbody.append(row);
     }
     content.append(table);
@@ -309,39 +353,58 @@ export function showDrawingBatch(manager) {
   number.onclick = async () => {
     number.disabled = true;
     try {
-      if (await numberWithDrawings(manager)) {
+      if ((await numberWithDrawings(manager)) && (await numberAssembliesWithDrawings(manager))) {
         checked = availableKeys();
         render();
-        message.textContent = 'Numrering klar. Granska de valda detaljerna och skapa ritningarna.';
+        message.textContent = 'Numrering klar. Granska typerna och skapa valda ritningar.';
       }
     } catch (e) {
       message.textContent = e.message;
     } finally {
-      number.disabled = false;
+      render();
     }
   };
   create.onclick = () => {
-    const state = manager.getState(),
-      next = createBatchDrawings(
-        state,
-        selection,
-        checked,
-        undefined,
-        selectedDrawingPreset(preset.select.value),
-        templates.find((t) => t.id === templateSelect.value) || null,
-      );
-    manager.change(next);
-    checked.clear();
+    try {
+      const state = manager.getState(),
+        next = createSelectedDrawings(
+          state,
+          selection,
+          new Set(
+            groupsForList()
+              .filter((g) => checked.has(g.key))
+              .map((g) => g.key),
+          ),
+          selectedDrawingPreset(preset.select.value),
+          templates.find((t) => t.id === templateSelect.value) || null,
+        );
+      manager.change(next);
+      checked.clear();
+      render();
+      manager.render();
+      const count = next.length - state.drawings.length;
+      message.textContent = `${count} ${count === 1 ? 'ritning skapad' : 'ritningar skapade'}. Öppna en ritning från listan eller stäng för att återgå.`;
+    } catch (error) {
+      message.textContent = error.message;
+    }
+  };
+  typeSelect.onchange = () => {
+    checked = availableKeys();
     render();
-    manager.render();
-    const count = next.length - state.drawings.length;
-    message.textContent = `${count} ${count === 1 ? 'ritning skapad' : 'ritningar skapade'}. Öppna en ritning från listan eller stäng för att återgå.`;
+  };
+  scopeSelect.onchange = () => {
+    selection =
+      scopeSelect.value === 'selected'
+        ? selectedIds
+        : new Set(manager.getState().objects.map((o) => o.id));
+    checked = availableKeys();
+    render();
   };
   close.onclick = () => d.close();
   d.addEventListener(
     'close',
     () => {
-      manager.highlight?.([...selection]);
+      if (reopenManager || !openingDrawing) manager.highlight?.([...selectedIds]);
       d.remove();
       if (reopenManager) {
         manager.render();

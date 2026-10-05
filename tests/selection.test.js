@@ -119,7 +119,7 @@ test('crossing catches a thin edge touch and all overlapping objects', () => {
   );
 });
 
-test('bulk selection uses current linked bore geometry and sees material restored after hole removal', () => {
+test('bulk selection uses the simple body consistently before and after hole removal', () => {
   const plate = {
     id: 'drilled',
     type: 'plate',
@@ -148,7 +148,7 @@ test('bulk selection uses current linked bore geometry and sees material restore
   };
   const a = { x: 510, y: 510 },
     b = { x: 490, y: 490 };
-  assert.deepEqual(enclosedSweeps([plate], camera, 1000, 1000, a, b, [plate, screw]), []);
+  assert.deepEqual(enclosedSweeps([plate], camera, 1000, 1000, a, b, [plate, screw]), [plate.id]);
   assert.deepEqual(
     enclosedSweeps([plate], camera, 1000, 1000, a, b, [plate, { ...screw, holes: [] }]),
     [plate.id],

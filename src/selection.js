@@ -54,13 +54,11 @@ export function enclosedSweeps(sweeps, camera, width, height, a, b, model = swee
         if (points.every((p) => p.z < -1) || points.every((p) => p.z > 1)) return false;
         return triangleIntersectsRect([points[0], points[1], points[1]], rect);
       }
-      const geometry = geometryForSelection(s);
-      const vertices = geometry.attributes.position.array;
-      if (!vertices.length) return false;
       // Orthographic projection is affine: eight box corners bound every surface point.
       // Accept fully enclosed objects and reject disjoint ones before examining triangles.
       if (camera.isOrthographicCamera) {
-        const box = geometry.boundingBox;
+        const box = geometryForSelection.bounds(s);
+        if (box.isEmpty()) return false;
         const corners = [];
         for (const x of [box.min.x, box.max.x])
           for (const y of [box.min.y, box.max.y])
@@ -76,6 +74,9 @@ export function enclosedSweeps(sweeps, camera, width, height, a, b, model = swee
         )
           return false;
       }
+      const geometry = geometryForSelection(s);
+      const vertices = geometry.attributes.position.array;
+      if (!vertices.length) return false;
       if (b.x >= a.x) {
         if (!vertices.length) return false;
         for (let i = 0; i < vertices.length; i += 3)

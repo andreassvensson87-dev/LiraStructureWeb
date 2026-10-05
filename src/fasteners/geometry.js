@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { geometryEdges } from './edges.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export function fastenerFrame(s) {
@@ -35,7 +36,7 @@ function cylinder(top, bottom, length, offset, segments = 48) {
   g.translate(0, 0, offset + length / 2);
   return g.toNonIndexed();
 }
-export function fastenerGeometry(s) {
+function localFastenerGeometry(s) {
   const spec = s.spec,
     r = spec.diameter / 2;
   const pieces = [cylinder(r, r, spec.length, 0)];
@@ -101,8 +102,44 @@ export function fastenerGeometry(s) {
   }
   const geometry = mergeGeometries(pieces);
   pieces.forEach((g) => g.dispose());
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+// Bounded templates contain modelling dimensions only; placement and hole edits
+// never change the screw shape. Render wrappers own their GPU attributes.
+const templates = new Map();
+export function fastenerDisplayTemplate(s) {
+  const key = JSON.stringify([s.spec, s.nutOffset, !!s.washers?.head, !!s.washers?.nut]);
+  let template = templates.get(key);
+  if (!template) {
+    const geometry = localFastenerGeometry(s);
+    template = { geometry, edges: geometryEdges(geometry, 10), key: 'fastener:' + key };
+    templates.set(key, template);
+    if (templates.size > 128) templates.delete(templates.keys().next().value);
+  }
   const f = fastenerFrame(s);
-  geometry.applyMatrix4(new THREE.Matrix4().makeBasis(f.x, f.y, f.z).setPosition(f.origin));
+  return {
+    ...template,
+    local: true,
+    matrix: new THREE.Matrix4().makeBasis(f.x, f.y, f.z).setPosition(f.origin),
+  };
+}
+export function fastenerGeometry(s) {
+  const template = fastenerDisplayTemplate(s);
+  return template.geometry.clone().applyMatrix4(template.matrix);
+}
+/** Independent geometry/attribute lifetimes, with shared immutable CPU arrays. */
+export function sharedGeometryView(source) {
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(source.attributes))
+    geometry.setAttribute(
+      name,
+      new THREE.BufferAttribute(attribute.array, attribute.itemSize, attribute.normalized),
+    );
+  if (source.index) geometry.setIndex(new THREE.BufferAttribute(source.index.array, 1));
+  geometry.boundingBox = source.boundingBox?.clone() || null;
+  geometry.boundingSphere = source.boundingSphere?.clone() || null;
   return geometry;
 }
 export function holeGeometry(hole) {
@@ -114,7 +151,13 @@ export function holeGeometry(hole) {
   ];
   if (cs) points.push(new THREE.Vector2(cs.diameter / 2, 0), new THREE.Vector2(r, cs.depth));
   points.push(new THREE.Vector2(r, hole.depth + 0.01), new THREE.Vector2(0, hole.depth + 0.01));
-  const geometry = new THREE.LatheGeometry(points, 96);
+  // Keep the cap, cylindrical wall and countersink normals separate. Smoothing
+  // across these corners makes CSG fragments look like extra sharp edges.
+  const pieces = points
+    .slice(1)
+    .map((point, i) => new THREE.LatheGeometry([points[i], point], 96).toNonIndexed());
+  const geometry = mergeGeometries(pieces);
+  pieces.forEach((g) => g.dispose());
   geometry.rotateX(Math.PI / 2);
   const f = hole.frame;
   geometry.applyMatrix4(

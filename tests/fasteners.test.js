@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import {
   validateFastenerSpec,
@@ -34,6 +35,45 @@ import { ProjectHistory } from '../src/project/project-history.js';
 import { moveGripPoints } from '../src/model/grips.js';
 import { partHoleSchedule } from '../src/fasteners/drawing.js';
 import { geometryEdges } from '../src/fasteners/edges.js';
+
+test('example joint shows bore rims without wall seams in model and side drawing', () => {
+  const model = JSON.parse(
+    readFileSync(new URL('../examples/forbandstest.lira.json', import.meta.url)),
+  ).project.objects;
+  for (const part of model.slice(0, 2)) {
+    const hole = holesForPart(part, model)[0],
+      [x, y] = hole.frame.origin,
+      radius = hole.diameter / 2,
+      g = geometryForModel(part, model),
+      edges = geometryEdges(g),
+      p = edges.attributes.position;
+    const rimCoverage = new Map();
+    for (let i = 0; i < p.count; i += 2) {
+      const a = new THREE.Vector3().fromBufferAttribute(p, i),
+        b = new THREE.Vector3().fromBufferAttribute(p, i + 1);
+      const onWall = (v) => Math.abs(Math.hypot(v.x - x, v.y - y) - radius) < 0.02;
+      if (!onWall(a) || !onWall(b)) continue;
+      assert.ok(Math.abs(a.z - b.z) < 0.001, 'bore wall must have no triangulation edges');
+      if (!rimCoverage.has(a.z)) rimCoverage.set(a.z, new Set());
+      const coverage = rimCoverage.get(a.z);
+      for (const v of [a, b])
+        coverage.add(Math.round((Math.atan2(v.y - y, v.x - x) * 48) / Math.PI + 96) % 96);
+    }
+    const rings = part.type === 'plate' ? 2 : 4;
+    assert.equal(rimCoverage.size, rings);
+    for (const coverage of rimCoverage.values())
+      assert.equal(coverage.size, 96, 'complete bore rims remain');
+    // Looking along Y exposes unwanted axial seams in both visible and hidden lines.
+    g.rotateX(Math.PI / 2);
+    for (const set of geometryVectors(g))
+      for (const [a, b] of [...set.visible, ...set.hidden]) {
+        if (Math.abs(a[0] - x) >= radius + 0.02 || Math.abs(b[0] - x) >= radius + 0.02) continue;
+        assert.ok(Math.abs(a[1] - b[1]) < 0.001, 'side drawing only shows bore contours');
+      }
+    edges.dispose();
+    g.dispose();
+  }
+});
 
 const wood = {
   id: 'wood',

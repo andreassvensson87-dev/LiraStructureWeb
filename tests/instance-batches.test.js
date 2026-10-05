@@ -78,7 +78,7 @@ test('shared display preserves per-object colours, selection, visibility and exa
   assert.equal(objects[0].layers.mask, 1);
 });
 
-test('prepared drilled copies share their exact template in both display modes; edited holes fall back', () => {
+test('prepared parts share their simple body template in both display modes and after hole edits', () => {
   const project = createFrameExample('small', { prepareGeometry: true });
   const sources = project.objects
     .filter((o) => o.profile === 'i' && o.name.includes('X-balk'))
@@ -88,7 +88,7 @@ test('prepared drilled copies share their exact template in both display modes; 
   );
   const batches = new InstanceBatches(new THREE.Scene(), { minimumObjects: 0 });
   batches.rebuild(objects);
-  assert.equal(batches.batches.length, 1);
+  assert.equal(batches.batches.length, 2);
   assert.equal(
     batches.batches[0].mesh.geometry.attributes.position.count,
     objects[0].geometry.attributes.position.count,
@@ -105,9 +105,20 @@ test('prepared drilled copies share their exact template in both display modes; 
       : o,
   );
   const edited = createObjectMesh(sources[1], { model: changed, selectedIds: new Set() });
-  assert.equal(edited.userData.instanceDescriptor, null);
-  batches.rebuild([objects[0], edited]);
-  assert.equal(batches.batches.length, 0);
+  assert.equal(edited.userData.instanceDescriptor, objects[1].userData.instanceDescriptor);
+  assert.equal(edited.userData.geometryIdentity, objects[1].userData.geometryIdentity);
+  assert.notEqual(edited.children[1].geometry, objects[1].children[1].geometry);
+  const bodyBuffer = batches.batches[0].mesh.geometry;
+  const markerBuffer = batches.holes.batch.mesh.geometry;
+  const markerBefore = markerBuffer.attributes.position.array.slice();
+  batches.prepareRebuild();
+  batches.update([objects[0], edited]);
+  assert.equal(batches.batches[0].mesh.geometry, bodyBuffer);
+  assert.equal(batches.holes.batch.mesh.geometry, markerBuffer);
+  assert.notDeepEqual(markerBuffer.attributes.position.array, markerBefore);
+  assert.equal(batches.batches.length, 2);
+  assert.equal(edited.children[1].layers.mask, 1 << 3);
+  assert.equal(batches.holes.batch.entries.length, 2);
   const transparent = createObjectMesh(sources[0], {
     model: project.objects,
     selectedIds: new Set(),
@@ -116,7 +127,7 @@ test('prepared drilled copies share their exact template in both display modes; 
   assert.ok(transparent.userData.instanceDescriptor);
   batches.rebuild([objects[0], transparent]);
   batches.setTransparentView(true);
-  assert.equal(batches.batches.length, 1);
+  assert.equal(batches.batches.length, 2);
   assert.equal(batches.batches[0].mesh.material.opacity, 0.3);
   cleanup([...objects, edited, transparent], batches);
 });
@@ -167,4 +178,35 @@ test('transparent batches sort copies after orbit and preserve colours, hidden o
     });
   }
   cleanup(objects, batches);
+});
+
+test('incremental placements retain buffers and conservative bounds while submitting only visible copies', () => {
+  const sources = [plate('a', 0, '#ff0000'), plate('b', 300, '#0000ff')];
+  const objects = sources.map((s) =>
+    createObjectMesh(s, { model: sources, selectedIds: new Set() }),
+  );
+  const batches = new InstanceBatches(new THREE.Scene(), { minimumObjects: 0 });
+  batches.rebuild(objects);
+  const batch = batches.batches[0];
+  const geometry = batch.mesh.geometry;
+  objects[0].visible = false;
+  batches.sync();
+  assert.equal(batch.mesh.count, 1);
+  assert.equal(batch.lines.geometry.instanceCount, 1);
+  assert.equal(batch.entries[0].object.userData.id, 'b');
+  const changed = [plate('a', 3000, '#ff0000'), sources[1]];
+  const moved = createObjectMesh(changed[0], { model: changed, selectedIds: new Set() });
+  moved.visible = false;
+  batches.prepareRebuild();
+  batches.update([moved, objects[1]]);
+  assert.equal(batch.mesh.geometry, geometry);
+  assert.ok(batch.mesh.boundingSphere.containsPoint(new THREE.Vector3(3050, 50, 10)));
+  moved.visible = true;
+  batches.sync();
+  assert.equal(batch.mesh.count, 2);
+  const entry = batch.entries.find((e) => e.object.userData.id === 'a');
+  const matrix = new THREE.Matrix4();
+  batch.mesh.getMatrixAt(entry.index, matrix);
+  assert.equal(matrix.elements[12], 3000);
+  cleanup([...objects, moved], batches);
 });

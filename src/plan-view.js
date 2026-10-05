@@ -31,7 +31,8 @@ import { partStatus } from './part-marks.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { partMatrix } from './part-marks.js';
 import * as THREE from 'three';
-import { objectGeometry, isPhysical } from './model-object.js';
+import { objectGeometry, displayGeometry, isPhysical } from './model-object.js';
+import { partHoleSchedule, partHoleCandidates } from './fasteners/drawing.js';
 import { roundProfile } from './round-profile.js';
 import { GridLines } from './grid-lines.js';
 import { sectionSegments, planHeights } from './plan-section.js';
@@ -642,7 +643,9 @@ export class PlanView {
         );
         fill.userData.sourceId = s.id;
         this.group.add(fill);
-        const pos = edge.attributes.position;
+        const snapGeometry = displayGeometry(s, this.getState().objects),
+          snapEdges = geometryEdges(snapGeometry, roundProfile(s) ? 5 : 1),
+          pos = snapEdges.attributes.position;
         const objectCandidates = [];
         const identities = [],
           localMatrix = partMatrix(s);
@@ -660,6 +663,20 @@ export class PlanView {
           }
         }
         this.annotationCandidates.push(...referenceCandidates(objectCandidates, s.id, identities));
+        const schedule = partHoleSchedule(s, state.objects, new THREE.Matrix4()).filter(
+          (hole) => hole.center[2] >= h.lower && hole.center[2] <= h.upper,
+        );
+        for (const hole of partHoleCandidates(schedule, {
+          origin: [0, 0, 0],
+          x: [1, 0, 0],
+          y: [0, 1, 0],
+          normal: [0, 0, 1],
+        })) {
+          hole.point.reference.source = s.id;
+          this.annotationCandidates.push(hole.point);
+        }
+        snapEdges.dispose();
+        snapGeometry.dispose();
         const lines = new THREE.LineSegments(
           edge,
           new THREE.LineBasicMaterial({ color: 0x53666d, clippingPlanes: planes(h.lower, h.cut) }),
@@ -802,9 +819,16 @@ export class PlanView {
         depth,
       );
       this.sections.push(...snapData.cut);
+      const snapGeometry = displayGeometry(object, this.getState().objects).applyMatrix4(matrix);
+      const candidates = sectionDrawing(
+        [snapGeometry],
+        { origin: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], normal: [0, 0, 1], span: frame.span },
+        depth,
+      );
+      snapGeometry.dispose();
       this.annotationCandidates.push(
         ...referenceCandidates(
-          [...snapData.cut, ...snapData.behind].flatMap(([a, b]) => [
+          [...candidates.cut, ...candidates.behind].flatMap(([a, b]) => [
             a,
             b,
             [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],

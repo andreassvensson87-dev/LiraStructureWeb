@@ -42,7 +42,7 @@ export function applyDrawingPreset(record, preset) {
   record.drawingPreset = structuredClone(p);
   record.typography = { font: p.font };
   const settings = {
-    hiddenLines: p.hiddenLines ?? record.type === 'SP',
+    hiddenLines: p.hiddenLines ?? ['SP', 'AS'].includes(record.type),
     showGrid: p.showGrid,
     showLevels: p.showLevels,
   };

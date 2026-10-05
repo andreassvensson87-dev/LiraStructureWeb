@@ -1,5 +1,11 @@
 import * as THREE from 'three';
+import { displayObjects, invalidateDisplayDetail } from './display-detail.js';
+import { HoleBatches } from './hole-batches.js';
 
+const displayed = (object) =>
+  object.visible &&
+  object.userData.lodOwner?.visible !== false &&
+  object.userData.detailVisible !== false;
 const emptyMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 const lineVertex = `
 attribute vec4 instanceRow0;
@@ -29,27 +35,37 @@ export class InstanceBatches {
     scene.add(this.group);
     this.minimumObjects = minimumObjects;
     this.batches = [];
+    this.holes = new HoleBatches(this.group);
   }
-  clear() {
-    for (const batch of this.batches) {
+  prepareRebuild() {
+    invalidateDisplayDetail(this.objects);
+    for (const batch of this.batches)
       for (const entry of batch.entries) {
         entry.object.traverse((part) => part.layers.set(0));
         delete entry.object.userData.instanced;
       }
+    for (const entry of this.holes.batch?.entries || []) entry.marker.layers.set(0);
+  }
+  clear() {
+    this.prepareRebuild();
+    for (const batch of this.batches) {
       batch.mesh.geometry.dispose();
       batch.mesh.material.dispose();
       batch.lines.geometry.dispose();
       batch.lines.material.dispose();
       batch.mesh.dispose();
     }
+    this.holes.clear();
     this.group.clear();
     this.batches = [];
   }
   rebuild(objects) {
     this.clear();
+    this.objects = objects;
+    invalidateDisplayDetail(objects);
     if (objects.length < this.minimumObjects) return;
     const shapes = new Map();
-    for (const object of objects) {
+    for (const object of displayObjects(objects)) {
       const descriptor = object.userData.instanceDescriptor;
       if (!descriptor) continue;
       if (!shapes.has(descriptor.key)) shapes.set(descriptor.key, []);
@@ -99,6 +115,9 @@ export class InstanceBatches {
       const entries = copies.map(({ object, descriptor }, index) => {
         mesh.setMatrixAt(index, descriptor.matrix);
         object.traverse((part) => part.layers.set(3));
+        // Bore markers have their own small geometry and remain visible beside
+        // the shared, unperforated body template.
+        for (const child of object.children) if (child.userData.holeMarker) child.layers.set(0);
         object.userData.instanced = true;
         return {
           object,
@@ -116,14 +135,85 @@ export class InstanceBatches {
       // Retain conservative bounds when individual copies are hidden and restored.
       mesh.computeBoundingBox();
       mesh.computeBoundingSphere();
-      const batch = { mesh, lines, buffer, colors, entries, cameraSignature: '' };
+      const batch = {
+        key: first.descriptor.key,
+        mesh,
+        lines,
+        buffer,
+        colors,
+        entries,
+        cameraSignature: '',
+      };
       this.batches.push(batch);
       this.group.add(mesh, lines);
       this.syncBatch(batch);
       edges.dispose();
     }
+    this.holes.rebuild(objects);
+  }
+  /** Keep GPU buffers when a joint edit leaves the same repeated body shapes. */
+  update(objects) {
+    this.objects = objects;
+    invalidateDisplayDetail(objects);
+    const shapes = new Map();
+    for (const object of displayObjects(objects)) {
+      const descriptor = object.userData.instanceDescriptor;
+      if (!descriptor) continue;
+      if (!shapes.has(descriptor.key)) shapes.set(descriptor.key, new Map());
+      shapes.get(descriptor.key).set(object.userData.id, object);
+    }
+    for (const [key, copies] of shapes) if (copies.size < 2) shapes.delete(key);
+    if (
+      objects.length < this.minimumObjects ||
+      shapes.size !== this.batches.length ||
+      this.batches.some((batch) => {
+        const copies = shapes.get(batch.key);
+        return (
+          !copies ||
+          copies.size !== batch.entries.length ||
+          batch.entries.some((entry) => !copies.has(entry.object.userData.id))
+        );
+      })
+    ) {
+      this.rebuild(objects);
+      return;
+    }
+    for (const batch of this.batches) {
+      const copies = shapes.get(batch.key);
+      let placementChanged = false;
+      for (const entry of batch.entries) {
+        entry.object = copies.get(entry.object.userData.id);
+        const matrix = entry.object.userData.instanceDescriptor.matrix;
+        if (!entry.matrix.equals(matrix)) {
+          entry.matrix = matrix;
+          entry.center
+            .copy(batch.mesh.geometry.boundingBox.getCenter(new THREE.Vector3()))
+            .applyMatrix4(matrix);
+          entry.visible = null;
+          placementChanged = true;
+        }
+        entry.object.traverse((part) =>
+          part.layers.set(entry.object.userData.detailVisible === false ? 2 : 3),
+        );
+        for (const child of entry.object.children)
+          if (child.userData.holeMarker) child.layers.set(0);
+        entry.object.userData.instanced = true;
+      }
+      if (placementChanged) {
+        batch.cameraSignature = '';
+        const bounds = new THREE.Box3(),
+          box = new THREE.Box3();
+        for (const entry of batch.entries)
+          bounds.union(box.copy(batch.mesh.geometry.boundingBox).applyMatrix4(entry.matrix));
+        batch.mesh.boundingBox = bounds;
+        batch.mesh.boundingSphere = bounds.getBoundingSphere(new THREE.Sphere());
+      }
+      this.syncBatch(batch);
+    }
+    this.holes.update(objects);
   }
   setTransparentView(transparentView) {
+    this.holes.setTransparentView(transparentView);
     for (const batch of this.batches) {
       batch.mesh.material.transparent = transparentView;
       batch.mesh.material.opacity = transparentView ? 0.3 : 1;
@@ -137,6 +227,20 @@ export class InstanceBatches {
     }
   }
   syncBatch(batch, camera = null) {
+    if (!batch.entries.some((entry) => displayed(entry.object))) {
+      if (batch.mesh.visible) {
+        for (const entry of batch.entries) {
+          entry.visible = false;
+          batch.mesh.setMatrixAt(entry.index, emptyMatrix);
+          emptyMatrix.toArray(batch.buffer.array, entry.index * 16);
+        }
+        batch.mesh.instanceMatrix.needsUpdate = true;
+        batch.buffer.needsUpdate = true;
+      }
+      batch.mesh.visible = batch.lines.visible = false;
+      batch.mesh.count = batch.lines.geometry.instanceCount = 0;
+      return;
+    }
     let reordered = false;
     if (camera && batch.mesh.material.transparent) {
       const signature = camera.matrixWorldInverse.elements.join(',');
@@ -147,18 +251,38 @@ export class InstanceBatches {
           entry.depth =
             e[2] * entry.center.x + e[6] * entry.center.y + e[10] * entry.center.z + e[14];
         batch.entries.sort((a, b) => a.depth - b.depth);
-        reordered = batch.entries.some((entry, index) => entry.index !== index);
-        for (let i = 0; i < batch.entries.length; i++) batch.entries[i].index = i;
       }
     }
+    // Submit only visible instances. Hidden screws must not consume vertex work
+    // when a single screw is selected in an otherwise distant overview.
+    let hiddenSeen = false,
+      partitionNeeded = false,
+      visibleCount = 0;
+    for (const entry of batch.entries) {
+      if (displayed(entry.object)) {
+        visibleCount++;
+        partitionNeeded ||= hiddenSeen;
+      } else hiddenSeen = true;
+    }
+    if (partitionNeeded)
+      batch.entries = [
+        ...batch.entries.filter((entry) => displayed(entry.object)),
+        ...batch.entries.filter((entry) => !displayed(entry.object)),
+      ];
+    reordered = batch.entries.some((entry, index) => entry.index !== index);
+    for (let i = 0; i < batch.entries.length; i++) batch.entries[i].index = i;
+    batch.mesh.count = batch.lines.geometry.instanceCount = visibleCount;
     let matricesChanged = false,
       bodyChanged = false,
-      edgesChanged = false;
+      edgesChanged = false,
+      anyVisible = false;
     for (const entry of batch.entries) {
       const { object, index } = entry;
-      if (reordered || entry.visible !== object.visible) {
-        entry.visible = object.visible;
-        const matrix = object.visible ? entry.matrix : emptyMatrix;
+      const visible = displayed(object);
+      anyVisible ||= visible;
+      if (reordered || entry.visible !== visible) {
+        entry.visible = visible;
+        const matrix = visible ? entry.matrix : emptyMatrix;
         batch.mesh.setMatrixAt(index, matrix);
         matrix.toArray(batch.buffer.array, index * 16);
         matricesChanged = true;
@@ -175,6 +299,7 @@ export class InstanceBatches {
         edgesChanged = true;
       }
     }
+    batch.mesh.visible = batch.lines.visible = anyVisible;
     if (matricesChanged) {
       batch.mesh.instanceMatrix.needsUpdate = true;
       batch.buffer.needsUpdate = true;
@@ -184,5 +309,6 @@ export class InstanceBatches {
   }
   sync(camera = null) {
     for (const batch of this.batches) this.syncBatch(batch, camera);
+    this.holes.sync(camera);
   }
 }

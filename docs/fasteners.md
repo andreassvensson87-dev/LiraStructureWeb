@@ -24,11 +24,11 @@ med pelare, I-balkar, förbandsplåtar, M20-skruvar, brickor, bjälklag, väggpa
 samt grundplintar och fotplåtar. Varje balk har två skruvförband med fyra skruvar
 per ände. Hålen bearbetar både plåten och balkflänsarna.
 
-| Storlek | Mått | Plan | Objekt | Skruvar | Borrhål |
-| --- | --- | --- | --- | --- | --- |
-| Liten | 18 × 12 m | 2 | 454 | 272 | 544 |
-| Stor | 30 × 24 m | 3 | 1 881 | 1 176 | 2 352 |
-| Prestandamodell | 48 × 36 m | 4 | 5 522 | 3 520 | 7 040 |
+| Storlek         | Mått      | Plan | Objekt | Skruvar | Borrhål |
+| --------------- | --------- | ---- | ------ | ------- | ------- |
+| Liten           | 18 × 12 m | 2    | 454    | 272     | 544     |
+| Stor            | 30 × 24 m | 3    | 1 881  | 1 176   | 2 352   |
+| Prestandamodell | 48 × 36 m | 4    | 5 522  | 3 520   | 7 040   |
 
 Identiska balkförband delar förberäknad bearbetad geometri vid inläsningen.
 Varje del, skruv och borrhål har ändå egen identitet. Ändrade hålkopplingar
@@ -138,6 +138,33 @@ hål ändrar inte deras identitet; kopiering ger nya ID:n. De är inte separata
 objekt i huvudmodellistan. IFC-export ingår inte ännu; underobjekten ger en grund
 för att senare exportera hål med stabil identitet och koppling till borrad del.
 
+Modellvyn visar borrhålen som förenklade mörka volymer med 24 segment. Delens
+visningsgeometri borras inte ur; vanliga skärningar behålls. Volymerna följer
+materiallagren och lämnar profilernas hålrum fria. De är visningsmarkeringar:
+markering och klick använder delens förenklade kropp, så ett klick genom ett
+visat hål kan välja delen. Transparent visning visar även hålvolymen inne i delen.
+Ritningar och snitt använder fortfarande exakt borrad geometri som beräknas
+separat vid behov. Hål bidrar bara med centrum till snap i modellvyn och
+ritningarnas punktunderlag; konturernas trianguleringspunkter används inte.
+
+Identiska skruvar återanvänder en lokal geometrimall och renderas som instanser
+när modellen är stor. Placering, färg, val och detaljvisning vid zoom gäller
+fortfarande per skruv. Hålmarkeringarna grupperas i en gemensam geometri med
+separata triangelområden per del. Dolda delar får degenererade trianglar och
+transparent visning sorterar områdena efter kameradjup. En håldiameterändring
+uppdaterar bara berörda områden när antalet trianglar är oförändrat; förändrade
+former eller objektantal bygger om grupperna. Ritningsgeometrin och hålens
+centrumreferenser använder samma modellvärden som tidigare.
+
+Vid modelländringar ligger återanvända scenobjekt kvar på samma förälder.
+Endast ändrade eller borttagna objekt kopplas ur, och nya objekt läggs till.
+Det undviker att en liten förbandsändring kopplar ur och återansluter hela
+modellen. Modellens objektordning behålls även vid flytt och ångra/gör om.
+Objektlistan återanvänder också sina rader och grupper när beteckning, namn,
+typ, material, profilnamn och objektordning är oförändrade. Urval och
+synlighetsknappar uppdateras ändå. Sökning, gruppering och ändrade listuppgifter
+bygger om listan; en håldiameterändring behåller dess DOM och scrolläge.
+
 ## Kontrollerat projektflöde
 
 Automatiska förband räknas om mot hela den föreslagna ändringen när skruven,
@@ -161,3 +188,170 @@ Separata oanvända bibliotek, referens-IFC-filer och kameravy ingår inte.
 flytt/rotation, kopiering, borttagning, numreringsstatus, borrkonturer,
 centrumreferenser, filåteröppning och ångra/gör om. En isolerad koppling från
 stomexemplet kontrolleras också genom projektfil och detaljritningsdata.
+
+## Detaljnivå i modellvyn
+
+Skruvar behåller sin tidiga visningsgräns på 1,5 skärmpixlar. Små
+hålmarkeringar döljs under 1,5 pixlar och återkommer vid 2,5 pixlar. För delar
+med flera hål används den största håldiametern, inklusive försänkning, för
+hela delens markering. Centrumreferenserna finns kvar i snapunderlaget.
+
+Balkar och pelare med mer än tolv trianglar växlar till en enkel lokal
+omslutande låda när tvärsnittets största yttermått understiger sex pixlar.
+Full profil återkommer vid nio pixlar. Olika gränser vid in- och utzoomning
+motverkar flimmer. Enstaka valda objekt visas med full detalj. Vanliga
+skärningar och redigeringsförhandsvisningar behåller sin detaljerade geometri.
+
+Översiktsformerna delar geometrimallar och renderas som instanser i större
+modeller. Dolda instanser och hålområden skickas inte till rendering.
+Växlingen beräknas om när zoom, fönsterhöjd, urval eller modell ändras; ren
+kamerarotation kräver ingen ny detaljnivåkontroll. Objektval, snap och
+ritningar använder fortfarande sitt befintliga geometriunderlag.
+
+## Mätning av verkliga förbandsändringar
+
+I utvecklingsservern aktiverar `/?performance=1` en lokal mätpanel efter klick
+på Spara skruv och hål, Ångra eller Gör om. Den mäter från klickhanteraren till nästa WebGL-inlämning,
+inklusive validering, modelltransaktion, historik, scenobjekt, snapindex,
+objektlista och övrig UI. Nästa animationscallback redovisas separat som en
+ungefärlig möjlighet att visa den nya bilden, inte som GPU-slutförande eller
+fysisk bildpresentation. Inmatningens tidigare förhandsvisning ingår inte.
+Mätningen aktiveras inte i produktionsbygget.
+
+Den 4 oktober 2026 kontrollerades fem ändringar av första hålets diameter
+22/24 mm på SK-001 i stresstestets 19 212 objekt, homogen översiktsvy vid
+1280 × 720. Medianen från sparaklick till WebGL-inlämning sjönk från 357 till
+246 ms efter återanvändning av objektlistan. Listans median sjönk från 81 till
+4 ms. Nästa bildgräns sjönk från 417 till 293 ms. Historiksnapshotten var
+därefter största uppmätta delkostnaden, cirka 93 ms. Ångra och gör om
+kontrollerades separat i samma appmodell. Råvärden finns lokalt i
+`artifacts/interaction-app-before.json` och `artifacts/interaction-app-after.json`.
+
+Historiken återanvänder nu egna frysta objektkopior mellan steg. Ett innehålls-
+fingeravtryck kontrolleras vid varje snapshot, även för nästlade ändringar
+på samma levande objekt. Specifikationer, material och profildata delar sina
+ägda kopior. Övriga projektvärden kopieras fortfarande. Vid ångra/gör om
+återanvänds endast levande objekt vars kontrollerade kopia är exakt den som
+ska återställas; ändrade objekt får nya muterbara kopior. Historikdata lämnas
+aldrig som muterbara modellvärden. Full modellinläsning förbereder kopiecachen,
+vilket ger extra uppbyggnad där och gör första redigeringen snabbare.
+
+En ny jämförelse samma dag med fem sparanden gav median 81 → 69 ms för
+historiken och 206 → 186 ms från klick till WebGL-inlämning. Ångra av sista
+håldiameterändringen tog 6119 → 243 ms i appen. Antalet nya scenobjekt sjönk
+från 19 212 till 3, med 19 209 återanvända objekt. Gör om kontrollerades till
+263 ms och återställde Ø24 efter att ångra återställt Ø22. Dessa enskilda
+återställningsmätningar är inte medianer. Råvärden finns i
+`artifacts/history-app-before.json` och `artifacts/history-app-after.json`.
+
+## Historik under längre sessioner
+
+Historikens objektlistor delar nu frysta block med 128 objekt mellan steg.
+Endast block som ändras får nya referenslistor. Snapshotten behåller sitt gränssnitt med en fryst
+objektarray; arrayen skapas först när en läsare behöver den.
+
+`npm run benchmark:history -- --size stress --edits 100 --output artifacts/history-memory-after.json`
+kör 200 verkliga håldiameterändringar i 19 212 objekt med 100 historiksteg,
+ångrar och gör om alla 100 steg och kontrollerar att en ny gren rensar gör om.
+Minnet mäts efter två explicita skräpinsamlingar i Node/V8. DOM, rendering,
+GPU och webbläsarens totala processminne ingår inte.
+
+Den 4 oktober 2026 sjönk kvarvarande JavaScript-heap efter 100 ändringar
+från cirka 146 till 132 MiB. Ytterligare 100 ändringar höll samma nivå med
+100 sparade steg. Efter att historiken släppts återstod cirka 58 MiB,
+jämfört med 57 MiB för modellen före historikens uppbyggnad. Processens RSS
+behöver inte minska samtidigt som JavaScript-värden frigörs. Råvärden finns i
+`artifacts/history-memory-before.json` och `artifacts/history-memory-after.json`.
+Medianen för checkpoint var 79 → 80 ms, ångra 88 → 89 ms och gör om
+87 → 89 ms i samma Node-test. Minnesvinsten innebär alltså ingen uppmätt
+CPU-förbättring; svarstiderna ligger nära föregående version.
+
+## Minnestest av modellvyn
+
+`/?memory=1` i utvecklingsservern visar ett separat test för en tom testflik.
+Knappen ersätter modellen och kör samma validerade skruvsparande,
+modelltransaktion, historikåterställning, UI-uppdatering och WebGL-rendering
+som appen. Testet gör 600 håldiameterändringar, 100 ångra, 100 gör om och
+åtta modellinläsningar. Tre byten tillbaka till stresstestets 19 212 objekt
+följs av 100 ändringar vardera, så att tidigare modeller lämnar historiken.
+Sist läses den lilla modellen med 454 objekt in och historiken fylls med
+100 små ändringar. Testet finns bara i utvecklingsservern.
+
+Testet den 4 oktober 2026 hittade cirka 1 426 636 800 byte upprepade
+geometribuffertar för skruvar. Visningen delade redan lokala mallar, men
+displaycachen byggde dessutom en separat geometri i världskoordinater per
+skruv. Cachen behåller nu mall, placering och omslutande låda. Fulla
+världskoordinater skapas först när en läsare behöver dem. Objektvalets
+första kontroll och snapindexets skärmavgränsning använder lådan. Exakt
+ytval, ritningsgeometri och vanliga skärningar behåller sina geometrier.
+
+I samma två fullständiga appkörningar sjönk Chrome-mätningen direkt efter
+stor modellinläsning från 2046 till 678 MiB. Efter de tre stora modellbytena
+låg den nya versionen på 695, 695 respektive 711 MiB. Uppladdade
+WebGL-geometrier höll sig på 48 vid skruvredigering och gick ner till 33
+för den lilla modellen. Antalet shaderprogram höll sig på fem och antalet
+texturer på noll. Modellflikens observerade process-RSS-topp sjönk från
+4827 till 2584 MiB, ungefär 4,7 till 2,5 GiB.
+
+Chrome `performance.memory` är en ungefärlig mätning med naturlig
+skräpinsamling. Ingen insamling tvingades fram. RSS inkluderar processens
+residenta minne och eventuellt delade sidor; delad GPU-process och
+webbläsarens övriga processer ingår inte. Processerna identifierades genom
+minnesökningen vid känd modellinläsning, eftersom en ny IAB-panelprocess
+kan vara en annan process än innehållets renderer. Den första RSS-loggen
+började efter initial inläsning. OS-loggarnas och sidans tidsstämplar är
+inte tillräckligt synkroniserade för att fördela RSS på enskilda steg.
+
+Efter sista bytet till liten modell var Chrome-mätningen fortfarande
+751 MiB efter fem sekunders vila. Det bevisar varken läcka eller fullständig
+frigöring utan en jämförelse efter skräpinsamling. Testet visar återhämtning
+och stabila grafikresurser under de körda modellflödena, men verifierar inte
+alla IFC-, referensmodell- eller ritningsflöden eller obegränsat långa sessioner.
+Rårapporter finns i `artifacts/browser-memory-before.json`,
+`artifacts/browser-memory-after.json`, `artifacts/browser-test-renderer-memory.json`
+och `artifacts/browser-renderer-memory-final.json`.
+
+## Minnestest av IFC-referenser
+
+`/?referenceMemory=1` i utvecklingsservern kör referensimport i en tom
+testflik med den riktiga web-ifc-läsaren i en Worker. En syntetisk IFC4
+på 4 663 299 byte innehåller 18 000 lådor och 2 000 cirkulära extruderingar
+med olika placeringar. Åtta importer följs vardera av hörnsnap, dölj/visa,
+transparens och borttagning. Testet kontrollerar dessutom avbrott efter
+första mottagna geometrin, felaktig IFC, borttagning under import och
+byte av pågående import. Referenserna lägger inga objekt eller steg i
+modellens historik. Det vanliga filväljarflödet kontrollerades separat
+med den lilla IFC-fixturen.
+
+Testet den 4 oktober 2026 hittade att borttagning av den synliga referensen
+inte stoppade en pågående ersättningsimport. Importen kunde därför lägga
+tillbaka modellen efter borttagningen. Borttagning avslutar nu Workern och
+frigör både väntande och synliga geometrier/material. Ett sent Worker-fel
+från en ersatt import ignoreras också, så att det inte avbryter den nya.
+Separata regressionstester verifierar dessa livscykler och sena filinläsningar.
+
+Efter rättningen klarade alla åtta importer testet. Import och första
+hörnsnap tog 1,26–1,39 sekunder per stor modell på testdatorn. Antalet
+uppladdade WebGL-geometrier gick från 20 012 tillbaka till 12 efter varje
+borttagning; shaderprogram gick tillbaka till tre och texturer var noll.
+Workern och listan över väntande geometrier var tomma efter slutförd,
+avbruten eller borttagen import.
+
+Rendererprocessens RSS samplades varje sekund, från cirka 255 MiB före
+testet till en observerad topp på 2089 MiB (2,04 GiB). Sista provet före
+testfliken stängdes var 757 MiB. Chrome-heapen återhämtade sig under
+upprepningarna, bland annat till 102 MiB efter sjunde borttagningen.
+Efter sista borttagningen och fem sekunders vila låg den på 567 MiB.
+Ingen skräpinsamling tvingades fram, så detta verifierar resursavveckling
+och återhämtning i körningen, men inte fullständig RAM-återlämning eller
+läckfrihet under obegränsat långa sessioner. Dold referens behåller sin
+geometri i RAM för att snabbt kunna visas igen.
+
+Chrome-heapen är ungefärlig och omfattar inte Worker-heapen. Process-RSS
+omfattar även Worker/native-minne men inte den delade GPU-processen.
+En liten syntetisk fil med många delar representerar inte alla komplexa
+Tekla-exporter, IFC2x3-filer eller georefererade projekt. Råvärden och
+testbilder finns i `artifacts/reference-memory-before.json`,
+`artifacts/reference-memory-after.json`, `artifacts/reference-renderer-memory.json`
+och `artifacts/reference-file-picker.png`. Testpanelen följer inte med
+i produktionsbygget.

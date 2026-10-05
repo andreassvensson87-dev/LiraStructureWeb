@@ -19,8 +19,22 @@ export function geometryEdges(geometry, threshold = 1) {
       ...normal.toArray().map((v) => Math.round(v * 10000)),
       Math.round(normal.dot(triangle[0]) * 100),
     ].join(',');
+    // The cutter's normals describe the smooth bore even when CSG produces
+    // very thin triangles whose geometric normals are numerically unstable.
+    if (geometry.attributes.normal) {
+      const smooth = new THREE.Vector3();
+      for (let j = 0; j < 3; j++)
+        smooth.add(
+          new THREE.Vector3().fromBufferAttribute(
+            geometry.attributes.normal,
+            index ? index.getX(i + j) : i + j,
+          ),
+        );
+      if (smooth.lengthSq() > 1e-12) normal.copy(smooth.normalize());
+    }
+    const face = new THREE.Triangle(...triangle);
     if (!planes.has(planeKey)) planes.set(planeKey, []);
-    planes.get(planeKey).push(new THREE.Triangle(...triangle));
+    planes.get(planeKey).push(face);
     for (let j = 0; j < 3; j++) {
       const a = triangle[j],
         b = triangle[(j + 1) % 3],

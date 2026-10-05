@@ -1,4 +1,4 @@
-import { geometryVectors } from './drawing-vector.js';
+import { geometryVectors, vectorDrawing } from './drawing-vector.js';
 import { sectionClipPlanes, clipSectionSegment } from './section-extents.js';
 import * as THREE from 'three';
 import { geometryEdges } from './fasteners/edges.js';
@@ -114,6 +114,20 @@ export function sectionDrawing(geometries, frame, depth) {
   return { cut, behind, bounds };
 }
 export function sectionVectors(geometry, frame, section) {
+  if (Array.isArray(geometry)) {
+    const planes = section ? sectionClipPlanes(frame, section.depth) : [];
+    const solids = geometry.map((g) => g.clone().applyMatrix4(frameMatrix(frame)));
+    const edges = solids.map((g) => geometryEdges(g, 5));
+    try {
+      return vectorDrawing(
+        solids.map((g) => ({ geometry: g, planes })),
+        edges.map((g) => ({ geometry: g, planes })),
+      );
+    } finally {
+      solids.forEach((g) => g.dispose());
+      edges.forEach((g) => g.dispose());
+    }
+  }
   const g = geometry.clone().applyMatrix4(frameMatrix(frame));
   const data = geometryVectors(g, section ? sectionClipPlanes(frame, section.depth) : []);
   g.dispose();

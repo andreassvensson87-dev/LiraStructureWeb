@@ -16,7 +16,38 @@ import { numberWithDrawings, showDrawingBatch } from './drawing-workflows.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { isPhysical } from './model-object.js';
 import { partStatus } from './part-marks.js';
+import { showAssemblies } from './assembly-workflow.js';
+import { assemblyValid } from './project/assemblies.js';
+import { drawingAssemblies } from './assembly-numbering.js';
 export function drawingStamp(record, state) {
+  if (record.type === 'AS') {
+    const instances = drawingAssemblies(record, state);
+    const assembly = instances.find((a) => a.id === record.assemblyId) || instances[0];
+    if (!assemblyValid(assembly, state.objects)) return null;
+    return JSON.stringify({
+      assembly,
+      quantity: instances.length,
+      objects: state.objects.filter(
+        (o) =>
+          assembly.memberIds.includes(o.id) ||
+          o.targets?.some((id) => assembly.memberIds.includes(id)) ||
+          o.holes?.some((h) => assembly.memberIds.includes(h.targetId)),
+      ),
+      parts: assembly.memberIds.map((id) => state.parts.assignments[id]),
+      sheet: record.sheet,
+      settings: record.settings,
+      annotations: record.annotations,
+      attributes: record.attributes,
+      revision: record.revision,
+      date: record.date,
+      drawnBy: record.drawnBy,
+      checkedBy: record.checkedBy,
+      issueStatus: record.issueStatus,
+      typography: record.typography,
+      drawingPreset: record.drawingPreset,
+      frame: drawingLayoutStamp(record.sheet?.layoutId),
+    });
+  }
   if (record.type === 'GA' && !state.levels.items.some((l) => l.id === record.levelId)) return null;
   if (record.type === 'GA')
     return JSON.stringify({
@@ -77,8 +108,16 @@ export function drawingStamp(record, state) {
     : null;
 }
 export class DrawingManager {
-  constructor({ getState, change, number, open, highlight, beforeNumber }) {
-    Object.assign(this, { getState, change, number, open, highlight, beforeNumber });
+  constructor({ getState, change, number, open, highlight, beforeNumber, changeAssemblies }) {
+    Object.assign(this, {
+      getState,
+      change,
+      number,
+      open,
+      highlight,
+      beforeNumber,
+      changeAssemblies,
+    });
     this.dialog = document.createElement('dialog');
     this.dialog.id = 'drawing-manager';
     this.dialog.innerHTML =
@@ -88,16 +127,15 @@ export class DrawingManager {
     button.id = 'drawings-open';
     button.textContent = 'Ritningar';
     document.querySelector('header .history').prepend(button);
-    const batchButton = document.createElement('button');
-    batchButton.type = 'button';
-    batchButton.id = 'single-part-batch-open';
-    batchButton.textContent = 'Skapa detaljritningar';
-    batchButton.title = 'Skapa Single Part-ritningar från markerade objekt';
-    batchButton.onclick = () => {
-      this.beforeNumber?.();
-      showDrawingBatch(this);
-    };
-    button.after(batchButton);
+    const createMenu = actionButton(document.createElement('button'), 'plus', 'Skapa ritningar');
+    createMenu.onclick = () => showDrawingBatch(this);
+    button.after(createMenu);
+    const assemblyButton = document.createElement('button');
+    assemblyButton.type = 'button';
+    assemblyButton.textContent = 'Assemblies';
+    assemblyButton.onclick = () => showAssemblies(this);
+    createMenu.after(assemblyButton);
+    this.$('filter').append(new Option('Assembly', 'AS'));
     button.onclick = () => {
       this.render();
       this.dialog.showModal();
@@ -113,7 +151,7 @@ export class DrawingManager {
       primary: true,
       items: [
         actionButton(this.$('new-ga'), 'page', 'GA · Översikt'),
-        actionButton(this.$('new-part'), 'page', 'Single Part · Från markering'),
+        actionButton(this.$('new-part'), 'page', 'Single Part / Assembly'),
       ],
     });
     toolbar.prepend(create);
@@ -251,7 +289,9 @@ export class DrawingManager {
       button.onclick = () => {
         if (stamp === null) {
           this.$('message').textContent =
-            'Källan saknas eller detaljen har ändrats. Kontrollera numreringen och skapa en ny detaljritning.';
+            r.type === 'AS'
+              ? 'Assemblyn har ändrats eller saknar delar. Välj Numrera assemblies under Assemblies, eller återställ saknade delar.'
+              : 'Källan saknas eller detaljen har ändrats. Kontrollera numreringen och skapa en ny detaljritning.';
           return;
         }
         const source =
@@ -284,7 +324,10 @@ export class DrawingManager {
           span.textContent = '—';
           return span;
         }
-        if (!a.editable) {
+        if (
+          !a.editable ||
+          (r.type === 'AS' && ['drawing.number', 'drawing.name'].includes(a.key))
+        ) {
           const span = document.createElement('span');
           span.textContent = attributeValue(a.key, context) || '—';
           span.title = 'Hämtas från projekt eller modell';
@@ -324,7 +367,7 @@ export class DrawingManager {
       button.textContent = '↗';
       button.title = 'Öppna ritning';
       const type = document.createElement('span');
-      type.textContent = r.type === 'GA' ? 'GA' : 'Single Part';
+      type.textContent = r.type === 'GA' ? 'GA' : r.type === 'AS' ? 'Assembly' : 'Single Part';
       for (const content of [identity, name, type, status, ...attributes.map(inputFor)]) {
         const cell = document.createElement('td');
         cell.append(content);

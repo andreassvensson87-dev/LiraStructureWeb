@@ -9,6 +9,8 @@ export function createProject({ grid, levels }) {
     info: { name: '', number: '', client: '' },
     parts: { registry: [], assignments: {} },
     drawings: [],
+    assemblies: [],
+    assemblyNumbering: { registry: [] },
     snap: {
       endpoints: true,
       corners: true,
@@ -25,7 +27,32 @@ export function createProject({ grid, levels }) {
     },
   });
 }
+export function projectData(project) {
+  const {
+    schemaVersion,
+    objects,
+    grid,
+    levels,
+    info,
+    parts,
+    drawings,
+    snap,
+    assemblies = [],
+    assemblyNumbering = { registry: [] },
+  } = project;
+  return {
+    schemaVersion,
+    objects,
+    grid,
+    levels,
+    info,
+    parts,
+    drawings,
+    snap,
+    assemblies,
+    assemblyNumbering,
+  };
+}
 export function captureProject(project) {
-  const { schemaVersion, objects, grid, levels, info, parts, drawings, snap } = project;
-  return structuredClone({ schemaVersion, objects, grid, levels, info, parts, drawings, snap });
+  return structuredClone(projectData(project));
 }

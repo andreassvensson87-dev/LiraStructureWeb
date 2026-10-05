@@ -1,12 +1,13 @@
 import { designation, typeName } from './object-identity.js';
+const listingFields = ['id', 'name', 'prefix', 'number', 'type', 'material', 'section'];
 export class ModelTree {
-  constructor(root, { select, visible, toggle, isolate, showAll }) {
-    Object.assign(this, { root, select, visible, toggle, isolate, showAll });
+  constructor(root, { select, selectGroup, visible, toggle, isolate, showAll }) {
+    Object.assign(this, { root, select, selectGroup, visible, toggle, isolate, showAll });
     this.closed = new Set();
     const toolbar = document.createElement('div');
     toolbar.className = 'model-tools';
     toolbar.innerHTML =
-      '<input type="search" placeholder="Sök objekt…" aria-label="Sök objekt"><select aria-label="Gruppera modell"><option value="type">Objekttyp</option><option value="material">Material</option><option value="none">Ingen gruppering</option></select><div><button type="button">Isolera valda</button><button type="button">Visa alla</button></div>';
+      '<input type="search" placeholder="Sök objekt…" aria-label="Sök objekt"><select aria-label="Gruppera modell"><option value="type">Objekttyp</option><option value="material">Material</option><option value="assembly">Assembly</option><option value="none">Ingen gruppering</option></select><div><button type="button">Isolera valda</button><button type="button">Visa alla</button></div>';
     root.before(toolbar);
     this.search = toolbar.querySelector('input');
     this.group = toolbar.querySelector('select');
@@ -16,15 +17,55 @@ export class ModelTree {
     buttons[0].onclick = isolate;
     buttons[1].onclick = showAll;
   }
-  render(objects = [], selected = new Set()) {
+  render(objects = [], selected = new Set(), assemblies = this.assemblies || []) {
     this.objects = objects;
+    this.assemblies = assemblies;
+    const assemblyListing = JSON.stringify(assemblies);
+    const query = this.search.value.toLocaleLowerCase('sv');
+    const listing = objects.map((s) => ({
+      id: s.id,
+      name: s.name,
+      prefix: s.prefix,
+      number: s.number,
+      type: s.type,
+      material: s.material?.name,
+      section: s.section?.name,
+    }));
+    // Geometry edits do not change the model list. Retain its DOM, scroll and
+    // focus, while still updating selection and externally changed visibility.
+    if (
+      this.query === query &&
+      this.grouping === this.group.value &&
+      this.assemblyListing === assemblyListing &&
+      this.listing?.length === listing.length &&
+      listing.every((s, i) => listingFields.every((key) => s[key] === this.listing[i][key]))
+    ) {
+      this.setSelection(selected);
+      for (const [id, entry] of this.visibilityRows) {
+        const shown = this.visible(id);
+        if (shown === entry.shown) continue;
+        entry.shown = shown;
+        entry.eye.textContent = shown ? '◉' : '○';
+        entry.eye.setAttribute('aria-label', `${shown ? 'Dölj' : 'Visa'} ${entry.label}`);
+        entry.eye.setAttribute('aria-pressed', String(shown));
+        entry.row.classList.toggle('muted', !shown);
+      }
+      return;
+    }
+    this.listing = listing;
+    this.assemblyListing = assemblyListing;
+    this.query = query;
+    this.grouping = this.group.value;
     this.selected = selected;
     this.isolateButton.disabled = !selected.size;
     this.root.replaceChildren();
     this.rows = new Map();
-    const query = this.search.value.toLocaleLowerCase('sv');
+    this.visibilityRows = new Map();
+    this.groupSelections = new Map();
+    const byMember = new Map(assemblies.flatMap((a) => a.memberIds.map((id) => [id, a])));
+    const objectIds = new Set(objects.map((o) => o.id));
     const matches = objects.filter((s) =>
-      `${designation(s)} ${s.name} ${typeName(s)} ${s.material?.name || ''} ${s.section?.name || ''}`
+      `${designation(s)} ${s.name} ${typeName(s)} ${s.material?.name || ''} ${s.section?.name || ''} ${byMember.get(s.id)?.mark || ''} ${byMember.get(s.id)?.name || ''}`
         .toLocaleLowerCase('sv')
         .includes(query),
     );
@@ -35,7 +76,11 @@ export class ModelTree {
           ? typeName(s)
           : this.group.value === 'material'
             ? s.material?.name || 'Utan material'
-            : '';
+            : this.group.value === 'assembly'
+              ? byMember.get(s.id)
+                ? `${byMember.get(s.id).mark} · ${byMember.get(s.id).name}`
+                : 'Utan assembly'
+              : '';
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(s);
     }
@@ -47,6 +92,29 @@ export class ModelTree {
         const groupKey = this.group.value + ':' + key;
         d.open = !this.closed.has(groupKey);
         summary.textContent = `${key} · ${list.length}`;
+        if (this.group.value === 'assembly' && byMember.has(list[0].id)) {
+          const assembly = byMember.get(list[0].id),
+            button = document.createElement('button');
+          const ids = assembly.memberIds.filter((id) => objectIds.has(id));
+          button.type = 'button';
+          button.textContent = 'Markera hela';
+          button.setAttribute('aria-label', `Markera assembly ${assembly.mark}`);
+          button.classList.toggle(
+            'selected',
+            ids.length > 0 && ids.every((id) => selected.has(id)),
+          );
+          button.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectGroup?.(ids, event.shiftKey);
+          };
+          button.setAttribute(
+            'aria-pressed',
+            String(ids.length > 0 && ids.every((id) => selected.has(id))),
+          );
+          summary.append(button);
+          this.groupSelections.set(assembly.id, { button, ids });
+        }
         d.append(summary);
         d.ontoggle = () => (d.open ? this.closed.delete(groupKey) : this.closed.add(groupKey));
         this.root.append(d);
@@ -72,6 +140,7 @@ export class ModelTree {
         row.append(pick, eye);
         target.append(row);
         this.rows.set(s.id, pick);
+        this.visibilityRows.set(s.id, { row, eye, shown, label: designation(s) });
       }
     }
     if (!matches.length) {
@@ -88,5 +157,12 @@ export class ModelTree {
       this.rows?.get(id)?.classList.toggle('selected', selected.has(id));
     }
     this.selected = selected;
+    for (const { button, ids } of this.groupSelections?.values() || []) {
+      button.classList.toggle('selected', ids.length > 0 && ids.every((id) => selected.has(id)));
+      button.setAttribute(
+        'aria-pressed',
+        String(ids.length > 0 && ids.every((id) => selected.has(id))),
+      );
+    }
   }
 }

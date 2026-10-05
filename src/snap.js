@@ -1,8 +1,6 @@
 import { roundProfile } from './round-profile.js';
 import * as THREE from 'three';
-import { objectCorners as sweepCorners, objectAnchors, objectSegments } from './model-object.js';
-// Sweep records are replaced on edits, so cached corners follow the current geometry.
-const corners = (s, model) => sweepCorners(s, model);
+import { createSnapGeometryContext, objectAnchors } from './model-object.js';
 const axes = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
 export function resolveSnap({
   pointer,
@@ -32,6 +30,7 @@ export function resolveSnap({
   workPlane = null,
   constrainToPlane = true,
 }) {
+  geometryContext ??= createSnapGeometryContext(model);
   const gridZ = grid.z ?? 0;
   const step = Number.isFinite(gridStep) && gridStep > 0 ? gridStep : 100;
   const quantize = (v) => (gridStepEnabled ? Math.round(v / step) * step : v);
@@ -71,19 +70,20 @@ export function resolveSnap({
         }))
       : []),
     ...((roundProfile(s) ? quadrantSnap : cornerSnap)
-      ? (geometryContext ? geometryContext.objectCorners(s) : corners(s, model)).map((coords) => ({
+      ? geometryContext.objectCorners(s).map((coords) => ({
           coords,
           symbol: roundProfile(s) ? 'diamond' : 'square',
           label: roundProfile(s) ? 'Kvadrant' : 'Hörn',
         }))
       : []),
   ]);
+  const holePoints = cornerSnap
+    ? sweeps.flatMap((s) => geometryContext.holeCenters?.(s) || [])
+    : [];
   const segmentPoints = [];
   if (midpointSnap || (perpendicularSnap && origin))
     for (const s of sweeps)
-      for (const [a, b] of geometryContext
-        ? geometryContext.objectSegments(s)
-        : objectSegments(s, model)) {
+      for (const [a, b] of geometryContext.objectSegments(s)) {
         const av = new THREE.Vector3(...a),
           delta = new THREE.Vector3(...b).sub(av),
           lengthSq = delta.lengthSq();
@@ -108,6 +108,7 @@ export function resolveSnap({
         }
       }
   for (const [points, tolerance] of [
+    [holePoints, 14],
     [objectPoints, 14],
     [referencePoints.filter((p) => !p.edge), 14],
     [segmentPoints, 12],
@@ -127,7 +128,7 @@ export function resolveSnap({
     let best = null,
       distance = tolerance,
       depth = Infinity;
-    for (const { coords, label, gridIds, symbol } of points) {
+    for (const { coords, label, gridIds, symbol, featureId } of points) {
       const p = new THREE.Vector3(...coords),
         hitPoint = p,
         clip = hitPoint.clone().project(camera);
@@ -140,6 +141,7 @@ export function resolveSnap({
         distance = d;
         depth = clip.z;
         best = { point: coords, label, kind: 'point', gridIds, symbol };
+        if (featureId) best.featureId = featureId;
       }
     }
     if (best) return best;

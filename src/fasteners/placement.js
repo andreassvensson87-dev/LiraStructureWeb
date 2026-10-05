@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { geometryForModel } from '../model-object.js';
+import { displayGeometry } from '../model-object.js';
 import { boreFeature } from './holes.js';
 import { axisPlacement, fastenerFrame } from './geometry.js';
 import { isFastener } from './object-type.js';
 
 /** Separate solid intervals, preserving cavities between walls and flanges. */
-export function partAxisIntervals(s, part, model) {
+export function partAxisIntervals(s, part, model, geometryContext = null) {
   const f = fastenerFrame(s),
-    geometry = geometryForModel(part, model);
+    geometry = geometryContext?.geometry(part) || displayGeometry(part, model);
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
   try {
     geometry.computeBoundingBox();

@@ -63,16 +63,16 @@ export class PartSections {
         orientation,
       );
     }
-    return partViewFrame(view.projection || view.id);
+    return view.assemblyFrame || partViewFrame(view.projection || view.id);
   }
-  data(view) {
+  data(view, geometry = this.e.geometry) {
     const frame = this.frame(view),
       source = detailSource(view, this.e.config.views),
       section = source.section || (source.id === 'section' ? { depth: 1e7 } : null);
     let data;
-    if (section) data = sectionDrawing([this.e.geometry], frame, section.depth);
+    if (section) data = sectionDrawing([geometry], frame, section.depth);
     else {
-      const g = this.e.geometry.clone().applyMatrix4(frameMatrix(frame)),
+      const g = geometry.clone().applyMatrix4(frameMatrix(frame)),
         edges = geometryEdges(g, 5),
         p = edges.attributes.position,
         behind = [];
@@ -104,17 +104,54 @@ export class PartSections {
     this.cache.clear();
     for (const view of this.items) {
       const data = this.data(view);
-      data.vectors = sectionVectors(this.e.geometry, data.frame, data.section);
+      data.vectors = sectionVectors(
+        this.e.assemblyEntries?.map((e) => e.geometry) || this.e.geometry,
+        data.frame,
+        data.section,
+      );
+      if (this.e.assemblyEntries && data.section)
+        data.cut = sectionDrawing(
+          this.e.assemblyEntries.map((e) => e.geometry),
+          data.frame,
+          data.section.depth,
+        ).cut;
       data.holeCenters = !data.section
         ? partHoleCandidates(this.e.holeSchedule || [], data.frame, this.e.drawingReflection)
         : [];
       this.cache.set(view.id, data);
+      // Manufacturing geometry draws the hole; simple body geometry supplies
+      // part snaps, so a bore contributes only its stable centre reference.
+      const snapData = this.data(view, this.e.snapGeometry || this.e.geometry);
       this.e.annotationCandidates[view.id] = referenceCandidates(
-        data.candidates || [...data.cut, ...data.behind].flat(),
+        snapData.candidates || [...snapData.cut, ...snapData.behind].flat(),
         'part',
-        data.identities,
+        snapData.identities,
       );
       this.e.annotationCandidates[view.id].push(...data.holeCenters.map((h) => h.point));
+      if (this.e.assemblyEntries) {
+        this.e.annotationCandidates[view.id] = this.e.assemblyEntries.flatMap((entry) => {
+          const snap = this.data(view, entry.snapGeometry);
+          const referenceMatrix = this.e.config.assemblyReferenceMatrix
+            ? new THREE.Matrix4().fromArray(this.e.config.assemblyReferenceMatrix)
+            : null;
+          return referenceCandidates(
+            snap.candidates || [...snap.cut, ...snap.behind].flat(),
+            entry.id,
+            referenceMatrix && snap.identities
+              ? snap.identities.map((p) =>
+                  new THREE.Vector3(...p).applyMatrix4(referenceMatrix).toArray(),
+                )
+              : snap.identities,
+          );
+        });
+        // Hole ids are globally stable; use their owning part as the reference source.
+        for (const hole of data.holeCenters) {
+          hole.point.reference.source = this.e.holeSchedule.find(
+            (h) => h.id === hole.point.reference.featureId,
+          )?.sourceId;
+          this.e.annotationCandidates[view.id].push(hole.point);
+        }
+      }
     }
   }
   commit(view) {

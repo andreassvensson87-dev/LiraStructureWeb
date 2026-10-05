@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="sv">
+  <meta charset="UTF-8" />
+  <title>LiraStructure · Prestandamätning</title>
+  <style>
+    body {
+      font: 16px system-ui;
+      margin: 24px;
+      color: #17343b;
+      background: #f1f5f6;
+    }
+    canvas {
+      width: min(100%, 1200px);
+      height: auto;
+      display: block;
+    }
+    pre {
+      white-space: pre-wrap;
+      background: white;
+      padding: 20px;
+    }
+  </style>
+  <h1>Prestandamätning av modellvyn</h1>
+  <p id="status" role="status">Bygger exempelmodellen…</p>
+  <p>
+    1200 × 800 pixlar, pixelkvot 1. Mätningen använder modellens visningsgeometri och rendering,
+    utan modellista, stomlinjer eller snapöverlägg.
+  </p>
+  <canvas id="model"></canvas>
+  <pre id="result">Mätningen pågår.</pre>
+  <script type="module">
+    import * as THREE from 'three';
+    import { buildExample, summarize } from './model-performance.js';
+    const status = document.getElementById('status');
+    const result = document.getElementById('result');
+    const frame = () => new Promise(requestAnimationFrame);
+    const run = async () => {
+      await frame();
+      const size = new URLSearchParams(location.search).get('size') || 'large';
+      const example = buildExample(size);
+      const renderer = new THREE.WebGLRenderer({
+        canvas: document.getElementById('model'),
+        antialias: true,
+      });
+      renderer.setPixelRatio(1);
+      renderer.setSize(1200, 800, false);
+      example.scene.background = new THREE.Color('#eaf0f2');
+      example.scene.add(new THREE.AmbientLight(0xffffff, 2));
+      const light = new THREE.DirectionalLight(0xffffff, 3);
+      light.position.set(4000, -3000, 7000);
+      example.scene.add(light);
+      const gl = renderer.getContext();
+      const firstStarted = performance.now();
+      example.frame(Math.PI / 4);
+      renderer.render(example.scene, example.camera);
+      gl.finish();
+      const firstFrameWithGpuMs = performance.now() - firstStarted;
+      const sampleView = async (transparent) => {
+        const { updateObjectMeshTransparency } = await import('../src/model/object-mesh.js');
+        example.meshes.forEach((m) => updateObjectMeshTransparency(m, transparent));
+        example.batches.setTransparentView(transparent);
+        for (let i = 0; i < 10; i++) {
+          await frame();
+          example.frame(Math.PI / 4 + i * 0.005);
+          renderer.render(example.scene, example.camera);
+        }
+        const intervals = [],
+          cpu = [],
+          calls = [],
+          triangles = [];
+        let previous = await frame();
+        for (let i = 0; i < 120; i++) {
+          const timestamp = await frame();
+          intervals.push(timestamp - previous);
+          previous = timestamp;
+          const started = performance.now();
+          example.frame(Math.PI / 4 + i * 0.005);
+          renderer.render(example.scene, example.camera);
+          cpu.push(performance.now() - started);
+          calls.push(renderer.info.render.calls);
+          triangles.push(renderer.info.render.triangles);
+        }
+        return {
+          transparent,
+          frameIntervalMs: summarize(intervals),
+          submissionCpuMs: summarize(cpu),
+          drawCalls: summarize(calls),
+          triangles: summarize(triangles),
+        };
+      };
+      status.textContent = `Mäter kamerarörelse · ${example.load.objects} objekt · ${example.load.holes} hål`;
+      const opaque = await sampleView(false);
+      const transparent = await sampleView(true);
+      const details = {
+        recordedAt: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        viewport: [1200, 800],
+        pixelRatio: 1,
+        load: example.load,
+        firstFrameWithGpuMs,
+        opaque,
+        transparent,
+        scope:
+          'Real WebGL rendering of the model, same mesh/batch/detail code as the app. Camera rotation via requestAnimationFrame; 10 warmup and 120 measured frames per view. Excludes app overlays and event handlers. Background throttling and display refresh affect frame intervals. CPU submission time is not GPU time.',
+      };
+      result.textContent = JSON.stringify(details, null, 2);
+      status.textContent = 'Mätningen klar';
+    };
+    run().catch((error) => {
+      status.textContent = 'Mätningen misslyckades';
+      result.textContent = error.stack;
+    });
+  </script>
+</html>

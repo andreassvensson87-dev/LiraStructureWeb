@@ -1,9 +1,8 @@
 import { createProject } from './project-state.js';
-import { holesByTarget } from '../fasteners/relations.js';
 import { automaticPlacement } from '../fasteners/placement.js';
 import { transformObject } from '../transform.js';
 import { rotateObject } from '../rotation.js';
-import { cacheObjectGeometry, geometryForModel, edgesForModel } from '../model-object.js';
+import { cacheObjectGeometry, displayGeometry, edgesForModel } from '../model-object.js';
 import * as THREE from 'three';
 
 export const FRAME_EXAMPLE_SIZES = [
@@ -334,12 +333,11 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
   }
   if (prepareGeometry) {
     const templates = new Map();
-    const holes = holesByTarget(project.objects);
     try {
       for (const original of xTemplate.filter((o) => o.type !== 'fastener'))
         templates.set(original.id, {
-          geometry: geometryForModel(original, xTemplate),
-          edges: edgesForModel(original, xTemplate),
+          geometry: displayGeometry(original, xTemplate),
+          edges: edgesForModel(original, xTemplate, 1, true),
         });
       for (const item of repeated) {
         const source = templates.get(item.originalId);
@@ -350,7 +348,7 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
           project.objects,
           source.geometry.clone().applyMatrix4(matrix),
           source.edges.clone().applyMatrix4(matrix),
-          holes.get(item.object.id) || [],
+          [],
           {
             key: source.geometry,
             geometry: source.geometry,
@@ -358,6 +356,7 @@ export function createFrameExample(sizeId = 'medium', { prepareGeometry = false 
             matrix,
             local: true,
           },
+          true,
         );
       }
     } finally {

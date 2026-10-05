@@ -4,6 +4,7 @@ import { isFastener } from '../fasteners/object-type.js';
 import { validateFastenerTargets } from '../fasteners/relations.js';
 import { validateLevels } from '../levels.js';
 import { parsePositions } from '../grid-lines.js';
+import { syncAssemblyDrawingIdentity } from './assemblies.js';
 
 export const PROJECT_FILE_LIMIT = 100 * 1024 * 1024;
 const record = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
@@ -70,17 +71,91 @@ export function validateProjectFile(project) {
       fail('Ogiltig detaljnumrering.');
   if (!Array.isArray(project.drawings) || project.drawings.length > 10000)
     fail('Ogiltig ritningslista.');
+  project.assemblies ??= [];
+  if (!Array.isArray(project.assemblies) || project.assemblies.length > 10000)
+    fail('Ogiltig assemblylista.');
+  const assemblyIds = new Set(),
+    assemblyMarks = new Map(),
+    members = new Set();
+  for (const assembly of project.assemblies) {
+    if (
+      !record(assembly) ||
+      !identity(assembly.id) ||
+      assemblyIds.has(assembly.id) ||
+      !identity(assembly.mark) ||
+      (assembly.typeKey !== undefined &&
+        (typeof assembly.typeKey !== 'string' || !assembly.typeKey)) ||
+      (assemblyMarks.has(assembly.mark) &&
+        (!assembly.typeKey || assemblyMarks.get(assembly.mark) !== assembly.typeKey)) ||
+      typeof assembly.name !== 'string' ||
+      !identity(assembly.mainId) ||
+      !Array.isArray(assembly.memberIds) ||
+      assembly.memberIds.length < 2 ||
+      assembly.memberIds.length > 100000 ||
+      !assembly.memberIds.every(identity) ||
+      !assembly.memberIds.includes(assembly.mainId) ||
+      new Set(assembly.memberIds).size !== assembly.memberIds.length ||
+      assembly.memberIds.some(
+        (id) => members.has(id) || (objects.has(id) && !isPhysical(objects.get(id))),
+      )
+    )
+      fail('Ogiltig assembly eller överlappande delar.');
+    assemblyIds.add(assembly.id);
+    assemblyMarks.set(assembly.mark, assembly.typeKey);
+    assembly.memberIds.forEach((id) => members.add(id));
+  }
+  project.assemblyNumbering ??= { registry: [] };
+  if (!record(project.assemblyNumbering) || !Array.isArray(project.assemblyNumbering.registry))
+    fail('Ogiltig assemblynumrering.');
+  const typeKeys = new Set(),
+    typeMarks = new Set();
+  for (const item of project.assemblyNumbering.registry) {
+    if (
+      !record(item) ||
+      typeof item.key !== 'string' ||
+      !item.key ||
+      !identity(item.mark) ||
+      typeof item.name !== 'string' ||
+      typeKeys.has(item.key) ||
+      typeMarks.has(item.mark)
+    )
+      fail('Ogiltig assemblynumrering.');
+    typeKeys.add(item.key);
+    typeMarks.add(item.mark);
+  }
+  for (const assembly of project.assemblies)
+    if (
+      assembly.typeKey &&
+      !project.assemblyNumbering.registry.some(
+        (r) => r.key === assembly.typeKey && r.mark === assembly.mark,
+      )
+    )
+      fail('Assemblyn saknar giltig typnumrering.');
   const drawingIds = new Set();
+  const drawnAssemblies = new Set();
   for (const drawing of project.drawings) {
     if (
       !record(drawing) ||
       !identity(drawing.id) ||
       drawingIds.has(drawing.id) ||
-      !['SP', 'GA'].includes(drawing.type) ||
+      !['SP', 'GA', 'AS'].includes(drawing.type) ||
       typeof drawing.number !== 'string'
     )
       fail('Ogiltig ritning eller duplicerad ritningsidentitet.');
     drawingIds.add(drawing.id);
+    if (drawing.type === 'AS' && !assemblyIds.has(drawing.assemblyId))
+      fail('Assemblyritningen saknar en assembly.');
+    if (drawing.type === 'AS') {
+      const assembly = project.assemblies.find((a) => a.id === drawing.assemblyId);
+      const type = drawing.assemblyKey || assembly.id;
+      if (
+        drawing.sourceId !== assembly.mainId ||
+        drawnAssemblies.has(type) ||
+        (drawing.assemblyKey !== undefined && drawing.assemblyKey !== assembly.typeKey)
+      )
+        fail('Ogiltig eller duplicerad assemblyritning.');
+      drawnAssemblies.add(type);
+    }
   }
   if (
     !record(project.snap) ||
@@ -103,6 +178,7 @@ export function validateProjectFile(project) {
     )
   )
     fail('Ogiltiga snapinställningar.');
+  project.drawings = syncAssemblyDrawingIdentity(project);
   return project;
 }
 export function serializeProject(project) {

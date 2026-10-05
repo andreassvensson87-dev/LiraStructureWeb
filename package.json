@@ -7,6 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build && node scripts/build-pwa.js",
     "test": "node --test tests/*.test.js",
+    "benchmark:model": "node --expose-gc scripts/benchmark-model.mjs",
+    "benchmark:history": "node --expose-gc scripts/benchmark-history.mjs",
     "format": "prettier --write \"src/**/*.{js,css}\" \"tests/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.{js,css}\" \"tests/**/*.js\"",
     "check": "npm run format:check && npm run lint && npm test && npm run build",

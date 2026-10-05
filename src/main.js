@@ -1,3 +1,4 @@
+import { updateDisplayDetail } from './model/display-detail.js';
 import { ReferenceModels } from './references/reference-models.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { installDrawingSettings } from './drawing-settings.js';
@@ -10,7 +11,11 @@ import { FastenerUI } from './fasteners/ui.js';
 import { isFastener } from './fasteners/object-type.js';
 import { resolveFastenerHoles } from './fasteners/placement.js';
 import { axisPlacement } from './fasteners/geometry.js';
-import { removeFastenerRelations, validateFastenerTargets } from './fasteners/relations.js';
+import {
+  removeFastenerRelations,
+  validateFastenerTargets,
+  holesByTarget,
+} from './fasteners/relations.js';
 import { updateAutomaticJoints } from './fasteners/update-joints.js';
 let fastenerUI = null;
 import { typeName } from './object-identity.js';
@@ -36,8 +41,28 @@ import {
 import { createProject, captureProject } from './project/project-state.js';
 import { installProjectFiles } from './app/project-files.js';
 import { SnapIndex } from './model/snap-index.js';
-import { selectionGeometryReader } from './model-object.js';
+import { displayGeometryIdentityReader, createDisplayGeometryContext } from './model-object.js';
 import { InstanceBatches } from './model/instance-batches.js';
+import { reconcileChildren } from './model/reconcile-children.js';
+import { InteractionTimings } from './model/interaction-timings.js';
+const interactionTimings = new InteractionTimings(
+  import.meta.env.DEV && new URLSearchParams(location.search).get('performance') === '1',
+);
+if (interactionTimings.enabled)
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (event.target.closest('form.fastener-editor button[type="submit"], #undo, #redo'))
+        interactionTimings.begin(
+          event.target.closest('#undo')
+            ? 'undo'
+            : event.target.closest('#redo')
+              ? 'redo'
+              : 'jointEdit',
+        );
+    },
+    { capture: true },
+  );
 import { FrameGate } from './model/frame-gate.js';
 import { updateFastenerDetail } from './model/fastener-detail.js';
 import { createFrameExample } from './project/frame-example.js';
@@ -81,7 +106,7 @@ import { endpointAtLength } from './length-input.js';
 import { resolveSnap } from './snap.js';
 import { GridLines, defaultGrid } from './grid-lines.js';
 
-import { isCut, cutsForModel, geometryForModel, isPlate, validateObject } from './model-object.js';
+import { isCut, cutsForModel, displayGeometry, isPlate, validateObject } from './model-object.js';
 import { platePoint, plateNormal } from './plate.js';
 const $ = (id) => document.getElementById(id),
   fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -291,6 +316,7 @@ renderer.setAnimationLoop(() => {
   if (!frameGate.consume(camera)) return;
   const frameStarted = performance.now();
   updateFastenerDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
+  updateDisplayDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
   instanceBatches.sync(camera);
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
   insertionPoints.update(
@@ -316,7 +342,9 @@ renderer.setAnimationLoop(() => {
   updateSnapOverlay();
   rotationHandle.update();
   updatePlateNormal();
-  renderer.render(scene, camera);
+  interactionTimings.record('framePreparationMs', frameStarted);
+  interactionTimings.measure('webglSubmissionMs', () => renderer.render(scene, camera));
+  interactionTimings.frameSubmitted(project.objects.length);
   if (import.meta.env.DEV) {
     host.dataset.renderCalls = renderer.info.render.calls;
     host.dataset.renderMs = (performance.now() - frameStarted).toFixed(1);
@@ -349,9 +377,10 @@ function clearPreview() {
     ui.preview = null;
   }
 }
-function mesh(s, ghost = false, model = project.objects) {
+function mesh(s, ghost = false, model = project.objects, geometryContext = null) {
   return createObjectMesh(s, {
     model,
+    geometryContext,
     selectedIds:
       tools.operation?.mode === 'fastenerTargets'
         ? new Set(tools.operation.targetIds)
@@ -365,6 +394,7 @@ let renderedById = new Map();
 let renderedSelection = new Set();
 let snapIndex = null;
 function render({ selectionOnly = false } = {}) {
+  const renderStarted = performance.now();
   frameGate.invalidate();
   selectionOnly &&=
     project.objects.length === renderedObjects.length &&
@@ -380,9 +410,11 @@ function render({ selectionOnly = false } = {}) {
       if (entry) updateObjectMeshSelection(entry.child, entry.source, selectedIds);
     }
   } else {
-    instanceBatches.clear();
+    instanceBatches.prepareRebuild();
     const previous = renderedById;
-    const geometry = selectionGeometryReader(project.objects);
+    const geometry = displayGeometryIdentityReader(project.objects);
+    const holes = holesByTarget(project.objects);
+    const geometryContext = createDisplayGeometryContext(project.objects);
     const children = [];
     let reused = 0;
     renderedById = new Map();
@@ -391,8 +423,10 @@ function render({ selectionOnly = false } = {}) {
       const reuse =
         old?.source === s &&
         old.child.userData.transparentView === ui.transparentView &&
-        old.child.userData.geometryIdentity === geometry(s);
-      const child = reuse ? old.child : mesh(s);
+        old.child.userData.geometryIdentity === geometry(s) &&
+        (old.child.userData.holes || []).length === (holes.get(s.id) || []).length &&
+        (old.child.userData.holes || []).every((h, i) => h === holes.get(s.id)?.[i]);
+      const child = reuse ? old.child : mesh(s, false, project.objects, geometryContext);
       if (reuse) {
         reused++;
         updateObjectMeshSelection(child, s, selectedIds);
@@ -407,11 +441,11 @@ function render({ selectionOnly = false } = {}) {
     }
     for (const [id, entry] of previous)
       if (renderedById.get(id)?.child !== entry.child) dispose(entry.child);
-    objects.clear();
-    for (const child of children) objects.add(child);
+    reconcileChildren(objects, children);
     renderedObjects = [...project.objects];
-    instanceBatches.rebuild(objects.children);
-    snapIndex = new SnapIndex(project.objects);
+    instanceBatches.update(objects.children);
+    interactionTimings.record('meshesAndBatchesMs', renderStarted);
+    snapIndex = interactionTimings.measure('snapIndexMs', () => new SnapIndex(project.objects));
     if (import.meta.env.DEV) {
       host.dataset.reusedMeshes = reused;
       host.dataset.createdMeshes = children.length - reused;
@@ -419,9 +453,12 @@ function render({ selectionOnly = false } = {}) {
   }
   renderedSelection = new Set(selectedIds);
   $('count').textContent = project.objects.length;
-  if (selectionOnly) modelTree?.setSelection(ui.selectedIds);
-  else modelTree?.render(project.objects, ui.selectedIds);
-  syncIdentity();
+  interactionTimings.measure('modelTreeMs', () => {
+    if (selectionOnly) modelTree?.setSelection(ui.selectedIds);
+    else modelTree?.render(project.objects, ui.selectedIds, project.assemblies);
+  });
+  interactionTimings.measure('identityMs', syncIdentity);
+  const uiStarted = performance.now();
   $('undo').disabled = !projectHistory.canUndo;
   $('redo').disabled = !projectHistory.canRedo;
   $('delete').hidden = !ui.selected;
@@ -448,6 +485,7 @@ function render({ selectionOnly = false } = {}) {
     planView?.sync();
     if (drawingManager?.dialog.open) drawingManager.render();
   }
+  interactionTimings.record('otherUiMs', uiStarted);
 }
 function setSelection(ids, keepTab = false) {
   inspector?.rollback();
@@ -536,7 +574,9 @@ function remove() {
 }
 $('delete').onclick = $('multi-delete').onclick = remove;
 function restore(direction) {
-  const next = projectHistory[direction](project);
+  const next = interactionTimings.measure('historyRestoreMs', () =>
+    projectHistory[direction](project),
+  );
   if (!next) return;
   Object.assign(project, next);
   levelsUI?.sync();
@@ -1188,25 +1228,28 @@ fastenerUI = new FastenerUI({
         : 'Skruv · Välj punkt under huvud, därefter riktning';
     renderer.domElement.focus({ preventScroll: true });
   },
-  commit: (draft) => {
-    const error = validateSweep(draft);
-    if (error) throw new Error(error);
-    const updated = draft.id ? applyObjectBatch(project.objects, [draft]).objects : null;
-    checkpoint();
-    if (draft.id) project.objects = updated;
-    else {
-      draft = {
-        ...draft,
-        ...nextIdentity(draft, project.objects),
-        id: crypto.randomUUID(),
-        name: draft.spec.name,
-      };
-      project.objects = [...project.objects, draft];
-    }
-    setSelection([draft.id]);
-    $('status').textContent = 'Skruv och hål sparade';
-  },
+  commit: commitFastener,
 });
+function commitFastener(draft) {
+  const error = interactionTimings.measure('validationMs', () => validateSweep(draft));
+  if (error) throw new Error(error);
+  const updated = interactionTimings.measure('transactionMs', () =>
+    draft.id ? applyObjectBatch(project.objects, [draft]).objects : null,
+  );
+  interactionTimings.measure('historyMs', checkpoint);
+  if (draft.id) project.objects = updated;
+  else {
+    draft = {
+      ...draft,
+      ...nextIdentity(draft, project.objects),
+      id: crypto.randomUUID(),
+      name: draft.spec.name,
+    };
+    project.objects = [...project.objects, draft];
+  }
+  setSelection([draft.id]);
+  $('status').textContent = 'Skruv och hål sparade';
+}
 installModelPointer(renderer.domElement, {
   getState: () => ({
     mode: tools.operation?.mode,
@@ -1347,27 +1390,29 @@ window.addEventListener('keydown', (e) => {
       break;
   }
 });
+function loadFrameExample(size) {
+  const started = performance.now();
+  const example = createFrameExample(size, { prepareGeometry: true });
+  inspector?.finish();
+  checkpoint();
+  setDrawing(false);
+  Object.assign(project, example);
+  projectHistory.prime(project);
+  hiddenObjects.clear();
+  ui.sequence = project.objects.length;
+  levelsUI?.sync();
+  grid.set({ ...project.grid, z: levelElevation(project.levels) });
+  select(null);
+  inspector.show('model');
+  fit(new THREE.Vector3(1, -1, 1).normalize(), new THREE.Box3().setFromObject(objects));
+  const screws = project.objects.filter(isFastener);
+  const holes = screws.reduce((n, s) => n + s.holes.length, 0);
+  return `Exempel inläst · ${project.objects.length} objekt · ${screws.length} skruvar · ${holes} hål · uppbyggnad ${((performance.now() - started) / 1000).toFixed(1)} s`;
+}
 const settingsController = createSettingsController({
   project,
   checkpoint,
-  loadExample: (size) => {
-    const started = performance.now();
-    const example = createFrameExample(size, { prepareGeometry: true });
-    inspector?.finish();
-    checkpoint();
-    setDrawing(false);
-    Object.assign(project, example);
-    hiddenObjects.clear();
-    ui.sequence = project.objects.length;
-    levelsUI?.sync();
-    grid.set({ ...project.grid, z: levelElevation(project.levels) });
-    select(null);
-    inspector.show('model');
-    fit(new THREE.Vector3(1, -1, 1).normalize(), new THREE.Box3().setFromObject(objects));
-    const screws = project.objects.filter(isFastener);
-    const holes = screws.reduce((n, s) => n + s.holes.length, 0);
-    return `Exempel inläst · ${project.objects.length} objekt · ${screws.length} skruvar · ${holes} hål · uppbyggnad ${((performance.now() - started) / 1000).toFixed(1)} s`;
-  },
+  loadExample: loadFrameExample,
   libraries: [
     {
       group: 'Modell',
@@ -1446,6 +1491,7 @@ installProjectFiles({
     const apply = (state) => {
       setDrawing(false);
       Object.assign(project, state);
+      projectHistory.prime(project);
       hiddenObjects.clear();
       ui.sequence = project.objects.length;
       levelsUI?.sync();
@@ -1523,7 +1569,7 @@ function validateSweep(s) {
       validateFastenerTargets(s, project.objects);
       const model = [...project.objects.filter((old) => old.id !== s.id), s];
       for (const h of s.holes)
-        geometryForModel(
+        displayGeometry(
           model.find((o) => o.id === h.targetId),
           model,
         ).dispose();
@@ -1537,7 +1583,7 @@ function validateSweep(s) {
     : [...project.objects, s];
   try {
     for (const target of isCut(s) ? model.filter((old) => s.targets.includes(old.id)) : [s])
-      geometryForModel(target, model).dispose();
+      displayGeometry(target, model).dispose();
     return '';
   } catch (error) {
     return error.message;
@@ -1780,6 +1826,13 @@ function changeVisibility(action) {
   render();
 }
 modelTree = new ModelTree($('object-list'), {
+  selectGroup: (ids, add) => {
+    ids.forEach((id) => hiddenObjects.delete(id));
+    const selection = add ? new Set(ui.selectedIds) : new Set();
+    const remove = add && ids.every((id) => selection.has(id));
+    ids.forEach((id) => (remove ? selection.delete(id) : selection.add(id)));
+    setSelection([...selection], true);
+  },
   select: (id, add) => {
     hiddenObjects.delete(id);
     if (isHelper(project.objects.find((s) => s.id === id))) ui.showHelpers = true;
@@ -1872,3 +1925,28 @@ referenceModels = new ReferenceModels({
     document.querySelector('footer [role=status]').textContent = text;
   },
 });
+
+if (import.meta.env.DEV && new URLSearchParams(location.search).get('memory') === '1') {
+  const { installMemoryBenchmark } = await import('./model/memory-benchmark.js');
+  installMemoryBenchmark({
+    project,
+    history: projectHistory,
+    renderer,
+    loadExample: loadFrameExample,
+    commit: commitFastener,
+    restore,
+    scene,
+  });
+}
+
+if (import.meta.env.DEV && new URLSearchParams(location.search).get('referenceMemory') === '1') {
+  const { installReferenceMemoryBenchmark } = await import('./references/memory-benchmark.js');
+  installReferenceMemoryBenchmark({
+    references: referenceModels,
+    renderer,
+    camera,
+    host,
+    project,
+    history: projectHistory,
+  });
+}

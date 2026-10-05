@@ -8,7 +8,8 @@ export function updateFastenerDetail(children, camera, height, selectedIds) {
     const detailed =
       diameter * pixelsPerUnit >= 1.5 ||
       (selectedIds.size < 5 && selectedIds.has(object.userData.id));
-    const layer = detailed ? 0 : 2;
+    object.userData.detailVisible = detailed;
+    const layer = detailed ? (object.userData.instanced ? 3 : 0) : 2;
     if (object.layers.mask === 1 << layer) continue;
     object.traverse((part) => part.layers.set(layer));
   }

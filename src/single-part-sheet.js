@@ -33,8 +33,15 @@ import {
 } from './drawing-layout.js';
 import { DrawingAnnotations } from './drawing-annotations.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
-import { objectGeometry } from './model-object.js';
+import { objectGeometry, displayGeometry } from './model-object.js';
 import { partMatrix } from './part-marks.js';
+import { partStatus } from './part-marks.js';
+import { assemblyGeometry } from './assembly-geometry.js';
+import { normalizeAssemblySchedule, assemblyScheduleTable } from './assembly-schedule.js';
+import { editAssemblySchedule } from './assembly-schedule-editor.js';
+import { assemblySchedule } from './project/assemblies.js';
+import { assemblyDrawingMatrix } from './assembly-frames.js';
+import { drawingAssemblies } from './assembly-numbering.js';
 import { updatePartHolePanel, partHoleSchedule } from './fasteners/drawing.js';
 import {
   PAPER_KEY,
@@ -84,6 +91,9 @@ export class SinglePartSheet {
       this.save?.(this.record);
       this.geometry?.dispose();
       this.geometry = null;
+      this.snapGeometry?.dispose();
+      this.snapGeometry = null;
+      this.disposeAssembly();
     });
     this.$('selected-view').onchange = () => this.selectView(this.$('selected-view').value);
     this.svg.addEventListener('keydown', (e) => {
@@ -104,6 +114,48 @@ export class SinglePartSheet {
         this.fit();
       },
     );
+    this.assemblyPanel = document.createElement('details');
+    this.assemblyPanel.hidden = true;
+    const summary = document.createElement('summary');
+    summary.textContent = 'Stycklista';
+    this.assemblyPanel.append(summary);
+    for (const [key, title] of [
+      ['visible', 'Visa på bladet'],
+      ['x', 'X på blad · mm'],
+      ['y', 'Y på blad · mm'],
+    ]) {
+      const label = document.createElement('label'),
+        input = document.createElement('input');
+      label.textContent = title;
+      input.type = key === 'visible' ? 'checkbox' : 'number';
+      if (key !== 'visible') input.step = 'any';
+      input.setAttribute('aria-label', 'Stycklista · ' + title);
+      input.dataset.scheduleField = key;
+      const update = () => {
+        const settings = this.config.assemblySchedule;
+        if (key === 'visible') settings.visible = input.checked;
+        else if (input.value.trim() && Number.isFinite(Number(input.value)))
+          settings.position[key === 'x' ? 0 : 1] = Number(input.value);
+        this.compose();
+      };
+      input.onchange = update;
+      if (key !== 'visible') input.oninput = update;
+      label.append(input);
+      this.assemblyPanel.append(label);
+    }
+    const editSchedule = document.createElement('button');
+    editSchedule.textContent = 'Redigera stycklista…';
+    editSchedule.onclick = () =>
+      editAssemblySchedule(
+        this.config.assemblySchedule,
+        assemblySchedule(this.assembly, this.getAttributeState()),
+        (settings) => {
+          this.config.assemblySchedule = settings;
+          this.compose();
+        },
+      );
+    this.assemblyPanel.append(editSchedule);
+    inspector.append(this.assemblyPanel);
     const hiddenLabel = document.createElement('label');
     hiddenLabel.className = 'drawing-check';
     hiddenLabel.innerHTML = '<input id=sheet-hidden-lines type=checkbox>Visa skymda kanter';
@@ -139,9 +191,18 @@ export class SinglePartSheet {
         project: (p, v) => this.projectAnnotation(p, v),
         locate: (e, v) => this.locateAnnotation(e, v),
         candidates: (v) => this.annotationCandidates[v] || [],
-        referenceSource: () => 'part',
-        pick: () => this.record.sourceId,
-        mark: (id) => (id === this.record.sourceId ? this.record.mark : null),
+        referenceSource: (id) => (this.record.type === 'AS' ? id : 'part'),
+        pick: (_event, hit) =>
+          this.record.type === 'AS' ? hit.reference?.source : this.record.sourceId,
+        mark: (id) => {
+          if (this.record.type !== 'AS')
+            return id === this.record.sourceId ? this.record.mark : null;
+          const state = this.getAttributeState(),
+            object = state.objects.find((o) => o.id === id);
+          if (!object || !this.assembly.memberIds.includes(id)) return null;
+          const status = partStatus(object, state.objects, state.parts);
+          return status.valid ? status.mark : null;
+        },
       },
     });
     installTemplateSave(this, toolbar);
@@ -360,26 +421,59 @@ export class SinglePartSheet {
     }
   }
   openRecord(record, { save, review }) {
+    this.disposeAssembly();
     this.record = structuredClone(record);
     if (this.fontSelect) this.fontSelect.value = drawingFont(this.record);
     for (const a of this.record.annotations || [])
-      if (a.sourceId && !a.manual) a.sourceId = record.sourceId;
+      if (record.type !== 'AS' && a.sourceId && !a.manual) a.sourceId = record.sourceId;
     this.save = save;
     this.review = review;
     const source = this.getObjects().find((s) => s.id === record.sourceId);
     if (!source) return;
-    this.geometry = objectGeometry(source, this.getObjects());
-    const localMatrix = partMatrix(source);
-    this.holeSchedule = partHoleSchedule(source, this.getObjects(), localMatrix);
+    this.geometry?.dispose();
+    const state = this.getAttributeState();
+    this.assembly =
+      record.type === 'AS' ? state.assemblies.find((a) => a.id === record.assemblyId) : null;
+    const assemblyData = this.assembly ? assemblyGeometry(this.assembly, this.getObjects()) : null;
+    this.assemblyEntries = assemblyData?.entries;
+    this.geometry = assemblyData?.geometry || objectGeometry(source, this.getObjects());
+    const localMatrix = assemblyData?.matrix || partMatrix(source);
+    this.snapGeometry?.dispose();
+    this.snapGeometry =
+      assemblyData?.snapGeometry ||
+      displayGeometry(source, this.getObjects()).applyMatrix4(localMatrix);
+    this.holeSchedule = this.assemblyEntries
+      ? this.assemblyEntries.flatMap((e) =>
+          partHoleSchedule(
+            this.getObjects().find((o) => o.id === e.id),
+            this.getObjects(),
+            localMatrix,
+          ).map((h) => ({ ...h, sourceId: e.id })),
+        )
+      : partHoleSchedule(source, this.getObjects(), localMatrix);
     updatePartHolePanel(
       this.dialog.querySelector('.drawing-inspector'),
       source,
       this.getObjects(),
       localMatrix,
     );
+    if (this.assembly) {
+      const panel = this.dialog.querySelector('[data-part-holes]');
+      panel.replaceChildren();
+      panel.hidden = !this.holeSchedule.length;
+      const summary = document.createElement('summary');
+      summary.textContent = `Hål i assembly · ${this.holeSchedule.length}`;
+      panel.append(summary);
+      for (const h of this.holeSchedule) {
+        const p = document.createElement('p');
+        p.className = 'inspector-note';
+        p.textContent = `${state.parts.assignments[h.sourceId]?.mark || 'Ej numrerad'} · ${h.label}`;
+        panel.append(p);
+      }
+    }
     this.drawingReflection = partDrawingReflection(localMatrix);
     this.geometryInDrawingFrame = false;
-    this.geometry.applyMatrix4(localMatrix);
+    if (!assemblyData) this.geometry.applyMatrix4(localMatrix);
     this.geometry.computeBoundingBox();
     this.bounds = this.geometry.boundingBox.clone();
     if (!this.record.sheet && this.record.template) {
@@ -395,15 +489,60 @@ export class SinglePartSheet {
     this.config = this.record.sheet || {
       paper: structuredClone(this.papers.find((p) => p.id === 'A3') || this.papers[0]),
       landscape: true,
-      scale: 10,
+      scale: this.assembly
+        ? Math.max(
+            10,
+            Math.ceil(
+              Math.max(
+                this.bounds.max.x - this.bounds.min.x,
+                this.bounds.max.y - this.bounds.min.y,
+                this.bounds.max.z - this.bounds.min.z,
+              ) /
+                Math.max(
+                  25,
+                  (findDrawingLayout(this.record.drawingPreset?.layoutId)?.width || 420) - 40,
+                ) /
+                5,
+            ) * 5,
+          )
+        : 10,
       section: (this.bounds.min.x + this.bounds.max.x) / 2,
       layout: null,
       layoutId: this.record.drawingPreset?.layoutId || '',
     };
     this.record.sheet = this.config;
+    if (this.assembly) this.config.assemblyModelMatrix = assemblyDrawingMatrix(source).toArray();
     ensurePartViews(this.record);
+    if (this.assembly && !this.config.assemblyViews) {
+      const side = structuredClone(this.config.views.find((v) => v.id === 'front'));
+      Object.assign(side, {
+        id: 'right',
+        name: 'Sidovy',
+        projection: 'right',
+        standard: true,
+        size: [1, 1],
+      });
+      const b = this.bounds;
+      side.camera.center = [(b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2];
+      side.size = [
+        Math.max(25, (b.max.y - b.min.y) / side.scale + 12),
+        Math.max(25, (b.max.z - b.min.z) / side.scale + 12),
+      ];
+      side.position = [10, 10];
+      this.config.views.push(side);
+      this.config.assemblyViews = true;
+      this.config.assemblySchedule = { position: [10, 240], visible: true };
+    }
+    if (this.assembly)
+      this.config.assemblySchedule = normalizeAssemblySchedule(this.config.assemblySchedule);
+    this.assemblyPanel.hidden = !this.assembly;
+    this.svg.setAttribute(
+      'aria-label',
+      this.assembly ? 'Assembly ritningsblad' : 'Single Part ritningsblad',
+    );
     fillLayoutPicker(this.layoutSelect, this.config.layoutId);
-    this.dialog.querySelector('header strong').textContent = `${record.number} · ${record.mark}`;
+    this.dialog.querySelector('header strong').textContent =
+      `${record.number} · ${record.type === 'AS' ? record.name : record.mark}`;
     this.paperOptions();
     this.$('orientation').value = this.config.landscape ? 'landscape' : 'portrait';
     for (const v of ['top', 'front', 'section'])
@@ -417,7 +556,22 @@ export class SinglePartSheet {
       this.config.views.find((v) => v.id === 'front')?.id || this.config.views[0].id;
     this.syncInspector();
     this.render();
+    if (this.assembly && !this.config.assemblyArranged) {
+      arrangePartViews(this.config.views, this.paper[0]);
+      const bottom = Math.max(...this.config.views.map((v) => v.position[1] + v.size[1])) + 14;
+      this.config.assemblySchedule.position = [10, bottom];
+      this.config.assemblyArranged = true;
+      this.compose();
+    }
     this.fit();
+  }
+  disposeAssembly() {
+    for (const e of this.assemblyEntries || []) {
+      e.geometry.dispose();
+      e.snapGeometry.dispose();
+    }
+    this.assemblyEntries = null;
+    this.assembly = null;
   }
   selectView(view) {
     this.selectedView = view;
@@ -529,6 +683,11 @@ export class SinglePartSheet {
       migratePartOrientation(this.record, frame, this.drawingReflection);
       if (!this.geometryInDrawingFrame) {
         this.geometry.applyMatrix4(this.drawingReflection);
+        this.snapGeometry.applyMatrix4(this.drawingReflection);
+        for (const e of this.assemblyEntries || []) {
+          e.geometry.applyMatrix4(this.drawingReflection);
+          e.snapGeometry.applyMatrix4(this.drawingReflection);
+        }
         this.geometry.computeBoundingBox();
         this.bounds = this.geometry.boundingBox.clone();
       }
@@ -583,11 +742,90 @@ export class SinglePartSheet {
       drawingAttributeContext(this.record, this.getAttributeState()),
     );
     this.annotations.render(this.svg);
+    if (this.assembly) {
+      this.paintAssemblySchedule();
+      const schedule = this.config.assemblySchedule;
+      for (const input of this.assemblyPanel.querySelectorAll('input')) {
+        const key = input.dataset.scheduleField;
+        if (key === 'visible') input.checked = schedule.visible;
+        else input.value = schedule.position[key === 'x' ? 0 : 1];
+      }
+      const table = assemblyScheduleTable(
+        assemblySchedule(this.assembly, this.getAttributeState()),
+        schedule,
+      );
+      if (
+        schedule.visible &&
+        (schedule.position[0] < 0 ||
+          schedule.position[0] + table.width > w ||
+          schedule.position[1] - table.rowHeight < 0 ||
+          schedule.position[1] + table.values.length * table.rowHeight > h)
+      )
+        this.$('message').textContent =
+          'Stycklistan ligger utanför bladet. Ändra placering under Stycklista eller välj ett större format.';
+    }
     const guides = [...this.svg.querySelectorAll('.section-extent-guides')];
     guides.forEach((n) => (n.style.display = 'none'));
     this.contentBounds = pasteboardBounds(this.paper, this.svg.getBBox());
     guides.forEach((n) => n.style.removeProperty('display'));
     this.size();
+  }
+  paintAssemblySchedule() {
+    const settings = this.config.assemblySchedule;
+    if (!settings?.visible) return;
+    const table = assemblyScheduleTable(
+        assemblySchedule(this.assembly, this.getAttributeState()),
+        settings,
+      ),
+      [x, y] = settings.position,
+      widths = table.columns.map((c) => c.width),
+      height = table.rowHeight,
+      g = node('g', {
+        'data-assembly-schedule': this.assembly.id,
+        transform: `translate(${x},${y})`,
+        'font-size': table.settings.textSize,
+      });
+    g.append(
+      node(
+        'text',
+        { x: 0, y: -3, 'font-weight': 'bold' },
+        `${this.assembly.mark} · ${drawingAssemblies(this.record, this.getAttributeState()).length} st assemblies · Stycklista per assembly`,
+      ),
+    );
+    const values = table.values;
+    values.forEach((row, i) => {
+      let left = 0;
+      row.forEach((value, j) => {
+        g.append(
+          node('rect', {
+            x: left,
+            y: i * height,
+            width: widths[j],
+            height,
+            fill: i ? 'white' : '#eef3f2',
+            stroke: '#899ba4',
+            'stroke-width': 0.15,
+          }),
+        );
+        const clipId = `assembly-cell-${i}-${j}`;
+        const clip = node('clipPath', { id: clipId });
+        clip.append(node('rect', { x: left + 1, y: i * height, width: widths[j] - 2, height }));
+        g.append(
+          clip,
+          node(
+            'text',
+            {
+              x: left + 1.5,
+              y: i * height + height / 2 + table.settings.textSize * 0.35,
+              'clip-path': `url(#${clipId})`,
+            },
+            value,
+          ),
+        );
+        left += widths[j];
+      });
+    });
+    this.svg.append(g);
   }
   size() {
     if (this.paper) this.navigation.size();

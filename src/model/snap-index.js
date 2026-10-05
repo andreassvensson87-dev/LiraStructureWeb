@@ -29,6 +29,8 @@ export class SnapIndex {
       return x * x + y * y < tolerance * tolerance;
     };
     return {
+      holeCenters: (s) =>
+        this.context.holeCenters(s).filter((h) => near(a.fromArray(h.coords), 14)),
       objectCorners: (s) => {
         const { points, matrix } = this.context.cornerFeatures(s);
         const result = [];
@@ -77,7 +79,7 @@ export class SnapIndex {
       const box = new THREE.Box3(),
         vector = new THREE.Vector3();
       for (const object of this.model) {
-        box.copy(this.context.geometry(object).boundingBox);
+        box.copy(this.context.bounds(object));
         for (const anchor of objectAnchors(object)) box.expandByPoint(vector.fromArray(anchor));
         if (box.isEmpty()) continue;
         let minX = Infinity,

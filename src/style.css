@@ -1875,6 +1875,16 @@ aside {
 .model-row.muted {
   opacity: 0.45;
 }
+
+#object-list summary button {
+  margin-left: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+#object-list summary button.selected {
+  background: #d7eee4;
+  color: #185c48;
+}
 #identity-fields {
   grid-template-columns: 1fr 1fr;
 }

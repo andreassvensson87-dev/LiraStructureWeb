@@ -12,6 +12,8 @@ export const builtInAttributes = [
   ['drawing.checkedBy', 'Granskad av', 'all', true],
   ['drawing.issueStatus', 'Utgivningsstatus', 'all', true],
   ['drawing.partMark', 'Part mark', 'SP', false],
+  ['drawing.assemblyMark', 'Assemblynummer', 'AS', false],
+  ['drawing.assemblyQuantity', 'Antal assemblies', 'AS', false, 'number'],
   ['drawing.material', 'Material', 'SP', false],
   ['drawing.quantity', 'Antal', 'SP', false, 'number'],
   ['drawing.level', 'Nivå', 'GA', false],
@@ -35,7 +37,7 @@ export function customAttributes() {
           )
           .map((a) => ({
             ...a,
-            scope: ['GA', 'SP'].includes(a.scope) ? a.scope : 'all',
+            scope: ['GA', 'SP', 'AS'].includes(a.scope) ? a.scope : 'all',
             dataType: ['date', 'number'].includes(a.dataType) ? a.dataType : 'text',
             editable: true,
           }))
@@ -58,6 +60,8 @@ export function attributeValue(key, context) {
   return String(value ?? '');
 }
 export function drawingAttributeContext(record, state = {}) {
+  const assembly =
+    record.type === 'AS' && state.assemblies?.find((a) => a.id === record.assemblyId);
   const source = state.objects?.find((o) => o.id === record.sourceId);
   const assignments = state.parts?.assignments || {};
   const quantity = state.objects?.filter(
@@ -67,9 +71,13 @@ export function drawingAttributeContext(record, state = {}) {
     project: state.info || state.project || {},
     drawing: {
       ...record,
+      ...(assembly ? { number: assembly.mark, name: assembly.name } : {}),
       partMark: record.mark || '',
+      assemblyMark:
+        state.assemblies?.find((a) => a.id === record.assemblyId)?.mark || record.mark || '',
       material: source?.material?.name || '',
       quantity: quantity ?? '',
+      assemblyQuantity: record.type === 'AS' ? drawingAssemblies(record, state).length : '',
       level: state.levels?.items?.find((l) => l.id === record.levelId)?.name || '',
     },
     custom: record.attributes || {},
@@ -78,6 +86,10 @@ export function drawingAttributeContext(record, state = {}) {
 export function updateDrawingAttribute(records, id, attribute, value) {
   const record = records.find((r) => r.id === id);
   if (!record || !attribute.editable || !attributeApplies(attribute, record.type)) return records;
+  if (record.type === 'AS' && ['drawing.number', 'drawing.name'].includes(attribute.key))
+    throw Error(
+      'Assemblyritningens namn och nummer följer assemblyn. Ändra namnet under Redigera assembly.',
+    );
   value = String(value).trim();
   if (['drawing.number', 'drawing.name'].includes(attribute.key) && !value)
     throw Error('Nummer och namn får inte vara tomma.');
@@ -97,3 +109,4 @@ export function updateDrawingAttribute(records, id, attribute, value) {
         : { ...r, [field]: value },
   );
 }
+import { drawingAssemblies } from './assembly-numbering.js';
