@@ -70,6 +70,7 @@ export function remapFastenerCopy(s, ids) {
   if (!isFastener(s)) return s;
   return {
     ...s,
+    ...(s.group ? { group: { ...s.group, id: ids.get(s.group.id) || crypto.randomUUID() } } : {}),
     anchorId: ids.get(s.anchorId) || s.anchorId,
     holes: s.holes.map((h) =>
       boreFeature({ ...h, id: crypto.randomUUID(), targetId: ids.get(h.targetId) || h.targetId }),

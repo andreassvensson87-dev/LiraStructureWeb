@@ -1,8 +1,9 @@
-import { isComponent, resolveFit } from '../components/fit.js';
+import { isComponent, resolveComponent, updateComponents } from '../components/fit.js';
 import { captureProject, PROJECT_SCHEMA_VERSION } from './project-state.js';
 import { validateObject, isCut, isPhysical } from '../model-object.js';
 import { isFastener } from '../fasteners/object-type.js';
 import { validateFastenerTargets } from '../fasteners/relations.js';
+import { validateFastenerGroups } from '../fasteners/group-data.js';
 import { validateLevels } from '../levels.js';
 import { parsePositions } from '../grid-lines.js';
 import { validateGridLabels } from '../grid-labels.js';
@@ -35,7 +36,23 @@ export function validateProjectFile(project) {
     objects.set(object.id, object);
   }
   for (const object of project.objects) {
-    if (isComponent(object)) Object.assign(object, resolveFit(object, project.objects));
+    if (isComponent(object)) resolveComponent(object, project.objects);
+    if (
+      object.generatedBy &&
+      !['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(
+        objects.get(object.generatedBy)?.kind,
+      )
+    )
+      fail('En genererad del saknar sin koppling.');
+  }
+  project.objects = updateComponents([], project.objects);
+  objects.clear();
+  for (const object of project.objects) {
+    if (!identity(object.id) || objects.has(object.id)) fail('Objekten behöver unika identiteter.');
+    objects.set(object.id, object);
+  }
+  validateFastenerGroups(project.objects);
+  for (const object of project.objects) {
     if (isFastener(object)) {
       const targets = object.holes.map((h) => objects.get(h.targetId));
       validateFastenerTargets(object, targets);

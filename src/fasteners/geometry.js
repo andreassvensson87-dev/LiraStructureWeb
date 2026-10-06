@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fastenerAccessories } from './accessories.js';
 import { geometryEdges } from './edges.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -40,7 +41,7 @@ function localFastenerGeometry(s) {
   const spec = s.spec,
     r = spec.diameter / 2;
   const pieces = [cylinder(r, r, spec.length, 0)];
-  if (spec.head.kind === 'hex')
+  if (spec.head?.kind === 'hex')
     pieces.push(
       cylinder(
         spec.head.diameter / Math.sqrt(3),
@@ -50,7 +51,7 @@ function localFastenerGeometry(s) {
         6,
       ),
     );
-  else
+  else if (spec.head)
     pieces.push(
       cylinder(
         spec.head.diameter / 2,
@@ -59,7 +60,7 @@ function localFastenerGeometry(s) {
         -spec.head.height,
       ),
     );
-  if (spec.kind === 'bolt') {
+  for (const accessory of fastenerAccessories(s).filter((item) => item.kind === 'nut')) {
     const radius = spec.nut.acrossFlats / Math.sqrt(3);
     const shape = new THREE.Shape(
       Array.from(
@@ -79,13 +80,10 @@ function localFastenerGeometry(s) {
       bevelEnabled: false,
       curveSegments: 24,
     });
-    nut.translate(0, 0, s.nutOffset);
+    nut.translate(0, 0, accessory.offset);
     pieces.push(nut);
   }
-  for (const offset of [
-    ...(s.washers?.head ? [0] : []),
-    ...(s.washers?.nut ? [s.nutOffset - spec.washer.thickness] : []),
-  ]) {
+  for (const { offset } of fastenerAccessories(s).filter((item) => item.kind === 'washer')) {
     const washer = spec.washer;
     const shape = new THREE.Shape();
     shape.absarc(0, 0, washer.outerDiameter / 2, 0, Math.PI * 2, false);
@@ -110,7 +108,7 @@ function localFastenerGeometry(s) {
 // never change the screw shape. Render wrappers own their GPU attributes.
 const templates = new Map();
 export function fastenerDisplayTemplate(s) {
-  const key = JSON.stringify([s.spec, s.nutOffset, !!s.washers?.head, !!s.washers?.nut]);
+  const key = JSON.stringify([s.spec, fastenerAccessories(s)]);
   let template = templates.get(key);
   if (!template) {
     const geometry = localFastenerGeometry(s);

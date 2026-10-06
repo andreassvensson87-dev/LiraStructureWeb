@@ -3,6 +3,8 @@ import { displayGeometry } from '../model-object.js';
 import { boreFeature } from './holes.js';
 import { axisPlacement, fastenerFrame } from './geometry.js';
 import { isFastener } from './object-type.js';
+import { hasNut } from './library.js';
+import { assemblyAllowance, fittedAssembly, selectFastenerLength } from './assembly.js';
 
 /** Separate solid intervals, preserving cavities between walls and flanges. */
 export function partAxisIntervals(s, part, model, geometryContext = null) {
@@ -60,7 +62,14 @@ const millimeters = (v) => Math.round(v * 1e6) / 1e6;
 export const holeExtent = (h) => h.extent || (h.kind === 'pilot' ? 'blind' : 'profile');
 
 /** Search the selected parts along the whole axis, independently of click distance. */
-export function automaticPlacement(s, start, direction, model, limit = null) {
+export function automaticPlacement(
+  s,
+  start,
+  direction,
+  model,
+  limit = null,
+  allowMissedTargets = false,
+) {
   if (limit != null && (!Number.isFinite(limit) || limit <= 0 || limit > 1e7))
     throw new Error('Ange en söklängd större än 0 och högst 10 000 000 mm.');
   const axisDraft = { ...s, ...axisPlacement(s.spec, start, direction) };
@@ -69,23 +78,26 @@ export function automaticPlacement(s, start, direction, model, limit = null) {
   const candidates = s.holes.flatMap((h) => {
     const part = materialModel.find((o) => o.id === h.targetId);
     if (!part) throw new Error('Hålets måldel saknas.');
-    const intervals = partAxisIntervals(axisDraft, part, materialModel);
+    let intervals;
+    try {
+      intervals = partAxisIntervals(axisDraft, part, materialModel);
+    } catch (error) {
+      if (allowMissedTargets && error.message.includes('träffar inte')) return [];
+      throw error;
+    }
     const chosen = ['wall', 'blind'].includes(holeExtent(h)) ? intervals.slice(0, 1) : intervals;
     return chosen.map((v) => ({ ...v, targetId: h.targetId }));
   });
   if (!candidates.length) throw new Error('Välj minst ett objekt i förbandet.');
   const first = Math.min(...candidates.map((v) => v.offset));
-  const reach =
-    s.spec.kind === 'wood'
-      ? first + s.spec.length - (s.washers?.head ? s.spec.washer.thickness : 0)
-      : Infinity;
+  const reach = !hasNut(s.spec) ? first + s.spec.length - entryAllowance(s) : Infinity;
   // A search limit selects complete layers from the first material surface.
   const layers = candidates
     .filter((v) => v.offset < first + (limit ?? Infinity) - 0.001)
     .map((v) => ({ ...v, depth: Math.min(v.depth, reach - v.offset) }))
     .filter((v) => v.depth > 0.001);
   if (
-    s.spec.kind === 'wood' &&
+    !hasNut(s.spec) &&
     layers.some((v) => {
       const h = s.holes.find((h) => h.targetId === v.targetId);
       const original = candidates.find((c) => c.targetId === v.targetId && c.offset === v.offset);
@@ -96,13 +108,18 @@ export function automaticPlacement(s, start, direction, model, limit = null) {
       'Skruven är för kort för genomgående hål. Välj en längre skruv eller förborrning.',
     );
   if (limit == null) {
-    const missed = s.holes.find((h) => !layers.some((v) => v.targetId === h.targetId));
+    const missed = s.holes.find(
+      (h) =>
+        (!allowMissedTargets || candidates.some((v) => v.targetId === h.targetId)) &&
+        !layers.some((v) => v.targetId === h.targetId),
+    );
     if (missed)
       throw new Error(
         `Skruven är för kort för att nå ${materialModel.find((o) => o.id === missed.targetId)?.name || missed.targetId}. Välj en längre skruv.`,
       );
   }
   const last = Math.max(...layers.map((v) => v.offset + v.depth));
+  s = selectFastenerLength(s, last - first);
   const fitted = spanPlacement(
     s,
     f.origin.clone().addScaledVector(f.z, first).toArray(),
@@ -122,7 +139,7 @@ export function automaticPlacement(s, start, direction, model, limit = null) {
     layers: layers
       .filter((v) => v.targetId === h.targetId)
       .map((v) => ({
-        offset: millimeters(v.offset - first + (s.washers?.head ? s.spec.washer.thickness : 0)),
+        offset: millimeters(v.offset - first + entryAllowance(s)),
         depth: millimeters(v.depth),
       })),
   }));
@@ -134,21 +151,41 @@ export function spanPlacement(s, entry, exit) {
   const axis = new THREE.Vector3(...exit).sub(new THREE.Vector3(...entry));
   const grip = axis.length();
   if (grip < 0.001) throw new Error('Välj två olika anliggningsytor.');
+  s = fittedAssembly(s, grip);
   axis.normalize();
-  const headWasher = s.washers?.head ? s.spec.washer?.thickness || 0 : 0;
-  const nutWasher = s.washers?.nut ? s.spec.washer?.thickness || 0 : 0;
+  const headWasher = entryAllowance(s);
+  const nutWasher = s.accessories == null && s.washers?.nut ? s.spec.washer?.thickness || 0 : 0;
   const start = new THREE.Vector3(...entry).addScaledVector(axis, -headWasher).toArray();
   const nutOffset = headWasher + grip + nutWasher;
-  if (s.spec.kind === 'bolt' && nutOffset + s.spec.nut.thickness > s.spec.length + 0.001)
+  if (
+    s.spec.kind === 'bolt' &&
+    s.accessories == null &&
+    nutOffset + s.spec.nut.thickness > s.spec.length + 0.001
+  )
     throw new Error(
       `Skruven är för kort. Förband, brickor och mutter kräver minst ${(nutOffset + s.spec.nut.thickness).toFixed(2)} mm.`,
     );
+  if (hasNut(s.spec) && headWasher + grip > s.spec.length + 0.001)
+    throw new Error('Skaftet är för kort för förbandet och valt utstick.');
   return {
     ...s,
     ...axisPlacement(s.spec, start, exit),
     span: { start: [...entry], end: [...exit] },
-    ...(s.spec.kind === 'bolt' ? { nutOffset: millimeters(nutOffset) } : {}),
+    ...(s.spec.kind === 'bolt' && s.accessories == null
+      ? { nutOffset: millimeters(nutOffset) }
+      : {}),
   };
+}
+function entryAllowance(s) {
+  const assembly = assemblyAllowance(s);
+  if (assembly != null) return assembly;
+  if (s.spec.kind === 'rod') return s.startAllowance || 0;
+  if (s.accessories != null) {
+    return s.accessories.find((item) => item.kind === 'washer' && Math.abs(item.offset) < 0.001)
+      ? s.spec.washer?.thickness || 0
+      : 0;
+  }
+  return s.washers?.head ? s.spec.washer?.thickness || 0 : 0;
 }
 
 /** Insertion points define an axis; a separate forward range selects material layers. */
@@ -170,12 +207,11 @@ export function insertionPlacement(s, start, direction, depth, model) {
       throw e;
     }
     for (const v of intervals) {
-      const from =
-          h.kind === 'clearance' || s.spec.kind === 'bolt' ? v.offset : Math.max(0, v.offset),
+      const from = h.kind === 'clearance' || hasNut(s.spec) ? v.offset : Math.max(0, v.offset),
         to = Math.min(depth, v.offset + v.depth);
       if (v.offset + v.depth <= 0 || v.offset >= depth || to - from <= 0.001) continue;
       if (
-        (h.kind === 'clearance' || s.spec.kind === 'bolt') &&
+        (h.kind === 'clearance' || hasNut(s.spec)) &&
         (from > v.offset + 0.001 || to < v.offset + v.depth - 0.001)
       )
         throw new Error(
@@ -198,7 +234,7 @@ export function insertionPlacement(s, start, direction, depth, model) {
     return {
       ...h,
       layers: local.map((v) => ({
-        offset: millimeters(v.offset - from + (s.washers?.head ? s.spec.washer.thickness : 0)),
+        offset: millimeters(v.offset - from + entryAllowance(s)),
         depth: millimeters(v.depth),
       })),
     };

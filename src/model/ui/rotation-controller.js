@@ -1,3 +1,4 @@
+import { componentTransformSources } from '../../components/ownership.js';
 import * as THREE from 'three';
 import { RotationHandle } from '../../rotation-handle.js';
 import { objectAnchors } from '../../model-object.js';
@@ -139,7 +140,7 @@ export function createRotationController({
     renderer.domElement.focus({ preventScroll: true });
   }
   $('rotate').onclick = () => {
-    const sources = project.objects.filter((s) => ui.selectedIds.has(s.id));
+    const sources = componentTransformSources(project.objects, ui.selectedIds);
     if (!sources.length) return;
     setDrawing(true);
     tools.operation = {

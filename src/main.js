@@ -1,3 +1,22 @@
+import {
+  copyPlateProperties,
+  editablePlate,
+  loadPlateDefaults,
+  storePlateDefaults,
+} from './model/plate-properties.js';
+let platePropertyUI = null;
+let lastPlateDefaults = loadPlateDefaults(localStorage);
+import {
+  copySweepProperties,
+  editableSweep,
+  loadSweepDefaults,
+  storeSweepDefaults,
+} from './model/sweep-properties.js';
+import { createObjectPropertyUI } from './inspector/object-property-ui.js';
+import { objectInspectorSchemas } from './inspector/object-schemas.js';
+let sweepPropertyUI = null;
+let lastSweepDefaults = loadSweepDefaults(localStorage);
+import { componentDeletion, componentTransformSources } from './components/ownership.js';
 import { ObjectFeedback } from './model/object-feedback.js';
 import { createConnectionMarkers } from './components/markers.js';
 import { createComponentUI } from './components/ui.js';
@@ -15,6 +34,12 @@ import { FastenerUI } from './fasteners/ui.js';
 import { isFastener } from './fasteners/object-type.js';
 import { resolveFastenerHoles } from './fasteners/placement.js';
 import { axisPlacement } from './fasteners/geometry.js';
+import {
+  alignFastenerGroup,
+  fastenerGroupBatch,
+  replaceFastenerGroup,
+} from './fasteners/groups.js';
+import { groupSelection } from './fasteners/group-data.js';
 import {
   removeFastenerRelations,
   validateFastenerTargets,
@@ -130,7 +155,11 @@ const grid = new GridLines(scene, host);
 grid.set({ ...project.grid, z: levelElevation(project.levels) });
 const objects = new THREE.Group();
 scene.add(objects);
-const connectionMarkers = createConnectionMarkers(host, (id) => setSelection([id]));
+const connectionMarkers = createConnectionMarkers(host, (id) => {
+  if (tools.operation?.mode === 'componentProperties')
+    componentUI.pickCopy(project.objects.find((s) => s.id === id));
+  else setSelection([id]);
+});
 const instanceBatches = new InstanceBatches(scene);
 const insertionPoints = new InsertionPoints(
   host,
@@ -379,6 +408,14 @@ const { readForm, fillForm, updateForm } = createSweepForm({
   updateTypedLength,
   updatePointer,
   clearPreview,
+  remember: () => {
+    if (
+      !ui.selected &&
+      !tools.operation &&
+      ['width', 'height', 'rotation'].every((id) => $(id).value.trim())
+    )
+      rememberSweep({ ...readForm(), ...ui.draftMaterial });
+  },
 });
 function dispose(o) {
   o.traverse((child) => {
@@ -500,6 +537,8 @@ function render({ selectionOnly = false } = {}) {
   syncMaterialPanel();
   helperController.sync();
   componentUI?.sync();
+  sweepPropertyUI?.sync();
+  platePropertyUI?.sync();
   objectFeedback.setSelection(ui.selectedIds);
   objectFeedback.setModel(project.objects);
   connectionMarkers.sync(
@@ -521,7 +560,7 @@ function render({ selectionOnly = false } = {}) {
 function setSelection(ids, keepTab = false) {
   inspector?.rollback();
   setDrawing(false);
-  ui.selectedIds = new Set(ids);
+  ui.selectedIds = groupSelection(project.objects, ids);
   ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
   if (ui.selected) fillForm(project.objects.find((s) => s.id === ui.selected));
   render({ selectionOnly: true });
@@ -530,8 +569,9 @@ function setSelection(ids, keepTab = false) {
 function select(id, additive = false, keepTab = false) {
   const ids = additive ? new Set(ui.selectedIds) : new Set();
   if (id) {
-    if (additive && ids.has(id)) ids.delete(id);
-    else ids.add(id);
+    if (additive && ids.has(id)) {
+      for (const memberId of groupSelection(project.objects, [id])) ids.delete(memberId);
+    } else ids.add(id);
   }
   setSelection(ids, keepTab);
 }
@@ -572,6 +612,7 @@ function save(s) {
   ui.selectedIds = new Set([ui.selected]);
   setDrawing(false);
   render();
+  rememberSweep(project.objects.find((o) => o.id === ui.selected));
   $('status').textContent = `${typeName(s)} skapad`;
   return true;
 }
@@ -584,10 +625,9 @@ $('deselect').onclick = () => select(null);
 function remove() {
   if (!ui.selectedIds.size) return;
   setDrawing(false);
-  let next = removeFastenerRelations(project.objects, ui.selectedIds)
-    .map((s) =>
-      isCut(s) ? { ...s, targets: s.targets.filter((id) => !ui.selectedIds.has(id)) } : s,
-    )
+  const removedIds = componentDeletion(project.objects, ui.selectedIds);
+  let next = removeFastenerRelations(project.objects, removedIds)
+    .map((s) => (isCut(s) ? { ...s, targets: s.targets.filter((id) => !removedIds.has(id)) } : s))
     .filter((s) => !isCut(s) || s.targets.length);
   try {
     next = updateAutomaticJoints(project.objects, next);
@@ -668,6 +708,8 @@ function setDrawing(value) {
   syncMaterialPanel();
   helperController.sync();
   componentUI?.sync();
+  sweepPropertyUI?.sync();
+  platePropertyUI?.sync();
   objectFeedback.setSelection(ui.selectedIds);
   objectFeedback.setModel(project.objects);
   connectionMarkers.sync(
@@ -681,8 +723,48 @@ function setDrawing(value) {
     tools.operation,
   );
 }
+function rememberPlate(source) {
+  if (!editablePlate(source)) return;
+  try {
+    lastPlateDefaults = storePlateDefaults(localStorage, source);
+  } catch {
+    /* Preserve the last valid plate properties. */
+  }
+}
+function restorePlateDefaults() {
+  if (!lastPlateDefaults) return;
+  $('plate-thickness').value = lastPlateDefaults.thickness;
+  $('plate-side').value = lastPlateDefaults.side;
+  $('plate-contour-offset').value = lastPlateDefaults.contourOffset;
+  ui.draftMaterial = {
+    material: structuredClone(lastPlateDefaults.material),
+    colorOverride: lastPlateDefaults.colorOverride,
+  };
+  ui.draftMaterialAutomatic = !lastPlateDefaults.material;
+}
+function rememberSweep(source) {
+  if (!editableSweep(source)) return;
+  try {
+    lastSweepDefaults = storeSweepDefaults(localStorage, source);
+  } catch {
+    /* Invalid drafts do not replace the last usable properties. */
+  }
+}
+function restoreSweepDefaults() {
+  if (!lastSweepDefaults) return;
+  const current = readForm();
+  ui.draftMaterial = {
+    material: lastSweepDefaults.material ?? null,
+    colorOverride: lastSweepDefaults.colorOverride ?? null,
+  };
+  ui.draftMaterialAutomatic = !lastSweepDefaults.material;
+  fillForm({ ...lastSweepDefaults, type: 'sweep', start: current.start, end: current.end });
+}
 function startDrawing() {
+  inspector?.finish();
+  if (ui.selected) rememberSweep(project.objects.find((o) => o.id === ui.selected));
   select(null);
+  restoreSweepDefaults();
   setDrawing(true);
   inspector.show('properties');
 }
@@ -729,7 +811,7 @@ function syncOperationUI() {
       : 'Skapa ↵';
 }
 function startTransform(mode) {
-  const sources = project.objects.filter((s) => ui.selectedIds.has(s.id));
+  const sources = componentTransformSources(project.objects, ui.selectedIds);
   const source = sources[0];
   if (!source || ((mode === 'start' || mode === 'end') && sources.length !== 1)) return;
   setDrawing(true);
@@ -750,10 +832,19 @@ function startTransform(mode) {
   renderer.domElement.focus({ preventScroll: true });
 }
 function startGrip(grip) {
-  const ids = new Set(grip.refs.map((r) => r.id));
-  const sources = structuredClone(project.objects.filter((s) => ids.has(s.id)));
+  const ids = groupSelection(
+    project.objects,
+    grip.refs.map((r) => r.id),
+  );
+  const sources = structuredClone(componentTransformSources(project.objects, ids));
   setDrawing(true);
-  tools.operation = { mode: 'grip', sources, refs: grip.refs };
+  tools.operation = sources.some(
+    (s) =>
+      s.group ||
+      ['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind),
+  )
+    ? { mode: 'move', sources }
+    : { mode: 'grip', sources, refs: grip.refs };
   $('status').textContent = 'Flytta insättningspunkter · Välj målpunkt eller ange avstånd';
   tools.first = [...grip.point];
   syncOperationUI();
@@ -764,6 +855,10 @@ function startGrip(grip) {
 function candidates(target) {
   if (tools.operation?.mode === 'fastenerCreate') {
     const draft = tools.operation.draft;
+    if (draft.group)
+      return fastenerGroupBatch(alignFastenerGroup(draft, tools.first, target), project.objects, {
+        fit: false,
+      });
     return [
       {
         ...draft,
@@ -805,7 +900,9 @@ function commitPoint(target) {
       $('draw-length-form').hidden = true;
       fastenerUI.sync([], tools.operation);
       inspector.show('properties');
-      $('status').textContent = 'Kontrollera förbandet · Enter skapar skruv och hål';
+      $('status').textContent = batch[0].group
+        ? 'Kontrollera skruvgruppen · Enter skapar gruppen och dess hål'
+        : 'Kontrollera förbandet · Enter skapar skruv och hål';
       fastenerUI.placeForm.querySelector('[type=submit]').focus();
       return true;
     }
@@ -1219,6 +1316,12 @@ const {
   previewModelBatch,
   clearPreview,
   dispose,
+  remember: rememberPlate,
+  restoreDefaults: restorePlateDefaults,
+  syncPropertyUI: () => {
+    sweepPropertyUI?.sync();
+    platePropertyUI?.sync();
+  },
 });
 const helperController = createHelperController({
   project,
@@ -1235,22 +1338,23 @@ const helperController = createHelperController({
 fastenerUI = new FastenerUI({
   getObjects: () => project.objects,
   getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
-  selectSource: (id) => setSelection([id]),
+  selectSource: (id) => setSelection(id ? [id] : []),
   getOperation: () => tools.operation,
   previewPlacement: (draft) => {
     clearPreview();
     if (!draft) return;
-    ui.preview = previewModelBatch([draft]);
+    ui.preview = previewModelBatch(Array.isArray(draft) ? draft : [draft]);
     scene.add(ui.preview);
   },
   showInspector: () => inspector.show('properties'),
-  beginTargets: (targetIds) => {
+  beginTargets: (targetIds, group = false) => {
     select(null);
     setDrawing(true);
     tools.operation = { mode: 'fastenerTargets', targetIds };
     render();
     inspector.show('properties');
-    $('status').textContent = 'Skruv · Klicka på delar, Enter bekräftar, Escape avbryter';
+    $('status').textContent =
+      `${group ? 'Skruvgrupp' : 'Skruv'} · Klicka på delar, Enter bekräftar, Escape avbryter`;
     renderer.domElement.focus({ preventScroll: true });
   },
   finish: () => {
@@ -1264,15 +1368,41 @@ fastenerUI = new FastenerUI({
     syncOperationUI();
     fastenerUI.sync([], tools.operation);
     inspector.show('properties');
+    const label = draft.group ? 'Skruvgrupp' : 'Skruv';
     $('status').textContent =
       draft.placementMode === 'range'
-        ? 'Skruv · Välj första insättningspunkten, därefter riktning'
-        : 'Skruv · Välj punkt under huvud, därefter riktning';
+        ? `${label} · Välj första insättningspunkten, därefter riktning`
+        : `${label} · Välj punkt under huvud, därefter riktning`;
     renderer.domElement.focus({ preventScroll: true });
   },
   commit: commitFastener,
 });
 function commitFastener(draft) {
+  if (draft.group) {
+    const batch = fastenerGroupBatch(draft, project.objects);
+    const known = new Set(project.objects.map((s) => s.id));
+    const identified = [];
+    for (const s of batch) {
+      identified.push(
+        known.has(s.id)
+          ? s
+          : {
+              ...s,
+              ...nextIdentity(s, [...project.objects, ...identified]),
+              name: `${s.spec.name} · ${s.group.row + 1}:${s.group.column + 1}`,
+            },
+      );
+    }
+    const next = updateAutomaticJoints(
+      project.objects,
+      replaceFastenerGroup(project.objects, identified),
+    );
+    checkpoint();
+    project.objects = next;
+    setSelection(identified.map((s) => s.id));
+    $('status').textContent = `Skruvgrupp sparad · ${identified.length} skruvar med kopplade hål`;
+    return;
+  }
   const error = interactionTimings.measure('validationMs', () => validateSweep(draft));
   if (error) throw new Error(error);
   const updated = interactionTimings.measure('transactionMs', () =>
@@ -1406,6 +1536,10 @@ installModelPointer(renderer.domElement, {
     clearPreview();
   },
   actions: {
+    'component-property-target': (e) => {
+      ray(e);
+      componentUI.pickCopy(project.objects.find((s) => s.id === selectionHit()));
+    },
     'fit-reference': (e) => {
       objectFeedback.setHover([], 'canvas');
       ray(e);
@@ -1437,6 +1571,14 @@ installModelPointer(renderer.domElement, {
         $('status').textContent = `${error.message} · Välj huvuddel eller Escape för att avbryta`;
       }
     },
+    'plate-property-target': (e) => {
+      ray(e);
+      platePropertyUI.pick(project.objects.find((s) => s.id === selectionHit()));
+    },
+    'sweep-property-target': (e) => {
+      ray(e);
+      sweepPropertyUI.pick(project.objects.find((s) => s.id === selectionHit()));
+    },
     'fastener-target': (e) => {
       ray(e);
       const id = selectionHit();
@@ -1448,7 +1590,8 @@ installModelPointer(renderer.domElement, {
       tools.operation.targetIds = [...ids];
       fastenerUI.setTargets(tools.operation.targetIds);
       render({ selectionOnly: true });
-      $('status').textContent = `Skruv · ${ids.size} delar valda · Klicka fler, Enter bekräftar`;
+      $('status').textContent =
+        `${fastenerUI.groupEditor.enabled() ? 'Skruvgrupp' : 'Skruv'} · ${ids.size} delar valda · Klicka fler, Enter bekräftar`;
       renderer.domElement.focus({ preventScroll: true });
     },
     helperpoint: (p) => save({ type: 'helperpoint', start: p }),
@@ -1500,10 +1643,19 @@ window.addEventListener('keydown', (e) => {
   if (!command) return;
   e.preventDefault();
   switch (command) {
+    case 'confirm-component-properties':
+      componentUI.confirmCopy();
+      break;
     case 'move':
     case 'copy':
     case 'rotate':
       $(command).click();
+      break;
+    case 'confirm-plate-properties':
+      platePropertyUI.confirm();
+      break;
+    case 'confirm-sweep-properties':
+      sweepPropertyUI.confirm();
       break;
     case 'confirm-fit':
       componentUI.confirm();
@@ -1515,6 +1667,12 @@ window.addEventListener('keydown', (e) => {
       cancelBox();
       if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
       if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
+      if (
+        ['sweepProperties', 'plateProperties', 'componentProperties'].includes(
+          tools.operation?.mode,
+        )
+      )
+        $('status').textContent = 'Egenskapskopiering avbruten';
       assemblyMenu.hidden = true;
       setDrawing(false);
       break;
@@ -1711,6 +1869,10 @@ inspector = new Inspector({
     const next = applyObjectBatch(project.objects, batch).objects;
     checkpoint();
     project.objects = next;
+    for (const object of batch) {
+      rememberSweep(object);
+      rememberPlate(object);
+    }
     render();
     $('status').textContent = 'Egenskaper uppdaterade';
   },
@@ -1766,12 +1928,36 @@ function validateSweep(s) {
 function previewModelBatch(batch, ghost = true) {
   const previous = new Map(project.objects.map((s) => [s.id, s]));
   const batchIds = new Set(batch.map((s) => s.id));
-  const model = applyObjectBatch(
-    project.objects,
-    batch.filter((s) => s.id),
-  ).objects;
-  batch.filter((s) => !previous.has(s.id)).forEach((s) => model.push(s));
+  const groupId = batch[0]?.group?.id;
+  const groupPreview = groupId && batch.every((s) => s.group?.id === groupId);
+  let model = groupPreview
+    ? updateAutomaticJoints(project.objects, replaceFastenerGroup(project.objects, batch))
+    : applyObjectBatch(
+        project.objects,
+        batch.filter((s) => s.id),
+      ).objects;
+  if (!groupPreview && batch.some((s) => !previous.has(s.id)))
+    model = updateAutomaticJoints(project.objects, [
+      ...model,
+      ...batch.filter((s) => !previous.has(s.id)),
+    ]);
+
   const affected = new Set(batch.map((s) => s.id));
+  const proposed = new Map(model.map((s) => [s.id, s]));
+  for (const s of [...project.objects, ...model])
+    if (
+      s.generatedBy &&
+      (previous.get(s.id) !== proposed.get(s.id) || batchIds.has(s.generatedBy))
+    ) {
+      affected.add(s.id);
+      for (const h of s.holes || []) affected.add(h.targetId);
+    }
+  if (groupPreview)
+    for (const s of project.objects)
+      if (s.group?.id === groupId) {
+        affected.add(s.id);
+        for (const h of s.holes) affected.add(h.targetId);
+      }
   for (const s of model) {
     const old = previous.get(s.id);
     if (s.type === 'component' && s !== old) {
@@ -1852,6 +2038,10 @@ function applyLibrarySection(section) {
     const next = applyObjectBatch(project.objects, batch).objects;
     checkpoint();
     project.objects = next;
+    for (const object of batch) {
+      rememberSweep(object);
+      rememberPlate(object);
+    }
     setDrawing(false);
     if (ui.selected) fillForm(project.objects.find((s) => s.id === ui.selected));
     render();
@@ -1867,6 +2057,7 @@ function applyLibrarySection(section) {
     $('profile').value = 'custom';
     updateForm();
     syncMaterialPanel();
+    rememberSweep({ ...readForm(), ...ui.draftMaterial });
   }
   $('status').textContent = `${section.name} · version ${section.revision}`;
 }
@@ -1906,11 +2097,28 @@ materialUI = new MaterialUI($('material-panel'), {
       project.objects = project.objects.map((s) =>
         ids.has(s.id) ? { ...s, ...structuredClone(patch) } : s,
       );
+      targets.forEach((source) => {
+        rememberSweep({ ...source, ...patch });
+        rememberPlate({ ...source, ...patch });
+      });
       render();
     } else {
       ui.draftMaterial = { ...ui.draftMaterial, ...structuredClone(patch) };
       if ('material' in patch) ui.draftMaterialAutomatic = false;
       syncMaterialPanel();
+      if (tools.drawing && !tools.operation) rememberSweep({ ...readForm(), ...ui.draftMaterial });
+      if (
+        tools.operation?.mode === 'plateCreate' &&
+        !tools.operation.cutTargets &&
+        !tools.operation.lineCut
+      )
+        rememberPlate({
+          type: 'plate',
+          thickness: +$('plate-thickness').value,
+          side: $('plate-side').value,
+          contourOffset: +$('plate-contour-offset').value,
+          ...ui.draftMaterial,
+        });
     }
   },
 });
@@ -2111,7 +2319,15 @@ function hoverInspectorReference(id) {
 }
 function updateObjectHover(e) {
   const fit = tools.operation?.mode === 'fit';
-  if (e.buttons || ui.marquee || (tools.drawing && !fit) || (tools.operation && !fit)) {
+  const propertyCopy = ['sweepProperties', 'plateProperties', 'componentProperties'].includes(
+    tools.operation?.mode,
+  );
+  if (
+    e.buttons ||
+    ui.marquee ||
+    (tools.drawing && !fit) ||
+    (tools.operation && !fit && !propertyCopy)
+  ) {
     objectFeedback.setHover([], 'canvas');
     return;
   }
@@ -2130,7 +2346,15 @@ function updateObjectHover(e) {
       : null;
   const id = previewHit?.object.userData.id ?? selectionHit();
   const source = objectFeedback.sources.get(id) || renderedById.get(id)?.source;
-  const eligible = isPhysical(source) && (!fit || (source.type ?? 'sweep') === 'sweep');
+  const eligible =
+    isPhysical(source) &&
+    (!fit || (source.type ?? 'sweep') === 'sweep') &&
+    (!propertyCopy ||
+      (tools.operation.mode === 'componentProperties'
+        ? project.objects.find((s) => s.id === source?.generatedBy)?.kind === tools.operation.kind
+        : tools.operation.mode === 'plateProperties'
+          ? editablePlate(source)
+          : editableSweep(source)));
   objectFeedback.setHover(
     eligible ? [id] : [],
     'canvas',
@@ -2140,26 +2364,77 @@ function updateObjectHover(e) {
     renderer.domElement.style.cursor = eligible ? 'pointer' : 'default';
 }
 componentUI = createComponentUI({
+  beginCopy: (kind) => {
+    inspector.finish();
+    setDrawing(false);
+    tools.operation = { mode: 'componentProperties', kind };
+    renderer.domElement.style.cursor = 'crosshair';
+    renderer.domElement.focus({ preventScroll: true });
+    $('status').textContent =
+      'Kopiera kopplingsegenskaper · Välj målkopplingar, sedan Modifiera eller Enter';
+  },
+  commitCopy: (batch) => {
+    const previous = new Map(project.objects.map((s) => [s.id, s]));
+    const next = applyObjectBatch(project.objects, batch).objects;
+    for (const object of next)
+      if (isPhysical(object) && object !== previous.get(object.id))
+        displayGeometry(object, next, 'exact').dispose();
+    checkpoint();
+    project.objects = next;
+    setDrawing(false);
+    setSelection(batch.map((s) => s.id));
+    render();
+    $('status').textContent =
+      `Egenskaper kopierade till ${batch.length} koppling${batch.length === 1 ? '' : 'ar'} · Ångra återställer ändringen`;
+  },
   getObjects: () => project.objects,
   getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
-  selectSource: (id) => setSelection([id]),
-  begin: (picking) => {
+  getFastenerSpecs: () => fastenerUI.records,
+  openFastenerLibrary: (onClose) => {
+    fastenerUI.library.addEventListener('close', onClose, { once: true });
+    fastenerUI.openLibrary({ preserveOperation: true });
+  },
+  selectSource: (id) => setSelection(id ? [id] : []),
+  begin: (picking, kind) => {
     setDrawing(true);
-    tools.operation = { mode: 'fit', picking };
+    tools.operation = { mode: 'fit', picking, kind };
     renderer.domElement.style.cursor = picking ? 'crosshair' : 'default';
     syncOperationUI();
     renderer.domElement.focus({ preventScroll: true });
     render({ selectionOnly: true });
-    $('status').textContent = 'Fit · Klicka första sweepen, sedan andra · Escape avbryter';
+    $('status').textContent =
+      kind === 'beamSplice'
+        ? picking
+          ? 'Balkskarv · Välj första och sedan andra balkänden · Escape avbryter'
+          : 'Balkskarv · Kontrollera förhandsvisningen och klicka på Skapa'
+        : kind === 'boltedEndplate'
+          ? picking
+            ? 'Ändplåtskoppling · Välj pelare, sedan balkände · Escape avbryter'
+            : 'Ändplåtskoppling · Kontrollera förhandsvisningen och klicka på Skapa'
+          : kind === 'endplate'
+            ? picking
+              ? 'Ändplåt · Klicka nära objektets ände · Escape avbryter'
+              : 'Ändplåt · Kontrollera valen och klicka på Skapa ändplåt'
+            : kind === 'stiffener'
+              ? picking
+                ? 'Avstyvning · Välj profil, sedan plats längs profilen · Escape avbryter'
+                : 'Avstyvning · Kontrollera valen och klicka på Skapa avstyvning'
+              : kind === 'baseplate'
+                ? picking
+                  ? 'Fotplåt · Klicka på pelaren · Escape avbryter'
+                  : 'Fotplåt · Kontrollera valen och klicka på Skapa fotplåt'
+                : 'Fit · Klicka första sweepen, sedan andra · Escape avbryter';
   },
   showInspector: () => inspector.show('properties'),
   highlight: highlightFitReferences,
   hoverReference: hoverInspectorReference,
   finish: () => {
     const fitActive = tools.operation?.mode === 'fit';
+    const copyActive = tools.operation?.mode === 'componentProperties';
     inspector?.finish();
     setDrawing(false);
     if (fitActive) $('status').textContent = 'Fit avbruten';
+    if (copyActive) $('status').textContent = 'Egenskapskopiering avbruten';
   },
   commit: (draft, mode) => {
     clearPreview();
@@ -2174,7 +2449,13 @@ componentUI = createComponentUI({
       draft.id && project.objects.some((s) => s.id === draft.id)
         ? applyObjectBatch(project.objects, [draft]).objects
         : updateAutomaticJoints(project.objects, [...project.objects, draft]);
-    for (const id of draft.targets)
+    for (const id of new Set([
+      ...draft.targets,
+      ...next.filter((s) => s.generatedBy === draft.id && s.type === 'plate').map((s) => s.id),
+      ...next
+        .filter((s) => s.generatedBy === draft.id)
+        .flatMap((s) => (s.holes || []).map((h) => h.targetId)),
+    ]))
       displayGeometry(
         next.find((s) => s.id === id),
         next,
@@ -2183,9 +2464,84 @@ componentUI = createComponentUI({
     checkpoint();
     project.objects = next;
     setSelection([draft.id]);
-    $('status').textContent = 'Fit sparad · klicka på kopplingssymbolen för att modifiera';
+    $('status').textContent =
+      `${draft.kind === 'beamSplice' ? 'Balkskarv' : draft.kind === 'boltedEndplate' ? 'Ändplåtskoppling' : draft.kind === 'endplate' ? 'Ändplåt' : draft.kind === 'stiffener' ? 'Avstyvning' : draft.kind === 'baseplate' ? 'Fotplåt' : 'Fit'} sparad · klicka på kopplingssymbolen för att modifiera`;
   },
 });
+function createPropertyCopyUI(family) {
+  const plate = family === 'plate';
+  const editable = plate ? editablePlate : editableSweep;
+  const copyProperties = plate ? copyPlateProperties : copySweepProperties;
+  const remember = plate ? rememberPlate : rememberSweep;
+  const mode = plate ? 'plateProperties' : 'sweepProperties';
+  const noun = plate ? 'plåt' : 'sweep';
+  return createObjectPropertyUI({
+    schema: objectInspectorSchemas[family],
+    getState: () => ({
+      selected: project.objects.filter((s) => ui.selectedIds.has(s.id)),
+      operation: tools.operation,
+      drawing: tools.drawing,
+    }),
+    start: (groups) => {
+      inspector.finish();
+      const source = project.objects.find((s) => s.id === ui.selected);
+      if (!editable(source)) throw new Error(`Markera en ${noun} att kopiera från.`);
+      setDrawing(false);
+      tools.operation = {
+        mode,
+        source: structuredClone(source),
+        groups,
+        targetIds: [],
+      };
+      render({ selectionOnly: true });
+      renderer.domElement.style.cursor = 'crosshair';
+      renderer.domElement.focus({ preventScroll: true });
+      $('status').textContent =
+        'Kopiera egenskaper · Klicka på målobjekt, sedan Modifiera eller Enter';
+    },
+    toggle: (id) => {
+      const operation = tools.operation;
+      if (id === operation.source.id) throw new Error('Välj ett annat mål än källobjektet.');
+      const ids = new Set(operation.targetIds);
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      operation.targetIds = [...ids];
+      frameGate.invalidate();
+    },
+    apply: (groups) => {
+      const operation = tools.operation;
+      if (operation?.mode !== mode || !operation.targetIds.length) return;
+      if (!groups.length) throw new Error('Välj minst en egenskap.');
+      const previous = new Map(project.objects.map((s) => [s.id, s]));
+      const batch = operation.targetIds.map((id) =>
+        copyProperties(operation.source, previous.get(id), groups),
+      );
+      const error = batch.map(validateObject).find(Boolean);
+      if (error) throw new Error(error);
+      const next = applyObjectBatch(project.objects, batch).objects;
+      for (const object of next)
+        if (isPhysical(object) && object !== previous.get(object.id))
+          displayGeometry(object, next, 'exact').dispose();
+      checkpoint();
+      project.objects = next;
+      const count = batch.length;
+      remember(operation.source);
+      setDrawing(false);
+      setSelection(batch.map((s) => s.id));
+      render();
+      $('status').textContent =
+        `Egenskaper kopierade till ${count} ${noun}${count === 1 ? '' : plate ? 'ar' : 's'} · Ångra återställer ändringen`;
+    },
+    cancel: () => {
+      setDrawing(false);
+      render({ selectionOnly: true });
+    },
+    highlight: highlightFitReferences,
+  });
+}
+sweepPropertyUI = createPropertyCopyUI('sweep');
+platePropertyUI = createPropertyCopyUI('plate');
+restoreSweepDefaults();
 createGroupedToolbox(document.querySelector('.toolbox'));
 updateForm();
 render();

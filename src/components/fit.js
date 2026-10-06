@@ -1,5 +1,18 @@
+import { validateBeamSplice, resolveBeamSplice, beamSpliceMembers } from './beam-splice.js';
+import {
+  validateBoltedEndplate,
+  resolveBoltedEndplate,
+  boltedEndplateMembers,
+} from './bolted-endplate.js';
+import { validateEndplate, resolveEndplate, endplateMembers } from './endplate.js';
+import { validateStiffener, resolveStiffener, stiffenerMembers } from './stiffener.js';
 import * as THREE from 'three';
-import { sweepFrame, sweepCorners } from '../sweep.js';
+import { validateBaseplate, resolveBaseplate, baseplateMembers } from './baseplate.js';
+import { nextNumber } from '../identity-number.js';
+import { plateType } from '../model/object-types/plate-type.js';
+import { fastenerType } from '../fasteners/object-type.js';
+import { sweepFrame, sweepCorners, profileAnchor } from '../sweep.js';
+import { roundProfile } from '../round-profile.js';
 import { lineCutGeometry, lineCutTool, lineCutFrame } from '../line-cut.js';
 
 export const isComponent = (s) => s?.type === 'component';
@@ -53,7 +66,26 @@ export function resolveFit(s, model) {
   const tb = (cosine * delta.dot(fa.axis) - delta.dot(fb.axis)) / denominator;
   const pa = fa.start.clone().addScaledVector(fa.axis, ta),
     pb = fb.start.clone().addScaledVector(fb.axis, tb);
-  if (pa.distanceTo(pb) > 1) throw new Error('Sweep-axlarna måste mötas i samma plan (inom 1 mm).');
+  // Report separation perpendicular to both axes without blocking a theoretical fit.
+  const transverse = fa.axis.clone().cross(fb.axis).normalize();
+  const intervals = [a, b].map((source, index) => {
+    const round = roundProfile(source);
+    if (round) {
+      const frame = index === 0 ? fa : fb;
+      const [ax, ay] = profileAnchor(source);
+      const center = frame.start
+        .clone()
+        .addScaledVector(frame.x, -ax)
+        .addScaledVector(frame.y, -ay)
+        .sub(pa)
+        .dot(transverse);
+      return [center - round.outer, center + round.outer];
+    }
+    const projections = sweepCorners(source).map((p) => vec(p).sub(pa).dot(transverse));
+    return [Math.min(...projections), Math.max(...projections)];
+  });
+  const profileOverlap =
+    Math.min(intervals[0][1], intervals[1][1]) - Math.max(intervals[0][0], intervals[1][0]) > 1e-6;
   const junction = pa.clone().add(pb).multiplyScalar(0.5);
   const keepA = vec(a[s.endA === 'start' ? 'end' : 'start']);
   const keepB = vec(b[s.endB === 'start' ? 'end' : 'start']);
@@ -80,10 +112,8 @@ export function resolveFit(s, model) {
         const sign = direction > 0 ? -1 : 1;
         const surface = sign < 0 ? Math.min(...projections) : Math.max(...projections);
         const normal = axis.clone().multiplyScalar(sign);
-        const origin = junction
-          .clone()
-          .addScaledVector(axis, surface)
-          .addScaledVector(normal, s.gap);
+        // A side belongs to the first axis, not the midpoint between skew axes.
+        const origin = pa.clone().addScaledVector(axis, surface).addScaledVector(normal, s.gap);
         const distance = origin.clone().sub(keepB).dot(axis) / direction;
         return { origin, normal, distance };
       })
@@ -112,7 +142,13 @@ export function resolveFit(s, model) {
         'Kapplanet ligger förbi hela sweepen. Välj den andra änden eller ändra läget.',
       );
   }
-  return { ...s, targets: cuts.flatMap((c) => c.targets), cuts, position: junction.toArray() };
+  return {
+    ...s,
+    targets: cuts.flatMap((c) => c.targets),
+    cuts,
+    position: junction.toArray(),
+    profileOverlap,
+  };
 }
 /** Extend only the connected end far enough for a complete planar cut across the profile. */
 export function fitEnvelope(source, cuts) {
@@ -140,32 +176,85 @@ export function fitEnvelope(source, cuts) {
   }
   return result;
 }
+export function resolveComponent(s, model) {
+  if (s.kind === 'beamSplice') return resolveBeamSplice(s, model);
+  if (s.kind === 'fit') return resolveFit(s, model);
+  if (s.kind === 'baseplate') return resolveBaseplate(s, model);
+  if (s.kind === 'stiffener') return resolveStiffener(s, model);
+  if (s.kind === 'endplate') return resolveEndplate(s, model);
+  if (s.kind === 'boltedEndplate') return resolveBoltedEndplate(s, model);
+  throw new Error('Okänd koppling.');
+}
 export function updateComponents(before, after) {
   const previous = new Map(before.map((s) => [s.id, s]));
   const current = new Map(after.map((s) => [s.id, s]));
-  return after
-    .filter((s) => !isComponent(s) || s.references.every((id) => current.has(id)))
+  const result = after
+    .filter(
+      (s) => !s.generatedBy && (!isComponent(s) || s.references.every((id) => current.has(id))),
+    )
     .map((s) => {
       if (!isComponent(s)) return s;
       if (
+        !['endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind) &&
         previous.get(s.id) === s &&
         s.cuts &&
         s.references.every((id) => previous.get(id) === current.get(id))
       )
         return s;
-      return resolveFit(s, after);
+      return resolveComponent(s, after);
     });
+  for (const component of result.filter(
+    (s) =>
+      isComponent(s) &&
+      ['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind),
+  )) {
+    const members =
+      component.kind === 'beamSplice'
+        ? beamSpliceMembers(component, after)
+        : component.kind === 'boltedEndplate'
+          ? boltedEndplateMembers(component, after)
+          : component.kind === 'endplate'
+            ? endplateMembers(component, after)
+            : component.kind === 'stiffener'
+              ? stiffenerMembers(component, after)
+              : baseplateMembers(component, after);
+    for (const member of members) {
+      result.push(
+        member.prefix && member.number
+          ? member
+          : {
+              ...member,
+              ...nextNumber(
+                member.prefix || (member.type === 'plate' ? plateType.prefix : fastenerType.prefix),
+                result,
+              ),
+            },
+      );
+    }
+  }
+  return result;
 }
 export const componentType = {
   id: 'component',
-  label: 'Komponent · Fit',
+  label: 'Koppling',
   prefix: 'K',
   family: 'component',
   inspector: 'component',
   cut: true,
   physical: false,
-  validate: validateFit,
-  geometry: (s) => lineCutGeometry(s.cuts[0]),
+  validate: (s) =>
+    s.kind === 'beamSplice'
+      ? validateBeamSplice(s)
+      : s.kind === 'boltedEndplate'
+        ? validateBoltedEndplate(s)
+        : s.kind === 'endplate'
+          ? validateEndplate(s)
+          : s.kind === 'stiffener'
+            ? validateStiffener(s)
+            : s.kind === 'baseplate'
+              ? validateBaseplate(s)
+              : validateFit(s),
+  geometry: (s) => (s.cuts.length ? lineCutGeometry(s.cuts[0]) : new THREE.BufferGeometry()),
   cutGeometry: (s, geometry, target) => {
     const cut = s.cuts.find((c) => c.targets.includes(target.id));
     return cut ? lineCutTool(cut, geometry) : null;

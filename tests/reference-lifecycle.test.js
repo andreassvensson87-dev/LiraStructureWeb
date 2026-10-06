@@ -9,6 +9,15 @@ import { createReferenceFixture } from '../scripts/ifc-memory-fixture.js';
 function referenceFixture() {
   const controls = new Map();
   const references = Object.assign(Object.create(ReferenceModels.prototype), {
+    models: [],
+    folders: ['Standard'],
+    selectedId: null,
+    showList() {
+      this.$('[data-model]').hidden = true;
+    },
+    showModel(id) {
+      this.selectedId = id;
+    },
     parts: [],
     pending: [],
     group: new THREE.Group(),
@@ -57,7 +66,11 @@ test('removing during import terminates the worker and disposes current and pend
       current = part(),
       pending = part();
     references.parts = [current];
-    references.group.add(current.mesh);
+    const group = new THREE.Group();
+    group.add(current.mesh);
+    references.models = [{ id: 'existing', group, parts: [current] }];
+    references.selectedId = 'existing';
+    references.group.add(group);
     await references.load({ name: 'replacement.ifc', arrayBuffer: async () => new ArrayBuffer(8) });
     references.pending.push(pending);
     references.remove();
@@ -137,4 +150,80 @@ test('synthetic load fixture imports boxes and circular extrusions with unique p
   } finally {
     api.CloseModel(model);
   }
+});
+
+test('multiple reference imports coexist and removing one preserves the other resources', async () => {
+  await fakeWorkers(async (workers) => {
+    const references = referenceFixture();
+    for (const name of ['first.ifc', 'second.ifc']) {
+      await references.load({ name, arrayBuffer: async () => new ArrayBuffer(8) });
+      references.pending.push(part());
+      workers.at(-1).onmessage({ data: { type: 'done', count: 1, schema: 'IFC4' } });
+    }
+    assert.equal(references.models.length, 2);
+    assert.equal(references.parts.length, 2);
+    const [first, second] = references.models;
+    references.remove(first.id);
+    assert.deepEqual(first.parts[0].disposed, { geometry: 1, material: 1 });
+    assert.deepEqual(second.parts[0].disposed, { geometry: 0, material: 0 });
+    assert.deepEqual(references.parts, second.parts);
+    assert.equal(references.group.children[0], second.group);
+    references.clear();
+  });
+});
+
+test('replacement disposes only its target after successful import and preserves its group and title', async () => {
+  await fakeWorkers(async (workers) => {
+    const references = referenceFixture();
+    await references.load({ name: 'old.ifc', arrayBuffer: async () => new ArrayBuffer(8) });
+    references.pending.push(part());
+    workers[0].onmessage({ data: { type: 'done', schema: 'IFC4' } });
+    const previous = references.models[0];
+    previous.folder = 'Building A';
+    previous.title = 'Custom title';
+    previous.group.visible = false;
+    previous.transparent = true;
+    previous.corners = false;
+    await references.load(
+      { name: 'new.ifc', arrayBuffer: async () => new ArrayBuffer(8) },
+      { replaceId: previous.id },
+    );
+    assert.equal(references.models[0], previous);
+    references.pending.push(part());
+    workers[1].onmessage({ data: { type: 'done', schema: 'IFC4' } });
+    const model = references.models[0];
+    assert.equal(references.models.length, 1);
+    assert.equal(model.id, previous.id);
+    assert.equal(model.title, 'Custom title');
+    assert.equal(model.folder, 'Building A');
+    assert.equal(model.fileName, 'new.ifc');
+    assert.equal(model.group.visible, false);
+    assert.equal(model.transparent, true);
+    assert.equal(model.parts[0].mesh.material.opacity, 0.3);
+    assert.equal(model.corners, false);
+    assert.deepEqual(previous.parts[0].disposed, { geometry: 1, material: 1 });
+    references.clear();
+  });
+});
+
+test('hidden reference models do not contribute to scene bounds or snapping', () => {
+  const references = referenceFixture(),
+    shown = part(),
+    hidden = part();
+  shown.mesh.position.set(10, 0, 0);
+  hidden.mesh.position.set(1000, 0, 0);
+  for (const [p, visible] of [
+    [shown, true],
+    [hidden, false],
+  ]) {
+    const group = new THREE.Group();
+    group.add(p.mesh);
+    group.visible = visible;
+    references.models.push({ group, parts: [p], corners: !visible, edges: !visible });
+    references.group.add(group);
+  }
+  assert.equal(references.bounds().max.x, 10.5);
+  assert.deepEqual(references.candidates({}), []);
+  references.syncParts();
+  references.clear();
 });

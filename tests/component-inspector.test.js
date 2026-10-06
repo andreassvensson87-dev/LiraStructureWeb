@@ -42,6 +42,22 @@ test('component inspector resolves a detached draft and leaves saved parameters 
   assert.throws(() => resolveComponentDraft(source, { width: 100 }, [a, b]), /parameter/);
   assert.deepEqual(source, saved);
 });
+test('a theoretical Fit reports separation without blocking the editable draft or numbering', async () => {
+  const { numberParts, partStatus } = await import('../src/part-marks.js');
+  const separated = { ...b, start: [0, -1000, 300], end: [0, 0, 300] };
+  const draft = resolveComponentDraft(source, { gap: 10 }, [a, separated]);
+  assert.equal(draft.profileOverlap, false);
+  assert.deepEqual(componentDefinition('fit').notices(draft), ['Ingen gemensam kontaktyta']);
+  assert.deepEqual(componentDefinition('fit').notices(source), []);
+  const model = [a, separated, draft];
+  const numbering = numberParts(model);
+  assert.equal(partStatus(a, model, numbering).valid, true);
+  assert.equal(partStatus(separated, model, numbering).valid, true);
+  const reconnected = resolveComponentDraft(draft, {}, [a, b]);
+  assert.equal(reconnected.profileOverlap, true);
+  assert.deepEqual(componentDefinition('fit').notices(reconnected), []);
+  assert.equal(source.profileOverlap, true);
+});
 test('a connection has a non-material scene placeholder instead of a cutting plane display', () => {
   const object = createObjectMesh(source, { model: [a, b, source], selectedIds: new Set() });
   assert.ok(object.isGroup);

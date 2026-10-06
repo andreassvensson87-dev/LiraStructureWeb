@@ -1,4 +1,5 @@
 import { inputWheelGesture } from './input-device.js';
+import { revisionExampleBlock } from './frame-revision-example.js';
 import { customAttributes } from './drawing-attributes.js';
 import { copyLibraryItem, libraryUsage } from './frame-library.js';
 import { rectangleSelection, frameSelectionShapes } from './frame-selection.js';
@@ -66,7 +67,7 @@ export class FrameEditor {
     this.dirty = false;
     this.dialog = document.createElement('dialog');
     this.dialog.id = 'frame-editor';
-    this.dialog.innerHTML = `<header><strong>Ritningsramseditor <small>1:1 · mm</small></strong><div><button data-action="new">Nytt blad</button><button data-action="open">Öppna / hantera…</button><button data-action="save">Spara</button><button data-action="saveAs">Spara som…</button><button data-action="settings" aria-label="Inställningar för rameditorn">⚙</button><button data-action="close" aria-label="Stäng ritningsramseditorn">×</button></div></header>
+    this.dialog.innerHTML = `<header><strong>Ritningsramseditor <small>1:1 · mm</small></strong><div><button data-action="new">Nytt blad</button><button data-action="revisionExample">Exempelblock · revision</button><button data-action="importDXF">Importera DXF…</button><button data-action="open">Öppna / hantera…</button><button data-action="save">Spara</button><button data-action="saveAs">Spara som…</button><button data-action="settings" aria-label="Inställningar för rameditorn">⚙</button><button data-action="close" aria-label="Stäng ritningsramseditorn">×</button></div></header>
   <div class="fe-modes"><button data-mode="block" aria-pressed="true">Ramblock</button><button data-mode="layout" aria-pressed="false">Layouter</button><span data-ui="modeHint">Rita ett återanvändbart block i mm · välj egen insättningspunkt</span></div><div class="fe-bar"><select hidden data-ui="library" aria-label="Sparade ritningsramar"><option value="">Sparade ritningsramar</option></select><input data-ui="name" aria-label="Ramnamn" readonly><button data-action="undo" title="Ångra · Ctrl Z">↶</button><button data-action="redo" title="Gör om · Ctrl Shift Z">↷</button><button data-action="fit">Visa blad</button><label>Förhandsvisa attribut<select data-ui="preview"><option value="">Attributnamn</option></select></label></div>
   <div class="fe-body"><nav aria-label="Ramverktyg">${[
     ['select', '↖', 'Markera'],
@@ -382,6 +383,8 @@ export class FrameEditor {
   }
   modeUI() {
     const layout = this.mode === 'layout';
+    this.dialog.querySelector('[data-action="revisionExample"]').hidden = layout;
+    this.dialog.querySelector('[data-action="importDXF"]').hidden = layout;
     for (const b of this.dialog.querySelectorAll('[data-mode]'))
       b.setAttribute('aria-pressed', String(b.dataset.mode === this.mode));
     this.$('modeHint').textContent = layout
@@ -864,6 +867,21 @@ export class FrameEditor {
 
     if (name === 'close') {
       this.dialog.close();
+      return;
+    }
+    if (name === 'importDXF') {
+      import('./frame-dxf-dialog.js')
+        .then(({ showFrameDXFImport }) => showFrameDXFImport(this))
+        .catch((error) => this.status(error.message));
+      return;
+    }
+    if (name === 'revisionExample') {
+      if (this.canDiscard()) {
+        this.frame = revisionExampleBlock();
+        this.loaded();
+        this.dirty = true;
+        this.sync();
+      }
       return;
     }
     if (name === 'new') {

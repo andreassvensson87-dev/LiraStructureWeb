@@ -1,11 +1,21 @@
 import { transformSpan } from './holes.js';
 import * as THREE from 'three';
+import { fastenerAccessories, validateAccessories } from './accessories.js';
+import { validateAssembly } from './assembly.js';
+import { validateFastenerGroup } from './group-data.js';
 import { validateFastenerSpec } from './library.js';
 import { fastenerGeometry, fastenerFrame } from './geometry.js';
 export const isFastener = (s) => s?.type === 'fastener';
 export function validateFastener(s) {
   try {
     validateFastenerSpec(s.spec);
+    validateAssembly(s);
+    validateFastenerGroup(s.group);
+    if (s.lengthOptions != null) {
+      if (!Array.isArray(s.lengthOptions) || s.lengthOptions.length > 1000)
+        throw new Error('Ogiltig längdserie.');
+      s.lengthOptions.forEach(validateFastenerSpec);
+    }
     if (
       [s.start, s.end].some(
         (p) =>
@@ -29,6 +39,7 @@ export function validateFastener(s) {
     )
       throw new Error('Ogiltig skruvorientering.');
     if (
+      s.accessories == null &&
       s.spec.kind === 'bolt' &&
       (!Number.isFinite(s.nutOffset) ||
         s.nutOffset < 0 ||
@@ -36,7 +47,7 @@ export function validateFastener(s) {
     )
       throw new Error('Muttern måste ligga inom skruvens längd.');
     if (!Array.isArray(s.holes) || s.holes.length > 100) throw new Error('Ogiltig hållista.');
-    if (s.washers != null) {
+    if (s.accessories == null && s.washers != null) {
       if (typeof s.washers.head !== 'boolean' || typeof s.washers.nut !== 'boolean')
         throw new Error('Ogiltiga brickval.');
       if (s.washers.head || s.washers.nut) {
@@ -60,6 +71,15 @@ export function validateFastener(s) {
           throw new Error('Brickorna och muttern överlappar. Öka mutterläget.');
       }
     }
+    validateAccessories(s);
+    if (
+      s.startAllowance != null &&
+      (!Number.isFinite(s.startAllowance) ||
+        s.startAllowance < 0 ||
+        s.startAllowance >= length ||
+        s.spec.kind !== 'rod')
+    )
+      throw new Error('Utstick före första ytan måste ligga inom gängstångens längd.');
     if (
       s.insertion &&
       (![s.insertion.start, s.insertion.direction].every(
@@ -158,8 +178,16 @@ export const fastenerType = {
   partShape: (s) => ({
     type: 'fastener',
     spec: s.spec,
-    nutOffset: s.nutOffset,
-    washers: { head: !!s.washers?.head, nut: !!s.washers?.nut },
+    ...(s.accessories == null
+      ? {
+          nutOffset: s.nutOffset,
+          washers: { head: !!s.washers?.head, nut: !!s.washers?.nut },
+        }
+      : {
+          accessories: fastenerAccessories(s).sort(
+            (a, b) => a.offset - b.offset || a.kind.localeCompare(b.kind),
+          ),
+        }),
   }),
   translate: (s, d) => ({
     ...s,

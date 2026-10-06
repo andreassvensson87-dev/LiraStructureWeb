@@ -1,3 +1,4 @@
+import { singlePartPDFPage, gaPDFPage, createDrawingPDF } from '../drawing-pdf.js';
 import { DrawingManager } from '../drawing-manager.js';
 import { PlanView } from '../plan-view.js';
 import { SinglePartSheet } from '../single-part-sheet.js';
@@ -59,6 +60,41 @@ export function createDrawingController({
       project.parts = parts;
       project.drawings = drawings;
       onChange();
+    },
+    exportPDF: async (records) => {
+      finishEditing();
+      stopTool();
+      const pages = [];
+      for (let record of records) {
+        if (record.type === 'AS') {
+          record = resolveAssemblyDrawing(record, project);
+          if (!record) throw Error('Assemblyritningens källa saknas.');
+        } else if (record.type === 'SP') {
+          const source = project.objects.find(
+            (o) => project.parts.assignments[o.id]?.key === record.partKey,
+          );
+          if (!source) throw Error('Detaljritningens källa saknas.');
+          record = { ...record, sourceId: source.id };
+        }
+        const editor = ['SP', 'AS'].includes(record.type) ? singleSheet : planView;
+        editor.dialog.classList.add('drawing-pdf-render');
+        try {
+          editor.openRecord(record, { save: () => {}, review: () => {} });
+          await document.fonts.ready;
+          await new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          );
+          pages.push(editor === singleSheet ? singlePartPDFPage(editor) : gaPDFPage(editor));
+        } finally {
+          if (editor.dialog.open)
+            await new Promise((resolve) => {
+              editor.dialog.addEventListener('close', resolve, { once: true });
+              editor.dialog.close();
+            });
+          editor.dialog.classList.remove('drawing-pdf-render');
+        }
+      }
+      return createDrawingPDF(pages);
     },
     open: (record) => {
       finishEditing();

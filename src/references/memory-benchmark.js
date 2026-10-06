@@ -74,14 +74,14 @@ export function installReferenceMemoryBenchmark({
       require(!references.pending?.length, 'Finished import retained pending meshes');
     };
     const load = async (file, count) => {
-      await references.load(file);
+      await references.load(file, { replaceId: references.selectedId });
       await waitForFinish();
       require(references.parts.length === count &&
         references.$('[data-name]').textContent ===
           file.name, `Import failed: ${references.$('[role=status]').textContent}`);
     };
     const startPending = async (file) => {
-      await references.load(file);
+      await references.load(file, { replaceId: references.selectedId });
       const worker = references.worker;
       require(worker, 'Worker was not created');
       await new Promise((resolve, reject) => {
@@ -170,7 +170,7 @@ export function installReferenceMemoryBenchmark({
         );
         sample(`loaded-${cycle}`);
         await click('[data-visible]');
-        require(!references.group.visible, 'Hidden reference remained visible');
+        require(!references.selected().group.visible, 'Hidden reference remained visible');
         require(references.candidates({}).length === 0, 'Hidden reference remained snap-enabled');
         sample(`hidden-${cycle}`);
         await click('[data-visible]');

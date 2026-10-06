@@ -13,6 +13,7 @@ export function createSweepForm({
   updateTypedLength,
   updatePointer,
   clearPreview,
+  remember,
 }) {
   const $ = (id) => document.getElementById(id),
     fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -117,6 +118,7 @@ export function createSweepForm({
       ],
       v = { top: 'uppe', center: 'mitten', bottom: 'nere' }[ui.placement.verticalAlignment];
     $('placement-label').textContent = `${h} · ${v}`;
+    if ($('sweep-placement-summary')) $('sweep-placement-summary').textContent = `${h} · ${v}`;
   }
   document.querySelectorAll('[data-placement-h]').forEach(
     (b) =>
@@ -127,7 +129,10 @@ export function createSweepForm({
         };
         updateForm();
         if (ui.selected) save(readForm());
-        else if (tools.drawing && tools.first) {
+        else {
+          remember?.();
+        }
+        if (tools.drawing && tools.first) {
           if ($('draw-length').value.trim()) updateTypedLength();
           else if (tools.lastPointer) updatePointer(tools.lastPointer);
         }
@@ -136,6 +141,7 @@ export function createSweepForm({
   $('form').addEventListener('input', () => {
     clearPreview();
     updateForm();
+    remember?.();
   });
 
   return { readForm, fillForm, updateForm };

@@ -568,3 +568,28 @@
 .fe-library-menu::backdrop {
   background: transparent;
 }
+
+.fe-dxf-dialog form {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+.fe-dxf-dialog form label {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.fe-dxf-dialog input,
+.fe-dxf-dialog select {
+  min-width: 0;
+  width: 100%;
+}
+.fe-dxf-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.fe-dxf-dialog [role='status']:empty {
+  display: none;
+}

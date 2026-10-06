@@ -64,7 +64,13 @@ export function createConnectionMarkers(host, select) {
         entry.source = s;
         entry.button.setAttribute('aria-label', `Koppling ${s.name || 'Fit'} · visa egenskaper`);
         entry.button.title = `${s.name || 'Fit'} · klicka för att modifiera`;
-        entry.button.setAttribute('aria-pressed', String(selectedIds.has(s.id)));
+        entry.button.setAttribute(
+          'aria-pressed',
+          String(
+            selectedIds.has(s.id) ||
+              objects.some((member) => member.generatedBy === s.id && selectedIds.has(member.id)),
+          ),
+        );
       }
     },
     update(camera) {

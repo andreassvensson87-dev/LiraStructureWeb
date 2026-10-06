@@ -1,12 +1,25 @@
 /** Fixed group and tool positions; existing buttons retain their handlers and state. */
 export const TOOL_GROUPS = [
   { id: 'selection', label: 'Markera', icon: 'select', tools: ['select', 'box-select'] },
-  { id: 'create', label: 'Skapa', icon: 'draw', tools: ['draw', 'plate', 'fastener'] },
+  {
+    id: 'create',
+    label: 'Skapa',
+    icon: 'draw',
+    tools: ['draw', 'plate', 'fastener', 'fastener-group'],
+  },
   {
     id: 'connections',
     label: 'Kopplingar',
     icon: 'component-fit',
-    tools: ['component-fit', 'component-library'],
+    tools: [
+      'component-fit',
+      'component-baseplate',
+      'component-stiffener',
+      'component-endplate',
+      'component-bolted-endplate',
+      'component-beam-splice',
+      'component-library',
+    ],
   },
   { id: 'cut', label: 'Bearbeta', icon: 'polygoncut', tools: ['polygoncut', 'linecut'] },
   { id: 'transform', label: 'Ändra', icon: 'move', tools: ['move', 'copy', 'rotate'] },

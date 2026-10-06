@@ -30,8 +30,21 @@ export function applyObjectBatch(
       ids: batch.map((s) => s.id),
     };
   }
+  const batchIds = new Set(batch.map((s) => s.id));
+  batch = batch.filter((s) => !s.generatedBy);
+  for (const s of objects)
+    if (
+      ['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind) &&
+      !batchIds.has(s.id) &&
+      s.references.every((id) => batchIds.has(id))
+    )
+      batch.push(s);
   const copies = [];
   const ids = new Map(batch.map((s) => [s.id, newId()]));
+  for (const s of objects)
+    if (s.generatedBy && ids.has(s.generatedBy))
+      ids.set(s.id, `${ids.get(s.generatedBy)}${s.id.slice(s.generatedBy.length)}`);
+  for (const s of batch) if (s.group && !ids.has(s.group.id)) ids.set(s.group.id, newId());
   for (const s of batch) {
     const object = {
       ...structuredClone(s),

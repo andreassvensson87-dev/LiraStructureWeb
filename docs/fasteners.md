@@ -8,6 +8,35 @@ och lagring. Nya bibliotek kan läggas till med grupp, namn, beskrivning och
 Modulen finns i `src/fasteners/` och ingår i programmets huvudgren.
 Bibliotek, geometri, placering och relationsregler är samlade i denna modul.
 
+## Gemensam grund för stålförband
+
+Biblioteket stöder träskruv, skruv med mutter, gängstång utan huvud och betongskruv.
+Skruv med sexkantshuvud kan klassas som ISO 4014 eller ISO 4017. Gänglängd från
+spetsen och valfri stigning lagras separat: ISO 4014 behöver en ogängad skaftdel,
+ISO 4017 och gängstänger är helgängade. Hållfasthetsklass, ytbehandling,
+tillverkare och artikelnummer kan sparas och tillverkare/artikel ingår i sökningen.
+Måtten anges av användaren; standardvalet fyller inte en verifierad måttabell.
+Gängorna visas med förenklat skaft, utan tung spiralgeometri.
+
+Betongskruvens `anchor` lagrar förankringsdjup, borrdiameter och borrdjup för vald
+produkt. Dessa är separata från frigångshålets `holeDefaults` i stålplåten.
+Förankringsdata visas i inspektorn men skapar ännu inte automatiskt ett separat
+betongborrhål och används inte för bärförmågeberäkning.
+
+Ett förband kan ha en explicit `accessories`-lista med muttrar och brickor.
+Varje läge mäts från skaftets start längs axeln; tillbehören använder förbandets
+sparade mutter- och brickmått. Inspektorn kan lägga till, flytta och ta bort dem.
+Gängstångens `startAllowance` ger utstick före första materialytan, så att muttrar
+och brickor kan ligga på båda sidor om en plåt. Ogiltiga lägen, överlappande
+tillbehör och muttrar utanför gängad del stoppas innan förbandet sparas.
+
+Den gemensamma läsningen och valideringen finns i `src/fasteners/accessories.js`
+och används av geometri, placering och detaljidentitet. Kopplingsgeneratorer kan
+skapa samma objekt utan en separat modell för skruvar. Äldre `nutOffset` och
+`washers` läses fortsatt; deras detaljidentitet behålls. Placerade förband äger en
+specifikationskopia och ändras inte av en ny biblioteksversion. Import jämför
+versionsinnehåll oberoende av JSON-fältordning och stoppar verkliga konflikter.
+
 ## Exempelmodell
 
 **Inställningar → Projekt → Läs in skruvexempel** läser in tre färdiga förband:
@@ -114,10 +143,64 @@ Integrationen har en separat merge-commit som vid behov kan återställas med
 `git revert -m 1 <merge-commit>`. Tidigare biblioteksversioner finns kvar i
 webbläsarens separata lagring. Ingen migrering av gamla projektformat ingår.
 
-Automatisk dimensionering av skruvar, produktkataloger, skruvmönster, gängor,
+Bärförmågedimensionering av skruvar, produktkataloger, spiralformade gängor,
 automatisk hålmåttsättning på bladet och stora prestandamätningar ingår
 inte i denna första implementation. Hålens konturer finns i ritningsgeometrin;
 befintliga ritningsverktyg kan användas för lägesmått.
+
+## Visuella förbandsval och automatisk längd
+
+Inspektorns schematiska bild och kryssrutor väljer brickor och muttrar vid
+materialytorna. Gängstång kan ha mutter på båda sidor och extra mutter på
+slutsidan. Manuella tillbehörslägen finns under avancerade val; äldre förband
+behåller sina manuella lägen tills användaren väljer visuella förbandsval.
+
+Skruv med mutter kan automatiskt välja kortaste passande bibliotekslängd med
+plats för material, valda tillbehör och extra utstick. Muttrarna måste ligga på
+gängad del. Samma serie kräver samma diameter, standard, huvud, mutter, bricka,
+gängstigning, tillverkare, hållfasthetsklass och ytbehandling. Egna produkter
+utan standard grupperas med bibliotekets fält **Serie**, annars med eget id.
+Inga nya produktlängder eller mått uppfinns. Gängstång och betongskruv behåller
+manuellt längdval.
+
+Förbandet sparar valen i `assembly`, längdläget i `lengthMode` och en kopia av
+seriens tillgängliga specifikationer i `lengthOptions`. Ändrad materialtjocklek
+räknar om lägen och längd från dessa kopior även utan lokalt bibliotek. Vid
+redigering kan nya biblioteksalternativ läggas till. Om ingen längd passar visas
+ett fel före sparande. Det här väljer geometrisk längd och kontrollerar
+muttrarnas placering; det beräknar inte förbandets bärförmåga.
+
+## Skruvgrupper
+
+**Skapa → Skruvgrupp** återanvänder skruvverktygets flöde: välj delarna,
+bekräfta med Enter, klicka första skruvens insättningspunkt och därefter en
+riktningspunkt längs skruvaxeln. Mönstret visas i modellen före bekräftelse.
+Inspektorn har antal rader/kolumner, positiva X/Y-avstånd och rotation kring
+skruvaxeln. Första skruven är mönstrets hörn; X är modellens X-riktning
+projicerad på gruppplanet när det är möjligt, Y är vinkelrät mot X och axeln.
+En schematisk mönsterbild markerar första skruven i grönt. Högst 100 skruvar
+kan ingå i en grupp.
+
+Klick på en skruv markerar gruppens alla skruvar och öppnar deras gemensamma
+inspektor. **Modifiera skruvgrupp** sparar mönster, skruvspecifikation, tillbehör
+och hålval i en transaktion. En befintlig enskild skruv kan göras till grupp med
+inspektorns kryssruta. Befintliga rad/kolumn-positioner behåller skruv- och
+borrhåls-ID:n när mönstret ändras; nytillkomna får nya ID:n och borttagna
+positioner förlorar sina hål. Flytt, rotation, kopiering och borttagning gäller
+hela gruppen. Kopior får ett separat grupp-ID. Referensdelens transformation
+flyttar även gruppens koordinatsystem.
+
+Varje position räknas mot materialet där dess axel passerar och kan välja en
+annan bibliotekslängd. Valda delar som en position missar behålls som referenser
+men borras inte där. En position som inte träffar något material, eller saknar
+passande skruvlängd, stoppar hela ändringen och anger rad/kolumn. Ändring av
+materialet räknar om de berörda skruvarna även efter att projektet öppnats igen.
+
+Modellen består fortsatt av vanliga skruvobjekt med egna hål för geometri,
+numrering och ritningar. `group` lagrar gemensamma mönsterdata och varje skruvs
+rad/kolumn. Projektinläsningen avvisar ofullständiga eller motsägande grupper.
+Gruppen är ett geometriskt mönster; kantavstånd och förbandets bärförmåga
+kontrolleras inte automatiskt.
 
 ## Automatisk placering och borrhål som underobjekt
 

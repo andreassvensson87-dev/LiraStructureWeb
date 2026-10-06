@@ -31,6 +31,9 @@ export function createPlateController({
   previewModelBatch,
   clearPreview,
   dispose,
+  remember,
+  restoreDefaults,
+  syncPropertyUI,
 }) {
   const $ = (id) => document.getElementById(id),
     fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -53,7 +56,11 @@ export function createPlateController({
           ? project.objects.find((s) => s.id === ui.selected)
           : null;
     plateNormalArrow.visible =
-      !!s && !isLineCut(s) && !s.lineCut && (isPlate(s) || s.mode === 'plateCreate');
+      !!s &&
+      !s.generatedBy &&
+      !isLineCut(s) &&
+      !s.lineCut &&
+      (isPlate(s) || s.mode === 'plateCreate');
     if (!plateNormalArrow.visible) return;
     const points = s.polygon ?? [],
       center = points.length
@@ -167,6 +174,7 @@ export function createPlateController({
       }
     }
     getInspector()?.sync();
+    syncPropertyUI?.();
   }
   function fillPlate(s) {
     $('plate-contour-offset').value = s.contourOffset ?? 0;
@@ -202,7 +210,12 @@ export function createPlateController({
   }
   function startPlate(cutTargets = null, lineCut = false) {
     if (!Array.isArray(cutTargets)) cutTargets = null;
+    getInspector()?.finish();
+    if (!cutTargets && !lineCut) {
+      remember?.(project.objects.find((s) => s.id === ui.selected));
+    }
     select(null);
+    if (!cutTargets && !lineCut) restoreDefaults?.();
     setDrawing(true);
     tools.operation = {
       mode: 'plateCreate',
@@ -378,6 +391,7 @@ export function createPlateController({
     if (!isCut(s)) Object.assign(s, structuredClone(ui.draftMaterial));
     Object.assign(s, nextIdentity(s, project.objects));
     project.objects.push(s);
+    remember?.(s);
     ui.selected = s.id;
     ui.selectedIds = new Set([s.id]);
     setDrawing(false);
@@ -430,7 +444,16 @@ export function createPlateController({
       startPlate(tools.operation.cutTargets, tools.operation.lineCut);
   };
   $('plate-form').addEventListener('input', () => {
-    if (tools.operation?.mode === 'plateCreate') previewPlatePoint(null);
+    if (tools.operation?.mode === 'plateCreate') {
+      previewPlatePoint(null);
+      if (
+        !tools.operation.cutTargets &&
+        !tools.operation.lineCut &&
+        $('plate-thickness').value.trim() &&
+        $('plate-contour-offset').value.trim()
+      )
+        remember?.({ type: 'plate', ...plateValues(), ...ui.draftMaterial });
+    }
   });
   $('plate-form').onsubmit = (e) => {
     e.preventDefault();
@@ -454,6 +477,7 @@ export function createPlateController({
     }
     checkpoint();
     project.objects = applyObjectBatch(project.objects, [s]).objects;
+    remember?.(s);
     fillPlate(s);
     render();
     $('status').textContent = 'Plate uppdaterad';

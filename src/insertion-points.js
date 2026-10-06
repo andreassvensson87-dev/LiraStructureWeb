@@ -123,7 +123,7 @@ export class InsertionPoints {
     }
     if (!drawing && selectedIds.size === 1) {
       const sweep = sweeps.find((s) => selectedIds.has(s.id));
-      if (sweep?.type === 'plate') {
+      if (sweep?.type === 'plate' && !sweep.generatedBy) {
         const vertices = plateVertices(sweep);
         vertices.forEach((p, i) =>
           show(

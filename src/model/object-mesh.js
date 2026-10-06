@@ -151,7 +151,7 @@ export function createObjectMesh(
   }
   if (isFastener(s))
     m.userData.detailDiameter = Math.max(
-      s.spec.head.diameter,
+      s.spec.head?.diameter || 0,
       s.spec.diameter,
       s.spec.nut?.acrossFlats || 0,
       s.spec.washer?.outerDiameter || 0,

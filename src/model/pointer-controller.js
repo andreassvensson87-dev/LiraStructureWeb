@@ -1,5 +1,8 @@
 /** Routes completed clicks to the active tool. Pointer capture/box selection stays in its adapter. */
 export function pointerCommand({ mode, picking, drawing, hasStart, plateLength, hasLength }) {
+  if (mode === 'componentProperties') return 'component-property-target';
+  if (mode === 'plateProperties') return 'plate-property-target';
+  if (mode === 'sweepProperties') return 'sweep-property-target';
   if (mode === 'fit') return picking ? 'fit-reference' : null;
   if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return 'fastener-target';
@@ -26,6 +29,9 @@ export function installModelPointer(
       e.pointerType !== 'touch' &&
       !s.drawing &&
       s.mode !== 'assemblyMain' &&
+      s.mode !== 'sweepProperties' &&
+      s.mode !== 'plateProperties' &&
+      s.mode !== 'componentProperties' &&
       (!s.mode || s.boxMode || e.shiftKey)
     ) {
       down = null; // The selection controller owns the entire gesture, including release.
@@ -55,6 +61,9 @@ export function installModelPointer(
         'fastener-target',
         'assembly-main',
         'fit-reference',
+        'sweep-property-target',
+        'plate-property-target',
+        'component-property-target',
       ].includes(command)
     ) {
       actions[command](e);
