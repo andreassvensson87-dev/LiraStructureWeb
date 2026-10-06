@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { numberParts, partStatus, partKey } from '../src/part-marks.js';
 import { drawingStamp } from '../src/drawing-manager.js';
+import { resolveFit } from '../src/components/fit.js';
 const beam = {
   id: 'a',
   profile: 'rect',
@@ -62,4 +63,37 @@ test('single part record invalidates when source changes or disappears', () => {
   assert.ok(drawingStamp(record, { objects: [beam], parts }));
   assert.equal(drawingStamp(record, { objects: [], parts }), null);
   assert.equal(drawingStamp(record, { objects: [{ ...beam, width: 210 }], parts }), null);
+});
+test('Fit numbering uses only the machining planes for each connected part', () => {
+  const a = { ...beam, type: 'sweep' };
+  const b = { ...a, id: 'b', start: [3000, 2000, 0], end: [3000, 0, 0] };
+  const definition = {
+    id: 'fit',
+    type: 'component',
+    kind: 'fit',
+    references: ['a', 'b'],
+    mode: 'miter',
+    gap: 0,
+    endA: 'end',
+    endB: 'end',
+  };
+  const fit = resolveFit(definition, [a, b]);
+  const model = [a, b, fit];
+  const saved = structuredClone(model);
+  const numbered = numberParts(model);
+  assert.equal(Object.keys(numbered.assignments).length, 2);
+  for (const part of [a, b]) {
+    const ownCut = fit.cuts.find((c) => c.targets.includes(part.id));
+    assert.equal(partKey(part, model), partKey(part, [ownCut]));
+    assert.notEqual(partKey(part, model), partKey(part, []));
+    assert.equal(partStatus(part, model, numbered).valid, true);
+  }
+  const changed = resolveFit({ ...definition, gap: 10 }, [a, b]);
+  assert.equal(partStatus(a, [a, b, changed], numbered).valid, false);
+  assert.equal(partStatus(b, [a, b, changed], numbered).valid, false);
+  const abut = resolveFit({ ...definition, mode: 'abut' }, [a, b]);
+  assert.equal(partKey(a, [a, b, abut]), partKey(a, []));
+  assert.notEqual(partKey(b, [a, b, abut]), partKey(b, []));
+  assert.doesNotThrow(() => numberParts([a, b, abut], numbered));
+  assert.deepEqual(model, saved);
 });

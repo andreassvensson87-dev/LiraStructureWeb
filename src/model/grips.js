@@ -6,7 +6,7 @@ import { objectType } from './object-types/index.js';
 export function selectionGrips(objects, selectedIds, drawing = false) {
   if (drawing || !selectedIds.size || selectedIds.size >= 5) return [];
   const groups = [];
-  for (const object of objects.filter((s) => selectedIds.has(s.id))) {
+  for (const object of objects.filter((s) => selectedIds.has(s.id) && s.type !== 'component')) {
     objectAnchors(object).forEach((point, index) => {
       const ref = { id: object.id, kind: isPlate(object) ? index : index === 0 ? 'start' : 'end' };
       let group = groups.find((g) => Math.hypot(...point.map((v, i) => v - g.point[i])) < 1e-6);

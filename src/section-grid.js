@@ -1,3 +1,4 @@
+import { gridLabel } from './grid-labels.js';
 // Intersect a world coordinate plane with the visible rectangle of a section.
 function planeLine(frame, axis, value, [left, bottom, right, top]) {
   const a = frame.x[axis],
@@ -34,7 +35,7 @@ export function sectionGridLines(grid, frame, bounds) {
     for (const [index, value] of values.entries()) {
       const points = planeLine(frame, axis, value, bounds);
       if (!points) continue;
-      const label = axis === 0 ? String(index + 1) : String.fromCharCode(65 + index);
+      const label = gridLabel(grid, axis === 0 ? 'x' : 'y', index);
       const same = lines.find((line) =>
         points.every((p) => line.points.some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6)),
       );

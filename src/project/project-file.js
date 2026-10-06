@@ -1,9 +1,11 @@
+import { isComponent, resolveFit } from '../components/fit.js';
 import { captureProject, PROJECT_SCHEMA_VERSION } from './project-state.js';
 import { validateObject, isCut, isPhysical } from '../model-object.js';
 import { isFastener } from '../fasteners/object-type.js';
 import { validateFastenerTargets } from '../fasteners/relations.js';
 import { validateLevels } from '../levels.js';
 import { parsePositions } from '../grid-lines.js';
+import { validateGridLabels } from '../grid-labels.js';
 import { syncAssemblyDrawingIdentity } from './assemblies.js';
 
 export const PROJECT_FILE_LIMIT = 100 * 1024 * 1024;
@@ -33,6 +35,7 @@ export function validateProjectFile(project) {
     objects.set(object.id, object);
   }
   for (const object of project.objects) {
+    if (isComponent(object)) Object.assign(object, resolveFit(object, project.objects));
     if (isFastener(object)) {
       const targets = object.holes.map((h) => objects.get(h.targetId));
       validateFastenerTargets(object, targets);
@@ -53,6 +56,7 @@ export function validateProjectFile(project) {
   )
     fail('Ogiltiga stomlinjer.');
   for (const axis of ['x', 'y']) parsePositions(project.grid[axis].join(' '));
+  validateGridLabels(project.grid);
   if (!record(project.levels) || !Array.isArray(project.levels.items)) fail('Ogiltiga nivåer.');
   validateLevels(project.levels);
   if (

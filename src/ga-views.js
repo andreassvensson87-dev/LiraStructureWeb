@@ -3,12 +3,14 @@ import { nextSectionName } from './drawing-sections.js';
 import { ensureGAViews, duplicateDrawingView, resizeDrawingView } from './drawing-views.js';
 import { actionButton } from './drawing-toolbar.js';
 import { DrawingViewActions } from './drawing-view-actions.js';
+import { drawingProfileDetail } from './profile-detail.js';
 export class GAViews {
   constructor(editor, inspector, toolbar) {
     this.e = editor;
     this.snapshots = new Map();
     this.actions = new DrawingViewActions(editor.dialog, {
       views: () => this.items,
+      drawingType: () => 'GA',
       annotations: () => editor.annotations.items,
       hit: (event) =>
         event.target.closest('.ga-view-snapshot')?.dataset.gaView ||
@@ -114,6 +116,9 @@ export class GAViews {
     e.$('level').value = view.settings.levelId;
     for (const k of ['lower', 'cut', 'upper']) e.$(k).value = view.settings[k];
     e.$('hidden-lines').checked = !!view.settings.hiddenLines;
+    view.settings.profileDetail = drawingProfileDetail(view, 'GA');
+    e.record.settings.profileDetail = view.settings.profileDetail;
+    e.profileDetailControl?.sync(view);
     e.paperScale.value = view.scale;
     e.$('section-grid').parentElement.hidden = !source.section;
     e.$('section-grid').checked = view.settings.showGrid !== false;

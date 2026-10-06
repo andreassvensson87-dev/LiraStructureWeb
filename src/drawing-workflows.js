@@ -2,6 +2,7 @@ import { TEMPLATE_KEY, readDrawingTemplates } from './drawing-templates.js';
 import { drawingPresetPicker, selectedDrawingPreset } from './drawing-presets.js';
 import { planDrawingNumbering, applyDrawingNumbering } from './single-part-drawings.js';
 import { drawingCreationGroups, createSelectedDrawings } from './drawing-creation.js';
+import { showAssemblies } from './assembly-workflow.js';
 import { numberAssembliesWithDrawings } from './assembly-numbering-workflow.js';
 const element = (tag, text, className) => {
   const e = document.createElement(tag);
@@ -190,7 +191,6 @@ export function showDrawingBatch(manager, initialType = 'all', initialSelection 
       message.textContent = 'Mallen kunde inte tas bort.';
     }
   };
-  templateLabel.append(removeTemplate);
   const typeLabel = element('label', 'Ritningstyp'),
     typeSelect = document.createElement('select');
   typeSelect.setAttribute('aria-label', 'Ritningstyp att skapa');
@@ -210,7 +210,20 @@ export function showDrawingBatch(manager, initialType = 'all', initialSelection 
   );
   scopeSelect.value = selectedIds.size ? 'selected' : 'all';
   scopeLabel.append(scopeSelect);
-  setup.append(typeLabel, scopeLabel, templateLabel, preset.label, number);
+  const manageAssemblies = element('button', 'Hantera assemblies');
+  manageAssemblies.onclick = () =>
+    showAssemblies(manager, (assembly) => {
+      if (assembly) {
+        typeSelect.value = 'AS';
+        scopeSelect.value = 'all';
+        selection = new Set(manager.getState().objects.map((o) => o.id));
+      }
+      checked = availableKeys();
+      render();
+    });
+  const setupActions = element('div', null, 'batch-setup-actions');
+  setupActions.append(removeTemplate, number, manageAssemblies);
+  setup.append(typeLabel, scopeLabel, templateLabel, preset.label, setupActions);
   const groupsForList = () =>
     drawingCreationGroups(manager.getState(), selection, typeSelect.value);
   selectionBar.append(selectionCount, all, clear);
@@ -249,7 +262,7 @@ export function showDrawingBatch(manager, initialType = 'all', initialSelection 
       content.append(
         element(
           'p',
-          'Inga typer i detta urval. Byt filter eller urval. Assemblygrupper skapas under Assemblies.',
+          'Inga typer i detta urval. Byt filter eller urval. Skapa assemblygrupper med Hantera assemblies.',
           'batch-empty',
         ),
       );

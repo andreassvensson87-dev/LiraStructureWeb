@@ -97,7 +97,7 @@ function intersects(a, b, c, d) {
     onSegment(c, d, b)
   );
 }
-export function validatePlate(s) {
+export function validatePlate(s, { minEdgeLength = 1 } = {}) {
   if (s.contourOffset !== undefined && !Number.isFinite(s.contourOffset))
     return 'Ange en giltig konturoffset.';
   if (s.contourOffset) {
@@ -128,8 +128,8 @@ export function validatePlate(s) {
   for (let i = 0; i < n; i++) {
     const a = p[i],
       b = p[(i + 1) % n];
-    if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 1)
-      return 'Två intilliggande hörn måste ligga minst 1 mm isär.';
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) < minEdgeLength)
+      return 'Två intilliggande hörn måste ligga minst ' + minEdgeLength + ' mm isär.';
     const c = p[(i + 2) % n];
     if (
       Math.abs(cross(a, b, c)) < 1e-6 &&

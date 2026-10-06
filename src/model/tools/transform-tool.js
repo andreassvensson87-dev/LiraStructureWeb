@@ -39,6 +39,8 @@ export function applyObjectBatch(
       id: ids.get(s.id),
     };
     object.name = designation(object);
+    if (object.type === 'component')
+      object.references = object.references.map((id) => ids.get(id) || id);
     copies.push(remapFastenerCopy(object, ids));
   }
   return {

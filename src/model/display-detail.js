@@ -73,7 +73,10 @@ export function updateDisplayDetail(objects, camera, height, selectedIds) {
     const selected = individuallySelected(object, selectedIds);
     if (proxy) {
       const pixels = object.userData.sectionSize * pixelsPerUnit;
-      const detailed = selected || pixels >= (object.userData.detailVisible === false ? 9 : 6);
+      const detailed =
+        object.userData.exactProfile ||
+        selected ||
+        pixels >= (object.userData.detailVisible === false ? 9 : 6);
       object.userData.detailVisible = detailed;
       proxy.userData.detailVisible = !detailed;
       object.layers.set(object.userData.instanced || !detailed ? 3 : 0);

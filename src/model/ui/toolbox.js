@@ -2,6 +2,12 @@
 export const TOOL_GROUPS = [
   { id: 'selection', label: 'Markera', icon: 'select', tools: ['select', 'box-select'] },
   { id: 'create', label: 'Skapa', icon: 'draw', tools: ['draw', 'plate', 'fastener'] },
+  {
+    id: 'connections',
+    label: 'Kopplingar',
+    icon: 'component-fit',
+    tools: ['component-fit', 'component-library'],
+  },
   { id: 'cut', label: 'Bearbeta', icon: 'polygoncut', tools: ['polygoncut', 'linecut'] },
   { id: 'transform', label: 'Ändra', icon: 'move', tools: ['move', 'copy', 'rotate'] },
   { id: 'helpers', label: 'Hjälp', icon: 'helperpoint', tools: ['helperpoint', 'helperline'] },

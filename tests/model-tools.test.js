@@ -78,6 +78,29 @@ test('pointer cancellation and disposal prevent stale commits', () => {
   event('pointerup');
   assert.equal(calls, 1);
 });
+test('assembly main picks preserve secondaries even with Shift and do not request a placement point', () => {
+  const surface = new EventTarget();
+  let picked = 0;
+  installModelPointer(surface, {
+    getState: () => ({ mode: 'assemblyMain' }),
+    beginBox() {
+      assert.fail('main pick must not change secondary selection');
+    },
+    orbit() {},
+    point() {
+      assert.fail('main pick uses object hit');
+    },
+    actions: { 'assembly-main': () => picked++ },
+    move() {},
+    leave() {},
+  });
+  for (const type of ['pointerdown', 'pointerup']) {
+    const event = new Event(type);
+    Object.assign(event, { button: 0, pointerId: 1, clientX: 10, clientY: 10, shiftKey: true });
+    surface.dispatchEvent(event);
+  }
+  assert.equal(picked, 1);
+});
 test('cancel clears transient operation but retains active workplane', () => {
   const s = createToolSession();
   s.operation = { mode: 'copy' };
@@ -118,4 +141,54 @@ test('fastener part picks receive pointer events without interpreting them as pl
   dispose();
   assert.equal(pointerCommand({ mode: 'fastenerCreate', drawing: true, hasStart: false }), 'start');
   assert.equal(pointerCommand({ mode: 'fastenerCreate', drawing: true, hasStart: true }), 'finish');
+});
+
+test('neutral left press starts click-or-rectangle selection, while Ctrl-middle remains navigation', () => {
+  const surface = new EventTarget(),
+    boxes = [],
+    orbits = [];
+  let state = { drawing: false, mode: undefined, boxMode: false };
+  const dispose = installModelPointer(surface, {
+    getState: () => state,
+    beginBox: (event) => boxes.push(event),
+    orbit: (event) => orbits.push(event),
+    point() {},
+    actions: {
+      select() {
+        assert.fail('selection adapter owns click completion');
+      },
+    },
+    move() {},
+    leave() {},
+  });
+  const send = (button, extra = {}) => {
+    const event = new Event('pointerdown');
+    Object.assign(event, {
+      button,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 20,
+      pointerType: 'mouse',
+      ...extra,
+    });
+    surface.dispatchEvent(event);
+    return event;
+  };
+  send(0);
+  assert.equal(boxes.length, 1);
+  assert.equal(orbits.length, 0);
+  send(0, { shiftKey: true });
+  assert.equal(boxes.length, 2);
+  assert.equal(boxes[1].shiftKey, true);
+  send(1, { ctrlKey: true });
+  assert.equal(orbits.length, 1);
+  assert.equal(boxes.length, 2);
+  state = { drawing: true };
+  send(0);
+  assert.equal(boxes.length, 2);
+  assert.equal(orbits.length, 2);
+  state = { drawing: false, mode: 'rotate', picking: true };
+  send(0);
+  assert.equal(boxes.length, 2);
+  dispose();
 });

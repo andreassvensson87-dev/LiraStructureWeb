@@ -1,3 +1,4 @@
+import { inputWheelGesture } from './input-device.js';
 import { installDrawingPan } from './drawing-pan.js';
 import { pasteboardSize } from './drawing-pasteboard.js';
 import { actionButton } from './drawing-toolbar.js';
@@ -50,13 +51,16 @@ export class DrawingWorkspace {
         e.preventDefault();
         e.stopPropagation();
         if (blocked() || this.pan.active) return;
+        const gesture = inputWheelGesture(e, undefined, workspace.clientHeight);
+        if (gesture.action === 'pan') {
+          workspace.scrollLeft += gesture.x;
+          workspace.scrollTop += gesture.y;
+          return;
+        }
         const r = paper.getBoundingClientRect(),
           x = (e.clientX - r.left) / this.scale,
           y = (e.clientY - r.top) / this.scale;
-        this.scale = Math.max(
-          0.001,
-          Math.min(32, this.scale * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.03 : 0.002))),
-        );
+        this.scale = Math.max(0.001, Math.min(32, this.scale * Math.exp(-gesture.y * 0.002)));
         this.size();
         const next = paper.getBoundingClientRect();
         workspace.scrollLeft += next.left + x * this.scale - e.clientX;

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { objectType } from './model/object-types/index.js';
 import { clean } from './model/object-types/shape-key.js';
-import { isCut, isPhysical } from './model-object.js';
+import { cutsForModel, isPhysical } from './model-object.js';
+import { isComponent } from './components/fit.js';
 import { defaultPrefix } from './object-identity.js';
-import { holesForPart } from './fasteners/relations.js';
 export function partFrame(s) {
   return objectType(s).partFrame(s);
 }
@@ -22,10 +22,8 @@ export function partKey(s, objects) {
       return [v.dot(f.x), v.dot(f.y), v.dot(f.z)].map(clean);
     };
   const shape = objectType(s).partShape(s);
-  const cuts = [
-    ...objects.filter((c) => isCut(c) && c.targets.includes(s.id)),
-    ...holesForPart(s, objects),
-  ]
+  const cuts = cutsForModel(s, objects)
+    .flatMap((c) => (isComponent(c) ? c.cuts.filter((cut) => cut.targets.includes(s.id)) : [c]))
     .map((c) =>
       c.type === 'linkedhole'
         ? {

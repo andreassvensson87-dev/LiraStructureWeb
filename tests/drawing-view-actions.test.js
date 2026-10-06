@@ -29,7 +29,9 @@ test('removed independent base views stay removed on reopen', () => {
   const record = { sheet: { independentViews: true, views: [{ id: 'top', name: 'Ovanifrån' }] } };
   ensurePartViews(record);
   ensurePartViews(record);
-  assert.deepEqual(record.sheet.views, [{ id: 'top', name: 'Top' }]);
+  assert.deepEqual(record.sheet.views, [
+    { id: 'top', name: 'Top', settings: { profileDetail: 'exact' } },
+  ]);
 });
 test('duplicate preserves section crop and copies annotations with independent ids', () => {
   const view = {

@@ -78,7 +78,7 @@ export function createSectionView(parent, points, side, position, views) {
     size: [100, 80],
     scale: parent.scale,
     camera: { center: [0, 0] },
-    settings: { ...parent.settings },
+    settings: { ...parent.settings, profileDetail: 'exact' },
     section: { label, points: structuredClone(points), side, depth: 1000 },
   };
 }

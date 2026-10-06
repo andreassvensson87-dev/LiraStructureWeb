@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VIEW_AXES } from './view-orientation.js';
 /** Owns orthographic framing and control replacement, independent of project and DOM. */
 export class ModelNavigation {
   constructor({ camera, controls, createControls, getSize }) {
@@ -66,6 +67,14 @@ export class ModelNavigation {
     camera.position.copy(center).addScaledVector(normal, distance);
     this.controls.update();
     camera.updateMatrixWorld();
+  }
+  lookAlongAxis(axis, sign = 1) {
+    const normal = new THREE.Vector3(...VIEW_AXES[axis]).multiplyScalar(sign);
+    this.lookAtPlane(
+      this.controls.target.clone(),
+      normal,
+      axis === 'Z' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1),
+    );
   }
   movePivot(point) {
     const { camera, controls } = this;

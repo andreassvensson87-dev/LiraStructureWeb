@@ -1,15 +1,17 @@
+import { updateComponents } from '../components/fit.js';
 import { automaticPlacement } from './placement.js';
 import { isFastener, validateFastener } from './object-type.js';
 
 /** Refit automatic joints against the complete proposed edit, before it enters the project. */
 export function updateAutomaticJoints(before, after) {
+  after = updateComponents(before, after);
   const previous = new Map(before.map((s) => [s.id, s]));
   const changed = new Set(after.filter((s) => previous.get(s.id) !== s).map((s) => s.id));
   const objects = new Map(after.map((s) => [s.id, s]));
-  const cuts = after.filter((s) => ['polygoncut', 'linecut'].includes(s.type));
+  const cuts = after.filter((s) => ['polygoncut', 'linecut', 'component'].includes(s.type));
   const affectedTargets = new Set(cuts.filter((s) => changed.has(s.id)).flatMap((s) => s.targets));
   for (const cut of before)
-    if (['polygoncut', 'linecut'].includes(cut.type) && !objects.has(cut.id))
+    if (['polygoncut', 'linecut', 'component'].includes(cut.type) && !objects.has(cut.id))
       for (const id of cut.targets) affectedTargets.add(id);
   return after.map((s) => {
     if (

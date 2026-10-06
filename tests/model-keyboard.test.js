@@ -23,3 +23,28 @@ test('fastener part picking confirms with Enter and consumes model deletion shor
   assert.equal(command({ key: 'Backspace' }, state), null);
   assert.equal(command({ key: 'Enter' }, { ...state, editing: true }), null);
 });
+
+test('transform shortcuts use the current selection and can switch active tools', () => {
+  for (const [key, expected] of [
+    ['m', 'move'],
+    ['c', 'copy'],
+    ['r', 'rotate'],
+  ]) {
+    for (const modifier of ['ctrlKey', 'metaKey']) {
+      const event = { key: key.toUpperCase(), [modifier]: true };
+      assert.equal(command(event, { hasSelection: true }), expected);
+      assert.equal(
+        command(event, { hasSelection: true, mode: 'rotate', picking: 'start' }),
+        expected,
+      );
+      assert.equal(command({ ...event, repeat: true }, { hasSelection: true }), 'consume');
+      assert.equal(command(event, { hasSelection: false }), null);
+      assert.equal(command(event, { hasSelection: true, editing: true }), null);
+      assert.equal(command(event, { hasSelection: true, modalOpen: true }), null);
+      assert.equal(command(event, { hasSelection: true, settingsOpen: true }), null);
+      assert.equal(command({ ...event, altKey: true }, { hasSelection: true }), null);
+      assert.equal(command({ ...event, shiftKey: true }, { hasSelection: true }), null);
+    }
+    assert.equal(command({ key }, { hasSelection: true }), null);
+  }
+});

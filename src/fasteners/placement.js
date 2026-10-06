@@ -7,7 +7,7 @@ import { isFastener } from './object-type.js';
 /** Separate solid intervals, preserving cavities between walls and flanges. */
 export function partAxisIntervals(s, part, model, geometryContext = null) {
   const f = fastenerFrame(s),
-    geometry = geometryContext?.geometry(part) || displayGeometry(part, model);
+    geometry = geometryContext?.geometry(part) || displayGeometry(part, model, 'exact');
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
   try {
     geometry.computeBoundingBox();

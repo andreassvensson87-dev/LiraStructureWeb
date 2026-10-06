@@ -6,6 +6,7 @@ import { ProjectHistory } from '../src/project/project-history.js';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
 import {
   createAssembly,
+  addToAssembly,
   createAssemblyDrawing,
   assemblySchedule,
   assemblyValid,
@@ -51,6 +52,27 @@ function fixture() {
   state.drawings = [createAssemblyDrawing(state, 'assembly', {}, () => 'drawing')];
   return state;
 }
+test('selected secondaries create an assembly with the clicked main and can extend an existing group', () => {
+  const state = fixture();
+  state.assemblies = [];
+  state.drawings = [];
+  const result = addToAssembly(state, ['b', 'b'], 'a');
+  assert.equal(result.assemblies[0].mainId, 'a');
+  assert.deepEqual(result.assemblies[0].memberIds, ['b', 'a']);
+  assert.equal(state.assemblies.length, 0);
+  const next = addToAssembly({ ...state, ...result }, ['c'], 'a');
+  assert.equal(next.assemblies.length, 1);
+  assert.deepEqual(next.assemblies[0].memberIds, ['b', 'a', 'c']);
+  assert.deepEqual(result.assemblies[0].memberIds, ['b', 'a']);
+});
+test('assembly picks reject selected mains, nonphysical parts and members of other assemblies', () => {
+  const state = fixture();
+  assert.throws(() => addToAssembly(state, [], 'c'), /sekundärdel/);
+  assert.throws(() => addToAssembly(state, ['c'], 'c'), /utanför/);
+  assert.throws(() => addToAssembly(state, ['c'], 'b'), /huvuddelen/);
+  assert.throws(() => addToAssembly(state, ['b'], 'c'), /redan/);
+  assert.throws(() => addToAssembly(state, ['c'], 'missing'), /fysiska/);
+});
 test('assembly membership validates physical members, overlap and main part without mutating selection', () => {
   const state = fixture(),
     ids = ['b', 'c', 'c'];

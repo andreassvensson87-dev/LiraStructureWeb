@@ -42,7 +42,7 @@ export function createSweepForm({
     });
   }
   function fillForm(s) {
-    if (isHelper(s) || isFastener(s)) return;
+    if (s.type === 'component' || isHelper(s) || isFastener(s)) return;
     ui.libraryMode = s.profile === 'custom';
     if (isPlate(s)) {
       fillPlate(s);

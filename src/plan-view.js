@@ -1,4 +1,6 @@
 import { createGAShell } from './drawing/ui/ga-shell.js';
+import { drawingProfileDetail } from './profile-detail.js';
+import { installDrawingProfileDetail } from './drawing-profile-detail.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
@@ -102,6 +104,14 @@ export class PlanView {
     hiddenLabel.innerHTML = '<input id=plan-hidden-lines type=checkbox>Visa skymda kanter';
     inspector.append(hiddenLabel);
     this.$('hidden-lines').onchange = () => this.rebuild();
+    this.profileDetailControl = installDrawingProfileDetail(inspector, {
+      view: () => this.views?.active,
+      drawingType: () => this.record?.type || 'GA',
+      changed: (view) => {
+        this.record.settings.profileDetail = view.settings.profileDetail;
+        this.rebuild();
+      },
+    });
     const gridLabel = document.createElement('label');
     gridLabel.className = 'drawing-check';
     gridLabel.hidden = true;
@@ -453,7 +463,11 @@ export class PlanView {
     this.grid.group.visible = false;
     this.grid.overlay.hidden = true;
     try {
-      const g = objectGeometry(s, this.getState().objects);
+      const g = objectGeometry(
+        s,
+        this.getState().objects,
+        drawingProfileDetail(this.views?.active, this.record.type),
+      );
       g.applyMatrix4(partMatrix(s));
       const view = this.partViews.querySelector('select').value;
       if (view === 'front') g.rotateX(-Math.PI / 2);
@@ -621,7 +635,8 @@ export class PlanView {
     ];
     try {
       for (const s of state.objects.filter((s) => isPhysical(s))) {
-        const g = objectGeometry(s, this.getState().objects);
+        const detail = drawingProfileDetail(this.views?.active, this.record.type);
+        const g = objectGeometry(s, this.getState().objects, detail);
         g.computeBoundingBox();
         const b = g.boundingBox;
         if (b.isEmpty() || b.max.z < h.lower || b.min.z > h.upper) {
@@ -643,7 +658,7 @@ export class PlanView {
         );
         fill.userData.sourceId = s.id;
         this.group.add(fill);
-        const snapGeometry = displayGeometry(s, this.getState().objects),
+        const snapGeometry = displayGeometry(s, this.getState().objects, 'schematic'),
           snapEdges = geometryEdges(snapGeometry, roundProfile(s) ? 5 : 1),
           pos = snapEdges.attributes.position;
         const objectCandidates = [];
@@ -731,7 +746,9 @@ export class PlanView {
   sectionBounds(view) {
     const geometries = this.getState()
       .objects.filter((s) => isPhysical(s))
-      .map((s) => objectGeometry(s, this.getState().objects));
+      .map((s) =>
+        objectGeometry(s, this.getState().objects, drawingProfileDetail(view, this.record.type)),
+      );
     try {
       return sectionDrawing(geometries, this.sectionFrameFor(view), view.section.depth).bounds;
     } finally {
@@ -777,7 +794,8 @@ export class PlanView {
       matrix = frameMatrix(frame),
       planes = sectionClipPlanes(frame, depth);
     for (const object of this.getState().objects.filter((s) => isPhysical(s))) {
-      const g = objectGeometry(object, this.getState().objects).applyMatrix4(matrix);
+      const detail = drawingProfileDetail(view, this.record.type);
+      const g = objectGeometry(object, this.getState().objects, detail).applyMatrix4(matrix);
       g.computeBoundingBox();
       if (g.boundingBox.max.z < -depth || g.boundingBox.min.z > 0) {
         g.dispose();
@@ -819,7 +837,11 @@ export class PlanView {
         depth,
       );
       this.sections.push(...snapData.cut);
-      const snapGeometry = displayGeometry(object, this.getState().objects).applyMatrix4(matrix);
+      const snapGeometry = displayGeometry(
+        object,
+        this.getState().objects,
+        'schematic',
+      ).applyMatrix4(matrix);
       const candidates = sectionDrawing(
         [snapGeometry],
         { origin: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], normal: [0, 0, 1], span: frame.span },

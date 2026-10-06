@@ -19,6 +19,7 @@ import { sharedGeometryView } from '../fasteners/geometry.js';
 import { isFastener } from '../fasteners/object-type.js';
 import { holesForPart } from '../fasteners/relations.js';
 import { holeDisplayMesh } from '../fasteners/display.js';
+import { hasExactProfile } from '../profile-detail.js';
 
 /** Change display mode without replacing model geometry or selection state. */
 export function updateObjectMeshTransparency(object, transparentView) {
@@ -55,6 +56,10 @@ export function updateObjectMeshTransparency(object, transparentView) {
 /** Selection changes only appearance; keep geometries and GPU buffers intact. */
 export function updateObjectMeshSelection(object, s, selectedIds) {
   const selected = selectedIds.has(s.id);
+  if (object.userData.component) {
+    object.userData.selected = selected;
+    return;
+  }
   if (object.userData.selected === selected) return;
   object.userData.selected = selected;
   if (object.userData.helper) {
@@ -77,15 +82,40 @@ export function updateObjectMeshSelection(object, s, selectedIds) {
 }
 export function createObjectMesh(
   s,
-  { model, selectedIds, transparentView = false, ghost = false, geometryContext = null },
+  {
+    model,
+    selectedIds,
+    transparentView = false,
+    ghost = false,
+    geometryContext = null,
+    profileDetail = 'schematic',
+  },
 ) {
+  profileDetail = geometryContext?.profileDetail?.(s) || profileDetail;
   if (isHelper(s)) return helperMesh(s, { selectedIds, ghost });
+  if (s.type === 'component') {
+    const marker = new THREE.Group();
+    marker.userData = {
+      id: s.id,
+      component: true,
+      cut: true,
+      ghost,
+      selected: selectedIds.has(s.id),
+      transparentView,
+      geometryIdentity:
+        geometryContext?.identity?.(s) || cachedDisplayGeometryIdentity(s, profileDetail),
+      holes: [],
+    };
+    return marker;
+  }
   const template = isFastener(s)
     ? geometryContext?.fastenerTemplate
       ? geometryContext.fastenerTemplate(s)
       : displayFastenerTemplate(s, model)
     : null;
-  const worldGeometry = template ? null : geometryContext?.geometry(s) || displayGeometry(s, model);
+  const worldGeometry = template
+    ? null
+    : geometryContext?.geometry(s) || displayGeometry(s, model, profileDetail);
   const cut = isCut(s),
     geometry = template ? sharedGeometryView(template.geometry) : worldGeometry,
     m = new THREE.Mesh(
@@ -128,7 +158,9 @@ export function createObjectMesh(
     );
   // Pay the initial bounds cost while building, rather than on the first click.
   geometry.computeBoundingSphere();
-  m.userData.geometryIdentity = cachedDisplayGeometryIdentity(s);
+  m.userData.geometryIdentity =
+    geometryContext?.identity?.(s) || cachedDisplayGeometryIdentity(s, profileDetail);
+  m.userData.exactProfile = profileDetail === 'exact' && hasExactProfile(s);
   m.userData.transparentView = transparentView;
   m.userData.id = s.id;
   m.userData.ghost = ghost;
@@ -138,7 +170,13 @@ export function createObjectMesh(
       ? sharedGeometryView(template.edges)
       : geometryContext
         ? geometryContext.edges(s, isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1)
-        : edgesForModel(s, model, isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1, true),
+        : edgesForModel(
+            s,
+            model,
+            isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1,
+            true,
+            profileDetail,
+          ),
     new THREE.LineBasicMaterial({
       color: cut
         ? selectedIds.has(s.id)
@@ -154,7 +192,11 @@ export function createObjectMesh(
   );
   lines.renderOrder = cut ? 20 : 0;
   m.userData.cut = cut;
-  if (!ghost && !cut) m.userData.instanceDescriptor = template || objectInstanceDescriptor(s, true);
+  if (!ghost && !cut)
+    m.userData.instanceDescriptor =
+      template ||
+      geometryContext?.instanceDescriptor?.(s) ||
+      objectInstanceDescriptor(s, true, profileDetail);
   m.add(lines);
   const holes = cut || isFastener(s) ? [] : geometryContext?.holes(s) || holesForPart(s, model);
   m.userData.holes = holes;
@@ -168,7 +210,7 @@ export function createObjectMesh(
     !cut &&
     (s.type || 'sweep') === 'sweep' &&
     m.userData.instanceDescriptor &&
-    !cachedDisplayHasCuts(s)
+    !(geometryContext?.hasCuts?.(s) ?? cachedDisplayHasCuts(s, profileDetail))
   )
     addOverviewMesh(m, m.userData.instanceDescriptor);
   if (!ghost && !cut) updateObjectMeshTransparency(m, transparentView);

@@ -1,9 +1,15 @@
+import { fitEnvelope } from './components/fit.js';
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { objectType, objectTypes } from './model/object-types/index.js';
 import { holesForPart, holesByTarget } from './fasteners/relations.js';
 import { holeGeometry, fastenerDisplayTemplate, fastenerGeometry } from './fasteners/geometry.js';
 import { geometryEdges } from './fasteners/edges.js';
+import {
+  profileDisplayObject,
+  modelProfileDetail,
+  schematicProfileLoops,
+} from './profile-detail.js';
 export const isHelper = (s) => !!s && objectTypes.find(s)?.family === 'helper';
 export const isPhysical = (s) =>
   !!s && !!objectTypes.find(s) && !isCut(s) && objectTypes.find(s).physical !== false;
@@ -92,12 +98,14 @@ function evaluated(s, model = [], knownCuts = null, simplified = false) {
     store.set(s, entry);
     return entry;
   }
-  let geometry = baseGeometry(s);
+  let geometry = baseGeometry(fitEnvelope(s, cuts));
   try {
     for (const cut of cuts) {
       if (!geometry.attributes.position.count) break;
       const tool =
-        cut.type === 'linkedhole' ? holeGeometry(cut) : objectType(cut).cutGeometry(cut, geometry);
+        cut.type === 'linkedhole'
+          ? holeGeometry(cut)
+          : objectType(cut).cutGeometry(cut, geometry, s);
       if (!tool) continue;
       const offset = cut.type === 'linkedhole' ? cut.frame.origin : [0, 0, 0];
       geometry.translate(-offset[0], -offset[1], -offset[2]);
@@ -123,6 +131,13 @@ function evaluated(s, model = [], knownCuts = null, simplified = false) {
       }
     }
     geometry.userData.linkedHoles = cuts.some((c) => c.type === 'linkedhole');
+    if (s.section?.generatedProfileDetail !== 'schematic') {
+      const contour = s.section?.contourDefinition;
+      if (contour?.radiusParameters.some((key) => s.section.parameters[key] > 0))
+        geometry.userData.profileEdgeThreshold = contour.radiusSegmentAngle + 1;
+      else if (!contour && schematicProfileLoops(s.section))
+        geometry.userData.profileEdgeThreshold = 16;
+    }
     geometry.computeBoundingBox();
     entry = { cuts, geometry };
     store.set(s, entry);
@@ -132,15 +147,17 @@ function evaluated(s, model = [], knownCuts = null, simplified = false) {
     throw new Error('Skärningen kunde inte beräknas. Ändra polygon eller skärdjup.');
   }
 }
-export const objectGeometry = (s, model = []) => evaluated(s, model).geometry.clone();
+export const objectGeometry = (s, model = [], profileDetail = 'exact') =>
+  evaluated(profileDisplayObject(s, profileDetail), model).geometry.clone();
 export const geometryForModel = (s, model) => evaluated(s, model).geometry.clone();
 /** Model display and picking retain ordinary cuts but do not subtract bores. */
-export const displayGeometry = (s, model = []) => evaluated(s, model, null, true).geometry.clone();
+export const displayGeometry = (s, model = [], profileDetail = 'schematic') =>
+  evaluated(profileDisplayObject(s, profileDetail), model, null, true).geometry.clone();
 /** Borrow cached geometry for read-only selection, avoiding large typed-array copies. */
-export function selectionGeometry(s, model) {
-  return evaluated(s, model, null, true).geometry;
+export function selectionGeometry(s, model, profileDetail = 'schematic') {
+  return evaluated(profileDisplayObject(s, profileDetail), model, null, true).geometry;
 }
-function indexedEntries(model, simplified = false) {
+function indexedEntries(model, simplified = false, options = {}) {
   const holes = simplified ? new Map() : holesByTarget(model),
     cuts = new Map();
   for (const cut of model.filter(isCut))
@@ -149,23 +166,35 @@ function indexedEntries(model, simplified = false) {
       cuts.get(target).push(cut);
     }
   return (s) =>
-    evaluated(s, model, [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])], simplified);
+    evaluated(
+      profileDisplayObject(s, modelProfileDetail(s, options)),
+      model,
+      [...(cuts.get(s.id) || []), ...(holes.get(s.id) || [])],
+      simplified,
+    );
 }
 /** One immutable index per render transaction, including all linked bore identities. */
-export function createDisplayGeometryContext(model) {
-  const entry = indexedEntries(model, true);
+export function createDisplayGeometryContext(model, options = {}) {
+  const entry = indexedEntries(model, true, options);
   const holes = holesByTarget(model);
   return {
     fastenerTemplate: (s) => entry(s).instance || null,
     geometry: (s) => entry(s).geometry.clone(),
+    identity: (s) => {
+      const e = entry(s);
+      return e.identity || e.geometry;
+    },
+    profileDetail: (s) => modelProfileDetail(s, options),
+    hasCuts: (s) => !!entry(s).cuts.length,
+    instanceDescriptor: (s) => objectInstanceDescriptor(s, true, modelProfileDetail(s, options)),
     holes: (s) => holes.get(s.id) || [],
     edges(s, threshold = 1) {
       return entryEdges(entry(s), threshold);
     },
   };
 }
-export function selectionGeometryReader(model) {
-  const entry = indexedEntries(model, true);
+export function selectionGeometryReader(model, options = {}) {
+  const entry = indexedEntries(model, true, options);
   const reader = (s) => entry(s).geometry;
   reader.bounds = (s) => {
     const value = entry(s);
@@ -173,17 +202,18 @@ export function selectionGeometryReader(model) {
   };
   return reader;
 }
-export function displayGeometryIdentityReader(model) {
-  const entry = indexedEntries(model, true);
+export function displayGeometryIdentityReader(model, options = {}) {
+  const entry = indexedEntries(model, true, options);
   return (s) => {
     const value = entry(s);
     return value.identity || value.geometry;
   };
 }
 export const cachedGeometryIdentity = (s) => cache.get(s)?.geometry;
-export const cachedDisplayHasCuts = (s) => !!displayCache.get(s)?.cuts.length;
-export const cachedDisplayGeometryIdentity = (s) => {
-  const entry = displayCache.get(s);
+export const cachedDisplayHasCuts = (s, detail = 'schematic') =>
+  !!displayCache.get(profileDisplayObject(s, detail))?.cuts.length;
+export const cachedDisplayGeometryIdentity = (s, detail = 'schematic') => {
+  const entry = displayCache.get(profileDisplayObject(s, detail));
   return entry?.identity || entry?.geometry;
 };
 export const displayFastenerTemplate = (s, model) =>
@@ -191,6 +221,7 @@ export const displayFastenerTemplate = (s, model) =>
 const snapTemplates = new WeakMap();
 export function createSnapGeometryContext(model) {
   const entry = indexedEntries(model, true);
+  const source = (s) => profileDisplayObject(s, 'schematic');
   const holes = holesByTarget(model);
   const features = (s) => {
     const evaluated = entry(s),
@@ -210,15 +241,15 @@ export function createSnapGeometryContext(model) {
     },
     cornerFeatures(s) {
       const f = features(s);
-      return { points: objectCorners(s, model, f.entry), matrix: f.matrix };
+      return { points: objectCorners(source(s), model, f.entry), matrix: f.matrix };
     },
     segmentFeatures(s) {
       const f = features(s);
-      return { segments: objectSegments(s, model, f.entry), matrix: f.matrix };
+      return { segments: objectSegments(source(s), model, f.entry), matrix: f.matrix };
     },
     geometry: (s) => entry(s).geometry,
-    objectCorners: (s) => objectCorners(s, model, entry(s)),
-    objectSegments: (s) => objectSegments(s, model, entry(s)),
+    objectCorners: (s) => objectCorners(source(s), model, entry(s)),
+    objectSegments: (s) => objectSegments(source(s), model, entry(s)),
     holeCenters: (s) =>
       (holes.get(s.id) || []).map((h) => ({
         coords: h.frame.origin,
@@ -238,6 +269,7 @@ export function cacheObjectGeometry(
   instance = null,
   simplified = false,
 ) {
+  if (simplified) s = profileDisplayObject(s);
   const store = simplified ? displayCache : cache;
   const previous = store.get(s);
   disposeEntry(previous);
@@ -251,7 +283,12 @@ export function cacheObjectGeometry(
   });
 }
 /** Called after geometryForModel has validated the cached cut identities. */
-export function objectInstanceDescriptor(s, simplified = false) {
+export function objectInstanceDescriptor(
+  s,
+  simplified = false,
+  detail = simplified ? 'schematic' : 'exact',
+) {
+  s = profileDisplayObject(s, detail);
   const entry = (simplified ? displayCache : cache).get(s);
   if (!entry) return null;
   if (s.type === 'fastener') return entry.cuts.length ? null : fastenerDisplayTemplate(s);
@@ -279,8 +316,14 @@ export function objectInstanceDescriptor(s, simplified = false) {
   if (s.start && s.end) shape.length = Math.hypot(...s.end.map((v, i) => v - s.start[i]));
   return { key: JSON.stringify(shape), matrix, geometry: entry.geometry, local: false };
 }
-export function edgesForModel(s, model, threshold = 1, simplified = false) {
-  const entry = evaluated(s, model, null, simplified);
+export function edgesForModel(
+  s,
+  model,
+  threshold = 1,
+  simplified = false,
+  detail = simplified ? 'schematic' : 'exact',
+) {
+  const entry = evaluated(profileDisplayObject(s, detail), model, null, simplified);
   return entryEdges(entry, threshold);
 }
 function entryEdges(entry, threshold) {

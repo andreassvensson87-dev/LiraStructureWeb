@@ -1,4 +1,7 @@
+import { inputDevice, setInputDevice, zoomSpeed, setZoomSpeed } from '../input-device.js';
 import { parsePositions } from '../grid-lines.js';
+import { createGridLabelEditor } from './grid-label-editor.js';
+import { validateGridLabels } from '../grid-labels.js';
 import { FRAME_EXAMPLE_SIZES, frameExampleCounts } from '../project/frame-example.js';
 export function createSettingsController({
   project,
@@ -10,10 +13,33 @@ export function createSettingsController({
   loadExample,
 }) {
   const $ = (id) => document.getElementById(id);
+  const gridLabelEditor = createGridLabelEditor(
+    document.querySelector('[data-settings-panel="grid"]'),
+  );
+  const navigationButton = document.createElement('button');
+  navigationButton.type = 'button';
+  navigationButton.dataset.settings = 'navigation';
+  navigationButton.setAttribute('aria-pressed', 'false');
+  navigationButton.textContent = 'Navigering';
+  document.querySelector('.settings-nav').append(navigationButton);
+  const navigationPanel = document.createElement('section');
+  navigationPanel.dataset.settingsPanel = 'navigation';
+  navigationPanel.hidden = true;
+  navigationPanel.innerHTML =
+    '<label class=field>Inmatningsenhet<select id=input-device aria-label="Inmatningsenhet"><option value=mouse>Mus med scrollhjul</option><option value=trackpad>Trackpad</option></select></label><label class=field>Zoomhastighet<input id=zoom-speed aria-label="Zoomhastighet" type=range min=25 max=400 step=5 value=100></label><output id=zoom-speed-value for=zoom-speed></output><button type=button id=zoom-speed-reset>Återställ zoomhastighet</button>';
+  $('settings-error').before(navigationPanel);
+  const updateZoomLabel = () => {
+    $('zoom-speed-value').textContent = `${$('zoom-speed').value} %`;
+  };
+  $('zoom-speed').oninput = updateZoomLabel;
+  $('zoom-speed-reset').onclick = () => {
+    $('zoom-speed').value = 100;
+    updateZoomLabel();
+  };
   if (loadExample) {
     const section = document.createElement('section');
     section.innerHTML =
-      '<h3>Exempelmodeller</h3><p>Stålstomme med pelare, I-balkar, bjälklag, väggpaneler, grundplintar och skruvförband. De utökade modellerna har även sekundärbalkar, uppdelade bjälklag och fasadstag. Demonstrationsmått för funktion och prestanda.</p><label class="field">Storlek<select data-example-size></select></label><p data-example-count></p><button type="button" class="primary" data-load-frame>Läs in stommodell</button><p>Modellen ersätts vid inläsning. Du kan återställa den med Ångra. Stora modeller kan ta längre tid att bygga upp.</p>';
+      '<h3>Exempelmodeller</h3><label class="field">Storlek<select data-example-size></select></label><p data-example-count></p><button type="button" class="primary" data-load-frame>Läs in stommodell</button>';
     const sizeSelect = section.querySelector('[data-example-size]');
     for (const size of FRAME_EXAMPLE_SIZES)
       sizeSelect.append(
@@ -66,13 +92,11 @@ export function createSettingsController({
         button.className = 'settings-library';
         const title = document.createElement('strong');
         title.textContent = library.name;
-        const description = document.createElement('span');
-        description.textContent = library.description;
         const arrow = document.createElement('span');
         arrow.className = 'settings-library-arrow';
         arrow.textContent = '↗';
         arrow.setAttribute('aria-hidden', 'true');
-        button.append(title, description, arrow);
+        button.append(title, arrow);
         button.onclick = library.open;
         panel.append(button);
       }
@@ -92,8 +116,12 @@ export function createSettingsController({
     .querySelectorAll('[data-settings]')
     .forEach((b) => (b.onclick = () => settingsCategory(b.dataset.settings)));
   function fillSettings() {
+    $('zoom-speed').value = zoomSpeed() * 100;
+    updateZoomLabel();
+    $('input-device').value = inputDevice();
     $('grid-x').value = project.grid.x.join(' ');
     $('grid-y').value = project.grid.y.join(' ');
+    gridLabelEditor.fill(project.grid);
     $('snap-endpoints').checked = project.snap.endpoints;
     $('snap-axes').checked = project.snap.axes;
     $('snap-polar').value = project.snap.polar;
@@ -129,7 +157,11 @@ export function createSettingsController({
     e.preventDefault();
     let next;
     try {
-      next = { x: parsePositions($('grid-x').value), y: parsePositions($('grid-y').value) };
+      next = gridLabelEditor.read({
+        x: parsePositions($('grid-x').value),
+        y: parsePositions($('grid-y').value),
+      });
+      validateGridLabels(next);
     } catch (error) {
       settingsCategory('grid');
       $('settings-error').textContent = error.message;
@@ -144,6 +176,8 @@ export function createSettingsController({
       $('settings-error').textContent = 'Rutsteget måste vara 0,001–100 000 mm.';
       return;
     }
+    setInputDevice($('input-device').value);
+    setZoomSpeed(Number($('zoom-speed').value) / 100);
     const gridChanged = JSON.stringify(next) !== JSON.stringify(project.grid);
     checkpoint();
     project.grid = next;

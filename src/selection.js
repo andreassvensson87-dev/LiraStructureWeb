@@ -26,8 +26,8 @@ function triangleIntersectsRect(points, rect) {
   return true;
 }
 // Left-to-right contains the complete sweep; right-to-left crosses actual surfaces.
-export function enclosedSweeps(sweeps, camera, width, height, a, b, model = sweeps) {
-  const geometryForSelection = selectionGeometryReader(model);
+export function enclosedSweeps(sweeps, camera, width, height, a, b, model = sweeps, options = {}) {
+  const geometryForSelection = selectionGeometryReader(model, options);
   const rect = {
     left: Math.min(a.x, b.x),
     right: Math.max(a.x, b.x),

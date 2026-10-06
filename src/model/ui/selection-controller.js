@@ -82,6 +82,7 @@ export function createSelectionController({
           m.start,
           p,
           project.objects,
+          { exactProfileIds: ui.exactProfileIds },
         );
         setSelection(m.additive ? [...ui.selectedIds, ...hits] : hits);
       }

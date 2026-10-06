@@ -12,6 +12,8 @@ export function dependentViewIds(views, id) {
   return ids;
 }
 
+import { drawingProfileDetail } from './profile-detail.js';
+
 export function alignDrawingView(view, target, direction) {
   const axis = direction === 'horizontal' ? 1 : 0;
   view.position[axis] = target.position[axis] + (target.size[axis] - view.size[axis]) / 2;
@@ -100,6 +102,14 @@ export class DrawingViewActions {
       this.menu.append(b);
     };
     button('Duplicera vy', () => this.adapter.duplicate(id));
+    const view = this.adapter.views().find((v) => v.id === id);
+    const detail = drawingProfileDetail(view, this.adapter.drawingType?.() || 'SP');
+    button(detail === 'exact' ? 'Visa profiler schematiskt' : 'Visa profiler exakt', () => {
+      view.settings ??= {};
+      view.settings.profileDetail = detail === 'exact' ? 'schematic' : 'exact';
+      this.adapter.changed(id);
+    });
+    button('Rita om vyn', () => this.adapter.changed(id));
     button('Ta bort vy…', () => this.remove(id));
     for (const [direction, label] of [
       ['horizontal', 'Linjera horisontellt…'],

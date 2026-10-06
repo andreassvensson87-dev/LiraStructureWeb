@@ -1,3 +1,7 @@
+import { ObjectFeedback } from './model/object-feedback.js';
+import { createConnectionMarkers } from './components/markers.js';
+import { createComponentUI } from './components/ui.js';
+let componentUI = null;
 import { updateDisplayDetail } from './model/display-detail.js';
 import { ReferenceModels } from './references/reference-models.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
@@ -25,6 +29,7 @@ import { createRotationController } from './model/ui/rotation-controller.js';
 import { createSelectionController } from './model/ui/selection-controller.js';
 import { createPlateController } from './model/ui/plate-controller.js';
 import { createModelEditorState } from './model/editor-state.js';
+import { hasExactProfile, setModelProfilesExact } from './profile-detail.js';
 const ui = createModelEditorState();
 import { createToolSession, resetToolLength, resetToolInteraction } from './model/tool-session.js';
 const tools = createToolSession();
@@ -39,6 +44,7 @@ import {
   updateObjectMeshTransparency,
 } from './model/object-mesh.js';
 import { createProject, captureProject } from './project/project-state.js';
+import { addToAssembly } from './project/assemblies.js';
 import { installProjectFiles } from './app/project-files.js';
 import { SnapIndex } from './model/snap-index.js';
 import { displayGeometryIdentityReader, createDisplayGeometryContext } from './model-object.js';
@@ -78,7 +84,7 @@ let planView = null;
 
 import { LevelsUI, initialLevels, levelElevation } from './levels.js';
 let levelsUI = null;
-import { nextIdentity, identityError } from './object-identity.js';
+import { nextIdentity, identityError, designation } from './object-identity.js';
 import { ModelTree } from './model-tree.js';
 let modelTree = null;
 let referenceModels = null;
@@ -88,6 +94,8 @@ const isVisible = (id) =>
   (ui.showHelpers ||
     !isHelper(renderedById.get(id)?.source ?? project.objects.find((s) => s.id === id)));
 import { MaterialUI } from './material-ui.js';
+import { profileMaterialSuggestions, suggestedProfileMaterial } from './profile-material.js';
+import { ObjectInformation } from './model/ui/object-information.js';
 let materialUI = null;
 import './style.css';
 
@@ -112,7 +120,7 @@ const $ = (id) => document.getElementById(id),
   fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
 
 const host = $('viewport');
-const { scene, camera, renderer, navigation } = createModelViewport(host, (message) => {
+const { scene, camera, renderer, navigation, viewWidget } = createModelViewport(host, (message) => {
   $('status').textContent = message;
 });
 const project = createProject({ grid: defaultGrid, levels: initialLevels() });
@@ -122,6 +130,7 @@ const grid = new GridLines(scene, host);
 grid.set({ ...project.grid, z: levelElevation(project.levels) });
 const objects = new THREE.Group();
 scene.add(objects);
+const connectionMarkers = createConnectionMarkers(host, (id) => setSelection([id]));
 const instanceBatches = new InstanceBatches(scene);
 const insertionPoints = new InsertionPoints(
   host,
@@ -292,6 +301,11 @@ document
 
 let pendingPointer = null;
 const frameGate = new FrameGate();
+const objectFeedback = new ObjectFeedback(scene, {
+  visible: isVisible,
+  invalidate: () => frameGate.invalidate(),
+});
+objectFeedback.setModel(project.objects);
 for (const event of ['click', 'input', 'change', 'keydown', 'pointerup', 'pointercancel'])
   document.addEventListener(event, () => frameGate.invalidate(), { capture: true });
 host.addEventListener(
@@ -308,6 +322,7 @@ renderer.setAnimationLoop(() => {
   if (pendingPointer) {
     const pointer = pendingPointer;
     pendingPointer = null;
+    updateObjectHover(pointer);
     updatePointer(pointer);
   }
   if (!ui.marquee && !rotationHandle.drag) navigation.controls.update();
@@ -318,6 +333,9 @@ renderer.setAnimationLoop(() => {
   updateFastenerDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
   updateDisplayDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
   instanceBatches.sync(camera);
+  objectFeedback.refresh();
+  viewWidget.update();
+  connectionMarkers.update(camera);
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
   insertionPoints.update(
     camera,
@@ -369,6 +387,8 @@ function dispose(o) {
   });
 }
 function clearPreview() {
+  ui.componentPreview = false;
+  objectFeedback.setModel(project.objects);
   objects.children.forEach((child) => (child.visible = isVisible(child.userData.id)));
   ui.previewSweep = null;
   if (ui.preview) {
@@ -381,6 +401,7 @@ function mesh(s, ghost = false, model = project.objects, geometryContext = null)
   return createObjectMesh(s, {
     model,
     geometryContext,
+    profileDetail: ui.exactProfileIds.has(s.id) ? 'exact' : 'schematic',
     selectedIds:
       tools.operation?.mode === 'fastenerTargets'
         ? new Set(tools.operation.targetIds)
@@ -412,9 +433,10 @@ function render({ selectionOnly = false } = {}) {
   } else {
     instanceBatches.prepareRebuild();
     const previous = renderedById;
-    const geometry = displayGeometryIdentityReader(project.objects);
+    const profileOptions = { exactProfileIds: ui.exactProfileIds };
+    const geometry = displayGeometryIdentityReader(project.objects, profileOptions);
     const holes = holesByTarget(project.objects);
-    const geometryContext = createDisplayGeometryContext(project.objects);
+    const geometryContext = createDisplayGeometryContext(project.objects, profileOptions);
     const children = [];
     let reused = 0;
     renderedById = new Map();
@@ -477,6 +499,15 @@ function render({ selectionOnly = false } = {}) {
   renderCutRelations();
   syncMaterialPanel();
   helperController.sync();
+  componentUI?.sync();
+  objectFeedback.setSelection(ui.selectedIds);
+  objectFeedback.setModel(project.objects);
+  connectionMarkers.sync(
+    project.objects,
+    ui.selectedIds,
+    isVisible,
+    tools.operation?.mode === 'fit',
+  );
   fastenerUI?.sync(
     project.objects.filter((s) => ui.selectedIds.has(s.id)),
     tools.operation,
@@ -588,6 +619,8 @@ function restore(direction) {
 $('undo').onclick = () => restore('undo');
 $('redo').onclick = () => restore('redo');
 function setDrawing(value) {
+  objectFeedback.clearHover();
+  componentUI?.cancel();
   inspector?.rollback();
   cancelInspectorPreview();
   clearPlateOutline();
@@ -608,8 +641,8 @@ function setDrawing(value) {
   syncLocks();
   updateSnapOverlay();
   clearPreview();
-  navigation.controls.mouseButtons.LEFT = value ? null : THREE.MOUSE.ROTATE;
-  navigation.controls.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
+  navigation.controls.mouseButtons.LEFT = null;
+  navigation.controls.mouseButtons.MIDDLE = THREE.MOUSE.PAN;
   navigation.controls.touches.ONE = value ? null : THREE.TOUCH.ROTATE;
   renderer.domElement.style.cursor = value ? 'crosshair' : 'default';
   $('draw').classList.toggle('active', value);
@@ -634,6 +667,15 @@ function setDrawing(value) {
   syncPlateUI();
   syncMaterialPanel();
   helperController.sync();
+  componentUI?.sync();
+  objectFeedback.setSelection(ui.selectedIds);
+  objectFeedback.setModel(project.objects);
+  connectionMarkers.sync(
+    project.objects,
+    ui.selectedIds,
+    isVisible,
+    tools.operation?.mode === 'fit',
+  );
   fastenerUI?.sync(
     project.objects.filter((s) => ui.selectedIds.has(s.id)),
     tools.operation,
@@ -891,7 +933,7 @@ function selectionHit() {
   };
   for (const object of objects.children) {
     if (tools.operation?.mode === 'fastenerTargets') continue;
-    if (!object.visible || !object.userData.cut) continue;
+    if (!object.visible || !object.userData.cut || object.userData.component) continue;
     const attributes = [object.children[0].geometry.attributes.position];
     if (object.children[2]?.isLine)
       attributes.push(object.children[2].geometry.attributes.position);
@@ -1041,7 +1083,7 @@ function showPreview(p) {
 function updatePointer(e) {
   tools.lastPointer = { clientX: e.clientX, clientY: e.clientY };
   if (!tools.drawing) return;
-  if (['fastenerTargets', 'fastenerDepth'].includes(tools.operation?.mode)) return;
+  if (['fastenerTargets', 'fastenerDepth', 'fit'].includes(tools.operation?.mode)) return;
   if (tools.operation?.mode === 'workPlane') {
     const p = point(e),
       points = [...tools.operation.points, ...(p ? [p] : [])];
@@ -1250,6 +1292,87 @@ function commitFastener(draft) {
   setSelection([draft.id]);
   $('status').textContent = 'Skruv och hål sparade';
 }
+const assemblyMenu = document.createElement('div');
+assemblyMenu.className = 'annotation-context-menu model-context-menu';
+assemblyMenu.hidden = true;
+assemblyMenu.setAttribute('role', 'menu');
+const addAssemblyButton = document.createElement('button');
+addAssemblyButton.type = 'button';
+addAssemblyButton.setAttribute('role', 'menuitem');
+addAssemblyButton.textContent = 'Lägg till i assembly';
+assemblyMenu.append(addAssemblyButton);
+const profileMenuButton = (label, action) => {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('role', 'menuitem');
+  button.textContent = label;
+  button.onclick = () => {
+    assemblyMenu.hidden = true;
+    action();
+    render();
+  };
+  assemblyMenu.append(button);
+  return button;
+};
+const objectInformation = new ObjectInformation({
+  getObjects: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
+  getModel: () => project.objects,
+  partLabel: (s) => (isPhysical(s) ? partStatus(s, project.objects, project.parts).label : '—'),
+});
+const informationButton = profileMenuButton('Information', () => {
+  inspector?.finish();
+  objectInformation.open();
+});
+const showExactButton = profileMenuButton('Visa exakt', () => {
+  setModelProfilesExact(ui, project.objects, ui.selectedIds, true);
+  $('status').textContent = 'Markerade profiler visas exakt med radier';
+});
+const showSchematicButton = profileMenuButton('Visa schematiskt', () => {
+  setModelProfilesExact(ui, project.objects, ui.selectedIds, false);
+  $('status').textContent = 'Markerade profiler visas schematiskt utan radier';
+});
+const redrawViewButton = profileMenuButton('Rita om vyn', () => {
+  ui.exactProfileIds.clear();
+  $('status').textContent = 'Vyn omritad · alla profiler visas schematiskt';
+});
+redrawViewButton.title = 'Återställ alla profiler i modellen till schematisk visning';
+document.body.append(assemblyMenu);
+renderer.domElement.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  if (tools.drawing || tools.operation) return;
+  const selected = project.objects.filter((s) => ui.selectedIds.has(s.id));
+  informationButton.disabled = !selected.length;
+  const profiles = selected.filter(hasExactProfile);
+  showExactButton.disabled =
+    !profiles.length || profiles.every((s) => ui.exactProfileIds.has(s.id));
+  showSchematicButton.disabled = !profiles.some((s) => ui.exactProfileIds.has(s.id));
+  addAssemblyButton.disabled = !selected.length || selected.some((s) => !isPhysical(s));
+  assemblyMenu.hidden = false;
+  assemblyMenu.style.left = `${Math.max(0, Math.min(event.clientX, innerWidth - assemblyMenu.offsetWidth))}px`;
+  assemblyMenu.style.top = `${Math.max(0, Math.min(event.clientY, innerHeight - assemblyMenu.offsetHeight))}px`;
+  addAssemblyButton.focus();
+});
+document.addEventListener('pointerdown', (event) => {
+  if (!assemblyMenu.contains(event.target)) assemblyMenu.hidden = true;
+});
+assemblyMenu.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.stopPropagation();
+    assemblyMenu.hidden = true;
+    renderer.domElement.focus({ preventScroll: true });
+  }
+});
+addAssemblyButton.onclick = () => {
+  inspector?.finish();
+  const secondaryIds = [...ui.selectedIds];
+  assemblyMenu.hidden = true;
+  setDrawing(false);
+  tools.operation = { mode: 'assemblyMain', secondaryIds };
+  syncOperationUI();
+  renderer.domElement.style.cursor = 'crosshair';
+  $('status').textContent = 'Assembly · Klicka på huvuddelen · Escape avbryter';
+  renderer.domElement.focus({ preventScroll: true });
+};
 installModelPointer(renderer.domElement, {
   getState: () => ({
     mode: tools.operation?.mode,
@@ -1264,13 +1387,15 @@ installModelPointer(renderer.domElement, {
   orbit: orbitAroundHit,
   point,
   move: (e) => {
-    pendingPointer = { clientX: e.clientX, clientY: e.clientY };
+    pendingPointer = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
     if (tools.drawing || tools.operation) frameGate.invalidate();
   },
   leave: () => {
     pendingPointer = null;
+    objectFeedback.setHover([], 'canvas');
     if (
-      ['rotate', 'plateCreate', 'plateVertex'].includes(tools.operation?.mode) ||
+      ['rotate', 'plateCreate', 'plateVertex', 'fit'].includes(tools.operation?.mode) ||
+      ui.componentPreview ||
       $('draw-length').value.trim()
     )
       return;
@@ -1281,6 +1406,37 @@ installModelPointer(renderer.domElement, {
     clearPreview();
   },
   actions: {
+    'fit-reference': (e) => {
+      objectFeedback.setHover([], 'canvas');
+      ray(e);
+      const hit = raycaster.intersectObjects(
+        objects.children.filter(
+          (o) =>
+            o.visible && (renderedById.get(o.userData.id)?.source?.type ?? 'sweep') === 'sweep',
+        ),
+        false,
+      )[0];
+      const source = hit && project.objects.find((s) => s.id === hit.object.userData.id);
+      componentUI.pick(source, hit?.point.toArray());
+    },
+    'assembly-main': (e) => {
+      ray(e);
+      const mainId = selectionHit();
+      try {
+        if (!mainId) throw Error('Klicka på en fysisk huvuddel · Escape avbryter');
+        const next = addToAssembly(project, tools.operation.secondaryIds, mainId);
+        const assembly = next.assemblies.find((a) => a.mainId === mainId);
+        checkpoint();
+        Object.assign(project, next);
+        setDrawing(false);
+        setSelection(assembly.memberIds);
+        render();
+        $('status').textContent =
+          `${assembly.mark} · ${assembly.memberIds.length} delar · Ångra återställer ändringen`;
+      } catch (error) {
+        $('status').textContent = `${error.message} · Välj huvuddel eller Escape för att avbryta`;
+      }
+    },
     'fastener-target': (e) => {
       ray(e);
       const id = selectionHit();
@@ -1329,8 +1485,12 @@ installModelPointer(renderer.domElement, {
 });
 window.addEventListener('keydown', (e) => {
   const command = modelKeyboardCommand(e, {
-    editing: ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName),
+    editing:
+      ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName) ||
+      document.activeElement.isContentEditable,
     settingsOpen: $('settings-dialog').open,
+    modalOpen: !!document.querySelector('dialog[open]'),
+    hasSelection: !!ui.selectedIds.size,
     mode: tools.operation?.mode,
     picking: tools.operation?.picking,
     hasStart: !!tools.first,
@@ -1340,11 +1500,22 @@ window.addEventListener('keydown', (e) => {
   if (!command) return;
   e.preventDefault();
   switch (command) {
+    case 'move':
+    case 'copy':
+    case 'rotate':
+      $(command).click();
+      break;
+    case 'confirm-fit':
+      componentUI.confirm();
+      break;
     case 'confirm-fastener-targets':
       fastenerUI.confirmTargets();
       break;
     case 'cancel':
       cancelBox();
+      if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
+      if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
+      assemblyMenu.hidden = true;
       setDrawing(false);
       break;
     case 'remove-workplane-point':
@@ -1484,6 +1655,7 @@ function fillSettings() {
 }
 installProjectFiles({
   project,
+  newProject: () => createProject({ grid: defaultGrid, levels: initialLevels() }),
   finishEditing: () => inspector?.finish(),
   onLoaded: fillSettings,
   loadProject: (next) => {
@@ -1493,6 +1665,7 @@ installProjectFiles({
       Object.assign(project, state);
       projectHistory.prime(project);
       hiddenObjects.clear();
+      ui.exactProfileIds.clear();
       ui.sequence = project.objects.length;
       levelsUI?.sync();
       grid.set({ ...project.grid, z: levelElevation(project.levels) });
@@ -1572,6 +1745,7 @@ function validateSweep(s) {
         displayGeometry(
           model.find((o) => o.id === h.targetId),
           model,
+          'exact',
         ).dispose();
     } catch (e) {
       return e.message;
@@ -1583,7 +1757,7 @@ function validateSweep(s) {
     : [...project.objects, s];
   try {
     for (const target of isCut(s) ? model.filter((old) => s.targets.includes(old.id)) : [s])
-      displayGeometry(target, model).dispose();
+      displayGeometry(target, model, 'exact').dispose();
     return '';
   } catch (error) {
     return error.message;
@@ -1600,6 +1774,10 @@ function previewModelBatch(batch, ghost = true) {
   const affected = new Set(batch.map((s) => s.id));
   for (const s of model) {
     const old = previous.get(s.id);
+    if (s.type === 'component' && s !== old) {
+      affected.add(s.id);
+      for (const id of [...s.targets, ...(old?.targets || [])]) affected.add(id);
+    }
     if (isFastener(s) && (s !== old || batchIds.has(s.id))) {
       affected.add(s.id);
       for (const h of [...s.holes, ...(old?.holes || [])]) affected.add(h.targetId);
@@ -1621,6 +1799,7 @@ function previewModelBatch(batch, ghost = true) {
   objects.children.forEach(
     (child) => (child.visible = isVisible(child.userData.id) && !affected.has(child.userData.id)),
   );
+  objectFeedback.setModel(model);
   return group;
 }
 function renderCutRelations() {
@@ -1656,7 +1835,7 @@ function applyLibrarySection(section) {
   inspector?.finish();
   ui.libraryMode = true;
   const sources = project.objects.filter(
-    (s) => ui.selectedIds.has(s.id) && !isPlate(s) && isPhysical(s),
+    (s) => ui.selectedIds.has(s.id) && (s.type || 'sweep') === 'sweep',
   );
   const apply = (s) => ({
     ...s,
@@ -1664,6 +1843,7 @@ function applyLibrarySection(section) {
     section: structuredClone(section),
     width: section.properties.bounds.width,
     height: section.properties.bounds.height,
+    material: suggestedProfileMaterial(section, s.material, materialUI.records, !s.material),
   });
   if (sources.length) {
     const batch = sources.map(apply),
@@ -1678,8 +1858,15 @@ function applyLibrarySection(section) {
   } else {
     startDrawing();
     ui.formSection = structuredClone(section);
+    ui.draftMaterial.material = suggestedProfileMaterial(
+      section,
+      ui.draftMaterial.material,
+      materialUI.records,
+      ui.draftMaterialAutomatic,
+    );
     $('profile').value = 'custom';
     updateForm();
+    syncMaterialPanel();
   }
   $('status').textContent = `${section.name} · version ${section.revision}`;
 }
@@ -1722,6 +1909,7 @@ materialUI = new MaterialUI($('material-panel'), {
       render();
     } else {
       ui.draftMaterial = { ...ui.draftMaterial, ...structuredClone(patch) };
+      if ('material' in patch) ui.draftMaterialAutomatic = false;
       syncMaterialPanel();
     }
   },
@@ -1733,10 +1921,21 @@ function syncMaterialPanel() {
     !ui.selectedIds.size &&
     (!tools.operation ||
       (tools.operation.mode === 'plateCreate' && !tools.operation.cutTargets?.length));
+  const section = selectedObjects.length
+    ? selectedObjects.every(
+        (s) =>
+          s.profile === 'custom' && s.section?.standard === selectedObjects[0].section?.standard,
+      )
+      ? selectedObjects[0].section
+      : null
+    : creating && !tools.operation && $('profile').value === 'custom'
+      ? ui.formSection
+      : null;
   materialUI?.sync(
     selectedObjects.length ? selectedObjects : [ui.draftMaterial],
     !!selectedObjects.length || creating,
     !!tools.operation && tools.operation.mode !== 'plateCreate',
+    profileMaterialSuggestions(section, materialUI?.records),
   );
 }
 const identityFields = document.createElement('div');
@@ -1896,6 +2095,97 @@ const drawingController = createDrawingController({
 });
 planView = drawingController.planView;
 drawingManager = drawingController.manager;
+for (const [id, key] of [
+  ['move', 'M'],
+  ['copy', 'C'],
+  ['rotate', 'R'],
+]) {
+  $(id).title = `${$(id).getAttribute('aria-label')} (Ctrl+${key})`;
+  $(id).setAttribute('aria-keyshortcuts', `Control+${key} Meta+${key}`);
+}
+function highlightFitReferences(ids) {
+  objectFeedback.setReferences(ids);
+}
+function hoverInspectorReference(id) {
+  objectFeedback.setHover(id ? [id] : [], 'inspector');
+}
+function updateObjectHover(e) {
+  const fit = tools.operation?.mode === 'fit';
+  if (e.buttons || ui.marquee || (tools.drawing && !fit) || (tools.operation && !fit)) {
+    objectFeedback.setHover([], 'canvas');
+    return;
+  }
+  ray(e);
+  const previewHit =
+    ui.componentPreview && ui.preview
+      ? raycaster.intersectObjects(
+          [...objects.children, ...ui.preview.children].filter(
+            (o) =>
+              o.visible &&
+              !o.userData.cut &&
+              (camera.layers.test(o.layers) || o.userData.instanced),
+          ),
+          false,
+        )[0]
+      : null;
+  const id = previewHit?.object.userData.id ?? selectionHit();
+  const source = objectFeedback.sources.get(id) || renderedById.get(id)?.source;
+  const eligible = isPhysical(source) && (!fit || (source.type ?? 'sweep') === 'sweep');
+  objectFeedback.setHover(
+    eligible ? [id] : [],
+    'canvas',
+    fit ? objectFeedback.referenceCount : null,
+  );
+  if (!tools.operation && !tools.drawing)
+    renderer.domElement.style.cursor = eligible ? 'pointer' : 'default';
+}
+componentUI = createComponentUI({
+  getObjects: () => project.objects,
+  getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
+  selectSource: (id) => setSelection([id]),
+  begin: (picking) => {
+    setDrawing(true);
+    tools.operation = { mode: 'fit', picking };
+    renderer.domElement.style.cursor = picking ? 'crosshair' : 'default';
+    syncOperationUI();
+    renderer.domElement.focus({ preventScroll: true });
+    render({ selectionOnly: true });
+    $('status').textContent = 'Fit · Klicka första sweepen, sedan andra · Escape avbryter';
+  },
+  showInspector: () => inspector.show('properties'),
+  highlight: highlightFitReferences,
+  hoverReference: hoverInspectorReference,
+  finish: () => {
+    const fitActive = tools.operation?.mode === 'fit';
+    inspector?.finish();
+    setDrawing(false);
+    if (fitActive) $('status').textContent = 'Fit avbruten';
+  },
+  commit: (draft, mode) => {
+    clearPreview();
+    if (mode === 'clear') return;
+    if (mode === 'preview') {
+      ui.preview = previewModelBatch([draft], false);
+      ui.componentPreview = true;
+      scene.add(ui.preview);
+      return;
+    }
+    const next =
+      draft.id && project.objects.some((s) => s.id === draft.id)
+        ? applyObjectBatch(project.objects, [draft]).objects
+        : updateAutomaticJoints(project.objects, [...project.objects, draft]);
+    for (const id of draft.targets)
+      displayGeometry(
+        next.find((s) => s.id === id),
+        next,
+        'exact',
+      ).dispose();
+    checkpoint();
+    project.objects = next;
+    setSelection([draft.id]);
+    $('status').textContent = 'Fit sparad · klicka på kopplingssymbolen för att modifiera';
+  },
+});
 createGroupedToolbox(document.querySelector('.toolbox'));
 updateForm();
 render();

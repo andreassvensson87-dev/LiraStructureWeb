@@ -1,4 +1,5 @@
 import { visibleGridEndpoints } from './grid-label-position.js';
+import { gridLabel } from './grid-labels.js';
 import * as THREE from 'three';
 
 export const defaultGrid = { x: [0, 3000, 6000], y: [0, 4000, 8000] };
@@ -63,7 +64,7 @@ export class GridLines {
       add(
         [x, data.y[0] - extension, data.z || 0],
         [x, data.y.at(-1) + extension, data.z || 0],
-        String(i + 1),
+        gridLabel(data, 'x', i),
         `x:${i}`,
       ),
     );
@@ -71,7 +72,7 @@ export class GridLines {
       add(
         [data.x[0] - extension, y, data.z || 0],
         [data.x.at(-1) + extension, y, data.z || 0],
-        String.fromCharCode(65 + i),
+        gridLabel(data, 'y', i),
         `y:${i}`,
       ),
     );
@@ -87,9 +88,10 @@ export class GridLines {
   updateLabels(camera, width, height, { keepVisible = false } = {}) {
     for (const { position, opposite, index, el } of this.labels) {
       const p = position.clone().project(camera);
+      const labelRadius = Math.max(14, el.textContent.length * 3 + 6);
       if (keepVisible) {
         const q = opposite.clone().project(camera),
-          radius = Math.max(1, Math.min(14, width / 2 - 1, height / 2 - 1));
+          radius = Math.max(1, Math.min(labelRadius, width / 2 - 1, height / 2 - 1));
         const ends =
           Math.abs(p.z) <= 1 && Math.abs(q.z) <= 1
             ? visibleGridEndpoints(
@@ -115,6 +117,7 @@ export class GridLines {
       el.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
       el.style.left = `${((p.x + 1) * width) / 2}px`;
       el.style.top = `${((1 - p.y) * height) / 2}px`;
+      el.style.width = el.style.height = `${labelRadius * 2}px`;
     }
   }
   snap(point, camera, width, height) {

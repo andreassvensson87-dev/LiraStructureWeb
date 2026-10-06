@@ -10,7 +10,8 @@ const element = (tag, text) => {
   if (text) e.textContent = text;
   return e;
 };
-export function showAssemblies(manager) {
+export function showAssemblies(manager, onReturn = null) {
+  let requestedAssembly = null;
   manager.beforeNumber?.();
   let reopen = manager.dialog.open;
   if (reopen) manager.dialog.close();
@@ -87,8 +88,9 @@ export function showAssemblies(manager) {
       open.disabled = !valid;
       open.onclick = () => {
         reopen = false;
+        requestedAssembly = a;
         d.close();
-        showDrawingBatch(manager, 'AS', a.memberIds);
+        if (!onReturn) showDrawingBatch(manager, 'AS', a.memberIds);
       };
       drawingCell.append(open);
       const remove = element('button', 'Ta bort assembly');
@@ -150,6 +152,7 @@ export function showAssemblies(manager) {
     'close',
     () => {
       d.remove();
+      if (onReturn) onReturn(requestedAssembly);
       if (reopen) {
         manager.render();
         manager.dialog.showModal();

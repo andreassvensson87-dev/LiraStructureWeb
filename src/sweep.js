@@ -1,7 +1,7 @@
 import { roundProfile, roundContours, roundGeometryTemplate } from './round-profile.js';
 import * as THREE from 'three';
 import { isRound, hasWall } from './profile-forms.js';
-import { validateContours } from './section-profile.js';
+import { validateProfileSnapshotContours } from './section-profile.js';
 export function validateSweep(s) {
   if (![...s.start, ...s.end, s.width, s.height, s.thickness, s.rotation].every(Number.isFinite))
     return 'Ange giltiga tal i alla fält.';
@@ -21,7 +21,7 @@ export function validateSweep(s) {
     return 'Bredd och höjd måste vara 1–10 000 mm.';
   if (s.profile === 'custom') {
     try {
-      validateContours(s.section.loops);
+      validateProfileSnapshotContours(s.section);
     } catch (error) {
       return error.message;
     }

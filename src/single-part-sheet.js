@@ -1,4 +1,6 @@
 import { createSinglePartShell } from './drawing/ui/single-part-shell.js';
+import { drawingProfileDetail } from './profile-detail.js';
+import { installDrawingProfileDetail } from './drawing-profile-detail.js';
 import { instantiateDrawingTemplate } from './drawing-templates.js';
 import { installTemplateSave } from './drawing-template-ui.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
@@ -94,6 +96,7 @@ export class SinglePartSheet {
       this.snapGeometry?.dispose();
       this.snapGeometry = null;
       this.disposeAssembly();
+      this.disposeProfileVariants();
     });
     this.$('selected-view').onchange = () => this.selectView(this.$('selected-view').value);
     this.svg.addEventListener('keydown', (e) => {
@@ -165,6 +168,14 @@ export class SinglePartSheet {
         this.$('hidden-lines').checked;
       this.render();
     };
+    this.profileDetailControl = installDrawingProfileDetail(
+      inspector.querySelector('.view-properties'),
+      {
+        view: () => viewById(this.config || {}, this.selectedView),
+        drawingType: () => this.record?.type || 'SP',
+        changed: () => this.render(),
+      },
+    );
     const toolbar = this.dialog.querySelector('.sheet-toolbar');
     toolbar.classList.add('drawing-commandbar');
     toolbar.setAttribute('aria-label', 'Ritningsverktyg');
@@ -339,6 +350,7 @@ export class SinglePartSheet {
         this.render();
       },
       changed: (id) => {
+        this.extraSections.build();
         this.compose();
         this.selectView(id);
       },
@@ -422,6 +434,7 @@ export class SinglePartSheet {
   }
   openRecord(record, { save, review }) {
     this.disposeAssembly();
+    this.disposeProfileVariants();
     this.record = structuredClone(record);
     if (this.fontSelect) this.fontSelect.value = drawingFont(this.record);
     for (const a of this.record.annotations || [])
@@ -438,10 +451,14 @@ export class SinglePartSheet {
     this.assemblyEntries = assemblyData?.entries;
     this.geometry = assemblyData?.geometry || objectGeometry(source, this.getObjects());
     const localMatrix = assemblyData?.matrix || partMatrix(source);
+    this.profileGeometryModel = this.getObjects();
+    this.profileGeometrySource = source;
+    this.profileGeometryAssembly = this.assembly;
+    this.profileLocalMatrix = localMatrix.clone();
     this.snapGeometry?.dispose();
     this.snapGeometry =
       assemblyData?.snapGeometry ||
-      displayGeometry(source, this.getObjects()).applyMatrix4(localMatrix);
+      displayGeometry(source, this.getObjects(), 'schematic').applyMatrix4(localMatrix);
     this.holeSchedule = this.assemblyEntries
       ? this.assemblyEntries.flatMap((e) =>
           partHoleSchedule(
@@ -573,6 +590,53 @@ export class SinglePartSheet {
     this.assemblyEntries = null;
     this.assembly = null;
   }
+  disposeProfileVariants() {
+    for (const variant of this.profileVariants?.values() || []) {
+      variant.geometry.dispose();
+      variant.snapGeometry.dispose();
+      for (const entry of variant.entries || []) {
+        entry.geometry.dispose();
+        entry.snapGeometry.dispose();
+      }
+    }
+    this.profileVariants = new Map();
+  }
+  drawingGeometry(view) {
+    const detail = drawingProfileDetail(view, this.record.type);
+    if (detail === 'exact')
+      return {
+        geometry: this.geometry,
+        snapGeometry: this.snapGeometry,
+        entries: this.assemblyEntries,
+      };
+    let variant = this.profileVariants.get(detail);
+    if (!variant) {
+      variant = this.profileGeometryAssembly
+        ? assemblyGeometry(this.profileGeometryAssembly, this.profileGeometryModel, detail)
+        : {
+            geometry: objectGeometry(
+              this.profileGeometrySource,
+              this.profileGeometryModel,
+              detail,
+            ).applyMatrix4(this.profileLocalMatrix),
+            snapGeometry: displayGeometry(
+              this.profileGeometrySource,
+              this.profileGeometryModel,
+              'schematic',
+            ).applyMatrix4(this.profileLocalMatrix),
+          };
+      if (this.drawingReflection) {
+        variant.geometry.applyMatrix4(this.drawingReflection);
+        variant.snapGeometry.applyMatrix4(this.drawingReflection);
+        for (const entry of variant.entries || []) {
+          entry.geometry.applyMatrix4(this.drawingReflection);
+          entry.snapGeometry.applyMatrix4(this.drawingReflection);
+        }
+      }
+      this.profileVariants.set(detail, variant);
+    }
+    return variant;
+  }
   selectView(view) {
     this.selectedView = view;
     this.syncInspector();
@@ -586,6 +650,7 @@ export class SinglePartSheet {
     if (this.extraSections?.items.length) this.compose();
   }
   syncInspector() {
+    this.profileDetailControl?.sync();
     if (this.viewName)
       this.viewName.value =
         this.config.views?.find((v) => v.id === this.selectedView)?.name ||

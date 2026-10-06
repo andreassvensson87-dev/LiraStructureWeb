@@ -1,3 +1,4 @@
+import { inputWheelGesture } from './input-device.js';
 import { customAttributes } from './drawing-attributes.js';
 import { copyLibraryItem, libraryUsage } from './frame-library.js';
 import { rectangleSelection, frameSelectionShapes } from './frame-selection.js';
@@ -298,10 +299,18 @@ export class FrameEditor {
       (e) => {
         e.preventDefault();
         if (this.selectionPress) return;
+        const gesture = inputWheelGesture(e, undefined, this.canvas.clientHeight);
+        if (gesture.action === 'pan') {
+          const bounds = this.svg.getBoundingClientRect();
+          this.view[0] += (gesture.x * this.view[2]) / Math.max(bounds.width, 1);
+          this.view[1] += (gesture.y * this.view[3]) / Math.max(bounds.height, 1);
+          this.render();
+          return;
+        }
         const r = this.svg.getBoundingClientRect(),
           x = (e.clientX - r.left) / r.width,
           y = (e.clientY - r.top) / r.height,
-          f = Math.exp(Math.max(-1, Math.min(1, e.deltaY * 0.0015)));
+          f = Math.exp(Math.max(-1, Math.min(1, gesture.y * 0.0015)));
         if (this.view[2] * f < 5 || this.view[2] * f > 20000) return;
         this.view = [
           this.view[0] + x * this.view[2] * (1 - f),

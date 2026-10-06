@@ -1,6 +1,13 @@
 import { SearchPicker } from './search-picker.js';
 import { ColorLibrary } from './color-library.js';
 import {
+  withMaterialCatalog,
+  personalMaterials,
+  isBuiltinMaterial,
+  materialRevision,
+  materialGroups,
+} from './material-catalog.js';
+import {
   MATERIAL_TYPES,
   MATERIAL_KEY,
   validateMaterial,
@@ -15,17 +22,20 @@ export class MaterialUI {
   constructor(root, { apply }) {
     this.root = root;
     this.apply = apply;
-    this.records = [];
+    this.records = withMaterialCatalog();
     this.loadError = '';
     try {
       const raw = localStorage.getItem(MATERIAL_KEY);
-      if (raw) this.records = validateMaterialLibrary(JSON.parse(raw));
+      if (raw) this.records = withMaterialCatalog(validateMaterialLibrary(JSON.parse(raw)));
     } catch (e) {
       this.loadError = e.message;
     }
     root.innerHTML =
       '<div class="material-quick-row"><div class="material-search"></div><button type="button" id="object-color-toggle" aria-label="Välj objektfärg" aria-expanded="false"><i></i></button><button type="button" id="material-library-open" aria-label="Öppna materialbibliotek" title="Materialbibliotek">↗</button></div><div class="object-palette" hidden><button type="button" id="object-color-auto">Materialets färg</button><div class="color-swatches"></div><button type="button" id="color-library-open">Redigera färgbibliotek ↗</button></div><p id="object-material-error" role="alert"></p>';
     this.error = root.querySelector('#object-material-error');
+    this.suggestions = document.createElement('div');
+    this.suggestions.className = 'material-suggestions';
+    root.append(this.suggestions);
     this.picker = new SearchPicker(root.querySelector('.material-search'), {
       label: 'Sök material',
       placeholder: 'Sök material…',
@@ -45,7 +55,7 @@ export class MaterialUI {
     this.dialog = document.createElement('dialog');
     this.dialog.id = 'material-library';
     this.dialog.innerHTML =
-      '<header><strong>Materialbibliotek</strong><button type="button" id="material-close" aria-label="Stäng materialbibliotek">×</button></header><div class="material-layout"><nav aria-label="Materialkategorier"><div id="material-tree"></div><button type="button" id="material-new">Nytt material</button></nav><form id="material-edit"><label class="field">Materialtyp<select id="material-category"></select></label><label class="field">Namn<input id="material-name" maxlength="120" required></label><label class="field">Densitet · kg/m³<input id="material-density" type="number" min="0.001" max="100000" step="any" required></label><label class="field">Standardfärg<input id="material-color" type="color" value="#688391"></label><p id="material-version" class="inspector-note"></p><button type="submit" class="primary">Spara material</button></form></div><p id="material-error" role="alert"></p><footer><button type="button" id="material-export">Exportera</button><button type="button" id="material-import-open">Importera</button><input type="file" id="material-import" accept=".json,application/json" hidden></footer><p class="inspector-note">Sparas i denna webbläsare. Exportera för säkerhetskopia. Befintliga objekt behåller sin materialversion.</p>';
+      '<header><strong>Materialbibliotek</strong><button type="button" id="material-close" aria-label="Stäng materialbibliotek">×</button></header><div class="material-layout"><nav aria-label="Materialkategorier"><input id="material-search" type="search" aria-label="Sök i materialbibliotek" placeholder="Sök material…"><div id="material-tree"></div><button type="button" id="material-new">Nytt material</button></nav><form id="material-edit"><label class="field">Materialtyp<select id="material-category"></select></label><label class="field">Undergrupp<input id="material-subgroup" maxlength="80"></label><label class="field">Namn<input id="material-name" maxlength="120" required></label><label class="field">Densitet · kg/m³<input id="material-density" type="number" min="0.001" max="100000" step="any" required></label><label class="field">Standardfärg<input id="material-color" type="color" value="#688391"></label><p id="material-note" class="inspector-note"></p><p id="material-version" class="inspector-note"></p><button type="submit" class="primary">Spara material</button></form></div><p id="material-error" role="alert"></p><footer><button type="button" id="material-export">Exportera</button><button type="button" id="material-import-open">Importera</button><input type="file" id="material-import" accept=".json,application/json" hidden></footer><p class="inspector-note">22 standardmaterial ingår offline. Egna material sparas i denna webbläsare. Exportera för säkerhetskopia. Befintliga objekt behåller sin materialversion.</p>';
     document.body.append(this.dialog);
     this.$ = (id) => this.dialog.querySelector('#material-' + id);
     options(this.$('category'));
@@ -54,25 +64,26 @@ export class MaterialUI {
     root.querySelector('#material-library-open').onclick = () => this.openLibrary();
     this.dialog.addEventListener('close', () => this.refresh());
     this.$('new').onclick = () => this.edit(null);
+    this.$('search').oninput = () => this.tree();
     this.$('edit').onsubmit = (e) => {
       e.preventDefault();
       try {
-        const m = {
-          id: this.editing?.id || crypto.randomUUID(),
-          revision:
-            1 +
-            Math.max(
-              0,
-              ...this.records.filter((m) => m.id === this.editing?.id).map((m) => m.revision),
-            ),
-          category: this.$('category').value,
-          name: this.$('name').value.trim(),
-          density: Number(this.$('density').value),
-          color: this.$('color').value,
-        };
+        const m = materialRevision(
+          this.records,
+          this.editing,
+          {
+            category: this.$('category').value,
+            subgroup: this.$('subgroup').value.trim(),
+            name: this.$('name').value.trim(),
+            density: Number(this.$('density').value),
+            color: this.$('color').value,
+          },
+          crypto.randomUUID(),
+        );
         validateMaterial(m);
         this.persist(mergeMaterials(this.records, [m]));
         this.edit(m);
+        this.$('search').value = '';
         this.tree();
         this.$('error').textContent = 'Material sparat.';
       } catch (e) {
@@ -114,7 +125,10 @@ export class MaterialUI {
     this.dialog.showModal();
   }
   persist(records) {
-    localStorage.setItem(MATERIAL_KEY, JSON.stringify({ schema: 1, materials: records }));
+    localStorage.setItem(
+      MATERIAL_KEY,
+      JSON.stringify({ schema: 1, materials: personalMaterials(records) }),
+    );
     this.records = records;
     this.loadError = '';
   }
@@ -129,36 +143,73 @@ export class MaterialUI {
   edit(m) {
     this.editing = m;
     this.$('category').value = m?.category || this.sources?.[0]?.material?.category || 'steel';
+    this.$('subgroup').value = m?.subgroup || '';
     this.$('name').value = m?.name || '';
+    this.$('note').textContent = m?.note || '';
     this.$('density').value = m?.density ?? '';
     this.$('color').value = m?.color || '#688391';
     this.$('version').textContent = m
-      ? `Version ${m.revision} · Spara skapar en ny version`
+      ? isBuiltinMaterial(m)
+        ? 'Standardmaterial · Ändringar sparas som ett eget material'
+        : `Version ${m.revision} · Spara skapar en ny version`
       : 'Nytt material · ange egna materialdata';
   }
   tree() {
     const tree = this.$('tree');
+    const expanded = new Set([...tree.querySelectorAll('details[open]')].map((d) => d.dataset.key));
     tree.replaceChildren();
-    for (const [id, name] of MATERIAL_TYPES) {
+    const query = this.$('search').value;
+    const branch = (key, label) => {
       const group = document.createElement('details');
-      group.open = true;
+      group.dataset.key = key;
+      group.open = Boolean(query.trim()) || expanded.has(key);
       const title = document.createElement('summary');
-      title.textContent = name;
+      title.textContent = label;
       group.append(title);
-      for (const m of latestMaterials(this.records).filter((m) => m.category === id)) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = m.name;
-        button.onclick = () => this.edit(m);
-        group.append(button);
+      return group;
+    };
+    for (const { id, name, count, groups } of materialGroups(this.records, query)) {
+      const group = branch(id, `${name} (${count})`);
+      for (const subgroup of groups) {
+        const child = branch(
+          `${id}/${subgroup.name}`,
+          `${subgroup.name} (${subgroup.materials.length})`,
+        );
+        for (const m of subgroup.materials) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = m.name;
+          button.onclick = () => this.edit(m);
+          child.append(button);
+        }
+        group.append(child);
       }
       tree.append(group);
     }
+    if (!tree.children.length) tree.textContent = 'Inga träffar';
   }
-  sync(sources, visible, disabled = false) {
+  sync(sources, visible, disabled = false, suggestions = []) {
     this.sources = sources;
     this.root.hidden = !visible;
     this.root.inert = disabled;
+    this.suggestions.replaceChildren();
+    const alternatives = suggestions.filter(
+      (m) => !sources.every((s) => s.material?.id === m.id && s.material?.revision === m.revision),
+    );
+    this.suggestions.hidden = !alternatives.length;
+    if (alternatives.length) {
+      const label = document.createElement('span');
+      label.textContent = 'Materialförslag från profilen';
+      this.suggestions.append(label);
+      for (const material of alternatives) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `Använd ${material.name}`;
+        button.setAttribute('aria-label', `Använd föreslaget material ${material.name}`);
+        button.onclick = () => this.run(() => this.apply({ material: structuredClone(material) }));
+        this.suggestions.append(button);
+      }
+    }
     if (visible) this.refresh();
   }
   renderColors() {
@@ -201,7 +252,7 @@ export class MaterialUI {
         { label: 'Inget material', value: null },
         ...choices.map((m) => ({
           label: m.name,
-          detail: `${MATERIAL_TYPES.find(([id]) => id === m.category)?.[1]} · v${m.revision}`,
+          detail: `${MATERIAL_TYPES.find(([id]) => id === m.category)?.[1]} · ${m.subgroup || 'Egna material'} · v${m.revision}`,
           value: m,
         })),
       ],

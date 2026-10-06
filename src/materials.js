@@ -23,6 +23,15 @@ export function validateMaterial(m) {
   if (!Number.isFinite(m.density) || m.density <= 0 || m.density > 100000)
     throw new Error('Densiteten måste vara större än 0 och högst 100 000 kg/m³.');
   if (!/^#[0-9a-f]{6}$/i.test(m.color)) throw new Error('Ogiltig materialfärg.');
+  for (const [key, limit] of [
+    ['subgroup', 80],
+    ['note', 500],
+    ['source', 2000],
+  ])
+    if (m[key] !== undefined && (typeof m[key] !== 'string' || m[key].length > limit))
+      throw new Error('Ogiltig materialinformation.');
+  if (m.source && !/^https?:\/\//i.test(m.source))
+    throw new Error('Materialkällan måste vara en http- eller https-adress.');
   return m;
 }
 export function validateMaterialLibrary(data) {

@@ -54,6 +54,23 @@ export function createAssembly(state, ids, mainId, name, uuid = () => crypto.ran
     memberIds,
   };
 }
+/** Attach selected secondaries to the clicked main part, creating a group when needed. */
+export function addToAssembly(state, secondaryIds, mainId) {
+  const ids = [...new Set(secondaryIds)];
+  if (!ids.length) throw Error('Markera minst en sekundärdel.');
+  if (ids.includes(mainId)) throw Error('Välj en huvuddel utanför de markerade sekundärdelarna.');
+  const existing = (state.assemblies || []).find((a) => a.memberIds.includes(mainId));
+  if (existing) {
+    if (existing.mainId !== mainId) throw Error('Klicka på huvuddelen i den befintliga assemblyn.');
+    return updateAssembly(state, existing.id, {
+      memberIds: [...existing.memberIds, ...ids],
+      mainId,
+      name: existing.name,
+    });
+  }
+  const assembly = createAssembly(state, [...ids, mainId], mainId);
+  return { assemblies: [...(state.assemblies || []), assembly], drawings: state.drawings };
+}
 export function updateAssembly(state, id, { memberIds, mainId, name }) {
   const old = (state.assemblies || []).find((a) => a.id === id);
   if (!old) throw Error('Assemblyn finns inte längre.');

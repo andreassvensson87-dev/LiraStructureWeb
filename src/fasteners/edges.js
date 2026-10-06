@@ -2,6 +2,8 @@ import * as THREE from 'three';
 
 /** CSG can leave T-junctions: split collinear triangle edges before comparing adjacent faces. */
 export function geometryEdges(geometry, threshold = 1) {
+  // Fillet tessellation is a smooth radius, not a series of longitudinal edges.
+  threshold = Math.max(threshold, geometry.userData.profileEdgeThreshold || 0);
   if (!geometry.userData.linkedHoles) return new THREE.EdgesGeometry(geometry, threshold);
   const p = geometry.attributes.position,
     index = geometry.index,

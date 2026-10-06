@@ -16,7 +16,6 @@ import { numberWithDrawings, showDrawingBatch } from './drawing-workflows.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { isPhysical } from './model-object.js';
 import { partStatus } from './part-marks.js';
-import { showAssemblies } from './assembly-workflow.js';
 import { assemblyValid } from './project/assemblies.js';
 import { drawingAssemblies } from './assembly-numbering.js';
 export function drawingStamp(record, state) {
@@ -130,11 +129,6 @@ export class DrawingManager {
     const createMenu = actionButton(document.createElement('button'), 'plus', 'Skapa ritningar');
     createMenu.onclick = () => showDrawingBatch(this);
     button.after(createMenu);
-    const assemblyButton = document.createElement('button');
-    assemblyButton.type = 'button';
-    assemblyButton.textContent = 'Assemblies';
-    assemblyButton.onclick = () => showAssemblies(this);
-    createMenu.after(assemblyButton);
     this.$('filter').append(new Option('Assembly', 'AS'));
     button.onclick = () => {
       this.render();

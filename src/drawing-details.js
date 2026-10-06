@@ -31,7 +31,7 @@ export function createDetailView(parent, points, position, views) {
       source: { ...parent.source, parentViewId: parent.id },
       position: [...position],
       scale: Math.max(0.1, parent.scale / 2),
-      settings: { ...parent.settings },
+      settings: { ...parent.settings, profileDetail: 'exact' },
       detail: { label, points: structuredClone(points) },
     };
   updateDetailArea(view);

@@ -1,56 +1,9 @@
+import { expression } from './section-expression.js';
+export { expression } from './section-expression.js';
+import { contourDefinition, evaluateProfileContours } from './section-contours.js';
 import { validateTemplate } from './section-templates.js';
 import { validatePlate } from './plate.js';
 export const LIBRARY_KEY = 'lirastructure.sections.v1';
-// Restricted arithmetic grammar. Expressions never execute JavaScript.
-export function expression(
-  text,
-  resolve = () => {
-    throw new Error('Okänd parameter.');
-  },
-) {
-  const source = String(text).trim().replaceAll(',', '.');
-  if (source.length > 200) throw new Error('Uttrycket är för långt.');
-  const tokens =
-    source.match(/(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z0-9_]*|[()+*/-]/g) || [];
-  if (tokens.join('') !== source.replace(/\s/g, ''))
-    throw new Error('Använd tal, parametrar och + − * / ( ).');
-  let i = 0;
-  const factor = () => {
-    const t = tokens[i++];
-    if (t === '+') return factor();
-    if (t === '-') return -factor();
-    if (t === '(') {
-      const v = sum();
-      if (tokens[i++] !== ')') throw new Error('Saknad parentes.');
-      return v;
-    }
-    if (t && /^[A-Za-z_]/.test(t)) return resolve(t);
-    if (t && /^(\d|\.)/.test(t)) return Number(t);
-    throw new Error('Ofullständigt uttryck.');
-  };
-  const product = () => {
-    let v = factor();
-    while (['*', '/'].includes(tokens[i])) {
-      const op = tokens[i++],
-        n = factor();
-      v = op === '*' ? v * n : v / n;
-    }
-    return v;
-  };
-  const sum = () => {
-    let v = product();
-    while (['+', '-'].includes(tokens[i])) {
-      const op = tokens[i++],
-        n = product();
-      v = op === '+' ? v + n : v - n;
-    }
-    return v;
-  };
-  const value = sum();
-  if (i !== tokens.length || !Number.isFinite(value))
-    throw new Error('Uttrycket ger inget giltigt tal.');
-  return value;
-}
 export function parameterValues(parameters) {
   const values = Object.create(null),
     definitions = new Map(),
@@ -111,12 +64,17 @@ export function validateContours(loops) {
     throw new Error('Rita en ytterkontur och högst 31 hål.');
   if (loops.flat().length > 1000) throw new Error('Högst 1 000 hörn per profil.');
   for (const loop of loops) {
-    const error = validatePlate({
-      frame: { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] },
-      polygon: loop,
-      thickness: 1,
-      side: 'center',
-    });
+    // Profile arcs can have sub-millimetre tessellation; overall section size
+    // is validated separately. Still reject coincident edges and intersections.
+    const error = validatePlate(
+      {
+        frame: { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] },
+        polygon: loop,
+        thickness: 1,
+        side: 'center',
+      },
+      { minEdgeLength: 1e-5 },
+    );
     if (error) throw new Error(error.replace('Plate', 'kontur'));
     if (loop.flat().some((v) => Math.abs(v) > 10000))
       throw new Error('Profilens koordinater måste ligga inom ±10 000 mm.');
@@ -208,9 +166,7 @@ export function evaluateSection(definition) {
     };
   validateTemplate(definition, parameters);
   const loops = validateContours(
-    definition.loops.map((loop) =>
-      loop.vertices.map((v) => [expression(v.x, resolve), expression(v.y, resolve)]),
-    ),
+    evaluateProfileContours(contourDefinition(definition), parameters),
   );
   const density = Number(definition.density ?? 7850);
   if (!Number.isFinite(density) || density < 0 || density > 30000)
@@ -220,11 +176,25 @@ export function evaluateSection(definition) {
     throw new Error('Ogiltig insättningspunkt.');
   for (const [key, value] of Object.entries(definition.catalog || {}))
     if (
-      !['A', 'Ix', 'Iy', 'Wx', 'Wy', 'J', 'massPerMeter'].includes(key) ||
+      ![
+        'A',
+        'Ix',
+        'Iy',
+        'Wx',
+        'Wy',
+        'WxPlus',
+        'WxMinus',
+        'WyPlus',
+        'WyMinus',
+        'cx',
+        'cy',
+        'J',
+        'massPerMeter',
+      ].includes(key) ||
       !Number.isFinite(value) ||
-      value < 0
+      (!['cx', 'cy'].includes(key) && value < 0)
     )
-      throw new Error('Katalogvärden måste vara positiva tal.');
+      throw new Error('Ogiltiga katalogvärden: tvärsnittsegenskaper ska vara positiva tal.');
   const properties = sectionProperties(loops, density);
   if (
     properties.bounds.width < 1 ||
@@ -237,6 +207,9 @@ export function evaluateSection(definition) {
 }
 export function profileSnapshot(definition) {
   const evaluated = evaluateSection(definition);
+  const contour = contourDefinition(definition);
+  if (contour.radiusParameters.length)
+    validateContours(evaluateProfileContours(contour, evaluated.parameters, 'schematic'));
   return {
     id: definition.id,
     revision: definition.revision,
@@ -248,11 +221,38 @@ export function profileSnapshot(definition) {
     density: definition.density ?? 7850,
     catalog: structuredClone(definition.catalog || {}),
     ...evaluated,
+    ...(contour.radiusParameters.length ? { contourDefinition: contour } : {}),
   };
 }
+/** Verify the embedded definition and physical contour remain consistent on import. */
+export function validateProfileSnapshotContours(section) {
+  validateContours(section.loops);
+  if (section.contourDefinition) {
+    const exact = validateContours(
+      evaluateProfileContours(section.contourDefinition, section.parameters),
+    );
+    const schematic = validateContours(
+      evaluateProfileContours(section.contourDefinition, section.parameters, 'schematic'),
+    );
+    if (
+      exact.length !== section.loops.length ||
+      exact.some(
+        (loop, i) =>
+          loop.length !== section.loops[i].length ||
+          loop.some((point, j) =>
+            point.some((value, k) => Math.abs(value - section.loops[i][j][k]) > 1e-7),
+          ),
+      )
+    )
+      throw new Error('Profilkonturen stämmer inte med profilens parametrar.');
+    return schematic;
+  }
+  if (section.schematicLoops) validateContours(section.schematicLoops);
+  return null;
+}
 export function validateLibrary(data) {
-  if (data?.schema !== 1 || !Array.isArray(data.profiles) || data.profiles.length > 500)
-    throw new Error('Ogiltig biblioteksfil (schema 1, högst 500 versioner).');
+  if (data?.schema !== 1 || !Array.isArray(data.profiles) || data.profiles.length > 5000)
+    throw new Error('Ogiltig biblioteksfil (schema 1, högst 5 000 versioner).');
   const seen = new Set();
   for (const s of data.profiles) {
     if (

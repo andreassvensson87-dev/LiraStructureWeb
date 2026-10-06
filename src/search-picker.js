@@ -59,10 +59,11 @@ export class SearchPicker {
     this.close();
   }
   show(query) {
-    this.filtered = this.items.filter((i) =>
-      `${i.label} ${i.detail || ''}`
-        .toLocaleLowerCase('sv')
-        .includes(query.trim().toLocaleLowerCase('sv')),
+    const normalizedQuery = query.trim().toLocaleLowerCase('sv');
+    this.filtered = this.items.filter(
+      (i) =>
+        `${i.label} ${i.detail || ''}`.toLocaleLowerCase('sv').includes(normalizedQuery) ||
+        i.searchText?.includes(normalizedQuery.replace(/\s/g, '')),
     );
     this.active = 0;
     this.list.replaceChildren();

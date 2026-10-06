@@ -1,4 +1,5 @@
 import { updateDetailArea, syncDetailCrop } from './drawing-details.js';
+import { drawingProfileDetail } from './profile-detail.js';
 // Paper coordinates are millimetres; camera coordinates are model millimetres.
 export const DRAWING_VIEWS_VERSION = 2;
 /** Unpainted space inside a view must still accept machining/dimension points. */
@@ -29,6 +30,10 @@ export function ensureGAViews(record, paper, center, scale) {
       },
     ];
   sheet.viewsVersion = DRAWING_VIEWS_VERSION;
+  for (const view of sheet.views) {
+    view.settings ??= {};
+    view.settings.profileDetail = drawingProfileDetail(view, 'GA');
+  }
   record.annotations ??= [];
   for (const a of record.annotations) if (!a.view || a.view === 'plan') a.view = sheet.views[0].id;
   return sheet.views;
@@ -39,9 +44,12 @@ const legacyPartNames = { top: 'Ovanifrån', front: 'Huvudvy' };
 /** Migrate legacy scale/visibility maps once. View records are the source of truth. */
 export function ensurePartViews(record, config = record.sheet) {
   if (record.sheet.independentViews) {
-    for (const view of record.sheet.views)
+    for (const view of record.sheet.views) {
+      view.settings ??= {};
+      view.settings.profileDetail = drawingProfileDetail(view, record.type);
       if (legacyPartNames[view.id] && view.name === legacyPartNames[view.id])
         view.name = partNames[view.id];
+    }
     return record.sheet.views;
   }
   const sheet = record.sheet,
@@ -65,6 +73,7 @@ export function ensurePartViews(record, config = record.sheet) {
       camera: old?.camera || { center: [0, 0] },
       settings: {
         ...old?.settings,
+        profileDetail: drawingProfileDetail(old, record.type),
         hiddenLines:
           old?.settings?.hiddenLines ??
           config.hiddenLines?.[id] ??

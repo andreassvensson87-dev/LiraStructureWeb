@@ -65,7 +65,8 @@ export class PartSections {
     }
     return view.assemblyFrame || partViewFrame(view.projection || view.id);
   }
-  data(view, geometry = this.e.geometry) {
+  data(view, geometry = null) {
+    geometry ||= this.e.drawingGeometry?.(view).geometry || this.e.geometry;
     const frame = this.frame(view),
       source = detailSource(view, this.e.config.views),
       section = source.section || (source.id === 'section' ? { depth: 1e7 } : null);
@@ -103,15 +104,20 @@ export class PartSections {
     migratePartOrientation(this.e.record, (view, orientation) => this.frame(view, orientation));
     this.cache.clear();
     for (const view of this.items) {
-      const data = this.data(view);
+      const source = this.e.drawingGeometry?.(view) || {
+        geometry: this.e.geometry,
+        snapGeometry: this.e.snapGeometry,
+        entries: this.e.assemblyEntries,
+      };
+      const data = this.data(view, source.geometry);
       data.vectors = sectionVectors(
-        this.e.assemblyEntries?.map((e) => e.geometry) || this.e.geometry,
+        source.entries?.map((e) => e.geometry) || source.geometry,
         data.frame,
         data.section,
       );
-      if (this.e.assemblyEntries && data.section)
+      if (source.entries && data.section)
         data.cut = sectionDrawing(
-          this.e.assemblyEntries.map((e) => e.geometry),
+          source.entries.map((e) => e.geometry),
           data.frame,
           data.section.depth,
         ).cut;
@@ -121,15 +127,15 @@ export class PartSections {
       this.cache.set(view.id, data);
       // Manufacturing geometry draws the hole; simple body geometry supplies
       // part snaps, so a bore contributes only its stable centre reference.
-      const snapData = this.data(view, this.e.snapGeometry || this.e.geometry);
+      const snapData = this.data(view, source.snapGeometry || source.geometry);
       this.e.annotationCandidates[view.id] = referenceCandidates(
         snapData.candidates || [...snapData.cut, ...snapData.behind].flat(),
         'part',
         snapData.identities,
       );
       this.e.annotationCandidates[view.id].push(...data.holeCenters.map((h) => h.point));
-      if (this.e.assemblyEntries) {
-        this.e.annotationCandidates[view.id] = this.e.assemblyEntries.flatMap((entry) => {
+      if (source.entries) {
+        this.e.annotationCandidates[view.id] = source.entries.flatMap((entry) => {
           const snap = this.data(view, entry.snapGeometry);
           const referenceMatrix = this.e.config.assemblyReferenceMatrix
             ? new THREE.Matrix4().fromArray(this.e.config.assemblyReferenceMatrix)
@@ -156,7 +162,11 @@ export class PartSections {
   }
   commit(view) {
     if (view.section) {
-      const data = sectionDrawing([this.e.geometry], this.frame(view), view.section.depth),
+      const data = sectionDrawing(
+          [this.e.drawingGeometry?.(view).geometry || this.e.geometry],
+          this.frame(view),
+          view.section.depth,
+        ),
         size = data.bounds.getSize(new THREE.Vector2());
       view.camera.center = data.bounds.getCenter(new THREE.Vector2()).toArray();
       view.size = [Math.max(25, size.x / view.scale + 12), Math.max(25, size.y / view.scale + 12)];
@@ -168,7 +178,11 @@ export class PartSections {
   }
   update(view) {
     if (view.section) {
-      const data = sectionDrawing([this.e.geometry], this.frame(view), view.section.depth);
+      const data = sectionDrawing(
+        [this.e.drawingGeometry?.(view).geometry || this.e.geometry],
+        this.frame(view),
+        view.section.depth,
+      );
       view.camera.center = data.bounds.getCenter(new THREE.Vector2()).toArray();
     }
     this.build();

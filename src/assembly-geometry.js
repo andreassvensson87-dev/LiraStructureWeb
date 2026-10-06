@@ -19,16 +19,16 @@ function combinedGeometry(geometries) {
   return geometry;
 }
 /** Keep individual solids for occlusion/seams, and a combined mesh for view bounds/tools. */
-export function assemblyGeometry(assembly, objects) {
+export function assemblyGeometry(assembly, objects, profileDetail = 'exact') {
   if (!assemblyValid(assembly, objects)) throw Error('Assemblyn saknar en eller flera delar.');
   const matrix = partMatrix(objects.find((o) => o.id === assembly.mainId));
   const entries = [];
   try {
     for (const object of assemblyMembers(assembly, objects)) {
-      const geometry = objectGeometry(object, objects).applyMatrix4(matrix);
+      const geometry = objectGeometry(object, objects, profileDetail).applyMatrix4(matrix);
       const entry = { id: object.id, geometry };
       entries.push(entry);
-      entry.snapGeometry = displayGeometry(object, objects).applyMatrix4(matrix);
+      entry.snapGeometry = displayGeometry(object, objects, 'schematic').applyMatrix4(matrix);
     }
     return {
       entries,

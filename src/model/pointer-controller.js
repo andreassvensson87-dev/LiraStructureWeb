@@ -1,7 +1,9 @@
 /** Routes completed clicks to the active tool. Pointer capture/box selection stays in its adapter. */
 export function pointerCommand({ mode, picking, drawing, hasStart, plateLength, hasLength }) {
+  if (mode === 'fit') return picking ? 'fit-reference' : null;
   if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return 'fastener-target';
+  if (mode === 'assemblyMain') return 'assembly-main';
   if (mode === 'helperpoint') return 'helperpoint';
   if (mode === 'workPlane') return 'workplane';
   if (mode === 'plateCreate' || mode === 'plateVertex')
@@ -19,7 +21,13 @@ export function installModelPointer(
   const start = (e) => {
     down = { id: e.pointerId, x: e.clientX, y: e.clientY };
     const s = getState();
-    if (e.button === 0 && !s.drawing && (s.boxMode || e.shiftKey)) {
+    if (
+      e.button === 0 &&
+      e.pointerType !== 'touch' &&
+      !s.drawing &&
+      s.mode !== 'assemblyMain' &&
+      (!s.mode || s.boxMode || e.shiftKey)
+    ) {
       down = null; // The selection controller owns the entire gesture, including release.
       e.stopImmediatePropagation();
       beginBox(e);
@@ -39,7 +47,16 @@ export function installModelPointer(
       return;
     const command = pointerCommand(getState());
     if (!command) return;
-    if (['select', 'length', 'plate-length', 'fastener-target'].includes(command)) {
+    if (
+      [
+        'select',
+        'length',
+        'plate-length',
+        'fastener-target',
+        'assembly-main',
+        'fit-reference',
+      ].includes(command)
+    ) {
       actions[command](e);
       return;
     }

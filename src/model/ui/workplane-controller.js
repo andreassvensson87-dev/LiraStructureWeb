@@ -10,13 +10,6 @@ export function createWorkplaneController({
 }) {
   const $ = (id) => document.getElementById(id);
   const workPlaneGuide = new WorkPlaneGuide(scene);
-  const originalPlane = { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] };
-  const originalPlanePoints = [
-    [0, 0, 0],
-    [3500, 0, 0],
-    [0, 3500, 0],
-  ];
-  workPlaneGuide.show(originalPlanePoints, originalPlane);
   const workPlaneButton = document.createElement('button');
   workPlaneButton.type = 'button';
   workPlaneButton.id = 'work-plane';
@@ -46,10 +39,7 @@ export function createWorkplaneController({
     workPlaneButton.classList.toggle('active', picking || !!tools.temporaryPlane);
     workPlaneButton.setAttribute('aria-pressed', String(picking || !!tools.temporaryPlane));
     resetPlaneButton.hidden = !tools.temporaryPlane;
-    workPlaneGuide.show(
-      tools.temporaryPlane ? tools.workPlanePoints : originalPlanePoints,
-      tools.temporaryPlane ?? originalPlane,
-    );
+    workPlaneGuide.show(tools.temporaryPlane ? tools.workPlanePoints : [], tools.temporaryPlane);
   }
   function workPlanePrompt() {
     return [

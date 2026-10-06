@@ -30,6 +30,9 @@ export class ProfilePicker {
     this.picker.set(
       all.map((p) => ({
         label: p.name,
+        searchText: `${p.name} ${(p.aliases || []).join(' ')} ${p.family || ''} ${p.standard || ''}`
+          .toLocaleLowerCase('sv')
+          .replace(/\s/g, ''),
         detail: `${PROFILE_TYPES.find(([id]) => id === p.profileType)?.[1] || 'Övrig'} · ${p.family || 'Övrig'} · v${p.revision}`,
         value: p,
       })),

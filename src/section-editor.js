@@ -1,5 +1,7 @@
+import { inputWheelGesture } from './input-device.js';
 import { sectionTemplate, TEMPLATE_KEYS, dimensionLabel } from './section-templates.js';
 import { PROFILE_TYPES, profileType, renderProfileTree } from './profile-tree.js';
+import { withBuiltinCatalog, personalProfiles, isBuiltinProfile } from './profile-catalog.js';
 import {
   LIBRARY_KEY,
   evaluateSection,
@@ -29,7 +31,7 @@ const blank = () => ({
 export class SectionEditor {
   constructor(onUse) {
     this.onUse = onUse;
-    this.profiles = [];
+    this.profiles = withBuiltinCatalog([]);
     this.def = blank();
     this.draft = [];
     this.undo = [];
@@ -42,7 +44,7 @@ export class SectionEditor {
     this.error = '';
     try {
       const raw = localStorage.getItem(LIBRARY_KEY);
-      if (raw) this.profiles = validateLibrary(JSON.parse(raw));
+      if (raw) this.profiles = withBuiltinCatalog(validateLibrary(JSON.parse(raw)));
     } catch (e) {
       this.error = 'Biblioteket kunde inte läsas: ' + e.message;
     }
@@ -50,7 +52,7 @@ export class SectionEditor {
     this.dialog.id = 'section-editor';
     this.dialog.innerHTML = `
   <header class="section-header"><div><strong>Tvärsnittsbibliotek</strong><span>mm · 2D</span></div><button type="button" data-action="close" aria-label="Stäng tvärsnittsbibliotek">×</button></header>
-  <div class="section-layout"><nav class="section-library" aria-label="Sparade tvärsnitt"><div class="section-library-actions"><button data-action="new">Ny</button><button data-action="variant">Ny variant</button></div><input id="section-search" placeholder="Sök typ, familj eller storlek" aria-label="Sök tvärsnitt"><div id="section-list"></div><div class="section-library-actions"><button data-action="export">Exportera</button><button data-action="import">Importera</button></div><input type="file" id="section-import" accept=".json,application/json" hidden><small>Biblioteket lagras i den här webbläsaren. Exportera för en separat säkerhetskopia.</small></nav>
+  <div class="section-layout"><nav class="section-library" aria-label="Sparade tvärsnitt"><div class="section-library-actions"><button data-action="new">Ny</button><button data-action="variant">Ny variant</button></div><input id="section-search" placeholder="Sök typ, familj eller storlek" aria-label="Sök tvärsnitt"><div class="section-tree-actions"><button data-action="collapse-tree">Fäll ihop</button><button data-action="expand-tree">Visa alla</button></div><div id="section-list"></div><div class="section-library-actions"><button data-action="export">Exportera</button><button data-action="import">Importera</button></div><input type="file" id="section-import" accept=".json,application/json" hidden><small>Tibnor 2023 och svenska träprofiler ingår offline. Egna profiler lagras i webbläsaren; exportera för säkerhetskopia.</small></nav>
   <section class="section-drawing"><div class="section-tools"><button data-mode="select">Markera</button><button data-mode="poly">Polylinje</button><button data-mode="rect">Rektangel</button><button data-mode="hole">Hål</button><button data-mode="anchor">Insättningspunkt</button><button data-action="finish">Slut kontur</button><button data-action="undo">↶</button><button data-action="redo">↷</button><button data-action="fit">Visa allt</button></div><div class="section-tracking"><label><input id="section-ortho" type="checkbox"> Ortho</label><label>Polar <select id="section-polar"><option value="0">Av</option><option value="15">15°</option><option value="45" selected>45°</option><option value="90">90°</option></select></label><label><input id="section-snap" type="checkbox" checked> Snap</label><span>Panorera: mitten/höger musknapp</span></div><canvas id="section-canvas" tabindex="0" aria-label="Rita tvärsnitt i millimeter"></canvas><form id="section-command"><label>X<input id="section-x" autocomplete="off" value="0"></label><label>Y<input id="section-y" autocomplete="off" value="0"></label><button type="submit">Punkt ↵</button><label>Längd<input id="section-length" inputmode="decimal" autocomplete="off" placeholder="mm"></label><button type="button" data-action="length">Lägg till</button><span id="section-coordinates"></span></form><p id="section-feedback" role="status"></p></section>
   <section class="section-properties"><label class="field">Profiltyp<select id="section-profileType"></select></label><label class="field">Storlek / profilnamn<input id="section-name" maxlength="120"></label><label class="field">Familj<input id="section-family" maxlength="120" placeholder="Exempelvis HEA"></label><details><summary>Identitet och källa</summary><label class="field">Standard<input id="section-standard" maxlength="120"></label><label class="field">Källa<input id="section-source" maxlength="300"></label><label class="field">Densitet · kg/m³<input id="section-density" type="number" min="0" max="30000"></label></details><div id="section-template-fields"></div><small id="section-template-note"></small><details open><summary>Parametrar</summary><textarea id="section-parameters" rows="3" placeholder="B = 200\nH = 300\nt = 10" aria-label="Parametrar"></textarea><small>En per rad. Koppla en parameter via punktens X- eller Y-uttryck nedan.</small><div id="section-parameter-links"></div><div class="section-library-actions"><button data-action="rectangle-template">B × H</button><button data-action="i-template">I-profil</button></div></details><details id="section-point-panel" open><summary>Punktkopplingar</summary><small id="section-point-hint">Välj en punkt i listan eller på profilen för att ändra dess uttryck.</small><div id="section-bindings"></div><div id="section-point-fields"><label class="field">X-uttryck<input id="section-point-x"></label><label class="field">Y-uttryck<input id="section-point-y"></label><button data-action="point">Ändra punkt</button></div><button data-action="delete">Ta bort markering</button><div id="section-contours"></div></details><details><summary>Insättningspunkt</summary><label class="field">X<input id="section-anchor-x"></label><label class="field">Y<input id="section-anchor-y"></label><button data-action="anchor">Ändra insättningspunkt</button></details><details open><summary>Beräknat från konturen</summary><dl id="section-metrics"></dl><small>X horisontell, Y vertikal. Ix kring X genom tyngdpunkten, Iy kring Y. Masseberäkning använder angiven densitet.</small></details><details><summary>Katalogvärden (separata)</summary><div id="section-catalog"></div><small>Katalogvärden ändrar inte geometrin och skrivs inte över av beräkningen.</small></details><p id="section-version"></p><div class="section-save"><button class="primary" data-action="save">Spara version</button><button data-action="use">Använd på sweep</button></div></section></div>`;
     document.body.append(this.dialog);
@@ -65,6 +67,10 @@ export class SectionEditor {
       ['Iy', 'Iy · mm⁴'],
       ['Wx', 'Wx · mm³'],
       ['Wy', 'Wy · mm³'],
+      ['WyPlus', 'Wy + · mm³'],
+      ['WyMinus', 'Wy − · mm³'],
+      ['cx', 'Tyngdpunkt X · mm'],
+      ['cy', 'Tyngdpunkt Y · mm'],
       ['J', 'Vridkonstant J · mm⁴'],
       ['massPerMeter', 'Massa · kg/m'],
     ]) {
@@ -73,7 +79,7 @@ export class SectionEditor {
       l.textContent = label;
       const input = document.createElement('input');
       input.type = 'number';
-      input.min = '0';
+      if (!['cx', 'cy'].includes(key)) input.min = '0';
       input.step = 'any';
       input.dataset.catalog = key;
       l.append(input);
@@ -141,9 +147,16 @@ export class SectionEditor {
       'wheel',
       (e) => {
         e.preventDefault();
+        const gesture = inputWheelGesture(e, undefined, this.canvas.clientHeight);
+        if (gesture.action === 'pan') {
+          this.center[0] += gesture.x / this.scale;
+          this.center[1] -= gesture.y / this.scale;
+          this.draw();
+          return;
+        }
         const p = this.local(e),
           before = this.world(p);
-        this.scale = Math.min(200, Math.max(0.005, this.scale * Math.exp(-e.deltaY * 0.001)));
+        this.scale = Math.min(200, Math.max(0.005, this.scale * Math.exp(-gesture.y * 0.001)));
         const after = this.world(p);
         this.center = this.center.map((v, i) => v + before[i] - after[i]);
         this.draw();
@@ -204,8 +217,20 @@ export class SectionEditor {
     if (value === undefined) throw new Error('Okänd parameter: ' + name);
     return value;
   }
+  clearCatalog() {
+    this.def.catalog = {};
+    this.$('catalog')
+      .querySelectorAll('input')
+      .forEach((input) => {
+        input.value = '';
+      });
+  }
   metadata() {
     this.checkpoint();
+    const dimensionsBefore = JSON.stringify(
+      this.def.parameters.map((p) => [p.name, String(p.value)]),
+    );
+    const densityBefore = this.def.density;
     for (const key of ['name', 'family', 'profileType', 'standard', 'source'])
       this.def[key] = this.$(key).value;
     this.def.density = +this.$('density').value;
@@ -216,6 +241,11 @@ export class SectionEditor {
         const [name, ...value] = line.split('=');
         return { name: name.trim(), value: value.join('=').trim() };
       });
+    if (
+      densityBefore !== this.def.density ||
+      dimensionsBefore !== JSON.stringify(this.def.parameters.map((p) => [p.name, String(p.value)]))
+    )
+      this.clearCatalog();
     this.def.catalog = {};
     this.$('catalog')
       .querySelectorAll('input')
@@ -266,7 +296,9 @@ export class SectionEditor {
     this.dialog.querySelector('[data-action=undo]').disabled = !this.undo.length;
     this.dialog.querySelector('[data-action=redo]').disabled = !this.redo.length;
     this.$('version').textContent = this.def.id
-      ? `Version ${this.def.revision} · Spara skapar en ny version`
+      ? isBuiltinProfile(this.def)
+        ? 'Standardprofil · Ändringar sparas som en egen profil'
+        : `Version ${this.def.revision} · Spara skapar en ny version`
       : 'Ny biblioteksprofil';
     const vertex = this.vertices().find(
       (v) => this.selected.length === 1 && this.selected.includes(v.id),
@@ -318,6 +350,11 @@ export class SectionEditor {
     const type = this.$('profileType').value;
     this.checkpoint();
     const template = sectionTemplate(type);
+    delete this.def.roundedRoots;
+    delete this.def.radiusParameters;
+    delete this.def.radiusSegmentAngle;
+    delete this.def.flangeSlope;
+    delete this.def.flangeThicknessReference;
     if (template) {
       Object.assign(this.def, template);
       this.def.catalog = {};
@@ -327,6 +364,11 @@ export class SectionEditor {
     } else {
       this.def.profileType = type;
       delete this.def.template;
+      delete this.def.roundedRoots;
+      delete this.def.radiusParameters;
+      delete this.def.radiusSegmentAngle;
+      delete this.def.flangeSlope;
+      delete this.def.flangeThicknessReference;
     }
     this.error = '';
     this.sync();
@@ -334,7 +376,12 @@ export class SectionEditor {
   }
   templateFields() {
     const root = this.$('template-fields'),
-      keys = TEMPLATE_KEYS[this.def.template] || [],
+      keys = [
+        ...new Set([
+          ...(TEMPLATE_KEYS[this.def.template] || []),
+          ...(this.def.radiusParameters || (this.def.roundedRoots ? ['R'] : [])),
+        ]),
+      ],
       signature = keys.join(',');
     if (root.dataset.signature !== signature) {
       root.replaceChildren();
@@ -351,6 +398,7 @@ export class SectionEditor {
         input.oninput = () => {
           this.checkpoint();
           this.def.parameters.find((p) => p.name === key).value = input.value;
+          this.clearCatalog();
           this.$('parameters').value = this.def.parameters
             .map((p) => `${p.name} = ${p.value}`)
             .join('\n');
@@ -370,8 +418,12 @@ export class SectionEditor {
         }
       }
     this.$('template-note').textContent = keys.length
-      ? 'Ändra måtten här eller klicka på måtten i ritningen. Typbyte ersätter grundformen; Ångra återställer. Mallarna har skarpa hörn.'
+      ? this.def.radiusParameters?.length || this.def.roundedRoots
+        ? 'Radier följer profilens parametrar, med segmenterade bågar. Ändrade mått rensar katalogvärdena.'
+        : 'Ändra måtten här eller klicka på måtten i ritningen. Typbyte ersätter grundformen; Ångra återställer. Mallarna har skarpa hörn.'
       : 'Fri kontur och valfritt familjenamn. Parametrar kopplas via punktuttryck.';
+    if (this.def.flangeSlope !== undefined)
+      this.$('template-note').textContent += ' Flänslutning ' + this.def.flangeSlope + ' %.';
   }
   bindings() {
     const vertices = this.vertices(),
@@ -629,7 +681,13 @@ export class SectionEditor {
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     if (drag.move && Math.hypot(...drag.offset) * this.scale > 3) {
       this.checkpoint();
+      this.clearCatalog();
       delete this.def.template;
+      delete this.def.roundedRoots;
+      delete this.def.radiusParameters;
+      delete this.def.radiusSegmentAngle;
+      delete this.def.flangeSlope;
+      delete this.def.flangeThicknessReference;
       this.run(() =>
         this.vertices()
           .filter((v) => this.selected.includes(v.id))
@@ -689,11 +747,22 @@ export class SectionEditor {
     evaluateSection(candidate);
     if (record) this.checkpoint();
     this.def = candidate;
+    this.clearCatalog();
     this.draft = [];
     this.mode = 'select';
   }
   action(action) {
     this.run(() => {
+      if (action === 'collapse-tree' || action === 'expand-tree') {
+        this.$('search').value = '';
+        this.list();
+        this.$('list')
+          .querySelectorAll('details')
+          .forEach((d) => {
+            d.open = action === 'expand-tree';
+          });
+        return;
+      }
       if (action === 'close') {
         this.dialog.close();
         return;
@@ -748,7 +817,13 @@ export class SectionEditor {
         );
         if (v) {
           this.checkpoint();
+          this.clearCatalog();
           delete this.def.template;
+          delete this.def.roundedRoots;
+          delete this.def.radiusParameters;
+          delete this.def.radiusSegmentAngle;
+          delete this.def.flangeSlope;
+          delete this.def.flangeThicknessReference;
           v.x = this.$('point-x').value;
           v.y = this.$('point-y').value;
         }
@@ -761,7 +836,13 @@ export class SectionEditor {
       }
       if (action === 'delete') {
         this.checkpoint();
+        this.clearCatalog();
         delete this.def.template;
+        delete this.def.roundedRoots;
+        delete this.def.radiusParameters;
+        delete this.def.radiusSegmentAngle;
+        delete this.def.flangeSlope;
+        delete this.def.flangeThicknessReference;
         if (this.draft.length) this.draft.pop();
         else {
           if (this.def.loops[0]?.vertices.every((v) => this.selected.includes(v.id)))
@@ -833,12 +914,16 @@ export class SectionEditor {
         );
         if (!saved) {
           saved = clone(this.def);
+          if (isBuiltinProfile(saved)) saved.id = uid();
           saved.id ||= uid();
           saved.revision =
             Math.max(0, ...this.profiles.filter((p) => p.id === saved.id).map((p) => p.revision)) +
             1;
           const next = mergeLibrary(this.profiles, [saved]);
-          localStorage.setItem(LIBRARY_KEY, JSON.stringify({ schema: 1, profiles: next }));
+          localStorage.setItem(
+            LIBRARY_KEY,
+            JSON.stringify({ schema: 1, profiles: personalProfiles(next) }),
+          );
           this.profiles = next;
           this.def = clone(saved);
         }
@@ -871,7 +956,10 @@ export class SectionEditor {
       if (file.size > 5e6) throw new Error('Filen får vara högst 5 MB.');
       const incoming = validateLibrary(JSON.parse(await file.text())),
         next = mergeLibrary(this.profiles, incoming);
-      localStorage.setItem(LIBRARY_KEY, JSON.stringify({ schema: 1, profiles: next }));
+      localStorage.setItem(
+        LIBRARY_KEY,
+        JSON.stringify({ schema: 1, profiles: personalProfiles(next) }),
+      );
       this.profiles = next;
       this.error = '';
     } catch (e) {

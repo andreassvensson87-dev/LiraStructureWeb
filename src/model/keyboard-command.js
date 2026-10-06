@@ -1,13 +1,19 @@
 /** Pure key routing: UI actions and project mutations are handled by the caller. */
 export function modelKeyboardCommand(
   e,
-  { editing, settingsOpen, mode, picking, hasStart, drawing, plateLength },
+  { editing, settingsOpen, modalOpen, hasSelection, mode, picking, hasStart, drawing, plateLength },
 ) {
-  if (settingsOpen) return null;
+  if (settingsOpen || modalOpen) return null;
   if (e.key === 'Escape') return 'cancel';
   if (editing) return null;
+  if (mode === 'fit') return e.key === 'Enter' && !picking ? 'confirm-fit' : null;
+  if (mode === 'assemblyMain') return null;
   const modifier = e.ctrlKey || e.metaKey,
     axis = ['x', 'y', 'z'].includes(e.key.toLowerCase());
+  if (modifier && !e.altKey && !e.shiftKey && hasSelection) {
+    const transform = { m: 'move', c: 'copy', r: 'rotate' }[e.key.toLowerCase()];
+    if (transform) return e.repeat ? 'consume' : transform;
+  }
   if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return e.key === 'Enter' ? 'confirm-fastener-targets' : null;
   if (mode === 'workPlane') return e.key === 'Backspace' ? 'remove-workplane-point' : null;

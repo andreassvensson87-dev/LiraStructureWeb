@@ -320,3 +320,71 @@ body[data-lira-app] button.lira-update {
 body[data-lira-app] button.lira-update[hidden] {
   display: none;
 }
+
+body[data-lira-app='structure'] > header .history {
+  margin-left: auto;
+}
+.project-menu {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 30;
+}
+.project-menu > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 1px solid #42545a;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.project-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.project-menu > summary:hover,
+.project-menu[open] > summary {
+  background: #2c444a;
+}
+.project-menu > summary:focus-visible {
+  outline: 2px solid #15946d;
+  outline-offset: 2px;
+}
+.project-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(280px, calc(100vw - 36px));
+  padding: 6px;
+  border: 1px solid #d5dfe1;
+  border-radius: 8px;
+  background: white;
+  color: #20343b;
+  box-shadow: 0 8px 24px #172b3226;
+}
+.project-menu .project-file-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body[data-lira-app] > header .project-menu-panel button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 0;
+  font-size: 13px;
+  text-align: left;
+}
+.project-menu-panel small {
+  color: #637980;
+}
+.project-menu-panel [role='status'] {
+  margin: 8px 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.project-menu-panel [role='status']:empty {
+  display: none;
+}

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { ModelNavigation } from '../src/model/navigation.js';
+import { VIEW_AXES, viewOrientation } from '../src/model/view-orientation.js';
 function setup() {
   const camera = new THREE.OrthographicCamera(-5000, 5000, 5000, -5000, 1, 1e8);
   camera.up.set(0, 0, 1);
@@ -15,7 +16,7 @@ function setup() {
       zoomToCursor: true,
       minZoom: 0.001,
       maxZoom: 1000,
-      mouseButtons: { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE },
+      mouseButtons: { LEFT: null, MIDDLE: THREE.MOUSE.PAN },
       touches: { ONE: null },
       update() {
         camera.lookAt(this.target);
@@ -38,6 +39,51 @@ function setup() {
   navigation.controls.update();
   return { camera, navigation, created };
 }
+test('axis views preserve zoom and orbit center and remain stable at all six poles', () => {
+  for (const axis of ['X', 'Y', 'Z']) {
+    for (const sign of [1, -1]) {
+      const { camera, navigation, created } = setup();
+      camera.zoom = 3;
+      const target = navigation.controls.target.clone();
+      const height = navigation.viewHeight;
+      navigation.lookAlongAxis(axis, sign);
+      const direction = camera.position.clone().sub(target).normalize();
+      assert.ok(
+        direction.distanceTo(new THREE.Vector3(...VIEW_AXES[axis]).multiplyScalar(sign)) < 1e-10,
+      );
+      assert.equal(camera.zoom, 3);
+      assert.equal(navigation.viewHeight, height);
+      assert.ok(navigation.controls.target.equals(target));
+      assert.equal(created[0].disposed, true);
+      assert.equal(navigation.controls.mouseButtons.LEFT, null);
+      assert.equal(navigation.controls.mouseButtons.MIDDLE, THREE.MOUSE.PAN);
+      const projected = viewOrientation(camera).find(
+        (entry) => entry.axis === axis && entry.sign === sign,
+      );
+      assert.ok(Math.abs(projected.x) < 1e-10 && Math.abs(projected.y) < 1e-10);
+      assert.ok(Math.abs(projected.depth - 1) < 1e-10);
+      assert.ok(camera.matrixWorld.elements.every(Number.isFinite));
+    }
+  }
+});
+
+test('orientation widget follows rotation but is independent of translation and zoom', () => {
+  const { camera, navigation } = setup();
+  const before = viewOrientation(camera);
+  navigation.movePivot(new THREE.Vector3(100, 200, 500));
+  camera.zoom = 4;
+  camera.updateProjectionMatrix();
+  const after = viewOrientation(camera);
+  after.forEach((entry, index) => {
+    assert.ok(Math.abs(entry.x - before[index].x) < 1e-10);
+    assert.ok(Math.abs(entry.y - before[index].y) < 1e-10);
+    const opposite = after.find((other) => other.axis === entry.axis && other.sign === -entry.sign);
+    assert.ok(Math.abs(entry.x + opposite.x) < 1e-10);
+    assert.ok(Math.abs(entry.y + opposite.y) < 1e-10);
+  });
+  navigation.lookAlongAxis('X');
+  assert.notDeepEqual(viewOrientation(camera), before);
+});
 test('changing orbit pivot preserves projected geometry at different zoom levels', () => {
   for (const zoom of [1, 4]) {
     const { camera, navigation } = setup();
@@ -64,6 +110,7 @@ test('workplane view replaces controls, preserving tool locks and zoom options',
   assert.equal(created[0].disposed, true);
   assert.equal(navigation.controls, created[1]);
   assert.equal(navigation.controls.mouseButtons.LEFT, null);
+  assert.equal(navigation.controls.mouseButtons.MIDDLE, THREE.MOUSE.PAN);
   assert.equal(navigation.controls.touches.ONE, null);
   assert.equal(navigation.controls.zoomToCursor, true);
   assert.ok(camera.position.clone().sub(center).normalize().distanceTo(normal) < 1e-10);

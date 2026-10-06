@@ -1,4 +1,5 @@
 import { roundProfile } from './round-profile.js';
+import { gridLabel } from './grid-labels.js';
 import * as THREE from 'three';
 import { createSnapGeometryContext, objectAnchors } from './model-object.js';
 const axes = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
@@ -118,7 +119,7 @@ export function resolveSnap({
         grid.y.map((y, j) => ({
           coords: [x, y, gridZ],
           symbol: 'cross',
-          label: `Stomlinjekorsning ${i + 1}/${String.fromCharCode(65 + j)}`,
+          label: `Stomlinjekorsning ${gridLabel(grid, 'x', i)}/${gridLabel(grid, 'y', j)}`,
           gridIds: [`x:${i}`, `y:${j}`],
         })),
       ),
@@ -240,7 +241,7 @@ export function resolveSnap({
             kind: 'point',
             symbol: 'line',
             gridIds: [`${axis === 0 ? 'x' : 'y'}:${i}`],
-            label: `Stomlinje ${axis === 0 ? i + 1 : String.fromCharCode(65 + i)}${tracking ? ' · ' + tracking.label : ''}`,
+            label: `Stomlinje ${gridLabel(grid, axis === 0 ? 'x' : 'y', i)}${tracking ? ' · ' + tracking.label : ''}`,
           };
         }
       }
