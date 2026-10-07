@@ -26,6 +26,7 @@ function dialog(title) {
   return d;
 }
 export async function numberWithDrawings(manager) {
+  if (manager.openNumbering) return manager.openNumbering({ parts: true, assemblies: false });
   manager.beforeNumber?.();
   const state = manager.getState(),
     plan = planDrawingNumbering(state.objects, state.parts, state.drawings),

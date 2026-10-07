@@ -1,10 +1,16 @@
 import { showDrawingRevision } from './drawing-revisions.js';
+import {
+  createAttributeInput,
+  attributeInputValue,
+  attributeInputUnchanged,
+} from './drawing-attribute-input.js';
 import { downloadDrawingPDF } from './drawing-pdf.js';
 import { positionDrawingMenu } from './drawing-menu-position.js';
 import {
   drawingAttributes,
   drawingAttributeContext,
   attributeValue,
+  attributeRawValue,
   attributeApplies,
   updateDrawingAttribute,
 } from './drawing-attributes.js';
@@ -43,10 +49,15 @@ export function drawingStamp(record, state) {
       revisionCreatedBy: record.revisionCreatedBy,
       revisionComment: record.revisionComment,
       revisionDate: record.revisionDate,
+      revisions: record.revisions,
       date: record.date,
       drawnBy: record.drawnBy,
       checkedBy: record.checkedBy,
       issueStatus: record.issueStatus,
+      documentType: record.documentType,
+      category: record.category,
+      contact: record.contact,
+      responsibleParty: record.responsibleParty,
       typography: record.typography,
       drawingPreset: record.drawingPreset,
       frame: drawingLayoutStamp(record.sheet?.layoutId),
@@ -71,10 +82,15 @@ export function drawingStamp(record, state) {
       revisionCreatedBy: record.revisionCreatedBy,
       revisionComment: record.revisionComment,
       revisionDate: record.revisionDate,
+      revisions: record.revisions,
       date: record.date,
       drawnBy: record.drawnBy,
       checkedBy: record.checkedBy,
       issueStatus: record.issueStatus,
+      documentType: record.documentType,
+      category: record.category,
+      contact: record.contact,
+      responsibleParty: record.responsibleParty,
       typography: record.typography,
       drawingPreset: record.drawingPreset,
       frame: drawingLayoutStamp(record.sheet?.layoutId),
@@ -106,10 +122,15 @@ export function drawingStamp(record, state) {
         revisionCreatedBy: record.revisionCreatedBy,
         revisionComment: record.revisionComment,
         revisionDate: record.revisionDate,
+        revisions: record.revisions,
         date: record.date,
         drawnBy: record.drawnBy,
         checkedBy: record.checkedBy,
         issueStatus: record.issueStatus,
+        documentType: record.documentType,
+        category: record.category,
+        contact: record.contact,
+        responsibleParty: record.responsibleParty,
         typography: record.typography,
         drawingPreset: record.drawingPreset,
         frame: drawingLayoutStamp(record.sheet?.layoutId),
@@ -551,13 +572,13 @@ export class DrawingManager {
         }
       };
       row.onclick = (event) => {
-        if (event.target.closest('input,button')) return;
+        if (event.target.closest('input,select,button')) return;
         if (!event.ctrlKey && !event.metaKey) this.selection.clear();
         this.selection.add(r.id);
         this.updateSelection();
       };
       row.ondblclick = (event) => {
-        if (!event.target.closest('input,button')) this.openDrawing(r);
+        if (!event.target.closest('input,select,button')) this.openDrawing(r);
       };
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -587,26 +608,31 @@ export class DrawingManager {
           span.title = 'Hämtas från projekt eller modell';
           return span;
         }
-        const input = document.createElement('input');
-        input.type = a.dataType || 'text';
-        input.value = attributeValue(a.key, context);
+        const input = createAttributeInput(a, attributeRawValue(a.key, context));
         input.setAttribute('aria-label', `${a.name} ${r.number}`);
-        input.maxLength = 200;
         input.onchange = input.onblur = () => {
           const latest = this.getState().drawings.find((d) => d.id === r.id);
+          const value = attributeInputValue(input);
           if (
             !latest ||
-            input.value.trim() ===
-              attributeValue(a.key, drawingAttributeContext(latest, this.getState()))
+            attributeInputUnchanged(
+              a,
+              value,
+              attributeRawValue(a.key, drawingAttributeContext(latest, this.getState())),
+            )
           )
             return;
           try {
-            this.change(updateDrawingAttribute(this.getState().drawings, r.id, a, input.value));
+            this.change(updateDrawingAttribute(this.getState().drawings, r.id, a, value));
             this.$('message').textContent = 'Ritningsinformation uppdaterad.';
             this.render();
           } catch (error) {
             this.$('message').textContent = error.message;
-            input.value = attributeValue(a.key, context);
+            if (input.multiple) {
+              const old = attributeRawValue(a.key, context);
+              const values = Array.isArray(old) ? old : old ? [String(old)] : [];
+              for (const option of input.options) option.selected = values.includes(option.value);
+            } else input.value = attributeValue(a.key, context);
           }
         };
         return input;

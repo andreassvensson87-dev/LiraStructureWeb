@@ -1,4 +1,5 @@
 const ns = 'http://www.w3.org/2000/svg';
+import { constrainCadPoint } from './cad-tracking.js';
 const node = (tag, attrs) => {
   const n = document.createElementNS(ns, tag);
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
@@ -88,9 +89,13 @@ export class DrawingToolFeedback {
       p = a.project(hit.point, hit.view),
       q = a.project([hit.point[0] + 1, hit.point[1]], hit.view),
       pixels = Math.hypot(q[0] - p[0], q[1] - p[1]) * scale;
-    const step = Number(t.adapter.getSnapSettings?.().polar ?? 45);
+    const settings = t.adapter.feedback.cad?.get() ||
+      t.adapter.getSnapSettings?.() || { polar: 45 };
+    const step = Number(settings.polar ?? 45);
     if (!hit.snapped && base) {
-      const point = polarPoint(hit.point, base, step, 8 / pixels);
+      const point = settings.ortho
+        ? constrainCadPoint(hit.point, base, { ortho: true })
+        : polarPoint(hit.point, base, step, 8 / pixels);
       if (point) {
         hit.point = point;
         hit.polar = true;

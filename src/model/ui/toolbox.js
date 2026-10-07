@@ -18,14 +18,26 @@ export const TOOL_GROUPS = [
       'component-endplate',
       'component-bolted-endplate',
       'component-beam-splice',
-      'component-library',
+    ],
+    categories: [
+      { label: 'Generellt', tools: ['component-fit'] },
+      {
+        label: 'Stål',
+        tools: [
+          'component-baseplate',
+          'component-stiffener',
+          'component-endplate',
+          'component-bolted-endplate',
+          'component-beam-splice',
+        ],
+      },
     ],
   },
   { id: 'cut', label: 'Bearbeta', icon: 'polygoncut', tools: ['polygoncut', 'linecut'] },
   { id: 'transform', label: 'Ändra', icon: 'move', tools: ['move', 'copy', 'rotate'] },
   { id: 'helpers', label: 'Hjälp', icon: 'helperpoint', tools: ['helperpoint', 'helperline'] },
 ];
-export function createGroupedToolbox(root) {
+export function createGroupedToolbox(root, definitions = TOOL_GROUPS) {
   const groups = [];
   let opened = null,
     timer;
@@ -38,6 +50,10 @@ export function createGroupedToolbox(root) {
     current.clicked = false;
     current.panel.hidden = true;
     current.trigger.setAttribute('aria-expanded', 'false');
+    if (current.search) {
+      current.search.value = '';
+      current.filter();
+    }
     if (restoreFocus) current.trigger.focus();
   }
   function open(group) {
@@ -46,8 +62,27 @@ export function createGroupedToolbox(root) {
     opened = group;
     group.panel.hidden = false;
     group.trigger.setAttribute('aria-expanded', 'true');
+    if (root.closest('.drawing-editor, #frame-editor')) {
+      const panel = group.panel,
+        anchor = group.trigger.getBoundingClientRect();
+      const area = root.closest('.drawing-body, .fe-body').getBoundingClientRect();
+      const top = Math.max(8, area.top + 8),
+        bottom = Math.min(window.innerHeight - 8, area.bottom - 8);
+      Object.assign(panel.style, {
+        top: '0px',
+        left: 'calc(100% + 10px)',
+        maxHeight: `${Math.max(60, bottom - top)}px`,
+        overflowY: 'auto',
+        boxSizing: 'border-box',
+      });
+      const bounds = panel.getBoundingClientRect();
+      if (bounds.right > document.documentElement.clientWidth - 8)
+        panel.style.left = `${-bounds.width - 10}px`;
+      panel.style.top = `${Math.max(top, Math.min(anchor.top, bottom - bounds.height)) - anchor.top}px`;
+    }
+    group.search?.focus({ preventScroll: true });
   }
-  for (const definition of TOOL_GROUPS) {
+  for (const definition of definitions) {
     const buttons = definition.tools.map((id) => root.querySelector(`#${id}`));
     if (buttons.some((button) => !button)) throw new Error(`Verktyg saknas i ${definition.id}`);
     const group = document.createElement('div');
@@ -55,20 +90,24 @@ export function createGroupedToolbox(root) {
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'tool-group-trigger';
-    trigger.id = `tools-${definition.id}`;
+    trigger.id =
+      definitions === TOOL_GROUPS ? `tools-${definition.id}` : `${root.id}-group-${definition.id}`;
     trigger.setAttribute(
       'aria-label',
       definition.id === 'helpers' ? 'Hjälpgeometri' : definition.label,
     );
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-controls', `tools-panel-${definition.id}`);
+    trigger.setAttribute(
+      'aria-controls',
+      definitions === TOOL_GROUPS ? `tools-panel-${definition.id}` : `${trigger.id}-panel`,
+    );
     trigger.append(root.querySelector(`#${definition.icon} svg`).cloneNode(true));
     trigger.querySelector('svg').setAttribute('aria-hidden', 'true');
     const label = document.createElement('span');
     label.textContent = definition.label;
     trigger.append(label);
     const panel = document.createElement('div');
-    panel.id = `tools-panel-${definition.id}`;
+    panel.id = trigger.getAttribute('aria-controls');
     panel.className = 'tool-group-panel';
     panel.hidden = true;
     panel.setAttribute('role', 'group');
@@ -82,11 +121,70 @@ export function createGroupedToolbox(root) {
     panel.append(heading);
     const items = document.createElement('div');
     items.className = 'tool-group-items';
-    items.append(...buttons);
+    if (definition.categories) {
+      items.classList.add('tool-group-categories');
+      for (const category of definition.categories) {
+        const section = document.createElement('div');
+        section.className = 'tool-category';
+        if (category.label) {
+          section.setAttribute('role', 'group');
+          section.setAttribute('aria-label', category.label);
+          const title = document.createElement('div');
+          title.className = 'tool-category-heading';
+          title.textContent = category.label;
+          section.append(title);
+        }
+        section.append(...category.tools.map((id) => buttons.find((button) => button.id === id)));
+        items.append(section);
+      }
+    } else items.append(...buttons);
     panel.append(items);
     group.append(trigger, panel);
     root.append(group);
     const entry = { trigger, panel, group, buttons };
+    if (definition.id === 'connections') {
+      const search = document.createElement('input');
+      search.type = 'search';
+      search.className = 'tool-group-search';
+      search.placeholder = 'Sök kopplingar…';
+      search.setAttribute('aria-label', 'Sök kopplingar');
+      search.setAttribute('aria-controls', (items.id = 'connection-search-results'));
+      const empty = document.createElement('div');
+      empty.className = 'tool-group-empty';
+      empty.textContent = 'Inga träffar';
+      empty.setAttribute('role', 'status');
+      empty.hidden = true;
+      panel.insertBefore(search, items);
+      panel.append(empty);
+      const normalize = (text) =>
+        text
+          .toLocaleLowerCase('sv-SE')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+      entry.search = search;
+      entry.filter = () => {
+        const words = normalize(search.value).trim().split(/\s+/).filter(Boolean);
+        for (const button of buttons) {
+          const text = normalize(
+            `${button.getAttribute('aria-label')} ${button.parentElement.getAttribute('aria-label') || ''}`,
+          );
+          button.hidden = !words.every((word) => text.includes(word));
+        }
+        for (const category of items.children)
+          category.hidden = ![...category.querySelectorAll('button')].some(
+            (button) => !button.hidden,
+          );
+        empty.hidden = buttons.some((button) => !button.hidden);
+      };
+      search.addEventListener('input', entry.filter);
+      search.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          buttons.find((button) => !button.hidden && !button.disabled)?.click();
+        }
+      });
+    }
     groups.push(entry);
     group.addEventListener('pointerenter', (e) => {
       if (e.pointerType !== 'touch') open(entry);
@@ -120,7 +218,8 @@ export function createGroupedToolbox(root) {
       }
     });
     panel.addEventListener('keydown', (e) => {
-      const enabled = buttons.filter((b) => !b.disabled),
+      if (e.target === entry.search && !['ArrowDown', 'ArrowUp'].includes(e.key)) return;
+      const enabled = buttons.filter((b) => !b.disabled && !b.hidden),
         index = enabled.indexOf(document.activeElement);
       if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
         e.preventDefault();
@@ -129,8 +228,12 @@ export function createGroupedToolbox(root) {
             ? 0
             : e.key === 'End'
               ? enabled.length - 1
-              : (index + (['ArrowLeft', 'ArrowUp'].includes(e.key) ? -1 : 1) + enabled.length) %
-                enabled.length;
+              : index === -1
+                ? e.key === 'ArrowUp'
+                  ? enabled.length - 1
+                  : 0
+                : (index + (['ArrowLeft', 'ArrowUp'].includes(e.key) ? -1 : 1) + enabled.length) %
+                  enabled.length;
         enabled[next]?.focus();
       }
     });
@@ -164,11 +267,13 @@ export function createGroupedToolbox(root) {
     if (!root.contains(e.target)) close();
   };
   document.addEventListener('pointerdown', outside);
+  window.addEventListener('resize', close);
   return {
     close,
     dispose() {
       close();
       document.removeEventListener('pointerdown', outside);
+      window.removeEventListener('resize', close);
       groups.forEach((g) => g.observer.disconnect());
     },
   };

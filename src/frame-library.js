@@ -9,10 +9,15 @@ export function copyLibraryItem(item, items) {
   for (const entity of copy.entities) entity.id = crypto.randomUUID();
   return copy;
 }
-export function libraryUsage(id, kind, layouts, drawings) {
+export function libraryUsage(id, kind, layouts, drawings, reports = []) {
   return kind === 'layout'
-    ? drawings
-        .filter((d) => d.sheet?.layoutId === id)
-        .map((d) => `${d.number || ''} · ${d.name || 'Ritning'}`)
+    ? [
+        ...drawings
+          .filter((d) => d.sheet?.layoutId === id)
+          .map((d) => `${d.number || ''} · ${d.name || 'Ritning'}`),
+        ...reports
+          .filter((r) => r.first === id || r.next === id)
+          .map((r) => 'Rapportmall · ' + r.name),
+      ]
     : layouts.filter((l) => l.entities.some((e) => e.blockId === id)).map((l) => l.name);
 }

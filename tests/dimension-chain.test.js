@@ -102,3 +102,47 @@ test('moving an anchor updates values without moving the dimension line', async 
   assert.equal(moveDimensionPoint(item, 1, [300, 20]), false);
   assert.deepEqual(item.points[1], [150, 40]);
 });
+
+test('hole dimensions use stable bore references from the same part and omit repeated stations', async () => {
+  const { holeDimensionPoints } = await import('../src/dimension-chain.js');
+  const point = (x, y, source, featureId) =>
+    Object.assign([x, y], { reference: { kind: 'bore', source, featureId } });
+  const candidates = [
+    point(100, 20, 'part', 'b'),
+    point(0, 20, 'part', 'a'),
+    point(100, 50, 'part', 'c'),
+    point(500, 20, 'other', 'd'),
+  ];
+  const result = holeDimensionPoints(candidates, candidates[0].reference, 'horizontal');
+  assert.deepEqual(
+    result.map((p) => [...p]),
+    [
+      [0, 20],
+      [100, 20],
+    ],
+  );
+  assert.equal(result[0].reference.featureId, 'a');
+  assert.deepEqual(holeDimensionPoints(candidates, null, 'horizontal'), []);
+});
+test('paper offsets honour projection scale and decimal choices format real model distances', async () => {
+  const { dimensionPaperOffset, setDimensionPaperOffset, formatDimension } = await import(
+    '../src/dimension-chain.js'
+  );
+  const item = {
+    kind: 'horizontal',
+    points: [
+      [0, 0],
+      [1000, 0],
+    ],
+    line: [0, 200],
+  };
+  const project = (p) => p.map((v) => v * 0.08);
+  assert.equal(dimensionPaperOffset(item, project, 4).value, 4);
+  assert.deepEqual(setDimensionPaperOffset(item, 10, project, 4), [0, 500]);
+  assert.deepEqual(setDimensionPaperOffset(item, -10, project, 4), [0, -500]);
+  assert.equal(formatDimension(123.456, 2), '123,46');
+  assert.equal(formatDimension(123, 2), '123,00');
+  assert.equal(formatDimension(123.456, 0), '123');
+  assert.throws(() => formatDimension(1, 5));
+  assert.throws(() => setDimensionPaperOffset(item, NaN, project, 4));
+});

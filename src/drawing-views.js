@@ -12,8 +12,9 @@ export function drawingViewAtPoint(views, point, selectedId = null) {
     null
   );
 }
-export function ensureGAViews(record, paper, center, scale) {
+export function ensureGAViews(record, paper, center, scale, contentArea = null) {
   const sheet = (record.sheet ??= {});
+  const [left, top, right, bottom] = contentArea || [10, 10, paper[0] - 10, paper[1] - 10];
   if (!sheet.views?.length)
     sheet.views = [
       {
@@ -22,8 +23,8 @@ export function ensureGAViews(record, paper, center, scale) {
         kind: 'view',
         projection: 'plan',
         source: { type: 'model' },
-        position: [...(sheet.viewPosition || [10, 10])],
-        size: [paper[0] - 20, paper[1] - 20],
+        position: [...(sheet.viewPosition || [left, top])],
+        size: [right - left, bottom - top],
         scale: sheet.viewScale || scale,
         camera: { center: [...center] },
         settings: { ...record.settings, levelId: record.levelId },

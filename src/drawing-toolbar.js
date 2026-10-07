@@ -16,6 +16,17 @@ const paths = {
   number: 'M9 3 7 21M17 3l-2 18M4 8h17M3 16h17',
   down: 'm8 10 4 4 4-4',
   page: 'M5 3h10l4 4v14H5zM14 3v5h5',
+  line: 'M4 20 20 4',
+  polyline: 'm3 18 6-12 6 12 6-12',
+  circle: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  rectangle: 'M3 6h18v12H3Z',
+  arc: 'M4 19a10 10 0 0 1 16-12',
+  move: 'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',
+  copy: 'M8 8h13v13H8ZM3 16V3h13',
+  rotate: 'M20 7a9 9 0 1 0 1 7M20 2v6h-6',
+  undo: 'M8 4 3 9l5 5M3 9h10a6 6 0 0 1 0 12',
+  redo: 'm16 4 5 5-5 5M21 9H11a6 6 0 0 0 0 12',
+  save: 'M4 3h13l4 4v14H3V3ZM7 3v6h10V3M7 21v-8h10v8',
 };
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -54,7 +65,17 @@ export function actionMenu(root, { label, iconName = 'more', primary = false, it
     const open = panel.hidden;
     panel.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
-    if (open) positionDrawingMenu(trigger, panel);
+    if (open) {
+      root
+        .closest('dialog')
+        ?.querySelectorAll('.drawing-action-menu')
+        .forEach((other) => {
+          if (other === wrap) return;
+          other.querySelector('.drawing-action-panel').hidden = true;
+          other.querySelector('button').setAttribute('aria-expanded', 'false');
+        });
+      positionDrawingMenu(trigger, panel);
+    }
   };
   panel.addEventListener('click', (e) => {
     if (e.target.closest('button:not(:disabled)')) close(true);

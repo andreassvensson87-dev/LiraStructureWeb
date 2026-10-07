@@ -62,15 +62,16 @@ export function partKey(s, objects) {
     (_, v) => (typeof v === 'number' ? clean(v) : v),
   );
 }
-export function numberParts(objects, state = { registry: [], assignments: {} }) {
+export function numberParts(objects, state = { registry: [], assignments: {} }, series = {}) {
   const next = structuredClone(state);
   next.assignments = {};
   for (const s of objects.filter((s) => isPhysical(s))) {
     const key = partKey(s, objects);
     let record = next.registry.find((r) => r.key === key);
     if (!record) {
-      const prefix = defaultPrefix(s);
-      let number = 1;
+      const settings = series[objectType(s).id];
+      const prefix = settings?.prefix || defaultPrefix(s);
+      let number = settings?.start || 1;
       while (next.registry.some((r) => r.mark === `${prefix}-${String(number).padStart(3, '0')}`))
         number++;
       record = { key, mark: `${prefix}-${String(number).padStart(3, '0')}` };

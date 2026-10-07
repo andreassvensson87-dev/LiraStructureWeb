@@ -48,7 +48,6 @@ export function createComponentUI({
     ['component-endplate', 'Ändplåt'],
     ['component-bolted-endplate', 'Ändplåtskoppling'],
     ['component-beam-splice', 'Balkskarv'],
-    ['component-library', 'Komponentbibliotek'],
   ]) {
     const button = document.createElement('button');
     button.id = id;
@@ -58,7 +57,7 @@ export function createComponentUI({
     button.title = label;
     button.innerHTML = connectionIcon;
     const span = document.createElement('span');
-    span.textContent = id === 'component-library' ? 'Bibliotek' : label;
+    span.textContent = label;
     button.append(span);
     toolbar.append(button);
   }
@@ -637,42 +636,6 @@ export function createComponentUI({
   document.getElementById('component-endplate').onclick = () => start('endplate');
   document.getElementById('component-bolted-endplate').onclick = () => start('boltedEndplate');
   document.getElementById('component-beam-splice').onclick = () => start('beamSplice');
-  const library = document.createElement('dialog');
-  library.className = 'component-dialog';
-  library.setAttribute('aria-labelledby', 'component-library-title');
-  library.innerHTML =
-    '<header><h2 id="component-library-title">Komponenter / kopplingar</h2><button type="button" aria-label="Stäng bibliotek">×</button></header><p>Kopplingar som följer sina referensobjekt och styrs med parametrar.</p><button type="button" class="component-card"><strong>Fit</strong><span>Gerning eller anslutning mot genomgående sweep</span></button><button type="button" class="component-card" data-baseplate><strong>Fotplåt</strong><span>Pelare, plåt och ankarmönster med gängstång eller betongskruv</span></button><button type="button" class="component-card" data-stiffener><strong>Avstyvning</strong><span>Profilpassade plåtar för H-, I- och U-profiler</span></button><button type="button" class="component-card" data-endplate><strong>Ändplåt</strong><span>Plåt vinkelrätt mot balkens eller pelarens ände</span></button><button type="button" class="component-card" data-bolted-endplate><strong>Ändplåtskoppling</strong><span>H/I-balk mot pelarfläns med plåt, skruvar och hål</span></button><button type="button" class="component-card" data-beam-splice><strong>Balkskarv</strong><span>Två ändplåtar med gemensamma skruvar och hål för raka H/I-balkar</span></button><h3>Planerade stålkopplingar</h3><ul><li>Pelare mot balk</li><li>Balk mot balk</li><li>Pelarskarv</li></ul>';
-  document.body.append(library);
-  library.querySelector('header button').onclick = () => library.close();
-  library.querySelector('.component-card').onclick = () => {
-    library.close();
-    start();
-  };
-  library.querySelector('[data-baseplate]').onclick = () => {
-    library.close();
-    start('baseplate');
-  };
-  library.querySelector('[data-stiffener]').onclick = () => {
-    library.close();
-    start('stiffener');
-  };
-  library.querySelector('[data-endplate]').onclick = () => {
-    library.close();
-    start('endplate');
-  };
-  library.querySelector('[data-bolted-endplate]').onclick = () => {
-    library.close();
-    start('boltedEndplate');
-  };
-  library.querySelector('[data-beam-splice]').onclick = () => {
-    library.close();
-    start('beamSplice');
-  };
-  library.addEventListener('keydown', (e) => e.stopPropagation());
-  document.getElementById('component-library').onclick = () => {
-    finish();
-    library.showModal();
-  };
   return {
     pickCopy,
     confirmCopy,

@@ -2,8 +2,10 @@ import { inputWheelGesture } from './input-device.js';
 import { installDrawingPan } from './drawing-pan.js';
 import { pasteboardSize } from './drawing-pasteboard.js';
 import { actionButton } from './drawing-toolbar.js';
+import { createDrawingToolbox } from './drawing-toolbox.js';
+import { installDrawingEditorHeader } from './drawing-editor-header.js';
 
-export function drawingEditorShell({ dialog, body, toolbar, tools, cancel }) {
+export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save, annotations }) {
   dialog.classList.add('drawing-editor');
   const back = dialog.querySelector('header button');
   back.textContent = 'Till modellen';
@@ -25,11 +27,17 @@ export function drawingEditorShell({ dialog, body, toolbar, tools, cancel }) {
   });
   const nav = document.createElement('nav');
   nav.className = 'sheet-tools drawing-commandbar';
+  nav.id = `${dialog.id}-tools`;
   nav.setAttribute('aria-label', 'Ritningsverktyg');
   const select = actionButton(document.createElement('button'), 'select', 'Markera');
   select.onclick = cancel;
   nav.append(select, ...tools);
   body.prepend(nav);
+  // Snitt och detaljverktyg installeras också under konstruktörens samma körning.
+  queueMicrotask(() => {
+    createDrawingToolbox(nav);
+    installDrawingEditorHeader({ dialog, toolbar, save, annotations });
+  });
 }
 
 export class DrawingWorkspace {

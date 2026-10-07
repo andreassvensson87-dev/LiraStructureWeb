@@ -1,0 +1,100 @@
+.selection-type-dock {
+  position: absolute;
+  top: 78px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #d2dfe2;
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+  background: #fff;
+  box-shadow: -2px 2px 8px #2339400c;
+  z-index: 12;
+}
+.selection-type-dock[hidden] {
+  display: none;
+}
+@media (max-width: 800px) {
+  .selection-type-dock {
+    top: 70px;
+  }
+}
+.selection-type-dock button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #637a83;
+}
+.selection-type-dock svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.selection-type-dock button[aria-pressed='true'] {
+  background: #dcefe8;
+  color: #176b53;
+}
+.selection-type-dock button:hover {
+  background: #edf3f4;
+}
+.selection-type-dock button:focus-visible {
+  outline: 2px solid #178268;
+}
+.selection-type-dock button::after {
+  content: attr(data-tooltip);
+  display: none;
+  position: absolute;
+  right: 36px;
+  top: 2px;
+  width: max-content;
+  padding: 5px 7px;
+  border-radius: 4px;
+  color: white;
+  background: #233940;
+  font-size: 11px;
+  pointer-events: none;
+}
+.selection-type-dock button:hover::after,
+.selection-type-dock button:focus-visible::after {
+  display: block;
+}
+.inspector-scope-note {
+  font-size: 12px;
+  color: #527078;
+  margin: 0 0 12px;
+}
+.inspector-scope-actions {
+  border-top: 1px solid #dce5e7;
+  padding-top: 12px;
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.inspector-scope-actions button {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.inspector-multi-profile {
+  margin: 10px 0;
+}
+.inspector-multi-profile button {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+#inspector-properties .inspector-scope-actions[hidden],
+#inspector-properties .inspector-multi-profile[hidden] {
+  display: none;
+}

@@ -227,3 +227,57 @@ test('hidden reference models do not contribute to scene bounds or snapping', ()
   references.syncParts();
   references.clear();
 });
+
+test('file drops import IFC files without replacing an existing reference', () => {
+  const references = referenceFixture(),
+    calls = [];
+  references.selectedId = 'existing';
+  references.load = (file, options) => calls.push({ file, options });
+  const file = { name: 'Structure.IFC' };
+  references.dropFiles([file]);
+  assert.deepEqual(calls, [{ file, options: undefined }]);
+  references.importFile(file, { replaceId: 'existing' });
+  assert.equal(calls[1].options.replaceId, 'existing');
+});
+
+test('invalid and multiple file drops do not start or cancel an import', () => {
+  const references = referenceFixture();
+  let loads = 0;
+  references.load = () => loads++;
+  references.dropFiles([{ name: 'plan.pdf' }]);
+  assert.match(references.$('[role=status]').textContent, /IFC-fil/);
+  references.dropFiles([{ name: 'a.ifc' }, { name: 'b.ifc' }]);
+  assert.match(references.$('[role=status]').textContent, /åt gången/);
+  references.$('[data-import]').disabled = true;
+  references.dropFiles([{ name: 'a.ifc' }]);
+  references.importFile({ name: 'a.ifc' });
+  references.dropFiles([]);
+  assert.equal(loads, 0);
+});
+
+test('reference picking respects visibility and highlights only the selected IFC object', () => {
+  const references = referenceFixture(),
+    first = part(),
+    other = part();
+  first.mesh.userData = { ifcId: 20, name: 'First' };
+  other.mesh.userData = { ifcId: 21, name: 'Other' };
+  const original = first.mesh.material.emissive.clone();
+  references.parts = [first, other];
+  references.models = [{ id: 'ref', group: new THREE.Group(), parts: [first, other] }];
+  const rays = {
+    intersectObjects: (meshes) => (meshes.includes(first.mesh) ? [{ object: first.mesh }] : []),
+  };
+  const picked = references.pickObject(rays);
+  assert.deepEqual(picked, { modelId: 'ref', ifcId: 20 });
+  references.selectObject(picked);
+  assert.equal(first.mesh.material.emissive.getHex(), 0x176b53);
+  assert.equal(other.mesh.material.emissive.getHex(), 0);
+  references.syncObjectSelection();
+  assert.equal(references.$('[data-convert]').disabled, false);
+  assert.match(references.$('[data-object-selection]').textContent, /First/);
+  references.clearObjectSelection();
+  assert.ok(first.mesh.material.emissive.equals(original));
+  assert.equal(references.$('[data-convert]').disabled, true);
+  references.models[0].group.visible = false;
+  assert.equal(references.pickObject(rays), null);
+});

@@ -1,0 +1,341 @@
+.numbering-dialog {
+  width: min(940px, calc(100vw - 40px));
+  max-width: none;
+  max-height: calc(100dvh - 40px);
+  padding: 24px 28px 20px;
+  border: 1px solid #d2dfe2;
+  border-radius: 9px;
+  background: #fff;
+  color: #263f49;
+  overflow: auto;
+}
+.numbering-dialog > header {
+  height: auto;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.numbering-dialog h2 {
+  font-size: 22px;
+  margin: 0;
+}
+.numbering-dialog h3 {
+  font-size: 14px;
+  margin: 22px 0 12px;
+}
+.numbering-dialog > header button {
+  background: transparent;
+  border: 0;
+  color: #637a83;
+  font-size: 24px;
+  padding: 0 6px;
+}
+.numbering-dialog > header div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.numbering-dialog > header .numbering-model-toggle {
+  font-size: 12px;
+  color: #176b53;
+}
+.numbering-model-view {
+  width: min(340px, calc(100vw - 40px));
+  margin: 70px 20px 0 auto;
+  padding: 16px;
+}
+.numbering-model-view::backdrop {
+  background: transparent;
+}
+.numbering-dialog.numbering-model-view > :not(header) {
+  display: none;
+}
+.numbering-model-view > header {
+  margin-bottom: 0;
+}
+.numbering-model-view h2 {
+  font-size: 16px;
+}
+.numbering-tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid #dce5e7;
+  margin-bottom: 20px;
+}
+.numbering-tabs button {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  padding: 12px 2px;
+  background: transparent;
+  color: #637a83;
+}
+.numbering-tabs button[aria-selected='true'] {
+  border-bottom-color: #178268;
+  color: #176b53;
+}
+.numbering-dialog p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #637a83;
+}
+.numbering-dialog [hidden] {
+  display: none;
+}
+.numbering-kinds {
+  display: flex;
+  gap: 24px;
+  padding: 14px 16px;
+  border: 1px solid #dce5e7;
+  border-radius: 6px;
+}
+.numbering-kinds legend {
+  font-size: 13px;
+}
+.numbering-kinds label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.numbering-kinds input {
+  width: 16px;
+  margin: 0;
+  accent-color: #178268;
+}
+.numbering-dialog table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.numbering-dialog th {
+  text-align: left;
+  font-weight: 500;
+  color: #637a83;
+  background: #f0f5f6;
+}
+.numbering-dialog th,
+.numbering-dialog td {
+  padding: 11px 14px;
+  border-bottom: 1px solid #dce5e7;
+}
+.numbering-series {
+  max-width: 560px;
+}
+.numbering-series input {
+  width: 100%;
+  max-width: 150px;
+  padding: 7px 9px;
+}
+.numbering-dialog .numbering-note {
+  max-width: 620px;
+  margin: 18px 0;
+}
+.numbering-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.numbering-filters button {
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  background: #fff;
+}
+.numbering-filters button[aria-pressed='true'] {
+  background: #dcefe8;
+  color: #176b53;
+  border-color: #b4d8ca;
+}
+.numbering-table-scroll {
+  max-height: min(520px, 58dvh);
+  overflow: auto;
+}
+.numbering-results thead {
+  position: sticky;
+  top: 0;
+}
+.numbering-dialog .numbering-results {
+  font-size: 12px;
+}
+.numbering-results th {
+  padding: 5px 10px;
+}
+.numbering-results td {
+  height: 24px;
+  padding: 2px 10px;
+  line-height: 18px;
+}
+.numbering-object {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.numbering-object > button:not(.numbering-expand) {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.numbering-results td .numbering-expand,
+.numbering-results td .numbering-zoom {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 3px;
+}
+.numbering-expand svg,
+.numbering-zoom svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.numbering-expand[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+.numbering-results td .numbering-expand:hover {
+  background: #e8ede9;
+}
+.numbering-results td .numbering-zoom {
+  margin-left: auto;
+  color: #637a83;
+}
+.numbering-results tbody > tr:not(.numbering-detail) {
+  cursor: pointer;
+}
+.numbering-results .numbering-selected {
+  outline: 1px solid #178268;
+  outline-offset: -1px;
+}
+.numbering-members {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  max-height: 160px;
+  overflow: auto;
+}
+.numbering-members span {
+  color: #637a83;
+}
+.numbering-results .numbering-detail td {
+  height: auto;
+  padding: 7px 10px 7px 28px;
+  white-space: normal;
+  color: #856425;
+  background: #fffaf0;
+}
+.numbering-results td:nth-child(n + 3) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.numbering-results td:first-child {
+  white-space: nowrap;
+}
+.numbering-results td:first-child::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: #98a7ae;
+}
+.numbering-results .numbering-detail td:first-child {
+  white-space: normal;
+}
+.numbering-results .numbering-detail td:first-child::before {
+  content: none;
+}
+.numbering-results .numbering-new {
+  background: #edf7f1;
+}
+.numbering-results .numbering-new td:first-child::before {
+  background: #2c9e74;
+}
+.numbering-results .numbering-changed {
+  background: #fff7e8;
+}
+.numbering-results .numbering-changed td:first-child::before {
+  background: #de931d;
+}
+.numbering-results td button {
+  text-align: left;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+.numbering-results td button:hover {
+  text-decoration: underline;
+}
+.numbering-conflicts label {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 2fr;
+  gap: 12px;
+  align-items: center;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.numbering-conflicts select {
+  width: 100%;
+}
+.numbering-dialog .numbering-error {
+  color: #b74343;
+}
+.numbering-error:empty {
+  display: none;
+}
+.numbering-dialog > footer {
+  position: static;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  border-top: 1px solid #dce5e7;
+  background: #fff;
+  margin-top: 24px;
+  padding: 18px 0 0;
+  height: auto;
+}
+.numbering-dialog > footer span {
+  font-size: 12px;
+  color: #637a83;
+  max-width: 350px;
+}
+.numbering-dialog > footer div {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.numbering-dialog > footer button {
+  font-size: 13px;
+  padding: 9px 16px;
+}
+@media (max-width: 600px) {
+  .numbering-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 16px;
+  }
+  .numbering-dialog > footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .numbering-series th,
+  .numbering-series td {
+    padding: 9px;
+  }
+  .numbering-conflicts label {
+    grid-template-columns: 1fr;
+  }
+}

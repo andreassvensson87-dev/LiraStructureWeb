@@ -252,29 +252,6 @@ export class PartSections {
       g.append(content);
       e.frame(g, view.id, 0, 0, w, h);
       g.setAttribute('aria-label', 'Välj ' + view.name);
-      if (e.selectedView === view.id) {
-        const r = 4 / e.navigation.scale;
-        for (const [corner, x, y] of [
-          ['nw', 0, 0],
-          ['ne', w, 0],
-          ['se', w, h],
-          ['sw', 0, h],
-        ])
-          g.append(
-            node('rect', {
-              'data-section-crop': corner,
-              x: x - r,
-              y: y - r,
-              width: 2 * r,
-              height: 2 * r,
-              fill: 'white',
-              stroke: '#287c65',
-              'stroke-width': 1,
-              'vector-effect': 'non-scaling-stroke',
-              cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
-            }),
-          );
-      }
       e.svg.append(g);
     }
   }

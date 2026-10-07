@@ -1,4 +1,7 @@
 import { createSinglePartShell } from './drawing/ui/single-part-shell.js';
+import { appendDrawingViewGrips, updateDrawingViewGripSizes } from './drawing-view-grips.js';
+import { createDrawingViewInspector } from './drawing-view-inspector.js';
+import { resizeDrawingView } from './drawing-views.js';
 import { drawingProfileDetail } from './profile-detail.js';
 import { installDrawingProfileDetail } from './drawing-profile-detail.js';
 import { instantiateDrawingTemplate } from './drawing-templates.js';
@@ -196,6 +199,7 @@ export class SinglePartSheet {
       surface: this.svg,
       toolbar,
       adapter: {
+        cancelTools: () => this.cancelInteraction(),
         redraw: () => this.compose(),
         pixelScale: () => this.svg.getBoundingClientRect().width / this.paper[0],
         unit: () => 1,
@@ -223,6 +227,8 @@ export class SinglePartSheet {
       toolbar,
       tools: [...toolbar.children].filter((child) => !existingTools.has(child)),
       cancel: () => this.cancelInteraction(),
+      save: () => this.save?.(this.record),
+      annotations: () => this.annotations,
     });
     for (const key of ['paper', 'orientation'])
       this.$(key).onchange = () => {
@@ -242,7 +248,7 @@ export class SinglePartSheet {
         this.render();
       };
     this.$('layout').onclick = () => {
-      arrangePartViews(this.config.views, this.paper[0]);
+      arrangePartViews(this.config.views, this.paper[0], this.frameLayout?.contentArea);
       this.compose();
     };
     this.$('fit').onclick = () => this.fit();
@@ -255,13 +261,14 @@ export class SinglePartSheet {
       getPaper: () => this.paper,
       getBounds: () => this.contentBounds,
       blocked: () => !!(this.drag || this.annotations.drag),
+      onScale: (scale) => updateDrawingViewGripSizes(this.svg, scale),
     });
     this.svg.onpointerdown = (e) => {
       const group = e.target.closest('[data-view]');
       if (!group || e.button !== 0) return;
       e.preventDefault();
       this.selectView(group.dataset.view);
-      if (!e.target.closest('.viewport-grip,[data-section-crop]')) return;
+      if (!e.target.closest('.viewport-grip,[data-section-crop],[data-view-grip]')) return;
       this.svg.setPointerCapture(e.pointerId);
       this.drag = {
         pointerId: e.pointerId,
@@ -295,7 +302,15 @@ export class SinglePartSheet {
         return;
       }
     };
-    this.svg.onpointerup = this.svg.onpointercancel = () => (this.drag = null);
+    this.svg.onpointerup = (e) => {
+      this.drag = null;
+      if (this.svg.hasPointerCapture(e.pointerId)) this.svg.releasePointerCapture(e.pointerId);
+      this.viewPlacement?.sync();
+    };
+    this.svg.onpointercancel = () => {
+      this.cancelInteraction();
+      this.compose();
+    };
     const nameLabel = document.createElement('label');
     nameLabel.textContent = 'Vynamn';
     this.viewName = document.createElement('input');
@@ -310,12 +325,27 @@ export class SinglePartSheet {
       }
     };
     this.extraSections = new PartSections(this);
+    this.viewPlacement = createDrawingViewInspector(this.dialog.querySelector('.view-properties'), {
+      selected: () => this.config?.views.find((v) => v.id === this.selectedView),
+      changed: (view, key, axis, value) => {
+        if (key === 'position') view.position[axis] = value;
+        else
+          Object.assign(
+            view,
+            resizeDrawingView(
+              view,
+              axis === 0 ? 'e' : 's',
+              axis === 0 ? [value - view.size[0], 0] : [0, value - view.size[1]],
+            ),
+          );
+        this.extraSections.build();
+        this.compose();
+      },
+    });
     this.viewActions = new DrawingViewActions(this.dialog, {
       views: () => this.config.views,
       annotations: () => this.annotations.items,
-      hit: (event) =>
-        event.target.closest('.viewport-grip,[data-section-crop]')?.closest('[data-view]')?.dataset
-          .view,
+      hit: (event) => event.target.closest('[data-view]')?.dataset.view,
       select: (id) => this.selectView(id),
       cancel: () => this.cancelInteraction(),
       duplicate: (id) => {
@@ -503,6 +533,7 @@ export class SinglePartSheet {
       );
       templateGeometry.dispose();
     }
+    const newSheet = !this.record.sheet;
     this.config = this.record.sheet || {
       paper: structuredClone(this.papers.find((p) => p.id === 'A3') || this.papers[0]),
       landscape: true,
@@ -573,8 +604,12 @@ export class SinglePartSheet {
       this.config.views.find((v) => v.id === 'front')?.id || this.config.views[0].id;
     this.syncInspector();
     this.render();
+    if (newSheet && this.frameLayout?.contentArea && !this.assembly) {
+      arrangePartViews(this.config.views, this.paper[0], this.frameLayout.contentArea);
+      this.compose();
+    }
     if (this.assembly && !this.config.assemblyArranged) {
-      arrangePartViews(this.config.views, this.paper[0]);
+      arrangePartViews(this.config.views, this.paper[0], this.frameLayout?.contentArea);
       const bottom = Math.max(...this.config.views.map((v) => v.position[1] + v.size[1])) + 14;
       this.config.assemblySchedule.position = [10, bottom];
       this.config.assemblyArranged = true;
@@ -638,6 +673,8 @@ export class SinglePartSheet {
     return variant;
   }
   selectView(view) {
+    this.annotations.selected = null;
+    this.annotations.ui();
     this.selectedView = view;
     this.syncInspector();
     for (const group of this.svg.querySelectorAll('[data-view]')) {
@@ -663,6 +700,7 @@ export class SinglePartSheet {
     this.$('section').parentElement.hidden = true;
     this.$('scale-section').parentElement.hidden = true;
     this.extraSections?.sync();
+    this.viewPlacement?.sync();
   }
   frame(group, id, x, y, width, height) {
     group.setAttribute('tabindex', '0');
@@ -828,6 +866,16 @@ export class SinglePartSheet {
       )
         this.$('message').textContent =
           'Stycklistan ligger utanför bladet. Ändra placering under Stycklista eller välj ett större format.';
+    }
+    const selected = this.config.views.find((view) => view.id === this.selectedView);
+    if (selected) {
+      const handles = node('g', {
+        'data-view': selected.id,
+        class: 'drawing-view-grips-layer',
+        transform: `translate(${selected.position})`,
+      });
+      appendDrawingViewGrips(handles, ...selected.size, this.navigation.scale);
+      this.svg.append(handles);
     }
     const guides = [...this.svg.querySelectorAll('.section-extent-guides')];
     guides.forEach((n) => (n.style.display = 'none'));

@@ -30,6 +30,15 @@ test('manager status reflects model changes, explicit review and missing sources
   assert.equal(drawingStatus(record, state).key, 'changed');
   assert.equal(drawingStatus(state.drawings[2], state).key, 'missing');
 });
+test('changes to the imported title block metadata invalidate drawing review', () => {
+  const state = fixture(),
+    record = state.drawings[0];
+  for (const field of ['documentType', 'category', 'contact', 'responsibleParty']) {
+    record.reviewed = drawingStamp(record, state);
+    record[field] = 'Ändrat värde';
+    assert.equal(drawingStatus(record, state).key, 'changed');
+  }
+});
 test('manager filters combine status and search and sort drawing numbers naturally', () => {
   const state = fixture();
   assert.deepEqual(

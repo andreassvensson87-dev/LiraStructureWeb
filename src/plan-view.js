@@ -11,6 +11,11 @@ import { appendViewTitle } from './drawing-view-title.js';
 import { detailSource } from './drawing-details.js';
 import { sectionGridLines, sectionLevelLines } from './section-grid.js';
 import { visibleGridEndpoints } from './grid-label-position.js';
+import {
+  DRAWING_GRID_BUBBLE_DIAMETER,
+  MODEL_GRID_BUBBLE_DIAMETER,
+  gridBubbleMetrics,
+} from './grid-bubble-size.js';
 import { DrawingSectionTool } from './drawing-section-tool.js';
 import { frameMatrix, sectionDrawing } from './drawing-sections.js';
 import { sectionClipPlanes } from './section-extents.js';
@@ -153,6 +158,7 @@ export class PlanView {
       surface: this.host,
       toolbar,
       adapter: {
+        cancelTools: () => this.cancelInteraction(),
         manualLeaders: true,
         visible: (item) => !this.views?.active || item.view === this.views.active.id,
         validAnchor: (item, p) =>
@@ -213,6 +219,11 @@ export class PlanView {
       toolbar,
       tools: [...toolbar.children].filter((child) => !existingTools.has(child)),
       cancel: () => this.cancelInteraction(),
+      save: () => {
+        this.captureSettings();
+        this.saveRecord?.(this.record);
+      },
+      annotations: () => this.annotations,
     });
     this.navigation = new DrawingWorkspace({
       workspace: this.paperWorkspace,
@@ -227,14 +238,6 @@ export class PlanView {
         if (this.scene) this.draw();
       },
     });
-    for (const edge of ['top', 'bottom', 'left', 'right']) {
-      const grip = document.createElement('div');
-      grip.className = 'ga-viewport-grip ga-grip-' + edge;
-      grip.dataset.viewportGrip = 'true';
-      grip.title = 'Dra för att flytta planvyn';
-      this.host.append(grip);
-    }
-
     this.views = new GAViews(this, inspector, toolbar);
     this.references = new GADrawingReferences(this, inspector);
     this.sectionTool = new DrawingSectionTool({
@@ -522,6 +525,11 @@ export class PlanView {
     this.observer.observe(this.host);
     this.host.onpointerdown = (e) => {
       if (e.button !== 0) return;
+      if (e.target.closest('.ga-view-grip')) {
+        this.annotations.selected = null;
+        this.annotations.ui();
+        this.views.list();
+      }
       e.preventDefault();
       this.host.setPointerCapture(e.pointerId);
       this.drag = {
@@ -979,19 +987,26 @@ export class PlanView {
         'stroke-dasharray': '7 4',
         fill: 'none',
       });
-      const radius = Math.max(14, line.label.length * 3 + 6),
-        ends = visibleGridEndpoints(points[0], points[1], w, h, radius + 2);
+      const metrics = gridBubbleMetrics(
+          line.label,
+          this.frameLayout
+            ? DRAWING_GRID_BUBBLE_DIAMETER * this.paperZoom
+            : (MODEL_GRID_BUBBLE_DIAMETER * h) / this.span,
+        ),
+        radius = metrics.radius,
+        ends = visibleGridEndpoints(points[0], points[1], w, h, radius + metrics.inset);
       if (!ends) continue;
       ends.forEach((p, index) => {
-        if (index && Math.hypot(p[0] - ends[0][0], p[1] - ends[0][1]) < radius * 2 + 2) return;
+        if (index && Math.hypot(p[0] - ends[0][0], p[1] - ends[0][1]) < radius * 2 + metrics.inset)
+          return;
         append('ellipse', {
           cx: p[0],
           cy: p[1],
           rx: radius,
-          ry: 14,
+          ry: metrics.height / 2,
           fill: '#edf3f5',
           stroke: '#718995',
-          'stroke-width': 1,
+          'stroke-width': metrics.strokeWidth,
         });
         append(
           'text',
@@ -1000,7 +1015,7 @@ export class PlanView {
             y: p[1],
             'text-anchor': 'middle',
             'dominant-baseline': 'central',
-            'font-size': 12,
+            'font-size': metrics.fontSize,
             'font-family': 'Arial, sans-serif',
             fill: '#425d69',
           },
@@ -1108,7 +1123,10 @@ export class PlanView {
         }));
       this.vectorCache = vectorDrawing(surfaces, edgeSets);
     }
-    this.grid.updateLabels(this.camera, w, h, { keepVisible: true });
+    this.grid.updateLabels(this.camera, w, h, {
+      keepVisible: true,
+      diameter: this.frameLayout ? DRAWING_GRID_BUBBLE_DIAMETER * this.paperZoom : undefined,
+    });
     this.svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     const path = document.createElementNS(svgNS, 'path');
     path.setAttribute(

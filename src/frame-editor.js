@@ -1,10 +1,36 @@
+import { createCadStatusbar, placeCadInput } from './cad-statusbar.js';
+import { CadTracking } from './cad-tracking.js';
+import { showStandardLayouts } from './frame-layout-wizard.js';
+import { installLineWeights } from './drawing-line-weights.js';
+import { frameText } from './frame-text.js';
+import { frameEditorHeader, installFrameHeader } from './frame-editor-header.js';
+import { installReportLayoutControls, paintReportViewport } from './report-frame-editor.js';
+import {
+  REPORT_VIEWPORT_ID,
+  reportViewportEntity,
+  reportViewportGrips,
+  editReportViewport,
+} from './report-viewport-grips.js';
+import { reportAreaFromPoints, validateReportViewport } from './report-layout.js';
+import { revisionBlockBottom } from './frame-revision-table.js';
+import { showRevisionBlockPreview } from './frame-revision-preview.js';
 import { inputWheelGesture } from './input-device.js';
-import { revisionExampleBlock } from './frame-revision-example.js';
-import { customAttributes } from './drawing-attributes.js';
+import { drawingAttributes, attributeDrawingValue } from './drawing-attributes.js';
+import { openDrawingAttributeLibrary } from './drawing-attribute-library.js';
 import { copyLibraryItem, libraryUsage } from './frame-library.js';
 import { rectangleSelection, frameSelectionShapes } from './frame-selection.js';
-import { frameGrips, coincidentFrameVertices, moveFrameVertices } from './frame-grips.js';
-import { improveFrameTools, paletteControl, FrameFileDialog } from './frame-editor-controls.js';
+import {
+  frameEditGrips,
+  magneticFrameSnap,
+  coincidentFrameVertices,
+  moveFrameVertices,
+} from './frame-grips.js';
+import {
+  improveFrameTools,
+  createFrameToolbox,
+  paletteControl,
+  FrameFileDialog,
+} from './frame-editor-controls.js';
 import {
   propertyFields,
   propertyNames,
@@ -23,9 +49,6 @@ import {
 } from './frame-layout.js';
 import {
   FRAME_LIBRARY_KEY,
-  ATTRIBUTE_KEY,
-  builtInAttributes,
-  attributeValue,
   blankFrame,
   snapFrame,
   transformFrameEntity,
@@ -55,10 +78,9 @@ export class FrameEditor {
     this.mode = 'block';
     this.drafts = {};
     this.frame = blankFrame();
-    this.library = read(FRAME_LIBRARY_KEY);
+    this.library = read(FRAME_LIBRARY_KEY).map(revisionBlockBottom);
     this.blocks = this.library;
     this.layouts = read(LAYOUT_KEY);
-    this.custom = read(ATTRIBUTE_KEY);
     this.undo = [];
     this.redo = [];
     this.selected = new Set();
@@ -67,11 +89,11 @@ export class FrameEditor {
     this.dirty = false;
     this.dialog = document.createElement('dialog');
     this.dialog.id = 'frame-editor';
-    this.dialog.innerHTML = `<header><strong>Ritningsramseditor <small>1:1 · mm</small></strong><div><button data-action="new">Nytt blad</button><button data-action="revisionExample">Exempelblock · revision</button><button data-action="importDXF">Importera DXF…</button><button data-action="open">Öppna / hantera…</button><button data-action="save">Spara</button><button data-action="saveAs">Spara som…</button><button data-action="settings" aria-label="Inställningar för rameditorn">⚙</button><button data-action="close" aria-label="Stäng ritningsramseditorn">×</button></div></header>
-  <div class="fe-modes"><button data-mode="block" aria-pressed="true">Ramblock</button><button data-mode="layout" aria-pressed="false">Layouter</button><span data-ui="modeHint">Rita ett återanvändbart block i mm · välj egen insättningspunkt</span></div><div class="fe-bar"><select hidden data-ui="library" aria-label="Sparade ritningsramar"><option value="">Sparade ritningsramar</option></select><input data-ui="name" aria-label="Ramnamn" readonly><button data-action="undo" title="Ångra · Ctrl Z">↶</button><button data-action="redo" title="Gör om · Ctrl Shift Z">↷</button><button data-action="fit">Visa blad</button><label>Förhandsvisa attribut<select data-ui="preview"><option value="">Attributnamn</option></select></label></div>
+    this.dialog.innerHTML = `${frameEditorHeader()}
   <div class="fe-body"><nav aria-label="Ramverktyg">${[
     ['select', '↖', 'Markera'],
     ['insert', '⊞', 'Placera block'],
+    ['report-area', '▤', 'Rapportyta'],
     ['origin', '⊙', 'Insättningspunkt'],
     ['line', '╱', 'Linje'],
     ['polyline', '⌁', 'Polylinje'],
@@ -88,9 +110,9 @@ export class FrameEditor {
     )
     .join('')}<button data-action="delete">Radera</button></nav>
   <div class="fe-canvas"><svg tabindex="0" aria-label="Rityta för ritningsram"></svg></div>
-  <aside><section class="fe-block-placement" hidden><h3>Ramblock</h3><label>Block<select data-ui="blockChoice"></select></label><label>Förankring<select data-ui="anchor"><option value="bottom-left">Nedre vänster</option><option value="bottom-right">Nedre höger</option><option value="top-left">Övre vänster</option><option value="top-right">Övre höger</option></select></label><div class="fe-pair"><label>X-avstånd · mm<input data-ui="offsetX" type="number" value="0"></label><label>Y-avstånd · mm<input data-ui="offsetY" type="number" value="0"></label></div><label>Blockrotation · °<input data-ui="blockAngle" type="number" value="0"></label><button data-action="instanceApply">Tillämpa placering</button><p>Avstånd mäts från valt hörn i +X åt höger och +Y uppåt.</p><div data-ui="instances"></div></section><section class="fe-paper"><h3 data-ui="paperTitle">Arbetsyta</h3><label>Pappersformat<select data-ui="paper"></select></label><label class="fe-check"><input data-ui="landscape" type="checkbox" checked>Liggande</label><div class="fe-pair"><label>Bredd · mm<input data-ui="width" type="number" min="50" max="5000"></label><label>Höjd · mm<input data-ui="height" type="number" min="50" max="5000"></label></div>
-  <div class="fe-origin-fields"><h3>Insättningspunkt · mm</h3><label>X<input data-ui="originX" type="number" value="0"></label><label>Y<input data-ui="originY" type="number" value="0"></label></div><button data-action="originApply">Ändra insättningspunkt</button></section><section class="fe-entity-properties"><h3 data-ui="selection">Egenskaper</h3><label>Text / innehåll<input data-ui="text" value="Text"></label><label>Typsnitt<select data-ui="font"><option value="Arial, sans-serif">Arial</option><option value="Verdana, sans-serif">Verdana</option><option value="Georgia, serif">Georgia</option><option value="Times New Roman, serif">Times New Roman</option><option value="Courier New, monospace">Courier New</option></select></label><label>Färg<input data-ui="color" type="text" value="#233940" placeholder="#233940"></label><label>Attribut<select data-ui="attribute"></select></label><div class="fe-pair"><label>Texthöjd · mm<input data-ui="size" type="number" min="0.5" max="100" value="3.5" step="0.5"></label><label>Vinkel · °<input data-ui="angle" type="number" value="0"></label></div><label>Textjustering<select data-ui="align"><option value="start">Vänster</option><option value="middle">Centrerad</option><option value="end">Höger</option></select></label><label>Linjetjocklek · mm<input data-ui="stroke" type="number" min="0.05" max="5" value="0.25" step="0.05"></label><label>Bildbredd · mm<input data-ui="imageWidth" type="number" min="1" max="5000" value="40"></label><label>Bildhöjd · mm<input data-ui="imageHeight" type="number" min="1" max="5000" value="20"></label><label class="fe-check"><input data-ui="ratio" type="checkbox" checked>Lås bildproportioner</label><button data-action="properties">Tillämpa på markerade</button>
-  <details><summary>Attributbibliotek</summary><p>Inbyggda attribut hämtas från projekt och ritning. Egna attribut kan ges ett värde i förhandsvisningen.</p><label>Namn<input data-ui="attributeName" placeholder="Exempel: Ritad av"></label><label>Gäller för<select data-ui="attributeScope"><option value="all">Alla ritningar</option><option value="GA">GA</option><option value="SP">Single Part</option></select></label><label>Datatyp<select data-ui="attributeType"><option value="text">Text</option><option value="date">Datum</option><option value="number">Tal</option></select></label><button data-action="attributeAdd">Lägg till attribut</button><label>Förhandsvisningsvärde för valt eget attribut<input data-ui="attributeValue"></label><button data-action="attributeValue">Sätt förhandsvisningsvärde</button></details>
+  <aside><section class="fe-block-placement" hidden><h3>Ramblock</h3><label>Block<select data-ui="blockChoice"></select></label><label>Förankring<select data-ui="anchor"><option value="bottom-left">Nedre vänster</option><option value="bottom-right">Nedre höger</option><option value="top-left">Övre vänster</option><option value="top-right">Övre höger</option></select></label><div class="fe-pair"><label>X-avstånd · mm<input data-ui="offsetX" type="number" value="0"></label><label>Y-avstånd · mm<input data-ui="offsetY" type="number" value="0"></label></div><label>Blockrotation · °<input data-ui="blockAngle" type="number" value="0"></label><button data-action="instanceApply">Tillämpa placering</button><div data-ui="instances"></div></section><section class="fe-paper"><h3 data-ui="paperTitle">Arbetsyta</h3><label>Pappersformat<select data-ui="paper"></select></label><label class="fe-check"><input data-ui="landscape" type="checkbox" checked>Liggande</label><div class="fe-pair"><label>Bredd · mm<input data-ui="width" type="number" min="50" max="5000"></label><label>Höjd · mm<input data-ui="height" type="number" min="50" max="5000"></label></div>
+  <button data-action="revisionPreview" hidden>Förhandsvisa revisionslista</button><label data-ui="revisionRowLabel" hidden>Revisionsrad · mm<input data-ui="revisionRowHeight" type="number" min="4" max="100" step="1"></label><div class="fe-origin-fields"><h3>Insättningspunkt · mm</h3><label>X<input data-ui="originX" type="number" value="0"></label><label>Y<input data-ui="originY" type="number" value="0"></label></div><button data-action="originApply">Ändra insättningspunkt</button></section><section class="fe-entity-properties"><h3 data-ui="selection">Egenskaper</h3><label>Text / innehåll<input data-ui="text" value="Text"></label><label>Typsnitt<select data-ui="font"><option value="Arial, sans-serif">Arial</option><option value="Verdana, sans-serif">Verdana</option><option value="Georgia, serif">Georgia</option><option value="Times New Roman, serif">Times New Roman</option><option value="Courier New, monospace">Courier New</option></select></label><label>Färg<input data-ui="color" type="text" value="#233940" placeholder="#233940"></label><label>Attribut<select data-ui="attribute"></select></label><div class="fe-pair"><label>Texthöjd · mm<input data-ui="size" type="number" min="0.5" max="100" value="3.5" step="0.5"></label><label>Vinkel · °<input data-ui="angle" type="number" value="0"></label></div><label>Textjustering<select data-ui="align"><option value="start">Vänster</option><option value="middle">Centrerad</option><option value="end">Höger</option></select></label><label>Linjetjocklek · mm<input data-ui="stroke" type="number" min="0.05" max="5" value="0.25" step="0.05"></label><label>Bildbredd · mm<input data-ui="imageWidth" type="number" min="1" max="5000" value="40"></label><label>Bildhöjd · mm<input data-ui="imageHeight" type="number" min="1" max="5000" value="20"></label><label class="fe-check"><input data-ui="ratio" type="checkbox" checked>Lås bildproportioner</label><button data-action="properties">Tillämpa på markerade</button>
+  <details><summary>Attributbibliotek</summary><p>Alla attribut och vallistor hanteras under Inställningar → Bibliotek → Attribut.</p><button data-action="attributeLibrary">Öppna attributbibliotek</button><label>Förhandsvisningsvärde för valt eget attribut<input data-ui="attributeValue"></label><button data-action="attributeValue">Sätt förhandsvisningsvärde</button></details>
   </section><details open><summary>Snappning</summary><label class="fe-check"><input type="checkbox" data-ui="boundary" checked>Arbetsytans kontur</label>${[
     ['endpoints', 'Ändpunkt'],
     ['midpoints', 'Mittpunkt'],
@@ -104,11 +126,33 @@ export class FrameEditor {
     .join(
       '',
     )}<label class="fe-check"><input type="checkbox" data-ui="ortho">Ortho · F8</label><label>Polar<select data-ui="polar"><option value="0">Av</option><option value="15">15°</option><option value="30">30°</option><option value="45" selected>45°</option><option value="90">90°</option></select></label><label class="fe-check"><input type="checkbox" data-ui="grid">Rutnätsnap</label><label>Rutsteg · mm<input data-ui="step" type="number" value="5" min="0.1" step="0.1"></label></details></aside></div>
-  <form class="fe-command"><span data-ui="status" role="status">Redo</span><label>Längd / rotationsvinkel<input data-ui="command" autocomplete="off" placeholder="mm / °"></label><button>Bekräfta ↵</button><button type="button" data-action="finish">Avsluta</button><span data-ui="coordinates"></span></form><input data-ui="file" type="file" accept="image/png,image/jpeg,image/webp" hidden>`;
+  <div class="cad-statusbar"></div><input data-ui="file" type="file" accept="image/png,image/jpeg,image/webp" hidden>`;
     document.body.append(this.dialog);
+    this.reportControls = installReportLayoutControls(this);
+    this.headerMenus = installFrameHeader(this.dialog);
     this.canvas = this.dialog.querySelector('.fe-canvas');
     this.svg = this.canvas.querySelector('svg');
+    this.canvas.insertAdjacentHTML(
+      'beforeend',
+      '<span class="cad-hint" data-ui="status" role="status" hidden></span><form class="cad-dynamic-input" hidden><label>Längd / vinkel<input data-ui="command" aria-label="Längd / rotationsvinkel" autocomplete="off" placeholder="mm / °"></label></form>',
+    );
+    this.dynamicInput = this.canvas.querySelector('form');
+    this.tracking = new CadTracking();
+    this.cad = createCadStatusbar(
+      this.dialog,
+      this.dialog.querySelector('.cad-statusbar'),
+      (settings) => {
+        for (const key of ['endpoints', 'midpoints', 'intersections', 'perpendicular', 'ortho'])
+          this.$(key).checked = settings[key];
+        this.$('polar').value = String(settings.polar);
+        this.tracking.reset();
+        this.trackHit = null;
+        if (this.gripDrag) this.gripDrag.magnet = null;
+        this.render();
+      },
+    );
     improveFrameTools(this.dialog);
+    this.toolbox = createFrameToolbox(this.dialog);
     this.fileDialog = new FrameFileDialog(this.dialog);
     this.updatePalette = paletteControl(this.$('color'), () => this.changedProperties.add('color'));
     const button = document.createElement('button');
@@ -127,13 +171,26 @@ export class FrameEditor {
     previewSection.innerHTML =
       '<summary>Förhandsvisning av attribut</summary><p>Visa exempelvärden från en ritning i editorn. På själva ritningen hämtas rätt värden automatiskt.</p>';
     const previewLabel = this.$('preview').closest('label');
+    previewLabel.hidden = false;
     previewLabel.firstChild.textContent = 'Visa värden från ritning';
     previewSection.append(previewLabel);
     this.settings.querySelector('div').append(previewSection);
     this.settings.querySelector('button').onclick = () => this.settings.close();
     this.settings.addEventListener('keydown', (e) => e.stopPropagation());
     this.settings.addEventListener('cancel', (e) => e.stopPropagation());
+    for (const key of [
+      'endpoints',
+      'midpoints',
+      'intersections',
+      'perpendicular',
+      'ortho',
+      'polar',
+    ])
+      this.$(key).addEventListener('change', () =>
+        this.cad.update(key, key === 'polar' ? +this.$(key).value : this.$(key).checked),
+      );
     this.changedProperties = new Set();
+    this.lineWeightControl = installLineWeights(this.$('stroke'));
     for (const key of new Set(Object.values(propertyFields).flat()))
       this.$(key).addEventListener('input', () => this.changedProperties.add(key));
     for (const key of ['imageWidth', 'imageHeight'])
@@ -152,11 +209,17 @@ export class FrameEditor {
             key === 'imageWidth' ? value / ratio : value * ratio;
       });
     for (const b of this.dialog.querySelectorAll('[data-mode]'))
-      b.onclick = () => this.switchMode(b.dataset.mode);
+      b.onclick = () => {
+        this.headerMenus.close();
+        this.switchMode(b.dataset.mode);
+      };
     for (const b of this.dialog.querySelectorAll('[data-tool]'))
       b.onclick = () => this.setTool(b.dataset.tool);
     for (const b of this.dialog.querySelectorAll('[data-action]'))
-      b.onclick = () => this.action(b.dataset.action);
+      b.onclick = () => {
+        this.headerMenus.close();
+        this.action(b.dataset.action);
+      };
     this.dialog.addEventListener('keydown', (e) => this.key(e));
     this.dialog.addEventListener('cancel', (e) => {
       e.preventDefault();
@@ -209,6 +272,22 @@ export class FrameEditor {
         this.$('offsetY').value = offset[1];
       }
     };
+    this.$('revisionRowHeight').onchange = () => {
+      const height = +this.$('revisionRowHeight').value;
+      if (!this.frame.revisionTable || !Number.isFinite(height) || height < 4 || height > 100)
+        return;
+      this.checkpoint();
+      const factor = height / this.frame.revisionTable.rowHeight;
+      for (const entity of this.frame.entities) {
+        if (entity.points) entity.points = entity.points.map(([x, y]) => [x, y * factor]);
+        else entity.point = [entity.point[0], entity.point[1] * factor];
+      }
+      this.frame.origin[1] *= factor;
+      this.frame.height *= factor;
+      this.frame.revisionTable.rowHeight = height;
+      this.sync();
+      this.fit();
+    };
     this.$('preview').onchange = () => this.render();
     this.$('file').onchange = () => this.loadImage();
     this.dialog.querySelector('form').onsubmit = (e) => {
@@ -219,8 +298,18 @@ export class FrameEditor {
       const grip = e.target.closest('[data-grip]');
       this.gripPress =
         e.button === 0 && grip
-          ? { id: grip.dataset.grip, index: +grip.dataset.index, x: e.clientX, y: e.clientY }
+          ? {
+              id: grip.dataset.grip,
+              index: +grip.dataset.index,
+              x: e.clientX,
+              y: e.clientY,
+              pointerId: e.pointerId,
+            }
           : null;
+      if (this.gripPress) {
+        e.preventDefault();
+        this.svg.setPointerCapture(e.pointerId);
+      }
       if (e.button === 0 && this.tool === 'select' && !grip) {
         e.preventDefault();
         this.selectionPress = {
@@ -240,6 +329,14 @@ export class FrameEditor {
       }
     });
     this.svg.addEventListener('pointermove', (e) => {
+      if (this.gripPress) {
+        const press = this.gripPress;
+        if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < 5) return;
+        this.gripPress = null;
+        this.startGrip(press.id, press.index);
+        this.gripDrag = { pointerId: press.pointerId, magnet: null };
+        this.status('Dra greppet till ny placering · släpp för att spara · Esc avbryter');
+      }
       if (this.pan) {
         const r = this.svg.getBoundingClientRect();
         this.view[0] = this.pan.view[0] - ((e.clientX - this.pan.x) * this.view[2]) / r.width;
@@ -257,6 +354,15 @@ export class FrameEditor {
       this.pointer(e);
     });
     this.svg.addEventListener('pointerup', (e) => {
+      if (this.gripDrag?.pointerId === e.pointerId) {
+        this.pointer(e);
+        const target = [...this.cursor];
+        const changed = distance(this.base, target) > 1e-7;
+        this.cancelGripDrag();
+        if (changed) this.transform(target);
+        else this.setTool('select');
+        return;
+      }
       if (this.pan) {
         this.pan = null;
         if (this.svg.hasPointerCapture(e.pointerId)) this.svg.releasePointerCapture(e.pointerId);
@@ -282,6 +388,8 @@ export class FrameEditor {
       if (e.button === 0) {
         const press = this.gripPress;
         this.gripPress = null;
+        if (press && this.svg.hasPointerCapture(e.pointerId))
+          this.svg.releasePointerCapture(e.pointerId);
         if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 5) {
           this.startGrip(press.id, press.index);
           return;
@@ -290,16 +398,23 @@ export class FrameEditor {
       }
     });
     this.svg.addEventListener('pointercancel', () => {
+      const dragging = !!this.gripDrag;
+      this.cancelGripDrag();
       this.pan = null;
       this.gripPress = null;
       this.cancelSelection();
+      if (dragging) this.setTool('select');
       this.render();
+    });
+    this.svg.addEventListener('lostpointercapture', () => {
+      if (this.gripDrag) this.setTool('select');
+      this.gripPress = null;
     });
     this.canvas.addEventListener(
       'wheel',
       (e) => {
         e.preventDefault();
-        if (this.selectionPress) return;
+        if (this.selectionPress || this.gripDrag || this.gripPress) return;
         const gesture = inputWheelGesture(e, undefined, this.canvas.clientHeight);
         if (gesture.action === 'pan') {
           const bounds = this.svg.getBoundingClientRect();
@@ -332,9 +447,11 @@ export class FrameEditor {
   }
   status(text) {
     this.$('status').textContent = text;
+    this.$('status').title = text || '';
+    this.$('status').hidden = !text || text === 'Redo';
   }
   attrs() {
-    return [...builtInAttributes, ...customAttributes()];
+    return drawingAttributes();
   }
   open() {
     this.beforeOpen?.();
@@ -383,7 +500,10 @@ export class FrameEditor {
   }
   modeUI() {
     const layout = this.mode === 'layout';
-    this.dialog.querySelector('[data-action="revisionExample"]').hidden = layout;
+    this.$('revisionRowLabel').hidden = layout || !this.frame.revisionTable;
+    this.dialog.querySelector('[data-action="revisionPreview"]').hidden =
+      layout || !this.frame.revisionTable;
+    this.$('revisionRowHeight').value = this.frame.revisionTable?.rowHeight || 10;
     this.dialog.querySelector('[data-action="importDXF"]').hidden = layout;
     for (const b of this.dialog.querySelectorAll('[data-mode]'))
       b.setAttribute('aria-pressed', String(b.dataset.mode === this.mode));
@@ -393,7 +513,8 @@ export class FrameEditor {
     for (const b of this.dialog.querySelectorAll('[data-tool]'))
       b.hidden = layout
         ? ['line', 'polyline', 'text', 'attribute', 'image', 'origin'].includes(b.dataset.tool)
-        : b.dataset.tool === 'insert';
+        : ['insert', 'report-area'].includes(b.dataset.tool);
+    this.toolbox.syncVisibility();
     this.dialog.querySelector('.fe-entity-properties').hidden = layout;
     this.dialog.querySelector('.fe-block-placement').hidden = !layout;
     this.$('boundary').parentElement.hidden = false;
@@ -408,7 +529,13 @@ export class FrameEditor {
       : 'Nytt ramblock';
   }
   displayEntities() {
-    return this.mode === 'layout' ? expandLayout(this.frame, this.blocks) : this.frame.entities;
+    return this.mode === 'layout'
+      ? expandLayout(
+          this.frame,
+          this.blocks,
+          this.getContext().drawings.find((d) => d.id === this.$('preview').value),
+        )
+      : this.frame.entities;
   }
   canDiscard() {
     return (
@@ -433,6 +560,7 @@ export class FrameEditor {
     this.dirty = true;
   }
   sync() {
+    this.reportControls.sync();
     this.$('name').value = this.frame.name;
     this.$('width').value = this.frame.width;
     this.$('height').value = this.frame.height;
@@ -448,9 +576,9 @@ export class FrameEditor {
       ...this.library.map((f) => new Option(f.name, f.id)),
     );
     this.$('library').value = this.library.some((f) => f.id === this.frame.id) ? this.frame.id : '';
-    this.dialog.querySelector('[data-action="save"]').textContent = this.dirty
-      ? 'Spara •'
-      : 'Spara';
+    this.$('unsaved').hidden = !this.dirty;
+    this.dialog.querySelector('[data-action="undo"]').disabled = !this.undo.length;
+    this.dialog.querySelector('[data-action="redo"]').disabled = !this.redo.length;
     this.instanceList();
     this.properties();
     this.render();
@@ -469,15 +597,34 @@ export class FrameEditor {
     if (p && this.svg.hasPointerCapture(p.id)) this.svg.releasePointerCapture(p.id);
   }
   setTool(tool) {
+    this.cancelGripDrag();
     this.cancelSelection();
+    if (['copy', 'rotate'].includes(tool) && this.selected.has(REPORT_VIEWPORT_ID)) {
+      this.status('Rapportytan kan flyttas och ändra storlek. Varje layout har en rapportyta.');
+      return;
+    }
     if (['move', 'copy', 'rotate'].includes(tool) && !this.selected.size) {
       this.status('Markera ett eller flera objekt först.');
       return;
     }
-    if (['line', 'polyline', 'text', 'attribute', 'image', 'insert', 'origin'].includes(tool))
+    if (
+      [
+        'line',
+        'polyline',
+        'text',
+        'attribute',
+        'image',
+        'insert',
+        'origin',
+        'report-area',
+      ].includes(tool)
+    )
       this.selected.clear();
     this.tool = tool;
+    this.tracking.reset();
+    this.dynamicInput.hidden = true;
     this.vertexGrip = null;
+    this.reportGrip = null;
     this.pending = [];
     this.base = null;
     this.cursor = null;
@@ -492,6 +639,7 @@ export class FrameEditor {
       {
         origin: 'Välj blockets insättningspunkt',
         insert: 'Välj block i listan och klicka placering',
+        'report-area': 'Rapportyta · välj första hörnet',
         select: 'Dra åt höger: helt innanför · åt vänster: allt som träffas · Shift lägger till',
         line: 'Linje · välj startpunkt',
         polyline: 'Polylinje · välj startpunkt · Enter avslutar',
@@ -514,6 +662,12 @@ export class FrameEditor {
       this.frame.height - (this.view[1] + ((e.clientY - r.top) / r.height) * this.view[3]),
     ];
   }
+  cancelGripDrag() {
+    const id = this.gripDrag?.pointerId ?? this.gripPress?.pointerId;
+    this.gripDrag = null;
+    this.gripPress = null;
+    if (id !== undefined && this.svg.hasPointerCapture(id)) this.svg.releasePointerCapture(id);
+  }
   pointer(e) {
     const options = Object.fromEntries(
       ['endpoints', 'midpoints', 'intersections', 'perpendicular', 'ortho', 'grid'].map((k) => [
@@ -522,31 +676,84 @@ export class FrameEditor {
       ]),
     );
     const step = +this.$('step').value;
-    this.snap = snapFrame(this.raw(e), {
-      entities: this.displayEntities().filter(
-        (e) => !(['move', 'copy', 'rotate'].includes(this.tool) && this.selected.has(e.id)),
-      ),
+    const raw = this.raw(e);
+    const settings = this.cad.get();
+    for (const key of ['endpoints', 'midpoints', 'intersections', 'perpendicular', 'grid'])
+      options[key] &&= settings.snap;
+    const snapOptions = {
+      entities: [
+        ...this.displayEntities().filter(
+          (e) => !(['move', 'copy', 'rotate'].includes(this.tool) && this.selected.has(e.id)),
+        ),
+        ...(this.mode === 'layout' &&
+        !this.selected.has(REPORT_VIEWPORT_ID) &&
+        this.frame.reportViewport
+          ? [reportViewportEntity(this.frame)]
+          : []),
+        { type: 'point', point: this.frame.origin || [0, 0] },
+      ],
       base: this.pending.at(-1) || this.base,
       tolerance: (this.view[2] / this.svg.clientWidth) * 9,
       polar: +this.$('polar').value,
       step: step > 0 ? step : 5,
       bounds: this.$('boundary').checked ? [this.frame.width, this.frame.height] : null,
       ...options,
-    });
-    this.cursor = this.snap.point;
-    this.$('coordinates').textContent =
-      `X ${this.cursor[0].toFixed(1)} · Y ${this.cursor[1].toFixed(1)} mm`;
+    };
+    this.snap = this.gripDrag
+      ? magneticFrameSnap(
+          raw,
+          { ...snapOptions, pixelSize: this.view[2] / this.svg.clientWidth },
+          this.gripDrag.magnet,
+        )
+      : snapFrame(raw, snapOptions);
+    if (this.gripDrag)
+      this.gripDrag.magnet = ['Ändpunkt', 'Mittpunkt', 'Korsning'].includes(this.snap.kind)
+        ? this.snap
+        : null;
+    this.trackHit =
+      settings.otrack && settings.snap
+        ? this.tracking.locate(raw, {
+            snapped: ['Ändpunkt', 'Mittpunkt', 'Korsning'].includes(this.snap.kind),
+            point: this.snap.point,
+            tolerance: (this.view[2] / this.svg.clientWidth) * 8,
+          })
+        : null;
+    this.cursor = this.trackHit?.guides.length ? this.trackHit.point : this.snap.point;
+    this.cad.coordinates(this.cursor);
+    this.dynamicInput.hidden = !(
+      (this.base || this.pending.length) &&
+      this.tool !== 'select' &&
+      !this.gripDrag
+    );
+    if (!this.dynamicInput.hidden && document.activeElement !== this.$('command'))
+      placeCadInput(this.dynamicInput, this.canvas, e);
     this.render();
   }
   startGrip(id, index) {
+    if (id === REPORT_VIEWPORT_ID) {
+      const point = reportViewportGrips(this.frame).find((grip) => grip.index === index)?.point;
+      if (!point) return;
+      this.selected = new Set([id]);
+      this.setTool('move');
+      this.reportGrip = index;
+      this.base = [...point];
+      this.cursor = [...point];
+      this.status(
+        index === -1
+          ? 'Flytta rapportyta · klicka ny placering eller dra'
+          : 'Ändra rapportyta · klicka ny placering eller dra · Esc avbryter',
+      );
+      this.render();
+      return;
+    }
     const entity = this.frame.entities.find((e) => e.id === id);
     if (!entity) return;
-    const point = frameGrips(entity, this.frame)[index];
+    const point = frameEditGrips(entity, this.frame).find((grip) => grip.index === index)?.point;
     if (!point) return;
-    if (entity.type !== 'line') this.selected = new Set([id]);
+    if (entity.type !== 'line' || index === -1) this.selected = new Set([id]);
     else this.selected.add(id);
     const matches =
-      entity.type === 'line'
+      entity.type === 'line' && index !== -1
         ? coincidentFrameVertices(this.frame.entities, this.selected, point)
         : null;
     this.setTool('move');
@@ -577,6 +784,26 @@ export class FrameEditor {
     this.place(this.cursor);
   }
   place(p) {
+    if (this.tool === 'report-area') {
+      if (!this.pending.length) {
+        this.pending = [[...p]];
+        this.status('Rapportyta · välj motsatt hörn');
+        this.render();
+        return;
+      }
+      try {
+        const area = reportAreaFromPoints(this.frame, this.pending[0], p);
+        this.checkpoint();
+        this.frame.reportViewport = { ...this.frame.reportViewport, ...area };
+        this.selected = new Set([REPORT_VIEWPORT_ID]);
+        if (!this.frame.usage || this.frame.usage === 'drawing') this.frame.usage = 'both';
+        this.setTool('select');
+        this.sync();
+      } catch (error) {
+        this.status(error.message);
+      }
+      return;
+    }
     if (this.tool === 'origin') {
       this.checkpoint();
       this.frame.origin = [...p];
@@ -696,7 +923,18 @@ export class FrameEditor {
     }
   }
   transform(target, degrees = 0) {
+    let area;
+    if (this.selected.has(REPORT_VIEWPORT_ID)) {
+      try {
+        area = editReportViewport(this.frame, this.base, target, this.reportGrip ?? -1);
+      } catch (error) {
+        this.setTool('select');
+        this.status(error.message);
+        return;
+      }
+    }
     this.checkpoint();
+    if (area) this.frame.reportViewport = area;
     const ids = new Set();
     const mapped = this.frame.entities
       .filter((e) => this.selected.has(e.id))
@@ -713,12 +951,14 @@ export class FrameEditor {
     if (this.tool === 'copy') this.frame.entities.push(...mapped);
     else
       this.frame.entities = this.frame.entities.map((e) => mapped.find((n) => n.id === e.id) || e);
+    if (area) ids.add(REPORT_VIEWPORT_ID);
     this.selected = ids;
     this.setTool('select');
     this.sync();
   }
   properties() {
     const selected = this.frame.entities.filter((e) => this.selected.has(e.id));
+    const reportSelected = this.mode === 'layout' && this.selected.has(REPORT_VIEWPORT_ID);
     const creating = ['line', 'polyline', 'text', 'attribute', 'image', 'insert'].includes(
       this.tool,
     );
@@ -727,7 +967,9 @@ export class FrameEditor {
       active = creating || selected.length > 0;
     this.visibleProperties = fields;
     this.changedProperties.clear();
-    this.dialog.querySelector('.fe-paper').hidden = !!active;
+    this.dialog.querySelector('.fe-paper').hidden =
+      !!active || reportSelected || this.tool === 'report-area';
+    this.reportControls.selection(reportSelected || this.tool === 'report-area');
     this.dialog.querySelector('.fe-entity-properties').hidden = !active || this.mode === 'layout';
     this.dialog.querySelector('.fe-block-placement').hidden = !active || this.mode !== 'layout';
     this.$('selection').textContent = creating
@@ -757,6 +999,7 @@ export class FrameEditor {
     }
     for (const row of this.dialog.querySelectorAll('.fe-entity-properties .fe-pair'))
       row.hidden = [...row.children].every((e) => e.hidden);
+    this.lineWeightControl.update();
     this.$('ratio').parentElement.hidden = !fields.includes('imageWidth');
     this.dialog.querySelector('[data-action="properties"]').hidden = creating || !fields.length;
     this.dialog.querySelector('[data-action="instanceApply"]').hidden = creating;
@@ -812,6 +1055,13 @@ export class FrameEditor {
     }
   }
   action(name) {
+    if (name === 'preview') {
+      const section = this.$('preview').closest('details');
+      section.open = true;
+      this.settings.showModal();
+      this.$('preview').focus();
+      return;
+    }
     if (name === 'settings') {
       this.settings.showModal();
       return;
@@ -866,22 +1116,23 @@ export class FrameEditor {
     }
 
     if (name === 'close') {
+      this.cancelGripDrag();
+      this.toolbox.close();
       this.dialog.close();
+      return;
+    }
+    if (name === 'standardLayouts') {
+      showStandardLayouts(this);
+      return;
+    }
+    if (name === 'revisionPreview') {
+      showRevisionBlockPreview(this);
       return;
     }
     if (name === 'importDXF') {
       import('./frame-dxf-dialog.js')
         .then(({ showFrameDXFImport }) => showFrameDXFImport(this))
         .catch((error) => this.status(error.message));
-      return;
-    }
-    if (name === 'revisionExample') {
-      if (this.canDiscard()) {
-        this.frame = revisionExampleBlock();
-        this.loaded();
-        this.dirty = true;
-        this.sync();
-      }
       return;
     }
     if (name === 'new') {
@@ -915,6 +1166,7 @@ export class FrameEditor {
                 : []),
           ],
           this.getContext().drawings,
+          this.reportTemplates?.() || [],
         );
       this.fileDialog.manage({
         kind,
@@ -965,6 +1217,8 @@ export class FrameEditor {
       const copy = name === 'saveAs',
         persist = (title) => {
           if (!title) throw Error('Ange ett namn.');
+          if (this.mode === 'layout' && this.frame.reportViewport)
+            validateReportViewport(this.frame);
           const saved = {
             ...structuredClone(this.frame),
             name: title,
@@ -1021,36 +1275,19 @@ export class FrameEditor {
       if (this.selected.size) {
         this.checkpoint();
         this.frame.entities = this.frame.entities.filter((e) => !this.selected.has(e.id));
+        if (this.selected.has(REPORT_VIEWPORT_ID)) delete this.frame.reportViewport;
         this.selected.clear();
         this.sync();
       }
       return;
     }
-    if (name === 'attributeAdd') {
-      const label = this.$('attributeName').value.trim();
-      if (!label) return;
-      const a = {
-        key: 'custom.' + crypto.randomUUID(),
-        name: label,
-        scope: this.$('attributeScope').value,
-        dataType: this.$('attributeType').value,
-      };
-      this.custom = customAttributes();
-      try {
-        localStorage.setItem(ATTRIBUTE_KEY, JSON.stringify([...this.custom, a]));
-        this.custom.push(a);
-        this.$('attribute').add(
-          new Option(
-            `${a.name} · ${a.scope === 'SP' ? 'Single Part' : a.scope === 'GA' ? 'GA' : 'Gemensamt'}`,
-            a.key,
-          ),
-        );
-        this.$('attribute').value = a.key;
-        this.$('attributeName').value = '';
-        this.status('Eget attribut tillagt.');
-      } catch {
-        this.status('Attributet kunde inte sparas.');
-      }
+    if (name === 'attributeLibrary') {
+      openDrawingAttributeLibrary(() => {
+        const selected = this.$('attribute').value;
+        this.$('attribute').replaceChildren(...this.attrs().map((a) => new Option(a.name, a.key)));
+        this.$('attribute').value = selected;
+        this.sync();
+      });
       return;
     }
     if (name === 'attributeValue') {
@@ -1091,6 +1328,7 @@ export class FrameEditor {
   }
   key(e) {
     e.stopPropagation();
+    if (this.cad.key(e)) return;
     if ((e.ctrlKey || e.metaKey) && ['s', 'o'].includes(e.key.toLowerCase())) {
       e.preventDefault();
       this.action(e.key.toLowerCase() === 'o' ? 'open' : e.shiftKey ? 'saveAs' : 'save');
@@ -1116,11 +1354,8 @@ export class FrameEditor {
       e.preventDefault();
       this.exact();
     }
-    if (e.key === 'F8') {
-      e.preventDefault();
-      this.$('ortho').checked = !this.$('ortho').checked;
-    }
-    if (/^[0-9+.,-]$/.test(e.key) && this.tool !== 'select') {
+    if (/^[0-9+.,-]$/.test(e.key) && this.tool !== 'select' && (this.base || this.pending.length)) {
+      this.dynamicInput.hidden = false;
       e.preventDefault();
       this.$('command').value = e.key;
       this.$('command').focus();
@@ -1128,6 +1363,12 @@ export class FrameEditor {
   }
   render() {
     if (!this.view) return;
+    this.dynamicInput.hidden = !(
+      (this.base || this.pending.length) &&
+      this.tool !== 'select' &&
+      this.tool !== 'report-area' &&
+      !this.gripDrag
+    );
     this.svg.setAttribute('viewBox', this.view.join(' '));
     this.svg.setAttribute('preserveAspectRatio', 'none');
     this.svg.replaceChildren(
@@ -1168,7 +1409,9 @@ export class FrameEditor {
             points,
             fill: 'none',
             stroke: color,
-            'stroke-width': e.stroke,
+            'stroke-width': this.cad.get().lineweight
+              ? e.stroke
+              : this.view[2] / this.svg.clientWidth,
             'pointer-events': 'none',
           }),
         );
@@ -1194,18 +1437,24 @@ export class FrameEditor {
               }),
             );
         } else {
+          const rendered = frameText(
+            e,
+            {
+              ...ctx,
+              drawing: {
+                ...ctx.drawing,
+                ...(this.mode === 'layout' ? { paperFormat: this.frame.paperFormat } : {}),
+              },
+            },
+            attributeDrawingValue,
+          );
           const name = this.attrs().find((a) => a.key === e.key)?.name || e.key,
-            value =
-              e.type === 'attribute'
-                ? drawing
-                  ? attributeValue(e.key, ctx)
-                  : `〈${name}〉`
-                : e.text;
+            value = e.type === 'attribute' ? (drawing ? rendered.value : `〈${name}〉`) : e.text;
           group.append(
             svg(
               'text',
               {
-                'font-size': e.size,
+                'font-size': drawing ? rendered.size : e.size,
                 'font-family': e.font || 'Arial, sans-serif',
                 'text-anchor': e.align,
                 fill: e.type === 'attribute' && !drawing ? '#397dc5' : color,
@@ -1218,6 +1467,7 @@ export class FrameEditor {
       if (ghost) group.setAttribute('pointer-events', 'none');
     };
     this.displayEntities().forEach((e) => paint(e));
+    paintReportViewport(this);
     if (this.mode === 'block') {
       const p = this.frame.origin || [0, 0];
       g.append(
@@ -1253,13 +1503,16 @@ export class FrameEditor {
     if (this.tool === 'select') {
       const r = (this.view[2] / Math.max(this.svg.clientWidth, 1)) * 4;
       for (const entity of this.frame.entities.filter((e) => this.selected.has(e.id)))
-        frameGrips(entity, this.frame).forEach((p, index) => {
+        frameEditGrips(entity, this.frame).forEach(({ point: p, index }) => {
           const grip = svg('g', {
             'data-grip': entity.id,
             'data-index': index,
             role: 'button',
             tabindex: 0,
-            'aria-label': `Flytta ${entity.type === 'line' ? 'linje' : entity.type === 'text' ? 'text' : entity.type === 'attribute' ? 'attributtext' : entity.type === 'block' ? 'ramblock' : 'bild'} från punkt ${index + 1}`,
+            'aria-label':
+              index === -1
+                ? 'Flytta hela linjeobjektet'
+                : `Flytta ${entity.type === 'line' ? 'linje' : entity.type === 'text' ? 'text' : entity.type === 'attribute' ? 'attributtext' : entity.type === 'block' ? 'ramblock' : 'bild'} från punkt ${index + 1}`,
             class: 'fe-object-grip',
           });
           grip.append(
@@ -1269,16 +1522,18 @@ export class FrameEditor {
               y: p[1] - r,
               width: r * 2,
               height: r * 2,
-              fill: 'white',
+              fill: index === -1 ? '#d4eeff' : 'white',
               stroke: '#178268',
               'stroke-width': r * 0.35,
             }),
             svg(
               'title',
               {},
-              entity.type === 'line'
-                ? 'Klicka för att flytta sammanfallande punkter i markerade linjer.'
-                : 'Klicka punkten, klicka sedan ny placering. Hela objektet flyttas.',
+              index === -1
+                ? 'Dra för att flytta hela objektet.'
+                : entity.type === 'line'
+                  ? 'Dra för att flytta sammanfallande punkter i markerade linjer.'
+                  : 'Dra för att flytta hela objektet.',
             ),
           );
           grip.addEventListener('keydown', (e) => {
@@ -1313,6 +1568,22 @@ export class FrameEditor {
           'pointer-events': 'none',
         }),
       );
+    }
+    if (this.cursor && this.trackHit?.guides.length) {
+      for (const { anchor } of this.trackHit.guides)
+        g.append(
+          svg('line', {
+            x1: anchor[0],
+            y1: anchor[1],
+            x2: this.cursor[0],
+            y2: this.cursor[1],
+            stroke: '#bc873b',
+            'stroke-width': 1,
+            'stroke-dasharray': '5 4',
+            'vector-effect': 'non-scaling-stroke',
+            'pointer-events': 'none',
+          }),
+        );
     }
     if (this.cursor && this.tool !== 'select') {
       const s = (this.view[2] / Math.max(this.svg.clientWidth, 1)) * 5;

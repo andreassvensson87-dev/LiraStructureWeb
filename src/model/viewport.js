@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { installViewportWheel } from '../viewport-wheel.js';
+import { orbitDamping } from '../input-device.js';
 import { installInputNavigation } from './input-navigation.js';
 import { ModelNavigation } from './navigation.js';
 import { createViewWidget } from './ui/view-widget.js';
@@ -31,7 +32,7 @@ export function createModelViewport(host, onError) {
   const controls = createControls();
   controls.target.set(1500, 0, 0);
   Object.assign(controls, {
-    enableDamping: true,
+    enableDamping: orbitDamping(),
     zoomToCursor: true,
     minZoom: 0.001,
     maxZoom: 1000,

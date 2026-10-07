@@ -1,8 +1,10 @@
 import { readColors } from './color-library.js';
+import { createGroupedToolbox } from './model/ui/toolbox.js';
 const paths = {
   select: 'm5 3 14 10-7 1-3 7Z',
   origin: 'M12 3v18M3 12h18M8 8h8v8H8Z',
   insert: 'M3 3h13v13H3ZM16 12v9m-4-5h9',
+  'report-area': 'M3 4h18v16H3ZM3 9h18M9 9v11M15 9v11',
   line: 'M4 20 20 4M3 18h3v3H3ZM18 3h3v3h-3Z',
   polyline: 'M3 18 9 6l6 12 6-12M2 17h2v2H2ZM8 5h2v2H8ZM14 17h2v2h-2Z',
   text: 'M4 5V3h16v2M12 3v18M8 21h8',
@@ -21,6 +23,59 @@ export function improveFrameTools(root) {
     b.querySelector('span').textContent = label;
     b.setAttribute('aria-label', key === 'origin' ? 'Insättningspunkt' : label);
   }
+}
+export function createFrameToolbox(dialog) {
+  const root = dialog.querySelector('.fe-body > nav');
+  root.id = 'frame-tools';
+  for (const button of root.querySelectorAll('button'))
+    button.id = `frame-tool-${button.dataset.tool || button.dataset.action}`;
+  const definitions = [
+    ['select', 'Markera', [['Urval', ['select']]]],
+    ['draw', 'Rita', [['Linjer', ['line', 'polyline']]]],
+    ['text', 'Text', [['Text och attribut', ['text', 'attribute']]]],
+    [
+      'insert',
+      'Infoga',
+      [
+        ['Ramblock', ['insert']],
+        ['Rapport', ['report-area']],
+        ['Bilder', ['image']],
+      ],
+    ],
+    [
+      'modify',
+      'Ändra',
+      [
+        ['Placering', ['move', 'copy', 'rotate']],
+        ['Radera', ['delete']],
+      ],
+    ],
+    ['origin', 'Origo', [['Insättningspunkt', ['origin']]]],
+  ].map(([id, label, sections]) => {
+    const categories = sections.map(([label, keys]) => ({
+      label,
+      tools: keys.map((key) => `frame-tool-${key}`),
+    }));
+    const tools = categories.flatMap((category) => category.tools);
+    return { id, label, categories, tools, icon: tools[0] };
+  });
+  const toolbox = createGroupedToolbox(root, definitions);
+  dialog.addEventListener('close', () => toolbox.close());
+  return {
+    ...toolbox,
+    syncVisibility() {
+      toolbox.close();
+      for (const group of root.querySelectorAll('.tool-group')) {
+        for (const category of group.querySelectorAll('.tool-category'))
+          category.hidden = [...category.querySelectorAll('button')].every(
+            (button) => button.hidden,
+          );
+        group.hidden = [...group.querySelectorAll('[data-tool],[data-action]')].every(
+          (button) => button.hidden,
+        );
+      }
+    },
+  };
 }
 export function paletteControl(input, onPick) {
   const label = input.parentElement,

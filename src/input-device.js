@@ -58,3 +58,24 @@ export function setZoomSpeed(value) {
     /* Keep the choice for this session. */
   }
 }
+
+export const ORBIT_DAMPING_KEY = 'lirastructure.orbit-damping.v1';
+let damping;
+export function orbitDamping() {
+  if (damping === undefined) {
+    try {
+      damping = localStorage.getItem(ORBIT_DAMPING_KEY) !== 'false';
+    } catch {
+      damping = true;
+    }
+  }
+  return damping;
+}
+export function setOrbitDamping(value) {
+  damping = Boolean(value);
+  try {
+    localStorage.setItem(ORBIT_DAMPING_KEY, String(damping));
+  } catch {
+    /* Keep the choice for this session. */
+  }
+}

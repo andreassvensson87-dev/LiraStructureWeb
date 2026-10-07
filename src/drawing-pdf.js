@@ -1,7 +1,7 @@
 import { appendViewTitle } from './drawing-view-title.js';
 const svgNS = 'http://www.w3.org/2000/svg';
 const controls =
-  '.viewport-grip,.viewport-frame,.section-extent-guides,[data-section-endpoint],[data-detail-corner],[data-section-crop],.annotation-anchor,.annotation-hit';
+  '.viewport-grip,.viewport-frame,.drawing-view-grip,.section-extent-guides,[data-section-endpoint],[data-detail-corner],[data-section-crop],.annotation-anchor,.annotation-hit,.shape-grip-target,[data-annotation-helper]';
 export function pdfFileName(records) {
   const name = records.length === 1 ? records[0].number : 'Ritningar';
   return `${String(name || 'Ritning').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')}.pdf`;
@@ -101,7 +101,7 @@ export function gaPDFPage(editor) {
   svg.append(frame);
   return { ...pdfPageSize(width, height), svg };
 }
-export async function createDrawingPDF(pages) {
+export async function createDrawingPDF(pages, { title = 'Ritningar' } = {}) {
   if (!pages.length) throw Error('Markera minst en ritning.');
   const [{ jsPDF }] = await Promise.all([import('jspdf'), import('svg2pdf.js')]);
   const first = pages[0];
@@ -111,7 +111,7 @@ export async function createDrawingPDF(pages) {
     orientation: first.orientation,
     compress: true,
   });
-  doc.setProperties({ title: 'Ritningar', creator: 'LiraStructure' });
+  doc.setProperties({ title, creator: 'LiraStructure' });
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-100000px;top:0;pointer-events:none';
   document.body.append(host);

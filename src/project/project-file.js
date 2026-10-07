@@ -8,6 +8,7 @@ import { validateLevels } from '../levels.js';
 import { parsePositions } from '../grid-lines.js';
 import { validateGridLabels } from '../grid-labels.js';
 import { syncAssemblyDrawingIdentity } from './assemblies.js';
+import { validateProjectReports } from '../report-record.js';
 
 export const PROJECT_FILE_LIMIT = 100 * 1024 * 1024;
 const record = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
@@ -25,6 +26,7 @@ export function validateProjectFile(project) {
   if (!record(project) || project.schemaVersion !== PROJECT_SCHEMA_VERSION)
     fail('Projektversionen stöds inte av det här programmet.');
   finiteData(project);
+  project.reports = validateProjectReports(project.reports);
   if (!Array.isArray(project.objects) || project.objects.length > 100000)
     fail('Ogiltig objektlista.');
   const objects = new Map();

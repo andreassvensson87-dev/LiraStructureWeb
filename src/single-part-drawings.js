@@ -6,8 +6,8 @@ export function nextDrawingNumber(drawings, type = 'SP') {
   while (drawings.some((d) => d.number === `${type}-${String(i).padStart(3, '0')}`)) i++;
   return `${type}-${String(i).padStart(3, '0')}`;
 }
-export function planDrawingNumbering(objects, parts, drawings) {
-  const nextParts = numberParts(objects, parts),
+export function planDrawingNumbering(objects, parts, drawings, series = {}) {
+  const nextParts = numberParts(objects, parts, series),
     groups = new Map();
   for (const object of objects.filter((o) => isPhysical(o))) {
     const next = nextParts.assignments[object.id];

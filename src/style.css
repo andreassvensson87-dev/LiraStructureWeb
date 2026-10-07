@@ -496,16 +496,29 @@ dialog p {
   background: currentColor;
 }
 #snap-status {
-  margin-left: auto;
+  margin-right: auto;
   color: #36715e;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 45%;
+  min-width: 0;
 }
 body > footer #status {
-  margin-left: auto;
-  text-align: right;
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+body > footer {
+  justify-content: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  background: linear-gradient(#fafcfb, #f1f5f4);
+  color: #506961;
+  box-shadow: 0 -1px 4px #172b3204;
 }
 body > footer #status:has(+ #snap-status:not(:empty)),
 body > footer #snap-status:empty {
@@ -2518,6 +2531,20 @@ button.insertion-point.edge-add:hover {
   border-color: #c5d0d4;
   background: white;
 }
+.drawing-table select {
+  min-width: 130px;
+  padding: 3px 5px;
+  font-size: 12px;
+  border-color: transparent;
+  background: transparent;
+}
+.drawing-table select:focus {
+  border-color: #93bdb0;
+  background: white;
+}
+.drawing-table select[multiple] {
+  min-height: 52px;
+}
 .drawing-status {
   font-size: 11px;
   color: #60737a;
@@ -2757,6 +2784,48 @@ button.insertion-point.edge-add:hover {
 .annotation-dragging,
 .annotation-dragging .drawing-annotation {
   cursor: grabbing !important;
+}
+.drawing-editor .drawing-paper,
+.drawing-editor .drawing-paper [data-view],
+.drawing-editor .drawing-annotation {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cpath d='M16 1v11m0 8v11M1 16h11m8 0h11M12 12h8v8h-8Z' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M16 1v11m0 8v11M1 16h11m8 0h11M12 12h8v8h-8Z' fill='none' stroke='%23263a42'/%3E%3C/svg%3E")
+      16 16,
+    crosshair;
+}
+.drawing-editor .annotating,
+.drawing-editor .annotating [data-view],
+.drawing-editor .annotating .drawing-annotation,
+.drawing-editor .annotation-dragging,
+.drawing-editor .annotation-dragging .drawing-annotation {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 1v46M1 24h46' stroke='white' stroke-width='3'/%3E%3Cpath d='M24 1v46M1 24h46' stroke='%23263a42'/%3E%3C/svg%3E")
+      24 24,
+    crosshair !important;
+}
+.drawing-editor .shape-grip {
+  pointer-events: all;
+  cursor: crosshair;
+}
+.drawing-editor .shape-grip-hit {
+  pointer-events: all;
+}
+.annotation-inspector .shape-fill-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.annotation-inspector .shape-fill-toggle input {
+  width: auto;
+  margin: 0;
+}
+.annotation-inspector input[type='color'] {
+  height: 32px;
+  padding: 3px;
+}
+.drawing-editor .shape-grip-target:hover .shape-grip {
+  fill: #f59e0b;
+  stroke: #263a42;
 }
 .sheet-workspace {
   display: block;
@@ -3021,20 +3090,124 @@ dialog.drawing-editor {
   border-radius: 5px;
 }
 .drawing-editor .drawing-body {
-  grid-template-columns: 122px minmax(0, 1fr) 245px;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 245px;
+}
+.dimension-assistant {
+  position: absolute;
+  z-index: 22;
+  bottom: 16px;
+  left: calc((100% - 245px) / 2);
+  transform: translateX(-50%);
+  max-width: calc(100% - 277px);
+  padding: 5px 7px;
+  border: 1px solid #d5dfe1;
+  border-radius: 12px;
+  background: #fffffff2;
+  box-shadow: 0 5px 20px #172b3220;
+  backdrop-filter: blur(8px);
+}
+.dimension-assistant[hidden] {
+  display: none;
+}
+.assistant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.assistant-actions button {
+  font-size: 11px;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
+.assistant-actions button[aria-pressed='true'] {
+  background: #287c65;
+  color: white;
+}
+.assistant-actions label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  flex: none;
+}
+.assistant-status {
+  margin: 8px 0 4px;
+  text-align: center;
+  color: #526b74;
+  font-size: 11px;
+}
+.drawing-editor .sheet-tools.grouped-toolbox {
+  z-index: 20;
+  gap: 4px;
+}
+.drawing-editor .sheet-tools .tool-group-trigger,
+.drawing-editor .sheet-tools .tool-group-items .drawing-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 60px;
+  min-height: 58px;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 11px;
+  text-align: center;
+}
+.drawing-editor .sheet-tools .tool-group-items .drawing-action {
+  width: 78px;
+}
+.drawing-editor .sheet-tools .tool-group-trigger:hover,
+.drawing-editor .sheet-tools button[aria-pressed='true'],
+.drawing-editor .sheet-tools .tool-group-trigger.active {
+  background: #e0eeeb;
+  color: #287c65;
+}
+.drawing-editor .sheet-tools .tool-group-trigger svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.drawing-editor .sheet-tools .tool-group-panel {
+  z-index: 30;
+}
+.drawing-editor .sheet-tools .tool-group-categories {
+  width: 252px;
+}
+.drawing-editor .sheet-tools .tool-category {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.drawing-editor .sheet-tools .tool-category-heading {
+  grid-column: 1 / -1;
 }
 .drawing-editor .sheet-tools {
+  position: absolute;
+  top: 20px;
+  left: 16px;
+  width: 70px;
+  height: auto;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   flex-wrap: nowrap;
   gap: 5px;
-  padding: 10px 7px;
+  padding: 5px;
   min-height: 0;
-  border: 0;
-  border-right: 1px solid #dce5e7;
-  background: #f8fafb;
+  border: 1px solid #d5dfe1;
+  border-radius: 12px;
+  background: #ffffffed;
+  box-shadow: 0 3px 14px #172b3208;
+  backdrop-filter: blur(8px);
   overflow: visible;
 }
 .drawing-editor .sheet-tools .drawing-action {
@@ -3125,8 +3298,12 @@ dialog.drawing-editor {
   right: -4px;
 }
 @media (max-width: 800px) {
+  .dimension-assistant {
+    left: calc((100% - 190px) / 2);
+    max-width: calc(100% - 210px);
+  }
   .drawing-editor .drawing-body {
-    grid-template-columns: 110px minmax(0, 1fr) 190px;
+    grid-template-columns: minmax(0, 1fr) 190px;
   }
 }
 #plan-view .plan-section-overlay {
@@ -3297,6 +3474,64 @@ dialog.drawing-editor {
 .grouped-toolbox .tool-group-items button {
   width: 70px;
   min-height: 60px;
+}
+.tool-group-items.tool-group-categories {
+  display: grid;
+  width: 220px;
+  gap: 8px;
+}
+.tool-group-search {
+  width: 220px;
+  margin-bottom: 10px;
+  padding: 8px;
+  font-size: 12px;
+}
+.tool-group-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: #647a83;
+}
+.toolbox.grouped-toolbox .tool-category[hidden],
+.toolbox.grouped-toolbox .tool-category button[hidden],
+.tool-group-empty[hidden] {
+  display: none;
+}
+.tool-group-categories {
+  max-height: min(440px, 55vh);
+  overflow-y: auto;
+}
+.tool-category {
+  display: grid;
+  gap: 2px;
+}
+.tool-category + .tool-category {
+  border-top: 1px solid #e5ebec;
+  padding-top: 8px;
+}
+.tool-category-heading {
+  padding: 2px 8px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #647a83;
+}
+.toolbox.grouped-toolbox .tool-category button {
+  flex-direction: row;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  gap: 10px;
+  text-align: left;
+}
+.toolbox.grouped-toolbox .tool-category button svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.toolbox.grouped-toolbox .tool-category button span {
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 .grouped-toolbox button:focus-visible {
   outline: 2px solid #258e79;
@@ -3732,6 +3967,18 @@ body > footer .pwa-install {
   gap: 6px;
   margin: 8px 0;
 }
+#inspector-references .reference-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#inspector-references .reference-heading [data-new-group] {
+  border: 0;
+  background: transparent;
+  color: #176b53;
+  padding: 3px;
+}
 #inspector-references .reference-toolbar button {
   flex: 1;
   min-width: 0;
@@ -3741,6 +3988,44 @@ body > footer .pwa-install {
   width: 100%;
   min-height: 32px;
   margin: 4px 0 12px;
+}
+#inspector-references .reference-drop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin: 8px 0;
+  padding: 3px 8px;
+  border: 1px dashed #ccd7da;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #74868e;
+}
+#inspector-references .reference-drop svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+#inspector-references .reference-drop [data-import] {
+  margin-left: auto;
+  padding: 3px 0 3px 8px;
+  border: 0;
+  background: transparent;
+  color: #176b53;
+  white-space: nowrap;
+}
+#inspector-references .reference-drop.is-dragging {
+  border-color: #178268;
+  background: #edf7f1;
+  color: #176b53;
+}
+#inspector-references .reference-drop.is-importing {
+  opacity: 0.6;
 }
 #inspector-references .reference-list-row {
   display: flex;
@@ -4689,4 +4974,126 @@ body > footer .pwa-install {
 .drawing-revision-dialog [role='alert'] {
   font-size: 12px;
   color: #a74334;
+}
+
+.drawing-revision-history-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.revision-list {
+  padding: 16px 16px 0;
+}
+.revision-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.revision-table-scroll {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #d4dce0;
+}
+.revision-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.revision-list th,
+.revision-list td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #d4dce0;
+}
+.revision-list th {
+  background: #edf1f3;
+  position: sticky;
+  top: 0;
+}
+.revision-list tr.selected {
+  background: #dcefe8;
+}
+.revision-list td {
+  overflow-wrap: anywhere;
+}
+.revision-list td:nth-child(2) {
+  white-space: nowrap;
+}
+.revision-list tbody tr {
+  cursor: pointer;
+}
+
+.reference-conversion {
+  width: min(900px, calc(100vw - 40px));
+  max-width: none;
+  max-height: calc(100dvh - 40px);
+  padding: 20px;
+  border: 1px solid #ccd7da;
+  border-radius: 8px;
+  color: #263f49;
+}
+.reference-conversion > header,
+.reference-conversion > footer {
+  position: static;
+  height: auto;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.reference-conversion h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.reference-conversion p {
+  font-size: 12px;
+  color: #637a83;
+}
+.reference-conversion-scroll {
+  max-height: 55dvh;
+  overflow: auto;
+}
+.reference-conversion table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.reference-conversion th {
+  position: sticky;
+  top: 0;
+  background: #f0f5f6;
+  text-align: left;
+}
+.reference-conversion td,
+.reference-conversion th {
+  padding: 3px 8px;
+  border-bottom: 1px solid #dce5e7;
+}
+.reference-conversion input {
+  width: 14px;
+  height: 14px;
+  accent-color: #178268;
+}
+.reference-conversion td:last-child {
+  max-width: 420px;
+}
+.reference-conversion-skipped {
+  color: #856425;
+}
+.reference-conversion > footer {
+  margin-top: 16px;
+  gap: 12px;
+  font-size: 12px;
+}
+.reference-conversion footer div {
+  display: flex;
+  gap: 8px;
+}
+.reference-conversion [data-error] {
+  color: #b74343;
+}
+.reference-conversion [data-error]:empty {
+  display: none;
 }

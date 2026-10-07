@@ -1,0 +1,99 @@
+#plan-view .ga-view-grip {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  z-index: 8;
+}
+.ga-view-grip::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  background: white;
+  border: 1px solid #287c65;
+  box-sizing: border-box;
+}
+.ga-view-grip-move::after {
+  background: #78b9da;
+  border-color: #287a9b;
+}
+.ga-view-grip:hover::after {
+  background: #f5ae56;
+  border-color: #a86a20;
+}
+.ga-view-grip-nw {
+  left: 0;
+  top: 0;
+}
+.ga-view-grip-n {
+  left: 50%;
+  top: 0;
+}
+.ga-view-grip-ne {
+  left: 100%;
+  top: 0;
+}
+.ga-view-grip-e {
+  left: 100%;
+  top: 50%;
+}
+.ga-view-grip-se {
+  left: 100%;
+  top: 100%;
+}
+.ga-view-grip-s {
+  left: 50%;
+  top: 100%;
+}
+.ga-view-grip-sw {
+  left: 0;
+  top: 100%;
+}
+.ga-view-grip-w {
+  left: 0;
+  top: 50%;
+}
+.ga-view-grip-move {
+  left: 50%;
+  top: 50%;
+}
+.view-grip-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+.view-grip-marker {
+  fill: white;
+  stroke: #287c65;
+  stroke-width: 1px;
+  pointer-events: none;
+}
+[data-view-grip='move'] .view-grip-marker {
+  fill: #78b9da;
+  stroke: #287a9b;
+}
+.drawing-view-grip:hover .view-grip-marker {
+  fill: #f5ae56;
+  stroke: #a86a20;
+}
+.drawing-editor .drawing-view-placement {
+  margin-top: 14px;
+}
+.drawing-editor .drawing-view-placement p {
+  margin: 0 0 10px;
+  font-size: 10px;
+  color: #70858c;
+}
+.drawing-view-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.drawing-editor .drawing-view-fields label {
+  margin: 0;
+  font-size: 11px;
+}
+.drawing-editor .drawing-view-fields input {
+  margin: 4px 0 0;
+  min-width: 0;
+}

@@ -1,5 +1,6 @@
 import { visibleGridEndpoints } from './grid-label-position.js';
 import { gridLabel } from './grid-labels.js';
+import { gridBubbleMetrics, projectedGridBubbleDiameter } from './grid-bubble-size.js';
 import * as THREE from 'three';
 
 export const defaultGrid = { x: [0, 3000, 6000], y: [0, 4000, 8000] };
@@ -85,13 +86,20 @@ export class GridLines {
       line.material.color.setHex(ids.includes(line.userData.gridId) ? 0x16815e : 0x82969f);
     for (const { el, id } of this.labels) el.classList.toggle('snap-active', ids.includes(id));
   }
-  updateLabels(camera, width, height, { keepVisible = false } = {}) {
+  updateLabels(camera, width, height, { keepVisible = false, diameter } = {}) {
     for (const { position, opposite, index, el } of this.labels) {
       const p = position.clone().project(camera);
-      const labelRadius = Math.max(14, el.textContent.length * 3 + 6);
+      const metrics = gridBubbleMetrics(
+        el.textContent,
+        diameter ?? projectedGridBubbleDiameter(camera, position, width, height),
+      );
+      const labelRadius = metrics.radius;
+      el.style.width = el.style.height = `${labelRadius * 2}px`;
+      el.style.fontSize = `${metrics.fontSize}px`;
+      el.style.borderWidth = `${metrics.strokeWidth}px`;
       if (keepVisible) {
         const q = opposite.clone().project(camera),
-          radius = Math.max(1, Math.min(labelRadius, width / 2 - 1, height / 2 - 1));
+          radius = labelRadius;
         const ends =
           Math.abs(p.z) <= 1 && Math.abs(q.z) <= 1
             ? visibleGridEndpoints(
@@ -99,19 +107,18 @@ export class GridLines {
                 [((q.x + 1) * width) / 2, ((1 - q.y) * height) / 2],
                 width,
                 height,
-                radius + 2,
+                radius + metrics.inset,
               )
             : null;
         el.hidden =
           !ends ||
           (index === 1 &&
-            Math.hypot(ends[0][0] - ends[1][0], ends[0][1] - ends[1][1]) < radius * 2 + 2);
+            Math.hypot(ends[0][0] - ends[1][0], ends[0][1] - ends[1][1]) <
+              radius * 2 + metrics.inset);
         if (ends) {
           el.style.left = `${ends[0][0]}px`;
           el.style.top = `${ends[0][1]}px`;
         }
-        el.style.width = el.style.height = `${radius * 2}px`;
-        el.style.fontSize = `${Math.max(8, Math.min(12, radius))}px`;
         continue;
       }
       el.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;

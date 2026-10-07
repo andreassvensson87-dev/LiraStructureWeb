@@ -149,3 +149,47 @@ test('shared grip moves coincident vertices only in selected lines, including cl
   for (const i of [3, 4, 5]) assert.equal(result[i], entities[i]);
   assert.deepEqual(entities[0].points[0], [0, 0]);
 });
+
+test('editing grips include a whole-object center without duplicating closed endpoints', async () => {
+  const { frameEditGrips } = await import('../src/frame-grips.js');
+  const entity = {
+    type: 'line',
+    points: [
+      [0, 0],
+      [80, 0],
+      [80, 40],
+      [0, 0],
+    ],
+  };
+  assert.deepEqual(frameEditGrips(entity), [
+    { point: [0, 0], index: 0 },
+    { point: [80, 0], index: 1 },
+    { point: [80, 40], index: 2 },
+    { point: [40, 20], index: -1 },
+  ]);
+  assert.deepEqual(transformFrameEntity(entity, [40, 20], [50, 25]).points, [
+    [10, 5],
+    [90, 5],
+    [90, 45],
+    [10, 5],
+  ]);
+  assert.deepEqual(frameEditGrips({ type: 'text', point: [7, 9] }), [{ point: [7, 9], index: 0 }]);
+});
+
+test('magnetic frame snapping acquires, holds and releases at pixel distances across zoom', async () => {
+  const { magneticFrameSnap } = await import('../src/frame-grips.js');
+  for (const pixelSize of [0.1, 1, 10]) {
+    const options = { entities: [{ type: 'point', point: [0, 0] }], pixelSize, polar: 0 };
+    const hit = magneticFrameSnap([13 * pixelSize, 0], options);
+    assert.equal(hit.kind, 'Ändpunkt');
+    assert.deepEqual(hit.point, [0, 0]);
+    assert.deepEqual(magneticFrameSnap([17 * pixelSize, 0], options, hit).point, [0, 0]);
+    const released = magneticFrameSnap([19 * pixelSize, 0], options, hit);
+    assert.equal(released.kind, 'Fritt');
+    assert.deepEqual(released.point, [19 * pixelSize, 0]);
+    assert.equal(
+      magneticFrameSnap([13 * pixelSize, 0], { ...options, endpoints: false }).kind,
+      'Fritt',
+    );
+  }
+});

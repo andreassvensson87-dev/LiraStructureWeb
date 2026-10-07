@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { edgeIndex, referenceCandidates } from './edge-index.js';
+import { installReferenceConversion } from './conversion-ui.js';
 export class ReferenceModels {
-  constructor({ scene, inspector, fit, status }) {
+  constructor({ scene, inspector, fit, status, getObjects, convert }) {
     Object.assign(this, { scene, fit, status });
     this.models = [];
     this.folders = ['Standard'];
     this.collapsed = new Set();
     this.selectedId = null;
+    this.selectedObject = null;
     this.parts = [];
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -30,10 +32,13 @@ export class ReferenceModels {
       inspector.show('references');
     };
     this.panel.innerHTML = `
-      <h2>Referensmodeller</h2>
+      <div class="reference-heading"><h2>Referensmodeller</h2><button type="button" data-new-group>+ Grupp</button></div>
       <div data-overview>
-        <div class="reference-toolbar"><button type="button" data-import>+ Lägg till IFC…</button><button type="button" data-new-group>+ Grupp</button></div>
         <form data-group-form hidden><label>Gruppnamn<input data-group-name required maxlength="80"></label><button type="submit">Skapa</button><button type="button" data-group-cancel>Avbryt</button></form>
+        <div class="reference-drop" data-drop role="group" aria-label="Importera referensfil">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12 2H5v16h11V6l-4-4v4h4M10 14V9m-3 3 3-3 3 3"/></svg>
+          <span>Släpp IFC här</span><button type="button" data-import>Välj fil</button>
+        </div>
         <input type="search" data-search placeholder="Sök referensmodeller…" aria-label="Sök referensmodeller">
         <div data-list></div>
       </div>
@@ -54,12 +59,25 @@ export class ReferenceModels {
           <label>Kanter<input type="checkbox" data-edges checked></label>
         </div></details>
         <button type="button" data-fit>Visa referensens utbredning</button>
+        <p data-object-selection>Markera ett IFC-objekt i modellvyn.</p>
+        <button type="button" data-convert disabled>Konvertera markerat IFC-objekt…</button>
         <div class="reference-toolbar"><button type="button" data-replace>Byt IFC-fil…</button><button type="button" data-remove>Ta bort</button></div>
       </div>
       `;
     const $ = (s) => this.panel.querySelector(s);
     this.$ = $;
+    if (getObjects && convert) {
+      const openConversion = installReferenceConversion({ getObjects, commit: convert });
+      $('[data-convert]').onclick = () => {
+        const model = this.selected();
+        if (model && this.selectedObject?.modelId === model.id) {
+          inspector.finish();
+          openConversion(model, [this.selectedObject.ifcId]);
+        }
+      };
+    } else $('[data-convert]').hidden = true;
     const pickFile = (replaceId = null) => {
+      if ($('[data-import]').disabled) return;
       this.replaceId = replaceId;
       $('input[type=file]').click();
     };
@@ -67,8 +85,25 @@ export class ReferenceModels {
     $('[data-replace]').onclick = () => pickFile(this.selectedId);
     $('input[type=file]').onchange = () => {
       const file = $('input[type=file]').files[0];
-      if (file) this.load(file, { replaceId: this.replaceId });
+      if (file) this.importFile(file, { replaceId: this.replaceId });
       $('input[type=file]').value = '';
+    };
+    const drop = $('[data-drop]');
+    const drag = (event) => {
+      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault();
+      const busy = $('[data-import]').disabled;
+      event.dataTransfer.dropEffect = busy ? 'none' : 'copy';
+      drop.classList.toggle('is-dragging', !busy);
+    };
+    drop.ondragenter = drop.ondragover = drag;
+    drop.ondragleave = (event) => {
+      if (!drop.contains(event.relatedTarget)) drop.classList.remove('is-dragging');
+    };
+    drop.ondrop = (event) => {
+      event.preventDefault();
+      drop.classList.remove('is-dragging');
+      this.dropFiles(Array.from(event.dataTransfer?.files || []));
     };
     $('[data-cancel]').onclick = () => {
       this.cancel();
@@ -133,7 +168,52 @@ export class ReferenceModels {
   selected() {
     return this.models.find((model) => model.id === this.selectedId);
   }
+  pickObject(raycaster) {
+    const visible = this.models.filter((model) => this.group.visible && model.group.visible);
+    const meshes = visible.flatMap((model) => model.parts.map((part) => part.mesh));
+    const hit = raycaster.intersectObjects(meshes, false)[0];
+    if (!hit) return null;
+    const model = visible.find((model) => model.parts.some((part) => part.mesh === hit.object));
+    return { modelId: model.id, ifcId: hit.object.userData.ifcId };
+  }
+  clearObjectSelection() {
+    for (const part of this.parts)
+      if (part.selectionEmissive) {
+        part.mesh.material.emissive.copy(part.selectionEmissive);
+        delete part.selectionEmissive;
+      }
+    this.selectedObject = null;
+    this.syncObjectSelection();
+  }
+  selectObject(selection) {
+    this.clearObjectSelection();
+    const model = this.models.find((model) => model.id === selection.modelId);
+    if (!model || !model.group.visible) return;
+    const parts = model.parts.filter((part) => part.mesh.userData.ifcId === selection.ifcId);
+    if (!parts.length) return;
+    this.selectedObject = selection;
+    for (const part of parts) {
+      part.selectionEmissive = part.mesh.material.emissive.clone();
+      part.mesh.material.emissive.setHex(0x176b53);
+    }
+    this.showModel(model.id);
+    this.message(`IFC-objekt markerat: ${parts[0].mesh.userData.name || '#' + selection.ifcId}`);
+  }
+  syncObjectSelection() {
+    const selected = this.selectedObject?.modelId === this.selectedId ? this.selectedObject : null;
+    const part =
+      selected &&
+      this.parts.find(
+        (part) =>
+          part.mesh.userData.ifcId === selected.ifcId && this.selected()?.parts.includes(part),
+      );
+    this.$('[data-object-selection]').textContent = part
+      ? `Markerat: ${part.mesh.userData.name || 'IFC-objekt'} · #${selected.ifcId}`
+      : 'Markera ett IFC-objekt i modellvyn.';
+    this.$('[data-convert]').disabled = !!this.worker || !part;
+  }
   showList() {
+    this.$('[data-new-group]').hidden = false;
     this.$('[data-model]').hidden = true;
     this.$('[data-overview]').hidden = false;
     this.renderList();
@@ -142,6 +222,7 @@ export class ReferenceModels {
     this.selectedId = id;
     const model = this.selected();
     if (!model) return this.showList();
+    this.$('[data-new-group]').hidden = true;
     this.$('[data-overview]').hidden = true;
     this.$('[data-model]').hidden = false;
     this.$('[data-name]').textContent = model.title;
@@ -157,8 +238,11 @@ export class ReferenceModels {
     select.value = model.folder;
     for (const key of ['visible', 'transparent', 'corners', 'edges'])
       this.$('[data-' + key + ']').checked = key === 'visible' ? model.group.visible : model[key];
+    this.syncObjectSelection();
   }
   setVisible(models, visible) {
+    if (!visible && models.some((model) => model.id === this.selectedObject?.modelId))
+      this.clearObjectSelection();
     for (const model of models) model.group.visible = visible;
     this.renderList();
   }
@@ -264,6 +348,7 @@ export class ReferenceModels {
     this.parts = this.models.flatMap((model) => model.parts);
   }
   clear() {
+    this.clearObjectSelection();
     this.dispose(this.parts);
     this.models = [];
     this.parts = [];
@@ -271,6 +356,7 @@ export class ReferenceModels {
     this.selectedId = null;
   }
   remove(id = this.selectedId) {
+    if (this.selectedObject?.modelId === id) this.clearObjectSelection();
     this.cancel();
     const model = this.models.find((m) => m.id === id);
     if (model) {
@@ -293,8 +379,27 @@ export class ReferenceModels {
   busy(value) {
     this.$('[data-import]').disabled = value;
     this.$('[data-replace]').disabled = value;
+    this.syncObjectSelection();
+    if (value) this.$('[data-convert]').disabled = true;
     this.$('[data-cancel]').hidden = !value;
     this.$('progress').hidden = !value;
+    this.$('[data-drop]').classList?.toggle('is-importing', value);
+  }
+  importFile(file, options) {
+    if (this.$('[data-import]').disabled) return;
+    if (!/\.ifc$/i.test(file.name)) {
+      this.message('Välj en IFC-fil (.ifc).', true);
+      return;
+    }
+    return this.load(file, options);
+  }
+  dropFiles(files) {
+    if (this.$('[data-import]').disabled) return;
+    if (files.length > 1) {
+      this.message('Släpp en IFC-fil åt gången.', true);
+      return;
+    }
+    if (files.length) return this.importFile(files[0]);
   }
   async load(file, { replaceId = null } = {}) {
     this.cancel();
@@ -356,6 +461,7 @@ export class ReferenceModels {
       }
       if (data.type === 'done') {
         const previous = this.models.find((m) => m.id === replaceId);
+        if (previous?.id === this.selectedObject?.modelId) this.clearObjectSelection();
         const model = {
           id: previous?.id || crypto.randomUUID(),
           title: previous?.title || file.name,
@@ -387,9 +493,9 @@ export class ReferenceModels {
         this.group.visible = true;
         this.syncParts();
         this.showModel(model.id);
-        this.busy(false);
         worker.terminate();
         this.worker = null;
+        this.busy(false);
         this.message('IFC importerad.');
         if (model.group.visible) this.fit(this.bounds());
       }

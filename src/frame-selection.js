@@ -54,7 +54,7 @@ export function rectangleSelection(shapes, start, end) {
 }
 export function frameSelectionShapes(root) {
   return [...root.querySelectorAll('[data-entity]')].flatMap((group) => {
-    const element = group.querySelector('polyline,text,image');
+    const element = group.querySelector('polyline,text,image,rect');
     if (!element) return [];
     const matrix = element.getScreenCTM();
     if (!matrix) return [];

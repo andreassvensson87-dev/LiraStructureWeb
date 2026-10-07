@@ -1,6 +1,7 @@
 import { planAssemblyNumbering, applyAssemblyNumbering } from './assembly-numbering.js';
 
 export async function numberAssembliesWithDrawings(manager) {
+  if (manager.openNumbering) return manager.openNumbering({ parts: false, assemblies: true });
   const plan = planAssemblyNumbering(manager.getState());
   const choices = {};
   const conflicts = plan.groups.filter((g) => g.requiresChoice);

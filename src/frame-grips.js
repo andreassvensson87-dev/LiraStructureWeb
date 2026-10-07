@@ -1,4 +1,5 @@
 import { instancePoint } from './frame-layout.js';
+import { snapFrame } from './frame-model.js';
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
 export function frameGrips(entity, layout) {
   if (entity.type === 'block') return [instancePoint(entity, layout)];
@@ -6,6 +7,24 @@ export function frameGrips(entity, layout) {
   const points = entity.points,
     closed = points.length > 2 && same(points[0], points.at(-1));
   return (closed ? points.slice(0, -1) : points).map((p) => [...p]);
+}
+export function frameEditGrips(entity, layout) {
+  const vertices = frameGrips(entity, layout).map((point, index) => ({ point, index }));
+  if (entity.type !== 'line' || !vertices.length) return vertices;
+  const points = vertices.map((grip) => grip.point);
+  const center = [0, 1].map(
+    (axis) =>
+      (Math.min(...points.map((p) => p[axis])) + Math.max(...points.map((p) => p[axis]))) / 2,
+  );
+  return [...vertices, { point: center, index: -1 }];
+}
+
+export function magneticFrameSnap(raw, options, held = null) {
+  const scale = options.pixelSize;
+  if (held && Math.hypot(raw[0] - held.point[0], raw[1] - held.point[1]) <= scale * 18)
+    return { ...held, point: [...held.point] };
+  const result = snapFrame(raw, { ...options, tolerance: scale * 14 });
+  return result;
 }
 export function moveFrameVertex(entity, index, target) {
   if (

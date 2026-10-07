@@ -4,6 +4,8 @@ import { ensureGAViews, duplicateDrawingView, resizeDrawingView } from './drawin
 import { actionButton } from './drawing-toolbar.js';
 import { DrawingViewActions } from './drawing-view-actions.js';
 import { drawingProfileDetail } from './profile-detail.js';
+import { createDrawingViewInspector } from './drawing-view-inspector.js';
+import { viewGripCursor } from './drawing-view-grips.js';
 export class GAViews {
   constructor(editor, inspector, toolbar) {
     this.e = editor;
@@ -14,7 +16,9 @@ export class GAViews {
       annotations: () => editor.annotations.items,
       hit: (event) =>
         event.target.closest('.ga-view-snapshot')?.dataset.gaView ||
-        (event.target.closest('.ga-viewport-grip,.ga-crop-grip') ? this.active?.id : null),
+        (event.target.closest('.ga-viewport-grip,.ga-crop-grip,.ga-view-grip')
+          ? this.active?.id
+          : null),
       select: (id) => this.activate(id),
       cancel: () => editor.cancelInteraction(),
       duplicate: () => this.add(true),
@@ -31,6 +35,7 @@ export class GAViews {
     inspector.prepend(section);
     this.select = section.querySelector('select');
     this.name = section.querySelector('input');
+    this.name.parentElement.after(editor.paperScale.parentElement);
     this.select.onchange = () => this.activate(this.select.value);
     this.name.oninput = () => {
       this.active.name = this.name.value.trim() || 'Planvy';
@@ -54,11 +59,30 @@ export class GAViews {
     remove.onclick = () => this.remove();
     section.querySelector('.ga-view-actions').append(remove);
     this.removeButton = remove;
-    for (const corner of ['nw', 'ne', 'se', 'sw']) {
+    this.placement = createDrawingViewInspector(section, {
+      selected: () => this.active,
+      changed: (view, key, axis, value) => {
+        if (key === 'position') view.position[axis] = value;
+        else
+          Object.assign(
+            view,
+            resizeDrawingView(
+              view,
+              axis === 0 ? 'e' : 's',
+              axis === 0 ? [value - view.size[0], 0] : [0, value - view.size[1]],
+            ),
+          );
+        this.load(view);
+        editor.navigation.size();
+      },
+    });
+    for (const corner of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'move']) {
       const grip = document.createElement('div');
-      grip.className = 'ga-crop-grip ga-crop-' + corner;
-      grip.dataset.cropCorner = corner;
-      grip.title = 'Dra för att beskära vyn · skalan behålls';
+      grip.className = 'ga-view-grip ga-view-grip-' + corner;
+      if (corner === 'move') grip.dataset.viewportGrip = 'true';
+      else grip.dataset.cropCorner = corner;
+      grip.style.cursor = viewGripCursor(corner);
+      grip.title = corner === 'move' ? 'Flytta vyn' : 'Beskär vyn · skalan behålls';
       editor.host.append(grip);
     }
   }
@@ -77,6 +101,7 @@ export class GAViews {
       [e.frameLayout.width, e.frameLayout.height],
       e.center.toArray(),
       e.record.sheet.viewScale,
+      e.frameLayout.contentArea,
     );
     this.ready = false;
     for (const view of this.items) {
@@ -86,6 +111,7 @@ export class GAViews {
     }
     this.load(this.items[0]);
     e.rebuild();
+    e.refreshPaper();
     this.ready = true;
     this.list();
     e.navigation.fit();
@@ -129,6 +155,7 @@ export class GAViews {
     this.snapshots.get(view.id)?.remove();
     this.snapshots.delete(view.id);
     e.positionView();
+    this.placement?.sync();
   }
   list() {
     this.select.replaceChildren(...this.items.map((v) => new Option(v.name, v.id)));
@@ -155,7 +182,7 @@ export class GAViews {
     content.className = 'ga-snapshot-content';
     container.append(content);
     for (const child of e.host.children)
-      if (!child.matches('.ga-viewport-grip,.ga-crop-grip')) {
+      if (!child.matches('.ga-viewport-grip,.ga-crop-grip,.ga-view-grip')) {
         const clone = child.cloneNode(true);
         clone
           .querySelectorAll('.section-extent-guides,[data-section-endpoint],[data-detail-corner]')
@@ -186,6 +213,7 @@ export class GAViews {
   }
   position() {
     const e = this.e;
+    this.placement?.sync();
     for (const view of this.items || []) {
       const snapshot = this.snapshots.get(view.id);
       if (!snapshot) continue;

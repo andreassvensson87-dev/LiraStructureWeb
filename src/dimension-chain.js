@@ -44,3 +44,35 @@ export function moveDimensionPoint(item, index, point) {
   item.points[index] = [...point];
   return true;
 }
+
+export function formatDimension(length, precision) {
+  if (precision === undefined) return Number(length.toFixed(1)).toLocaleString('sv-SE');
+  if (!Number.isInteger(precision) || precision < 0 || precision > 3)
+    throw Error('Välj 0–3 decimaler.');
+  return length.toLocaleString('sv-SE', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  });
+}
+export function holeDimensionPoints(candidates, reference, kind) {
+  if (reference?.kind !== 'bore') return [];
+  const points = candidates.filter(
+    (p) => p.reference?.kind === 'bore' && p.reference.source === reference.source,
+  );
+  const axis = dimensionAxis(kind, points);
+  return orderedPoints(points, axis).map((p) => p.point);
+}
+export function dimensionPaperOffset(item, project, unit) {
+  const axis = item.axis || dimensionAxis(item.kind, item.points),
+    normal = [-axis[1], axis[0]];
+  const a = project(item.points[0]),
+    b = project(item.points[0].map((v, i) => v + normal[i]));
+  const factor = Math.hypot(b[0] - a[0], b[1] - a[1]) / unit;
+  return { value: dot(sub(item.line, item.points[0]), normal) * factor, factor, normal };
+}
+export function setDimensionPaperOffset(item, value, project, unit) {
+  const { factor, normal } = dimensionPaperOffset(item, project, unit);
+  if (!Number.isFinite(value) || Math.abs(value) > 500 || !(factor > 0))
+    throw Error('Ange ett avstånd mellan −500 och 500 mm.');
+  return item.points[0].map((v, i) => v + (normal[i] * value) / factor);
+}

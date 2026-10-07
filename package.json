@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build && node scripts/build-pwa.js",
     "test": "node --test tests/*.test.js",
+    "templates:import": "node scripts/import-drawing-templates.mjs",
     "benchmark:model": "node --expose-gc scripts/benchmark-model.mjs",
     "benchmark:history": "node --expose-gc scripts/benchmark-history.mjs",
     "format": "prettier --write \"src/**/*.{js,css}\" \"tests/**/*.js\"",

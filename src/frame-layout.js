@@ -1,3 +1,4 @@
+import { expandRevisionBlock } from './frame-revision-table.js';
 import { transformFrameEntity } from './frame-model.js';
 export const LAYOUT_KEY = 'lirastructure.drawing-layouts.v1';
 export function blankLayout() {
@@ -24,11 +25,11 @@ export function offsetForPoint(point, layout, anchor) {
   const a = anchorPoint(layout, anchor);
   return point.map((v, i) => v - a[i]);
 }
-export function expandLayout(layout, blocks) {
+export function expandLayout(layout, blocks, drawing) {
   return layout.entities.flatMap((instance) => {
     const block = blocks.find((b) => b.id === instance.blockId);
     if (!block) return [];
-    return block.entities.map((e) => ({
+    return expandRevisionBlock(block, drawing).map((e) => ({
       ...transformFrameEntity(
         e,
         block.origin || [0, 0],

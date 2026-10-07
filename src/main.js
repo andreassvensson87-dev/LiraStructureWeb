@@ -1,3 +1,22 @@
+import { installDrawingTemplates } from './install-drawing-templates.js';
+import { installReports } from './report-module.js';
+import { installNumbering } from './numbering/ui.js';
+import {
+  installReportTemplates,
+  installMaterialReportTemplate,
+  installFullFrameReportTables,
+} from './install-report-templates.js';
+import { installTeklaAttributeChoices } from './install-tekla-attribute-choices.js';
+import { openDrawingAttributeLibrary } from './drawing-attribute-library.js';
+try {
+  installDrawingTemplates();
+  installReportTemplates();
+  installMaterialReportTemplate();
+  installFullFrameReportTables();
+  installTeklaAttributeChoices();
+} catch (error) {
+  console.warn('Kunde inte installera ritningsmallarna.', error);
+}
 import {
   copyPlateProperties,
   editablePlate,
@@ -72,7 +91,11 @@ import { createProject, captureProject } from './project/project-state.js';
 import { addToAssembly } from './project/assemblies.js';
 import { installProjectFiles } from './app/project-files.js';
 import { SnapIndex } from './model/snap-index.js';
-import { displayGeometryIdentityReader, createDisplayGeometryContext } from './model-object.js';
+import {
+  displayGeometryIdentityReader,
+  createDisplayGeometryContext,
+  selectionGeometryReader,
+} from './model-object.js';
 import { InstanceBatches } from './model/instance-batches.js';
 import { reconcileChildren } from './model/reconcile-children.js';
 import { InteractionTimings } from './model/interaction-timings.js';
@@ -110,19 +133,25 @@ let planView = null;
 import { LevelsUI, initialLevels, levelElevation } from './levels.js';
 let levelsUI = null;
 import { nextIdentity, identityError, designation } from './object-identity.js';
+import { ModelFilter } from './model-filter-ui.js';
+let modelFilter = null;
 import { ModelTree } from './model-tree.js';
 let modelTree = null;
 let referenceModels = null;
 const hiddenObjects = new Set();
-const isVisible = (id) =>
+const baseVisible = (id) =>
   !hiddenObjects.has(id) &&
   (ui.showHelpers ||
     !isHelper(renderedById.get(id)?.source ?? project.objects.find((s) => s.id === id)));
+const isVisible = (id) => baseVisible(id) && (modelFilter?.allows(id) ?? true);
 import { MaterialUI } from './material-ui.js';
 import { profileMaterialSuggestions, suggestedProfileMaterial } from './profile-material.js';
 import { ObjectInformation } from './model/ui/object-information.js';
 let materialUI = null;
 import './style.css';
+import './cad-statusbar.css';
+import './drawing-editor-header.css';
+import './drawing-view-grips.css';
 
 import { ProfilePicker } from './profile-picker.js';
 let profilePicker = null;
@@ -358,6 +387,15 @@ renderer.setAnimationLoop(() => {
   // Project labels with the same camera transform used to render this frame.
   camera.updateMatrixWorld();
   if (!frameGate.consume(camera)) return;
+  if (modelFilter?.filter.inView) {
+    const previous = [...modelFilter.matches].join('|');
+    modelFilter.sync(project);
+    if ([...modelFilter.matches].join('|') !== previous) {
+      ui.selectedIds = new Set([...ui.selectedIds].filter(isVisible));
+      ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
+      render();
+    }
+  }
   const frameStarted = performance.now();
   updateFastenerDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
   updateDisplayDetail(objects.children, camera, host.clientHeight, ui.selectedIds);
@@ -453,6 +491,7 @@ let renderedSelection = new Set();
 let snapIndex = null;
 function render({ selectionOnly = false } = {}) {
   const renderStarted = performance.now();
+  modelFilter?.sync(project);
   frameGate.invalidate();
   selectionOnly &&=
     project.objects.length === renderedObjects.length &&
@@ -558,6 +597,7 @@ function render({ selectionOnly = false } = {}) {
   interactionTimings.record('otherUiMs', uiStarted);
 }
 function setSelection(ids, keepTab = false) {
+  referenceModels?.clearObjectSelection();
   inspector?.rollback();
   setDrawing(false);
   ui.selectedIds = groupSelection(project.objects, ids);
@@ -574,6 +614,15 @@ function select(id, additive = false, keepTab = false) {
     } else ids.add(id);
   }
   setSelection(ids, keepTab);
+}
+function selectModelOrReference(id, additive = false) {
+  const reference = !id && referenceModels?.pickObject(raycaster);
+  if (reference) {
+    setSelection([], true);
+    referenceModels.selectObject(reference);
+    inspector.show('references');
+    frameGate.invalidate();
+  } else select(id, additive);
 }
 function checkpoint() {
   projectHistory.checkpoint(project);
@@ -1252,7 +1301,7 @@ const { cancelBox, beginBox } = createSelectionController({
   getControls: () => navigation.controls,
   setDrawing,
   ray,
-  select,
+  select: selectModelOrReference,
   selectionHit,
   setSelection,
   isVisible,
@@ -1608,7 +1657,7 @@ installModelPointer(renderer.domElement, {
     },
     select: (e) => {
       ray(e);
-      select(selectionHit(), e.shiftKey);
+      selectModelOrReference(selectionHit(), e.shiftKey);
     },
     finish: commitPoint,
     start: (p) => {
@@ -1728,6 +1777,7 @@ function loadFrameExample(size) {
   Object.assign(project, example);
   projectHistory.prime(project);
   hiddenObjects.clear();
+  modelFilter?.reset();
   ui.sequence = project.objects.length;
   levelsUI?.sync();
   grid.set({ ...project.grid, z: levelElevation(project.levels) });
@@ -1741,6 +1791,9 @@ function loadFrameExample(size) {
 const settingsController = createSettingsController({
   project,
   checkpoint,
+  onOrbitDampingChanged: (enabled) => {
+    navigation.controls.enableDamping = enabled;
+  },
   loadExample: loadFrameExample,
   libraries: [
     {
@@ -1766,6 +1819,16 @@ const settingsController = createSettingsController({
       name: 'Färger',
       description: 'Färger för material och objekt',
       open: () => materialUI.colors.open(),
+    },
+    {
+      group: 'Ritningar',
+      name: 'Attribut',
+      open: () =>
+        openDrawingAttributeLibrary(() => {
+          if (drawingController.manager.dialog.open) drawingController.manager.render();
+          if (drawingController.singleSheet.dialog.open) drawingController.singleSheet.compose();
+          if (drawingController.planView.dialog.open) drawingController.planView.refreshPaper();
+        }),
     },
     {
       group: 'Ritningar',
@@ -1823,6 +1886,7 @@ installProjectFiles({
       Object.assign(project, state);
       projectHistory.prime(project);
       hiddenObjects.clear();
+      modelFilter?.reset();
       ui.exactProfileIds.clear();
       ui.sequence = project.objects.length;
       levelsUI?.sync();
@@ -1852,7 +1916,16 @@ function cancelInspectorPreview() {
   if (!tools.operation)
     objects.children.forEach((child) => (child.visible = isVisible(child.userData.id)));
 }
+function inspectorSelection() {
+  return inspector
+    ? inspector.getState().selected
+    : project.objects.filter((s) => ui.selectedIds.has(s.id));
+}
 inspector = new Inspector({
+  scopeChanged: (staged = false) => {
+    if (!staged) render();
+    else syncMaterialPanel();
+  },
   getState: () => ({
     selected: project.objects.filter((s) => ui.selectedIds.has(s.id)),
     drawing: tools.drawing,
@@ -1877,7 +1950,7 @@ inspector = new Inspector({
     $('status').textContent = 'Egenskaper uppdaterade';
   },
   fill: (batch) => {
-    if (batch.length === 1) {
+    if (batch.length === 1 && !inspector.multiEditing) {
       fillForm(batch[0]);
       $('inspector-name').value = batch[0].name;
     } else inspector.fillCommon(batch);
@@ -2018,11 +2091,22 @@ $('polygoncut').onclick = () => {
   if (targets.length) startPlate(targets);
 };
 function applyLibrarySection(section) {
+  if (inspector?.multiEditing) {
+    const sources = inspectorSelection();
+    if (!sources.length || !sources.every((s) => (s.type || 'sweep') === 'sweep')) return;
+    inspector.stage((s) => ({
+      ...s,
+      profile: 'custom',
+      section: structuredClone(section),
+      width: section.properties.bounds.width,
+      height: section.properties.bounds.height,
+      material: suggestedProfileMaterial(section, s.material, materialUI.records, !s.material),
+    }));
+    return;
+  }
   inspector?.finish();
   ui.libraryMode = true;
-  const sources = project.objects.filter(
-    (s) => ui.selectedIds.has(s.id) && (s.type || 'sweep') === 'sweep',
-  );
+  const sources = inspectorSelection().filter((s) => (s.type || 'sweep') === 'sweep');
   const apply = (s) => ({
     ...s,
     profile: 'custom',
@@ -2068,7 +2152,7 @@ profilePicker = new ProfilePicker($('profile-quick-picker'), {
 });
 sectionEditor.dialog.addEventListener('close', () => updateForm());
 $('section-library-open').onclick = () => {
-  inspector?.finish();
+  if (!inspector?.multiEditing) inspector?.finish();
   sectionEditor.open();
 };
 $('profile-source-library').onclick = () => {
@@ -2089,8 +2173,12 @@ $('profile-source-form').onclick = () => {
 };
 materialUI = new MaterialUI($('material-panel'), {
   apply: (patch) => {
+    if (inspector?.multiEditing) {
+      inspector.stage((s) => (isPhysical(s) ? { ...s, ...structuredClone(patch) } : s));
+      return;
+    }
     inspector?.finish();
-    const targets = project.objects.filter((s) => ui.selectedIds.has(s.id) && isPhysical(s));
+    const targets = inspectorSelection().filter(isPhysical);
     if (targets.length) {
       checkpoint();
       const ids = new Set(targets.map((s) => s.id));
@@ -2123,7 +2211,7 @@ materialUI = new MaterialUI($('material-panel'), {
   },
 });
 function syncMaterialPanel() {
-  const selectedObjects = project.objects.filter((s) => ui.selectedIds.has(s.id) && isPhysical(s));
+  const selectedObjects = (inspector?.editingObjects() || inspectorSelection()).filter(isPhysical);
   const creating =
     tools.drawing &&
     !ui.selectedIds.size &&
@@ -2228,12 +2316,17 @@ function changeVisibility(action) {
   inspector?.finish();
   setDrawing(false);
   action();
+  modelFilter?.sync(project);
   ui.selectedIds = new Set([...ui.selectedIds].filter(isVisible));
   ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
   render();
 }
 modelTree = new ModelTree($('object-list'), {
   selectGroup: (ids, add) => {
+    if (ids.some((id) => !modelFilter.allows(id))) {
+      modelFilter.reset();
+      modelFilter.sync(project);
+    }
     ids.forEach((id) => hiddenObjects.delete(id));
     const selection = add ? new Set(ui.selectedIds) : new Set();
     const remove = add && ids.every((id) => selection.has(id));
@@ -2241,6 +2334,10 @@ modelTree = new ModelTree($('object-list'), {
     setSelection([...selection], true);
   },
   select: (id, add) => {
+    if (!modelFilter.allows(id)) {
+      modelFilter.reset();
+      modelFilter.sync(project);
+    }
     hiddenObjects.delete(id);
     if (isHelper(project.objects.find((s) => s.id === id))) ui.showHelpers = true;
     select(id, add, true);
@@ -2250,6 +2347,7 @@ modelTree = new ModelTree($('object-list'), {
     changeVisibility(() => {
       if (isVisible(id)) hiddenObjects.add(id);
       else {
+        if (!modelFilter.allows(id)) modelFilter.reset();
         hiddenObjects.delete(id);
         if (isHelper(project.objects.find((s) => s.id === id))) ui.showHelpers = true;
       }
@@ -2266,8 +2364,55 @@ modelTree = new ModelTree($('object-list'), {
   showAll: () =>
     changeVisibility(() => {
       hiddenObjects.clear();
+      modelFilter?.reset();
       ui.showHelpers = true;
     }),
+});
+const filterBounds = new WeakMap();
+modelFilter = new ModelFilter({
+  inspector,
+  baseVisible,
+  change: () => {
+    changeVisibility(() => modelFilter.sync(project));
+    inspector.show('filter');
+    $('status').textContent = modelFilter.active
+      ? `Filter aktivt · ${modelFilter.matches.size} ${modelFilter.matches.size === 1 ? 'träff' : 'träffar'} av ${project.objects.length} objekt`
+      : 'Alla modellfilter återställda';
+  },
+  showAll: () => {
+    changeVisibility(() => {
+      hiddenObjects.clear();
+      ui.showHelpers = true;
+    });
+    inspector.show('filter');
+    $('status').textContent = 'Alla objekt visas';
+  },
+  selectMatches: (ids) => {
+    setSelection(ids, true);
+    ui.selectedIds = new Set([...ui.selectedIds].filter(isVisible));
+    ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
+    render({ selectionOnly: true });
+    inspector.show('filter');
+  },
+  getViewIds: () => {
+    camera.updateMatrixWorld();
+    objects.updateMatrixWorld(true);
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+    return new Set(
+      objects.children
+        .filter((child) => {
+          let box = filterBounds.get(child);
+          if (!box) {
+            box = new THREE.Box3().setFromObject(child);
+            filterBounds.set(child, box);
+          }
+          return frustum.intersectsBox(box);
+        })
+        .map((child) => child.userData.id),
+    );
+  },
 });
 levelsUI = new LevelsUI({
   getState: () => project.levels,
@@ -2303,6 +2448,41 @@ const drawingController = createDrawingController({
 });
 planView = drawingController.planView;
 drawingManager = drawingController.manager;
+const numbering = installNumbering({
+  getState: () => project,
+  beforeOpen: () => {
+    inspector?.finish();
+    setDrawing(false);
+  },
+  commit: (patch) => {
+    checkpoint();
+    Object.assign(project, patch);
+    render();
+    $('status').textContent = 'Numrering tilldelad · Kan ångras';
+  },
+  highlight: (ids) => {
+    ids.forEach((id) => hiddenObjects.delete(id));
+    setSelection(ids, true);
+  },
+  zoom: (ids) => {
+    const bounds = new THREE.Box3(),
+      geometry = selectionGeometryReader(project.objects, { exactProfileIds: ui.exactProfileIds }),
+      selected = new Set(ids);
+    for (const object of project.objects)
+      if (selected.has(object.id)) bounds.union(geometry.bounds(object));
+    if (!bounds.isEmpty()) {
+      fit(undefined, bounds);
+      frameGate.invalidate();
+    }
+  },
+  onClose: () => drawingManager.render(),
+});
+drawingManager.openNumbering = (kinds) => numbering.open(kinds);
+const numberingButton = document.createElement('button');
+numberingButton.id = 'numbering-open';
+numberingButton.textContent = 'Numrering';
+numberingButton.onclick = () => numbering.open();
+document.querySelector('header .history').prepend(numberingButton);
 for (const [id, key] of [
   ['move', 'M'],
   ['copy', 'C'],
@@ -2561,6 +2741,19 @@ const frameEditor = new FrameEditor({
 });
 
 const drawingSettings = installDrawingSettings(drawingController, frameEditor);
+installReports({
+  project,
+  frameEditor,
+  checkpoint: () => {
+    projectHistory.checkpoint(project);
+    $('undo').disabled = false;
+    $('redo').disabled = true;
+  },
+  finishEditing: () => {
+    inspector?.finish();
+    setDrawing(false);
+  },
+});
 setupPWA();
 
 referenceModels = new ReferenceModels({
@@ -2569,6 +2762,15 @@ referenceModels = new ReferenceModels({
   fit: (bounds) => fit(undefined, bounds),
   status: (text) => {
     document.querySelector('footer [role=status]').textContent = text;
+  },
+  getObjects: () => project.objects,
+  convert: (added) => {
+    inspector.finish();
+    setDrawing(false);
+    checkpoint();
+    project.objects.push(...added);
+    setSelection(added.map((object) => object.id));
+    $('status').textContent = `${added.length} IFC-objekt konverterade · Kan ångras`;
   },
 });
 

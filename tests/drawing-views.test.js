@@ -21,8 +21,8 @@ const paperPoint = (v, p) => [
   v.position[0] + v.size[0] / 2 + (p[0] - v.camera.center[0]) / v.scale,
   v.position[1] + v.size[1] / 2 - (p[1] - v.camera.center[1]) / v.scale,
 ];
-test('all corner crops retain scale and model placement on paper', () => {
-  for (const corner of ['nw', 'ne', 'se', 'sw']) {
+test('corner and edge crops retain scale and model placement on paper', () => {
+  for (const corner of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
     const next = cropDrawingView(view, corner, [20, 10]);
     assert.equal(next.scale, 50);
     assert.deepEqual(paperPoint(next, [3500, 4500]), paperPoint(view, [3500, 4500]));

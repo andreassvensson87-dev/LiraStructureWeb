@@ -1,5 +1,8 @@
-import { FRAME_LIBRARY_KEY, attributeValue } from './frame-model.js';
+import { FRAME_LIBRARY_KEY } from './frame-model.js';
+import { attributeDrawingValue } from './drawing-attributes.js';
 import { LAYOUT_KEY, expandLayout } from './frame-layout.js';
+import { frameText } from './frame-text.js';
+import { layoutAppliesTo } from './report-layout.js';
 const NS = 'http://www.w3.org/2000/svg';
 export function readDrawingLayouts() {
   try {
@@ -24,16 +27,29 @@ export function layoutPicker(parent, id, onChange) {
 export function fillLayoutPicker(select, id) {
   select.replaceChildren(
     new Option('Ingen layout', ''),
-    ...readDrawingLayouts().map((l) => new Option(l.name, l.id)),
+    ...readDrawingLayouts()
+      .filter((l) => layoutAppliesTo(l, 'drawing'))
+      .map((l) => new Option(l.name, l.id)),
   );
-  if (id && !findDrawingLayout(id)) select.add(new Option('Layout saknas', id));
+  if (id && ![...select.options].some((o) => o.value === id))
+    select.add(new Option(findDrawingLayout(id)?.name || 'Layout saknas', id));
   select.value = id || '';
 }
-export function appendDrawingLayout(svg, layout, context) {
+export function appendDrawingLayout(svg, layout, context, suppliedBlocks) {
   if (!layout) return;
-  let blocks = [];
+  context = {
+    ...context,
+    drawing: {
+      ...context.drawing,
+      paperFormat:
+        layout.paperFormat ||
+        layout.name?.match(/^A[0-6]\b/)?.[0] ||
+        `${layout.width} × ${layout.height}`,
+    },
+  };
+  let blocks = suppliedBlocks || [];
   try {
-    blocks = JSON.parse(localStorage.getItem(FRAME_LIBRARY_KEY) || '[]');
+    if (!suppliedBlocks) blocks = JSON.parse(localStorage.getItem(FRAME_LIBRARY_KEY) || '[]');
   } catch {}
   const node = (tag, attrs, text) => {
     const e = document.createElementNS(NS, tag);
@@ -47,7 +63,7 @@ export function appendDrawingLayout(svg, layout, context) {
     'pointer-events': 'none',
   });
   svg.append(root);
-  for (const e of expandLayout(layout, blocks)) {
+  for (const e of expandLayout(layout, blocks, context.drawing)) {
     if (e.type === 'line') {
       root.append(
         node('polyline', {
@@ -67,19 +83,21 @@ export function appendDrawingLayout(svg, layout, context) {
       group.append(
         node('image', { href: e.src, x: 0, y: -e.height, width: e.width, height: e.height }),
       );
-    else
+    else {
+      const text = frameText(e, context, attributeDrawingValue);
       group.append(
         node(
           'text',
           {
             'font-family': e.font || 'Arial, sans-serif',
-            'font-size': e.size,
+            'font-size': text.size,
             'text-anchor': e.align,
             fill: e.color || '#233940',
           },
-          e.type === 'attribute' ? attributeValue(e.key, context) : e.text,
+          text.value,
         ),
       );
+    }
   }
 }
 export function drawingLayoutStamp(id) {

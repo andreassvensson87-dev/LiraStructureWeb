@@ -1,4 +1,11 @@
-import { inputDevice, setInputDevice, zoomSpeed, setZoomSpeed } from '../input-device.js';
+import {
+  inputDevice,
+  setInputDevice,
+  zoomSpeed,
+  setZoomSpeed,
+  orbitDamping,
+  setOrbitDamping,
+} from '../input-device.js';
 import { parsePositions } from '../grid-lines.js';
 import { createGridLabelEditor } from './grid-label-editor.js';
 import { validateGridLabels } from '../grid-labels.js';
@@ -9,6 +16,7 @@ export function createSettingsController({
   onClose,
   onGridChanged,
   onChange,
+  onOrbitDampingChanged,
   libraries = [],
   loadExample,
 }) {
@@ -26,7 +34,7 @@ export function createSettingsController({
   navigationPanel.dataset.settingsPanel = 'navigation';
   navigationPanel.hidden = true;
   navigationPanel.innerHTML =
-    '<label class=field>Inmatningsenhet<select id=input-device aria-label="Inmatningsenhet"><option value=mouse>Mus med scrollhjul</option><option value=trackpad>Trackpad</option></select></label><label class=field>Zoomhastighet<input id=zoom-speed aria-label="Zoomhastighet" type=range min=25 max=400 step=5 value=100></label><output id=zoom-speed-value for=zoom-speed></output><button type=button id=zoom-speed-reset>Återställ zoomhastighet</button>';
+    '<label class="setting-toggle"><span>Dämpad orbit</span><input type="checkbox" id="orbit-damping"></label><label class=field>Inmatningsenhet<select id=input-device aria-label="Inmatningsenhet"><option value=mouse>Mus med scrollhjul</option><option value=trackpad>Trackpad</option></select></label><label class=field>Zoomhastighet<input id=zoom-speed aria-label="Zoomhastighet" type=range min=25 max=400 step=5 value=100></label><output id=zoom-speed-value for=zoom-speed></output><button type=button id=zoom-speed-reset>Återställ zoomhastighet</button>';
   $('settings-error').before(navigationPanel);
   const updateZoomLabel = () => {
     $('zoom-speed-value').textContent = `${$('zoom-speed').value} %`;
@@ -116,6 +124,7 @@ export function createSettingsController({
     .querySelectorAll('[data-settings]')
     .forEach((b) => (b.onclick = () => settingsCategory(b.dataset.settings)));
   function fillSettings() {
+    $('orbit-damping').checked = orbitDamping();
     $('zoom-speed').value = zoomSpeed() * 100;
     updateZoomLabel();
     $('input-device').value = inputDevice();
@@ -178,6 +187,8 @@ export function createSettingsController({
     }
     setInputDevice($('input-device').value);
     setZoomSpeed(Number($('zoom-speed').value) / 100);
+    setOrbitDamping($('orbit-damping').checked);
+    onOrbitDampingChanged?.(orbitDamping());
     const gridChanged = JSON.stringify(next) !== JSON.stringify(project.grid);
     checkpoint();
     project.grid = next;

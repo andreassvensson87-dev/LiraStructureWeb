@@ -132,7 +132,8 @@ export function resolveAssemblyDrawing(record, state) {
   const assembly = candidates.find((a) => a.id === record.assemblyId) || candidates[0];
   return assembly ? assignAssemblyDrawing(record, assembly, state) : null;
 }
-export function planAssemblyNumbering(state) {
+export function planAssemblyNumbering(state, series) {
+  const allocation = series || { prefix: 'A', start: 1 };
   const registry = structuredClone(state.assemblyNumbering?.registry || []),
     groups = new Map();
   const used = new Set([
@@ -152,11 +153,20 @@ export function planAssemblyNumbering(state) {
   for (const group of groups.values()) {
     let identity = registry.find((r) => r.key === group.key);
     if (!identity) {
-      let mark = group.assemblies.find((a) => !used.has(a.mark))?.mark;
+      let mark = group.assemblies.find((a) => {
+        if (!series) return !used.has(a.mark);
+        const number = Number(a.mark.slice(series.prefix.length + 1));
+        return (
+          a.mark.startsWith(series.prefix + '-') &&
+          Number.isSafeInteger(number) &&
+          number >= series.start &&
+          !used.has(a.mark)
+        );
+      })?.mark;
       if (!mark) {
-        let i = 1;
-        while (used.has(`A-${String(i).padStart(3, '0')}`)) i++;
-        mark = `A-${String(i).padStart(3, '0')}`;
+        let i = allocation.start;
+        while (used.has(`${allocation.prefix}-${String(i).padStart(3, '0')}`)) i++;
+        mark = `${allocation.prefix}-${String(i).padStart(3, '0')}`;
       }
       identity = { key: group.key, mark, name: group.assemblies[0].name };
       registry.push(identity);

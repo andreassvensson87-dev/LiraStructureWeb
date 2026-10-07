@@ -1,0 +1,221 @@
+#frame-editor .cad-statusbar,
+#plan-view .cad-statusbar,
+#single-sheet .cad-statusbar {
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  flex: 0 0 30px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  background: linear-gradient(#fafcfb, #f1f5f4);
+  border-top: 1px solid #d5dfe1;
+  overflow: visible;
+  position: relative;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 -1px 4px #172b3204;
+}
+.cad-status-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-left: auto;
+  padding-left: 10px;
+  border-left: 1px solid #dce5e3;
+}
+#frame-editor .cad-status-controls button,
+.drawing-editor .cad-status-controls button,
+.cad-status-menu summary {
+  border: 0;
+  background: transparent;
+  color: #61777c;
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 4px 7px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+.cad-status-controls button:hover,
+.cad-status-menu summary:hover {
+  background: #e7eeeb;
+  color: #284d42;
+}
+#frame-editor .cad-status-controls button[aria-pressed='true'],
+.drawing-editor .cad-status-controls button[aria-pressed='true'],
+.cad-status-menu summary.active {
+  background: #dceee7;
+  color: #216c53;
+}
+.cad-status-menu {
+  position: relative;
+}
+.cad-status-menu summary {
+  list-style: none;
+}
+.cad-status-menu summary::-webkit-details-marker {
+  display: none;
+}
+.cad-status-panel {
+  background: white;
+  border: 1px solid #d5dfe1;
+  box-shadow: 0 5px 22px #172b3222;
+  border-radius: 8px;
+  padding: 12px;
+  color: #20343b;
+  z-index: 80;
+}
+.cad-status-panel label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 0 0 7px !important;
+}
+.cad-status-panel input[type='checkbox'] {
+  width: auto !important;
+  margin: 0 !important;
+}
+.cad-coordinates {
+  margin-left: 8px;
+  padding-left: 10px;
+  border-left: 1px solid #dce5e3;
+  min-width: 115px;
+  font-size: 10px;
+  color: #70858c;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#frame-editor .cad-hint,
+.drawing-editor .cad-hint {
+  position: absolute;
+  left: 92px;
+  bottom: 40px;
+  max-width: calc(100% - 365px);
+  padding: 5px 9px;
+  height: auto;
+  min-height: 0;
+  border: 1px solid #dce5e7;
+  border-radius: 6px;
+  background: #ffffffed;
+  box-shadow: 0 2px 8px #172b3208;
+  font-size: 11px;
+  color: #526b64;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 10;
+}
+.cad-hint:empty {
+  display: none;
+}
+#frame-editor .cad-statusbar > .cad-hint,
+.drawing-editor .cad-statusbar > .cad-hint {
+  position: static;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #506961;
+  text-align: left;
+  pointer-events: auto;
+}
+#frame-editor .cad-dynamic-input,
+.drawing-editor .cad-dynamic-input {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #aac6bf;
+  border-radius: 6px;
+  box-shadow: 0 3px 12px #172b3215;
+  padding: 5px 7px;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  z-index: 15;
+}
+#frame-editor .cad-dynamic-input label,
+.cad-dynamic-input label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+  margin: 0;
+}
+#frame-editor .cad-dynamic-input input,
+.cad-dynamic-input input {
+  width: 90px !important;
+  margin: 0;
+  padding: 4px;
+  font-size: 12px;
+}
+.cad-dynamic-input[hidden] {
+  display: none !important;
+}
+.drawing-editor.cad-thin-lines
+  :is(.drawing-paper, .ga-frame-overlay, .drawing-annotations)
+  :is(path, line, polyline, polygon, circle, rect):not(.annotation-hit):not(.shape-grip-hit) {
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+@media (max-width: 700px) {
+  .cad-coordinates {
+    display: none;
+  }
+  .cad-status-controls {
+    gap: 1px;
+    padding-left: 6px;
+  }
+  #frame-editor .cad-status-controls button,
+  .drawing-editor .cad-status-controls button,
+  .cad-status-menu summary {
+    padding: 4px;
+    font-size: 10px;
+  }
+  #frame-editor .cad-hint,
+  .drawing-editor .cad-hint {
+    max-width: calc(100% - 110px);
+    font-size: 10px;
+  }
+}
+.drawing-editor .drawing-body:has(.dimension-assistant:not([hidden])) .cad-hint {
+  bottom: 72px;
+}
+.cad-status-controls button:focus-visible,
+.cad-status-menu summary:focus-visible {
+  outline: 2px solid #287c65;
+  outline-offset: 1px;
+}
+.drawing-editor :is(#plan-error, #sheet-message).cad-warning {
+  position: absolute;
+  left: 92px;
+  bottom: 76px;
+  max-width: calc(100% - 365px);
+  margin: 0;
+  padding: 6px 9px;
+  height: auto;
+  z-index: 12;
+}
+.drawing-editor .cad-warning:empty {
+  display: none;
+}
+:is(#frame-editor, .drawing-editor):has(.cad-status-menu[open], .tool-group-panel:not([hidden]))
+  :is(.drawing-body, .canvas)
+  :is(.cad-hint, .cad-dynamic-input) {
+  visibility: hidden;
+}

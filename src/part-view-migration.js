@@ -21,13 +21,14 @@ export function migrateIndependentPartViews(sheet, bounds) {
   sheet.independentViews = true;
 }
 
-export function arrangePartViews(views, paperWidth) {
-  let x = 10,
-    y = 10,
+export function arrangePartViews(views, paperWidth, contentArea = null) {
+  const [left, top, right] = contentArea || [10, 10, paperWidth - 10];
+  let x = left,
+    y = top,
     rowHeight = 0;
   for (const view of views) {
-    if (x > 10 && x + view.size[0] > paperWidth - 10) {
-      x = 10;
+    if (x > left && x + view.size[0] > right) {
+      x = left;
       y += rowHeight + 12;
       rowHeight = 0;
     }
