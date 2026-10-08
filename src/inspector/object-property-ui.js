@@ -60,13 +60,17 @@ export function createObjectPropertyUI({
     }
   }
   function sync() {
-    const { selected, operation, drawing } = getState(),
+    const { selected, operation, drawing, multiEditing } = getState(),
       active = operation?.mode === mode;
     const visible =
-      selected.length === 1 && editable(selected[0]) && (!operation || active) && !drawing;
+      selected.length === 1 &&
+      editable(selected[0]) &&
+      (!operation || active) &&
+      !drawing &&
+      !multiEditing;
     root.hidden = !visible;
     const compact =
-      (selected.length === 1 && editable(selected[0])) ||
+      (selected.length > 0 && selected.every(editable)) ||
       (!selected.length && schema.isCreating({ drawing, operation }));
     layout.sync({
       compact,
@@ -75,7 +79,7 @@ export function createObjectPropertyUI({
       state: { selected, operation, drawing },
     });
     document.getElementById('inspector-properties').classList.toggle(panelClass, compact);
-    if (compact && selected.length === 1)
+    if (compact && selected.length === 1 && !multiEditing)
       document.getElementById('mode-label').textContent = designation(selected[0]);
     const identity = document.getElementById('sweep-identity-details');
     if (identity) identity.hidden = document.getElementById('identity-fields').hidden;

@@ -3,6 +3,8 @@ import {
   setInputDevice,
   zoomSpeed,
   setZoomSpeed,
+  zoomInverted,
+  setZoomInverted,
   orbitDamping,
   setOrbitDamping,
 } from '../input-device.js';
@@ -19,11 +21,38 @@ export function createSettingsController({
   onOrbitDampingChanged,
   libraries = [],
   loadExample,
+  editGrid,
 }) {
   const $ = (id) => document.getElementById(id);
   const gridLabelEditor = createGridLabelEditor(
     document.querySelector('[data-settings-panel="grid"]'),
   );
+  if (editGrid) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'primary';
+    button.textContent = 'Redigera i modellen';
+    document.querySelector('[data-settings-panel="grid"]').prepend(button);
+    button.onclick = () => {
+      try {
+        const next = gridLabelEditor.read({
+          x: parsePositions($('grid-x').value),
+          y: parsePositions($('grid-y').value),
+        });
+        validateGridLabels(next);
+        if (JSON.stringify(next) !== JSON.stringify(project.grid)) {
+          checkpoint();
+          project.grid = next;
+          onGridChanged();
+          onChange();
+        }
+        $('settings-dialog').close();
+        editGrid();
+      } catch (error) {
+        $('settings-error').textContent = error.message;
+      }
+    };
+  }
   const navigationButton = document.createElement('button');
   navigationButton.type = 'button';
   navigationButton.dataset.settings = 'navigation';
@@ -34,8 +63,14 @@ export function createSettingsController({
   navigationPanel.dataset.settingsPanel = 'navigation';
   navigationPanel.hidden = true;
   navigationPanel.innerHTML =
-    '<label class="setting-toggle"><span>Dämpad orbit</span><input type="checkbox" id="orbit-damping"></label><label class=field>Inmatningsenhet<select id=input-device aria-label="Inmatningsenhet"><option value=mouse>Mus med scrollhjul</option><option value=trackpad>Trackpad</option></select></label><label class=field>Zoomhastighet<input id=zoom-speed aria-label="Zoomhastighet" type=range min=25 max=400 step=5 value=100></label><output id=zoom-speed-value for=zoom-speed></output><button type=button id=zoom-speed-reset>Återställ zoomhastighet</button>';
+    '<label class="setting-toggle"><span>Dämpad orbit</span><input type="checkbox" id="orbit-damping"></label><label class=field>Inmatningsenhet<select id=input-device aria-label="Inmatningsenhet"><option value=mouse>Mus med scrollhjul</option><option value=trackpad>Trackpad</option></select></label><button type="button" id="zoom-inverted" aria-pressed="false">Invertera zoomriktning · Av</button><label class=field>Zoomhastighet<input id=zoom-speed aria-label="Zoomhastighet" type=range min=25 max=400 step=5 value=100></label><output id=zoom-speed-value for=zoom-speed></output><button type=button id=zoom-speed-reset>Återställ zoomhastighet</button>';
   $('settings-error').before(navigationPanel);
+  const updateZoomDirection = (inverted) => {
+    $('zoom-inverted').setAttribute('aria-pressed', String(inverted));
+    $('zoom-inverted').textContent = `Invertera zoomriktning · ${inverted ? 'På' : 'Av'}`;
+  };
+  $('zoom-inverted').onclick = () =>
+    updateZoomDirection($('zoom-inverted').getAttribute('aria-pressed') !== 'true');
   const updateZoomLabel = () => {
     $('zoom-speed-value').textContent = `${$('zoom-speed').value} %`;
   };
@@ -125,6 +160,7 @@ export function createSettingsController({
     .forEach((b) => (b.onclick = () => settingsCategory(b.dataset.settings)));
   function fillSettings() {
     $('orbit-damping').checked = orbitDamping();
+    updateZoomDirection(zoomInverted());
     $('zoom-speed').value = zoomSpeed() * 100;
     updateZoomLabel();
     $('input-device').value = inputDevice();
@@ -187,6 +223,7 @@ export function createSettingsController({
     }
     setInputDevice($('input-device').value);
     setZoomSpeed(Number($('zoom-speed').value) / 100);
+    setZoomInverted($('zoom-inverted').getAttribute('aria-pressed') === 'true');
     setOrbitDamping($('orbit-damping').checked);
     onOrbitDampingChanged?.(orbitDamping());
     const gridChanged = JSON.stringify(next) !== JSON.stringify(project.grid);

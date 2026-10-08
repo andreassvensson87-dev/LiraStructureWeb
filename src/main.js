@@ -1,3 +1,4 @@
+import { createGridModelEditor } from './app/grid-model-editor.js';
 import { installDrawingTemplates } from './install-drawing-templates.js';
 import { installReports } from './report-module.js';
 import { installNumbering } from './numbering/ui.js';
@@ -83,6 +84,7 @@ import { createSettingsController } from './app/settings-controller.js';
 import { transformCandidates, applyObjectBatch } from './model/tools/transform-tool.js';
 import { installModelPointer } from './model/pointer-controller.js';
 import { modelKeyboardCommand } from './model/keyboard-command.js';
+import { stepSweepPlacement, quarterTurnSweep } from './model/sweep-shortcuts.js';
 import {
   createObjectMesh,
   updateObjectMeshSelection,
@@ -161,6 +163,7 @@ import { SectionEditor } from './section-editor.js';
 import { isLineCut } from './line-cut.js';
 import { Inspector } from './inspector.js';
 let inspector = null;
+let gridEditor = null;
 import * as THREE from 'three';
 import { createModelViewport } from './model/viewport.js';
 
@@ -322,7 +325,7 @@ guide.visible = false;
 guide.renderOrder = 10;
 scene.add(guide);
 function updateSnapOverlay() {
-  grid.highlight(tools.drawing ? tools.activeSnap?.gridIds : []);
+  if (!gridEditor?.active) grid.highlight(tools.drawing ? tools.activeSnap?.gridIds : []);
   const active = tools.drawing && tools.activeSnap?.point;
   const text = active ? tools.activeSnap.label : '';
   if (snapStatus.textContent !== text) snapStatus.textContent = text;
@@ -405,6 +408,7 @@ renderer.setAnimationLoop(() => {
   viewWidget.update();
   connectionMarkers.update(camera);
   grid.updateLabels(camera, host.clientWidth, host.clientHeight);
+  gridEditor?.update();
   insertionPoints.update(
     camera,
     host.clientWidth,
@@ -442,6 +446,7 @@ const { readForm, fillForm, updateForm } = createSweepForm({
   tools,
   ui,
   getProfilePicker: () => profilePicker,
+  getInspector: () => inspector,
   fillPlate: (s) => fillPlate(s),
   save,
   updateTypedLength,
@@ -697,6 +702,7 @@ function remove() {
 }
 $('delete').onclick = $('multi-delete').onclick = remove;
 function restore(direction) {
+  gridEditor?.cancelDrag();
   const next = interactionTimings.measure('historyRestoreMs', () =>
     projectHistory[direction](project),
   );
@@ -707,6 +713,7 @@ function restore(direction) {
   fillSettings();
   grid.set({ ...project.grid, z: levelElevation(project.levels) });
   select(null);
+  gridEditor?.refresh();
   $('status').textContent = 'Modellen återställd';
 }
 $('undo').onclick = () => restore('undo');
@@ -1609,10 +1616,12 @@ installModelPointer(renderer.domElement, {
   orbit: orbitAroundHit,
   point,
   move: (e) => {
+    if (gridEditor?.active) return;
     pendingPointer = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
     if (tools.drawing || tools.operation) frameGate.invalidate();
   },
   leave: () => {
+    if (gridEditor?.active) return;
     pendingPointer = null;
     objectFeedback.setHover([], 'canvas');
     if (
@@ -1726,6 +1735,10 @@ window.addEventListener('keydown', (e) => {
     settingsOpen: $('settings-dialog').open,
     modalOpen: !!document.querySelector('dialog[open]'),
     hasSelection: !!ui.selectedIds.size || !!referenceModels?.transformSelection(),
+    hasEditableSweeps:
+      !gridEditor?.active &&
+      inspectorSelection().length > 0 &&
+      inspectorSelection().every(editableSweep),
     mode: tools.operation?.mode,
     picking: tools.operation?.picking,
     hasStart: !!tools.first,
@@ -1735,6 +1748,18 @@ window.addEventListener('keydown', (e) => {
   if (!command) return;
   e.preventDefault();
   switch (command) {
+    case 'sweep-placement':
+    case 'sweep-profile-rotation':
+      if (
+        inspector.stage((s) =>
+          command === 'sweep-placement' ? stepSweepPlacement(s, e.key) : quarterTurnSweep(s),
+        )
+      ) {
+        inspector.finish();
+        if (!inspector.multiEditing && inspectorSelection().length === 1)
+          fillForm(inspectorSelection()[0]);
+      }
+      break;
     case 'confirm-component-properties':
       componentUI.confirmCopy();
       break;
@@ -1766,7 +1791,7 @@ window.addEventListener('keydown', (e) => {
       )
         $('status').textContent = 'Egenskapskopiering avbruten';
       assemblyMenu.hidden = true;
-      setDrawing(false);
+      select(null);
       break;
     case 'remove-workplane-point':
       tools.operation.points.pop();
@@ -1909,6 +1934,7 @@ const settingsController = createSettingsController({
   onClose: () => {
     if (tools.drawing) renderer.domElement.focus({ preventScroll: true });
   },
+  editGrid: () => gridEditor.start(),
   onGridChanged: () => {
     setDrawing(false);
     grid.set({ ...project.grid, z: levelElevation(project.levels) });
@@ -1995,6 +2021,7 @@ inspector = new Inspector({
     render();
     $('status').textContent = 'Egenskaper uppdaterade';
   },
+  fillStandard: (object) => fillForm(object),
   fill: (batch) => {
     if (batch.length === 1 && !inspector.multiEditing) {
       fillForm(batch[0]);
@@ -2101,10 +2128,15 @@ function previewModelBatch(batch, ghost = true) {
     dispose(group);
     throw error;
   }
+  // Move/copy targets are previews; keep the real model at its original position
+  // so its visible geometry agrees with the unchanged snapping index.
+  const keepOriginals = ghost && ['move', 'copy'].includes(tools.operation?.mode);
   objects.children.forEach(
-    (child) => (child.visible = isVisible(child.userData.id) && !affected.has(child.userData.id)),
+    (child) =>
+      (child.visible =
+        isVisible(child.userData.id) && (keepOriginals || !affected.has(child.userData.id))),
   );
-  objectFeedback.setModel(model);
+  objectFeedback.setModel(keepOriginals ? project.objects : model);
   return group;
 }
 function renderCutRelations() {
@@ -2704,7 +2736,8 @@ function createPropertyCopyUI(family) {
   return createObjectPropertyUI({
     schema: objectInspectorSchemas[family],
     getState: () => ({
-      selected: project.objects.filter((s) => ui.selectedIds.has(s.id)),
+      selected: inspectorSelection(),
+      multiEditing: inspector.multiEditing,
       operation: tools.operation,
       drawing: tools.drawing,
     }),
@@ -2835,6 +2868,33 @@ referenceModels = new ReferenceModels({
     setSelection(added.map((object) => object.id));
     $('status').textContent = `${added.length} IFC-objekt konverterade · Kan ångras`;
   },
+});
+
+gridEditor = createGridModelEditor({
+  host,
+  camera,
+  grid,
+  project,
+  getControls: () => navigation.controls,
+  elevation: () => levelElevation(project.levels),
+  begin: () => {
+    inspector.finish();
+    cancelBox();
+    pendingPointer = null;
+    select(null);
+    inspector.show('model');
+    referenceModels.clearObjectSelection();
+  },
+  checkpoint,
+  changed: () => {
+    fillSettings();
+    render();
+  },
+  invalidate: () => frameGate.invalidate(),
+  status: (text) => {
+    $('status').textContent = text;
+  },
+  undo: restore,
 });
 
 if (import.meta.env.DEV && new URLSearchParams(location.search).get('memory') === '1') {

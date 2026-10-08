@@ -283,6 +283,8 @@ I samma flik finns **Zoomhastighet**, från 25 % till 400 % med 100 % som standa
 
 Markera objekt i modellen och använd **Ctrl+M** för Flytta, **Ctrl+C** för Kopiera och **Ctrl+R** för Rotera. På Mac fungerar även Cmd. Kortkommandona startar samma verktyg som knapparna och kan växla mellan verktygen. Textfält behåller sina vanliga kortkommandon; modellkommandona är avstängda i dialoger. Escape avbryter verktyget.
 
+För markerade sweeps flyttar **Alt+piltangent** insättningspunkten ett steg i profilens 3 × 3-ruta, med stopp vid kanten. **Alt+mellanslag** roterar profilen 90° runt längdaxeln. På Mac används Option. Vid flerval ändras varje sweep från sitt eget läge; ett valt sweep-urval i inspektören kan också användas. Ändringen bekräftas direkt och går att ångra. Dessa kortkommandon är avstängda vid modellering, aktiva verktyg, dialoger och inmatning i textfält.
+
 Under **Inställningar → Stomlinjer** kan du ange egen bubbeltext för varje X- och Y-linje. Beteckningen följer linjens koordinat när lägen läggs till eller sorteras. Tom text ger standardbeteckningen. Tillämpa sparar beteckningarna i projektet och uppdaterar modell, ritningar och snappningshjälp; Avbryt lämnar tidigare värden. Ändringarna kan ångras och följer med projektfilen.
 
 Koordinatindikatorn ligger fast nere till höger i modellvyn och visar globala XYZ-riktningar när kameran roteras. Indikatorn är liten, utan bakgrund eller förklarande text. Klicka på en axelbubbla (+X, +Y eller +Z) för att se modellen från den sidan. Axelvyerna behåller zoom och kamerans målpunkt. Ett valt arbetsplan visas fortfarande med sin lokala indikator i modellen.

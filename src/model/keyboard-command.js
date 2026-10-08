@@ -1,7 +1,18 @@
 /** Pure key routing: UI actions and project mutations are handled by the caller. */
 export function modelKeyboardCommand(
   e,
-  { editing, settingsOpen, modalOpen, hasSelection, mode, picking, hasStart, drawing, plateLength },
+  {
+    editing,
+    settingsOpen,
+    modalOpen,
+    hasSelection,
+    hasEditableSweeps,
+    mode,
+    picking,
+    hasStart,
+    drawing,
+    plateLength,
+  },
 ) {
   if (settingsOpen || modalOpen) return null;
   if (e.key === 'Escape') return 'cancel';
@@ -14,6 +25,11 @@ export function modelKeyboardCommand(
   if (mode === 'assemblyMain') return null;
   const modifier = e.ctrlKey || e.metaKey,
     axis = ['x', 'y', 'z'].includes(e.key.toLowerCase());
+  if (e.altKey && !modifier && !e.shiftKey && hasEditableSweeps && !mode && !drawing) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key))
+      return 'sweep-placement';
+    if (e.key === ' ') return e.repeat ? 'consume' : 'sweep-profile-rotation';
+  }
   if (modifier && !e.altKey && !e.shiftKey && hasSelection) {
     const transform = { m: 'move', c: 'copy', r: 'rotate' }[e.key.toLowerCase()];
     if (transform) return e.repeat ? 'consume' : transform;

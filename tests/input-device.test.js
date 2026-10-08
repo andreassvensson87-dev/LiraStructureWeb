@@ -152,3 +152,53 @@ test('model wheel uses current zoom speed and reapplies it to replaced OrbitCont
     setZoomSpeed(1);
   }
 });
+
+test('inverted zoom persists and reverses wheel zoom without changing pan or pinch', async () => {
+  const { ZOOM_INVERTED_KEY, zoomInverted, setZoomInverted } = await import(
+    '../src/input-device.js'
+  );
+  const previous = globalThis.localStorage,
+    values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key),
+    setItem: (key, value) => values.set(key, value),
+  };
+  let listener;
+  const host = {
+    clientHeight: 500,
+    addEventListener: (_type, fn) => {
+      listener = fn;
+    },
+    removeEventListener() {},
+  };
+  const controls = {};
+  const dispose = installInputNavigation(host, new THREE.OrthographicCamera(), () => controls);
+  try {
+    const freshDefault = await import('../src/input-device.js?inverted-default');
+    assert.equal(freshDefault.zoomInverted(), false);
+    setZoomInverted(true);
+    assert.equal(zoomInverted(), true);
+    assert.equal(values.get(ZOOM_INVERTED_KEY), 'true');
+    const fresh = await import('../src/input-device.js?inverted-session');
+    assert.equal(fresh.zoomInverted(), true);
+    assert.equal(inputWheelGesture(wheel(), 'mouse').y, -40);
+    assert.equal(inputWheelGesture(wheel({ deltaY: -40 }), 'mouse').y, 40);
+    assert.deepEqual(inputWheelGesture(wheel(), 'trackpad'), { action: 'pan', x: 20, y: 40 });
+    assert.equal(inputWheelGesture(wheel({ ctrlKey: true }), 'trackpad').y, 40);
+    assert.equal(inputWheelGesture(wheel({ metaKey: true }), 'trackpad').y, 40);
+    listener(wheel());
+    assert.equal(controls.zoomSpeed, -1);
+    await Promise.resolve();
+    assert.equal(controls.zoomSpeed, 1);
+    listener(wheel({ ctrlKey: true }));
+    assert.equal(controls.zoomSpeed, 1);
+    setZoomInverted(false);
+    assert.equal(inputWheelGesture(wheel(), 'mouse').y, 40);
+    listener(wheel());
+    assert.equal(controls.zoomSpeed, 1);
+  } finally {
+    dispose();
+    setZoomInverted(false);
+    globalThis.localStorage = previous;
+  }
+});

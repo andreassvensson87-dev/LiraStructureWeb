@@ -10,11 +10,21 @@ export class Inspector {
     commit,
     cancel,
     fill,
+    fillStandard,
     validate,
     remove,
     scopeChanged = () => {},
   }) {
-    Object.assign(this, { getState, preview, commit, cancel, fill, validate, remove });
+    Object.assign(this, {
+      getState,
+      preview,
+      commit,
+      cancel,
+      fill,
+      fillStandard,
+      validate,
+      remove,
+    });
     this.rawState = getState;
     this.scope = new SelectionScope();
     this.getState = () => {
@@ -72,7 +82,6 @@ export class Inspector {
         if (!this.session) return;
         if (e.key === 'Escape') {
           e.preventDefault();
-          e.stopPropagation();
           this.rollback();
         }
         if (e.key === 'Enter') {
@@ -98,6 +107,95 @@ export class Inspector {
   }
   get multiEditing() {
     return this.rawState().selected.length > 1 && !this.rawState().operation;
+  }
+  get standardType() {
+    const selected = this.getState().selected;
+    const type = selected[0] && objectType(selected[0]).id;
+    return selected.length &&
+      selected.every((s) => objectType(s).id === type) &&
+      ['sweep', 'plate'].includes(type)
+      ? type
+      : null;
+  }
+  fillStandardFields() {
+    const selected = this.editingObjects(),
+      type = this.standardType;
+    if (!this.multiEditing || !type || !selected.length || !this.fillStandard) return;
+    const active = this.session?.input;
+    const value = active?.value;
+    this.fillStandard(selected[0]);
+    const fields =
+      type === 'sweep'
+        ? {
+            profile: 'profile',
+            width: 'width',
+            height: 'height',
+            thickness: 'thickness',
+            rotation: 'rotation',
+          }
+        : {
+            'plate-thickness': 'thickness',
+            'plate-side': 'side',
+            'plate-contour-offset': 'contourOffset',
+          };
+    for (const [id, key] of Object.entries(fields)) {
+      const input = this.$(id);
+      const values = selected.map((s) => s[key] ?? (key === 'contourOffset' ? 0 : undefined));
+      const mixed = values.some((v) => v !== values[0]);
+      if (input.tagName === 'SELECT' && !input.querySelector('[data-mixed]')) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Blandat';
+        option.dataset.mixed = 'true';
+        option.disabled = true;
+        input.prepend(option);
+      }
+      input.value = mixed ? '' : values[0];
+      input.placeholder = 'Blandat';
+    }
+    if (type === 'sweep') {
+      this.$('profile-height-field').hidden = selected.every((s) => isRound(s.profile));
+      this.$('thickness-field').hidden = !selected.some((s) => hasWall(s.profile));
+      this.$('thickness').disabled = !selected.some((s) => hasWall(s.profile));
+      this.$('width').disabled = this.$('height').disabled = selected.some(
+        (s) => s.profile === 'custom',
+      );
+      const samePlacement = selected.every((s) =>
+        ['horizontalAlignment', 'verticalAlignment'].every(
+          (key) => (s.placement?.[key] ?? 'center') === (selected[0].placement?.[key] ?? 'center'),
+        ),
+      );
+      if (!samePlacement) {
+        document
+          .querySelectorAll('[data-placement-h]')
+          .forEach((b) => b.setAttribute('aria-pressed', 'false'));
+        if (this.$('sweep-placement-summary'))
+          this.$('sweep-placement-summary').textContent = 'Blandat';
+      }
+      const sameProfile = selected.every(
+        (s) =>
+          JSON.stringify([s.profile, s.width, s.height, s.thickness, s.section]) ===
+          JSON.stringify([
+            selected[0].profile,
+            selected[0].width,
+            selected[0].height,
+            selected[0].thickness,
+            selected[0].section,
+          ]),
+      );
+      this.$('cross-section').toggleAttribute('hidden', !sameProfile);
+      if (!sameProfile) {
+        this.$('profile-dimensions').textContent = 'Blandade tvärsnitt';
+        this.$('section-reference').textContent = 'Blandade profiler';
+      }
+      const lengths = selected.map((s) => Math.hypot(...s.end.map((v, i) => v - s.start[i])));
+      if (lengths.some((v) => Math.abs(v - lengths[0]) > 1e-6))
+        this.$('length').textContent = 'Blandat';
+    } else {
+      this.$('plate-stage').textContent = `${selected.length} plåtar markerade`;
+      this.$('plate-plane-fields').hidden = true;
+    }
+    if (active) active.value = value;
   }
   editingObjects() {
     return this.session?.batch || this.getState().selected;
@@ -192,7 +290,7 @@ export class Inspector {
     $('apply').hidden = has;
     $('deselect').hidden = true;
     $('plate-new').hidden = true;
-    if (selected.length === 1) $('plate-apply').hidden = true;
+    $('plate-apply').hidden = has;
     $('common-fields').inert = !!operation;
     this.fillCommon(this.editingObjects());
     for (const key of ['width', 'height', 'thickness']) {
@@ -200,7 +298,13 @@ export class Inspector {
       if (input) input.disabled = this.editingObjects().some((s) => s.profile === 'custom');
     }
     if (this.multiEditing) {
-      $('form').hidden = $('plate-form').hidden = true;
+      const type = this.standardType;
+      $('form').hidden = type !== 'sweep';
+      $('plate-form').hidden = type !== 'plate';
+      $('common-fields').hidden = !!type;
+      if (type) $(type === 'sweep' ? 'form' : 'plate-form').after($('multi-selection'));
+      else $('form').before($('multi-selection'));
+      this.fillStandardFields();
       $('inspector-identity').hidden = true;
       $('identity-fields').hidden = true;
       $('multi-selection').hidden = false;
@@ -224,7 +328,7 @@ export class Inspector {
       this.actions.querySelector('button').disabled = !this.session;
       $('multi-delete').hidden = !!this.scope.type;
       const sweeps = selected.every((s) => objectType(s).inspector === 'sweep');
-      this.multiProfile.hidden = !sweeps;
+      this.multiProfile.hidden = !sweeps || !!type;
       this.multiProfile.querySelector('span').textContent = sweeps
         ? this.editingObjects().every(
             (s) => s.section?.name && s.section.name === this.editingObjects()[0].section?.name,
@@ -233,10 +337,15 @@ export class Inspector {
           : 'Profil · Blandat / egen form'
         : '';
     } else {
+      $('common-fields').hidden = false;
+      $('cross-section').removeAttribute('hidden');
       $('inspector-scope-note').hidden = true;
       this.actions.hidden = this.multiProfile.hidden = true;
       $('multi-delete').hidden = false;
     }
+    $('sweep-geometry').hidden = true;
+    $('plate-geometry').hidden =
+      !selected.some((s) => objectType(s).cut) && !operation?.cutTargets && !operation?.lineCut;
     this.show(this.tab);
   }
   buildCommon(selected, force = false) {
@@ -463,6 +572,7 @@ export class Inspector {
       }
     }
     if (this.multiEditing) {
+      if (!session.error) this.fillStandardFields();
       this.actions.querySelector('.primary').disabled = !session.batch || !!session.error;
       this.actions.querySelector('button').disabled = false;
     }
@@ -505,7 +615,7 @@ export class Inspector {
   focusGeometry(index) {
     this.show('properties');
     const details = this.$(typeof index === 'number' ? 'plate-geometry' : 'sweep-geometry');
-    details.open = true;
+    if (!details.hidden) details.open = true;
     if (typeof index === 'number')
       this.$('plate-vertices')
         .querySelectorAll('.plate-vertex-row')

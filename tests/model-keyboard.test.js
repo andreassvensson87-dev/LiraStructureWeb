@@ -48,3 +48,27 @@ test('transform shortcuts use the current selection and can switch active tools'
     assert.equal(command({ key }, { hasSelection: true }), null);
   }
 });
+
+test('sweep shortcuts require editable sweeps and leave fields and active tools alone', () => {
+  for (const key of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ']) {
+    const event = { key, altKey: true },
+      state = { hasEditableSweeps: true };
+    assert.equal(command(event, state), key === ' ' ? 'sweep-profile-rotation' : 'sweep-placement');
+    for (const blocked of [
+      { hasEditableSweeps: false },
+      { editing: true },
+      { modalOpen: true },
+      { settingsOpen: true },
+      { drawing: true },
+      { mode: 'move' },
+    ])
+      assert.equal(command(event, { ...state, ...blocked }), null);
+    for (const modifier of ['ctrlKey', 'metaKey', 'shiftKey'])
+      assert.equal(command({ ...event, [modifier]: true }, state), null);
+    assert.equal(command({ key }, state), null);
+    assert.equal(
+      command({ ...event, repeat: true }, state),
+      key === ' ' ? 'consume' : 'sweep-placement',
+    );
+  }
+});

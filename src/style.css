@@ -848,13 +848,6 @@ body > footer #snap-status:empty {
   width: 7px;
   height: 7px;
 }
-.profile-preview #placement-label {
-  position: static;
-  display: block;
-  font-size: 10px;
-  color: #647b83;
-  margin-top: 7px;
-}
 
 button.insertion-point {
   pointer-events: auto;
@@ -4648,9 +4641,6 @@ body > footer .pwa-install {
   width: 20px;
   height: 20px;
 }
-#inspector-properties:is(.sweep-inspector, .plate-inspector) #placement-label {
-  margin-top: 3px;
-}
 #inspector-properties:is(.sweep-inspector, .plate-inspector) .inspector-inline {
   grid-template-columns: var(--inspector-label-width) minmax(0, 1fr);
 }
@@ -5192,4 +5182,143 @@ body > footer .pwa-install {
 }
 .reference-conversion [data-error]:empty {
   display: none;
+}
+
+/* Grid editing is an explicit mode; ordinary bubbles remain non-interactive. */
+.grid-editable span {
+  pointer-events: auto;
+  cursor: grab;
+}
+.grid-editable span:focus-visible {
+  outline: 2px solid #16815e;
+  outline-offset: 3px;
+}
+.grid-edit-bar {
+  position: absolute;
+  z-index: 35;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  padding: 7px 9px;
+  background: #fff;
+  border: 1px solid #d3dfdf;
+  border-radius: 9px;
+  box-shadow: 0 5px 20px #172b3224;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.grid-edit-bar[hidden],
+.grid-edit-handle[hidden],
+.grid-edit-delta[hidden] {
+  display: none;
+}
+.grid-edit-bar strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.grid-edit-bar strong i {
+  width: 6px;
+  height: 6px;
+  background: #16815e;
+  border-radius: 50%;
+}
+.grid-edit-bar button,
+.grid-edit-bar input,
+.grid-edit-bar select {
+  height: 29px;
+  min-height: 29px;
+  margin: 0;
+  padding: 3px 7px;
+  font-size: 11px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+.grid-edit-bar button[aria-pressed='true'] {
+  background: #16815e;
+  color: white;
+  border-color: #16815e;
+}
+.grid-edit-bar label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 10px;
+}
+.grid-edit-bar input[data-label] {
+  width: 46px;
+}
+.grid-edit-bar input[data-position] {
+  width: 88px;
+}
+.grid-edit-bar select {
+  width: 40px;
+  padding: 3px;
+}
+.grid-edit-bar small {
+  font-size: 10px;
+}
+.grid-edit-separator {
+  height: 22px;
+  border-left: 1px solid #dce5e5;
+  margin: 0 3px;
+}
+.grid-edit-escape {
+  color: #87969b;
+  margin: 0 3px;
+}
+.grid-edit-handle {
+  position: absolute;
+  z-index: 25;
+  min-height: 24px;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  color: #16815e;
+  background: white;
+  border: 1px solid #16815e;
+  border-radius: 5px;
+  cursor: grab;
+  touch-action: none;
+  font-size: 20px;
+}
+.grid-edit-delta {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  padding: 5px 7px;
+  border-radius: 4px;
+  background: white;
+  border: 1px solid #d3dfdf;
+  font-size: 12px;
+}
+.grid-edit-lock-note {
+  padding: 8px;
+  background: #f0f5f5;
+  border: 1px solid #dce5e5;
+  border-radius: 5px;
+  font-size: 12px;
+}
+body:has(.grid-editing) .toolbox {
+  opacity: 0.35;
+}
+.grid-editing {
+  touch-action: none;
+}
+.grid-editable span.snap-active {
+  background: #16815e;
+  color: white;
+  border-color: #16815e;
 }

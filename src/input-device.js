@@ -31,7 +31,7 @@ export function inputWheelGesture(event, mode = inputDevice(), pageSize = 800) {
     }
     return { action: 'pan', x, y };
   }
-  return { action: 'zoom', x, y: y * zoomSpeed() };
+  return { action: 'zoom', x, y: y * zoomSpeed() * zoomDirection(event) };
 }
 
 export const ZOOM_SPEED_KEY = 'lirastructure.zoom-speed.v1';
@@ -78,4 +78,29 @@ export function setOrbitDamping(value) {
   } catch {
     /* Keep the choice for this session. */
   }
+}
+
+export const ZOOM_INVERTED_KEY = 'lirastructure.zoom-inverted.v1';
+let inverted;
+export function zoomInverted() {
+  if (inverted === undefined) {
+    try {
+      inverted = localStorage.getItem(ZOOM_INVERTED_KEY) === 'true';
+    } catch {
+      inverted = false;
+    }
+  }
+  return inverted;
+}
+export function setZoomInverted(value) {
+  inverted = Boolean(value);
+  try {
+    localStorage.setItem(ZOOM_INVERTED_KEY, String(inverted));
+  } catch {
+    /* Keep the choice for this session. */
+  }
+}
+/** Invert wheel zoom while keeping pinch gestures in their natural direction. */
+export function zoomDirection(event) {
+  return zoomInverted() && !event.ctrlKey && !event.metaKey ? -1 : 1;
 }

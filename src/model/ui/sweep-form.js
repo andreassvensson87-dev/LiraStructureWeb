@@ -8,6 +8,7 @@ export function createSweepForm({
   tools,
   ui,
   getProfilePicker,
+  getInspector = () => null,
   fillPlate,
   save,
   updateTypedLength,
@@ -17,6 +18,10 @@ export function createSweepForm({
 }) {
   const $ = (id) => document.getElementById(id),
     fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
+  $('rotation').title = 'Alt + mellanslag: rotera markerade sweeps 90°';
+  document.querySelectorAll('[data-placement-h]').forEach((button) => {
+    button.title = `${button.getAttribute('aria-label') || button.title} · Alt + piltangent: flytta insättningspunkten`;
+  });
   function readForm() {
     const source = ui.selected ? project.objects.find((s) => s.id === ui.selected) : null;
     const profileUp =
@@ -117,12 +122,22 @@ export function createSweepForm({
         ui.placement.horizontalAlignment
       ],
       v = { top: 'uppe', center: 'mitten', bottom: 'nere' }[ui.placement.verticalAlignment];
-    $('placement-label').textContent = `${h} · ${v}`;
     if ($('sweep-placement-summary')) $('sweep-placement-summary').textContent = `${h} · ${v}`;
   }
   document.querySelectorAll('[data-placement-h]').forEach(
     (b) =>
       (b.onclick = () => {
+        const inspector = getInspector();
+        if (inspector?.multiEditing) {
+          inspector.stage((s) => ({
+            ...s,
+            placement: {
+              horizontalAlignment: b.dataset.placementH,
+              verticalAlignment: b.dataset.placementV,
+            },
+          }));
+          return;
+        }
         ui.placement = {
           horizontalAlignment: b.dataset.placementH,
           verticalAlignment: b.dataset.placementV,
@@ -139,6 +154,7 @@ export function createSweepForm({
       }),
   );
   $('form').addEventListener('input', () => {
+    if (getInspector()?.multiEditing) return;
     clearPreview();
     updateForm();
     remember?.();

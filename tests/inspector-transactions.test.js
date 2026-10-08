@@ -116,3 +116,86 @@ test('library profile remains a draft, can be reset, and commits only selected s
   assert.deepEqual(h.objects()[2], before[2]);
   assert.deepEqual(h.selectedIds, ['s', 'p']);
 });
+
+test('homogeneous selections and a selected type scope use their standard inspector', () => {
+  const h = harness('');
+  assert.equal(h.inspector.standardType, null);
+  h.inspector.scope.choose('plate', h.inspector.rawState().selected);
+  assert.equal(h.inspector.standardType, 'plate');
+  h.selectedIds.splice(0, 2, 's', 'outside');
+  assert.equal(h.inspector.standardType, 'sweep');
+});
+
+test('standard plate fields show mixed values and retain the current draft input', (t) => {
+  const previous = globalThis.document;
+  globalThis.document = {
+    createElement: () => ({ dataset: {} }),
+  };
+  t.after(() => {
+    globalThis.document = previous;
+  });
+  const fields = new Map();
+  for (const id of [
+    'plate-thickness',
+    'plate-side',
+    'plate-contour-offset',
+    'plate-stage',
+    'plate-plane-fields',
+  ]) {
+    fields.set(id, {
+      tagName: id === 'plate-side' ? 'SELECT' : 'INPUT',
+      querySelector: () => null,
+      prepend() {},
+    });
+  }
+  const objects = [
+    structuredClone(plate),
+    { ...structuredClone(plate), id: 'other', thickness: 20 },
+  ];
+  const inspector = Object.create(Inspector.prototype);
+  Object.assign(inspector, {
+    rawState: () => ({ selected: objects }),
+    getState: () => ({ selected: objects }),
+    $: (id) => fields.get(id),
+    fillStandard: () => {},
+    session: null,
+  });
+  inspector.fillStandardFields();
+  assert.equal(fields.get('plate-thickness').value, '');
+  assert.equal(fields.get('plate-thickness').placeholder, 'Blandat');
+  assert.equal(fields.get('plate-side').value, 'center');
+  assert.equal(fields.get('plate-contour-offset').value, 0);
+  const input = fields.get('plate-thickness');
+  input.value = '30';
+  inspector.session = { input, batch: objects.map((s) => ({ ...s, thickness: 30 })) };
+  inspector.fillStandardFields();
+  assert.equal(input.value, '30');
+  assert.equal(objects[0].thickness, 10);
+  assert.equal(objects[1].thickness, 20);
+});
+
+test('standard sweep input modifies every scoped sweep while preserving each axis', () => {
+  const h = harness('');
+  h.selectedIds.splice(0, 2, 's', 'outside');
+  const before = structuredClone(h.objects());
+  const input = {
+    id: 'width',
+    type: 'number',
+    value: '180',
+    dataset: {},
+    matches: () => true,
+  };
+  h.inspector.actions = { querySelector: () => ({}) };
+  h.inspector.input({ target: input });
+  assert.deepEqual(h.objects(), before);
+  assert.deepEqual(
+    h.inspector.previewBatch.map((s) => s.width),
+    [180, 180],
+  );
+  h.inspector.finish();
+  assert.equal(h.objects()[0].width, 180);
+  assert.equal(h.objects()[2].width, 180);
+  assert.deepEqual(h.objects()[0].start, before[0].start);
+  assert.deepEqual(h.objects()[2].end, before[2].end);
+  assert.deepEqual(h.objects()[1], before[1]);
+});
