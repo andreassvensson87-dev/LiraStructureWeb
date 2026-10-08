@@ -18,9 +18,9 @@ export function createSweepForm({
 }) {
   const $ = (id) => document.getElementById(id),
     fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
-  $('rotation').title = 'Alt + mellanslag: rotera markerade sweeps 90°';
+  $('rotation').title = 'Shift + mellanslag: rotera markerade sweeps 90°';
   document.querySelectorAll('[data-placement-h]').forEach((button) => {
-    button.title = `${button.getAttribute('aria-label') || button.title} · Alt + piltangent: flytta insättningspunkten`;
+    button.title = `${button.getAttribute('aria-label') || button.title} · Shift + piltangent: flytta insättningspunkten`;
   });
   function readForm() {
     const source = ui.selected ? project.objects.find((s) => s.id === ui.selected) : null;

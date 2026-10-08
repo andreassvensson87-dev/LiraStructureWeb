@@ -25,7 +25,7 @@ export function modelKeyboardCommand(
   if (mode === 'assemblyMain') return null;
   const modifier = e.ctrlKey || e.metaKey,
     axis = ['x', 'y', 'z'].includes(e.key.toLowerCase());
-  if (e.altKey && !modifier && !e.shiftKey && hasEditableSweeps && !mode && !drawing) {
+  if (e.shiftKey && !modifier && !e.altKey && hasEditableSweeps && !mode && !drawing) {
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key))
       return 'sweep-placement';
     if (e.key === ' ') return e.repeat ? 'consume' : 'sweep-profile-rotation';

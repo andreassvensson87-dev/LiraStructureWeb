@@ -27,9 +27,13 @@ export class InsertionPoints {
         this.menu.hidden = true;
       }
     });
-    host.addEventListener('pointerdown', (e) => {
-      if (!this.menu.contains(e.target)) this.menu.hidden = true;
-    });
+    host.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!this.menu.contains(e.target)) this.menu.hidden = true;
+      },
+      true,
+    );
     this.canRemove = canRemove;
     host.append(this.layer);
     this.markers = new Map();

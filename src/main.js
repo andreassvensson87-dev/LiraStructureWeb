@@ -1581,9 +1581,14 @@ renderer.domElement.addEventListener('contextmenu', (event) => {
   assemblyMenu.style.top = `${Math.max(0, Math.min(event.clientY, innerHeight - assemblyMenu.offsetHeight))}px`;
   addAssemblyButton.focus();
 });
-document.addEventListener('pointerdown', (event) => {
-  if (!assemblyMenu.contains(event.target)) assemblyMenu.hidden = true;
-});
+// Capture outside presses before model selection consumes the pointer event.
+document.addEventListener(
+  'pointerdown',
+  (event) => {
+    if (!assemblyMenu.contains(event.target)) assemblyMenu.hidden = true;
+  },
+  true,
+);
 assemblyMenu.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.stopPropagation();

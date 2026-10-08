@@ -238,7 +238,9 @@ export function createGroupedToolbox(root, definitions = TOOL_GROUPS) {
       }
     });
     group.addEventListener('focusout', (e) => {
-      if (!group.contains(e.relatedTarget)) close();
+      // Safari can blur the search field without focusing the clicked button.
+      // Keep the hovered menu open until its click or pointerleave is handled.
+      if (!group.contains(e.relatedTarget) && !group.matches(':hover')) close();
     });
     group.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && opened === entry) {
