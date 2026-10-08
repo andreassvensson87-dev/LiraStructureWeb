@@ -187,8 +187,6 @@ test('inverted zoom persists and reverses wheel zoom without changing pan or pin
     assert.equal(inputWheelGesture(wheel({ ctrlKey: true }), 'trackpad').y, 40);
     assert.equal(inputWheelGesture(wheel({ metaKey: true }), 'trackpad').y, 40);
     listener(wheel());
-    assert.equal(controls.zoomSpeed, -1);
-    await Promise.resolve();
     assert.equal(controls.zoomSpeed, 1);
     listener(wheel({ ctrlKey: true }));
     assert.equal(controls.zoomSpeed, 1);

@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { setZoomInverted } from '../src/input-device.js';
 import { installViewportWheel } from '../src/viewport-wheel.js';
 function setup() {
   let listener, options;
@@ -18,7 +21,8 @@ function setup() {
         WheelEvent: class {
           constructor(type, init) {
             this.type = type;
-            Object.assign(this, init);
+            for (const [key, value] of Object.entries(init))
+              if (!['bubbles', 'cancelable'].includes(key)) this[key] = value;
           }
         },
       },
@@ -73,4 +77,75 @@ test('canvas wheel cancels browser default without duplicating model zoom', () =
   assert.ok(event.prevented);
   assert.equal(event.stopped, undefined);
   assert.equal(s.forwarded.length, 0);
+});
+
+test('inversion changes actual OrbitControls zoom on canvas and overlay exactly once', () => {
+  let capture;
+  const host = {
+    addEventListener(_type, listener) {
+      capture = listener;
+    },
+    removeEventListener() {},
+  };
+  const root = new EventTarget();
+  class Wheel extends Event {
+    constructor(type, init) {
+      super(type, { cancelable: true });
+      for (const [key, value] of Object.entries(init))
+        if (!['bubbles', 'cancelable'].includes(key)) this[key] = value;
+    }
+  }
+  class Canvas extends EventTarget {
+    style = {};
+    ownerDocument = { defaultView: { WheelEvent: Wheel } };
+    getRootNode() {
+      return root;
+    }
+    dispatchEvent(event) {
+      Object.defineProperty(event, 'target', { value: this, configurable: true });
+      capture(event);
+      if (!event.cancelBubble) return super.dispatchEvent(event);
+      return false;
+    }
+  }
+  const canvas = new Canvas();
+  const camera = new THREE.OrthographicCamera(-500, 500, 500, -500);
+  camera.position.set(0, 0, 1000);
+  const controls = new OrbitControls(camera, canvas);
+  installViewportWheel(host, canvas);
+  const send = (target, deltaY, ctrlKey = false) => {
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
+    const event = new Wheel('wheel', {
+      deltaX: 0,
+      deltaY,
+      deltaZ: 0,
+      deltaMode: 0,
+      clientX: 120,
+      clientY: 240,
+      ctrlKey,
+      metaKey: false,
+    });
+    Object.defineProperty(event, 'target', { value: target, configurable: true });
+    if (target === canvas) canvas.dispatchEvent(event);
+    else capture(event);
+    return camera.zoom;
+  };
+  try {
+    setZoomInverted(false);
+    const normal = send(canvas, 60);
+    assert.ok(normal < 1);
+    setZoomInverted(true);
+    const inverted = send(canvas, 60);
+    assert.ok(inverted > 1);
+    assert.ok(Math.abs(inverted * normal - 1) < 1e-10);
+    assert.equal(send({ tagName: 'BUTTON' }, 60), inverted);
+    assert.ok(send(canvas, -60) < 1);
+    assert.ok(send(canvas, 60, true) < 1);
+    setZoomInverted(false);
+    assert.equal(send(canvas, 60), normal);
+  } finally {
+    setZoomInverted(false);
+    controls.dispose();
+  }
 });
