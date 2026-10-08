@@ -26,7 +26,7 @@ export function showAssemblies(manager, onReturn = null) {
   close.onclick = () => d.close();
   const intro = element(
       'p',
-      'Markera minst två delar i modellen. Huvuddelen styr ritningsvyernas riktning. Varje del kan ingå i en assembly.',
+      'Markera en eller flera delar i modellen. Huvuddelen styr ritningsvyernas riktning. Varje del kan ingå i en assembly.',
     ),
     form = element('div'),
     nameLabel = element('label', 'Namn'),
@@ -45,7 +45,7 @@ export function showAssemblies(manager, onReturn = null) {
   main.append(...candidates.map((o) => new Option(o.name || o.id, o.id)));
   nameLabel.append(name);
   mainLabel.append(main);
-  create.disabled = candidates.length < 2;
+  create.disabled = candidates.length < 1;
   message.setAttribute('role', 'status');
   form.append(nameLabel, mainLabel, create, number);
   d.append(header, intro, form, list, message);

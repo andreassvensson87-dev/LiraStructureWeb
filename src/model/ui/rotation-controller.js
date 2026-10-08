@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RotationHandle } from '../../rotation-handle.js';
 import { objectAnchors } from '../../model-object.js';
 import { rotationCandidates, applyObjectBatch } from '../tools/transform-tool.js';
+import { rotateReferencePlacement } from '../../references/reference-placement.js';
 export function createRotationController({
   guide,
   host,
@@ -24,6 +25,9 @@ export function createRotationController({
   render,
   syncLocks,
   syncOperationUI,
+  getReference,
+  previewReference,
+  commitReference,
 }) {
   const $ = (id) => document.getElementById(id),
     fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -33,6 +37,14 @@ export function createRotationController({
       tools.operation.axis = axis;
       tools.operation.angle = angle;
       clearPreview();
+      if (tools.operation.referenceId) {
+        previewReference(
+          tools.operation.referenceId,
+          rotateReferencePlacement(tools.operation.placement, tools.operation.pivot, axis, angle),
+        );
+        $('status').textContent = `Rotera referens · ${fmt(angle)}° · Enter bekräftar`;
+        return;
+      }
       const batch = rotationCandidates(tools.operation, axis, angle);
       const error = batch.map(validateSweep).find(Boolean);
       rotationHandle.error.textContent = error || '';
@@ -51,6 +63,22 @@ export function createRotationController({
     pivot: () => restartRotationAxis(),
     commit: () => {
       if (tools.operation?.mode !== 'rotate' || tools.operation.picking) return;
+      if (tools.operation.referenceId) {
+        const next = rotateReferencePlacement(
+          tools.operation.placement,
+          tools.operation.pivot,
+          tools.operation.axis,
+          tools.operation.angle,
+        );
+        clearPreview();
+        checkpoint();
+        commitReference(tools.operation.referenceId, next);
+        setDrawing(false);
+        render();
+        $('status').textContent = 'Referensen roterad';
+        renderer.domElement.focus({ preventScroll: true });
+        return;
+      }
       const batch = rotationCandidates(tools.operation);
       const error = batch.map(validateSweep).find(Boolean);
       if (error) {
@@ -140,6 +168,21 @@ export function createRotationController({
     renderer.domElement.focus({ preventScroll: true });
   }
   $('rotate').onclick = () => {
+    const reference = getReference?.();
+    if (reference) {
+      setDrawing(true);
+      tools.operation = {
+        mode: 'rotate',
+        referenceId: reference.id,
+        placement: structuredClone(reference.placement),
+        pivot: [...reference.placement.offset],
+        angle: 0,
+        picking: 'start',
+      };
+      syncOperationUI();
+      restartRotationAxis();
+      return;
+    }
     const sources = componentTransformSources(project.objects, ui.selectedIds);
     if (!sources.length) return;
     setDrawing(true);

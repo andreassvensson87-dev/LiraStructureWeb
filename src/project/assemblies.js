@@ -1,5 +1,7 @@
 import { isPhysical } from '../model-object.js';
 import { partStatus } from '../part-marks.js';
+import { objectQuantities } from '../model/object-quantities.js';
+import { materialProfile, materialLength } from '../report-material-list.js';
 import { applyDrawingPreset } from '../drawing-presets.js';
 import * as THREE from 'three';
 import { assemblyDrawingMatrix, rebaseAssemblyViews } from '../assembly-frames.js';
@@ -21,7 +23,7 @@ export function assemblyValid(assembly, objects) {
 }
 function validatedMembers(state, ids, mainId, ownId) {
   const memberIds = [...new Set(ids)];
-  if (memberIds.length < 2) throw Error('Markera minst två fysiska delar för en assembly.');
+  if (memberIds.length < 1) throw Error('Markera minst en fysisk del för en assembly.');
   if (!memberIds.includes(mainId)) throw Error('Huvuddelen måste ingå i assemblyn.');
   if (!memberIds.every((id) => state.objects.some((o) => o.id === id && isPhysical(o))))
     throw Error('Assemblyn får bara innehålla fysiska delar.');
@@ -157,15 +159,37 @@ export function assemblySchedule(assembly, state) {
   for (const object of assemblyMembers(assembly, state.objects).filter(Boolean)) {
     const status = partStatus(object, state.objects, state.parts);
     const key = status.valid ? status.key : object.id;
-    if (!rows.has(key))
+    if (!rows.has(key)) {
+      const metrics = objectQuantities(object, state.objects);
+      const plateWidth =
+        object.type === 'plate' && object.polygon?.length
+          ? Math.min(
+              ...[0, 1].map(
+                (axis) =>
+                  Math.max(...object.polygon.map((p) => p[axis])) -
+                  Math.min(...object.polygon.map((p) => p[axis])),
+              ),
+            )
+          : null;
       rows.set(key, {
         key,
         mark: status.valid ? status.mark : 'Ej numrerad',
-        name: object.section?.name || object.spec?.name || object.name || object.profile || 'Plate',
+        name:
+          materialProfile(object) +
+          (plateWidth == null
+            ? ''
+            : ` × ${plateWidth.toLocaleString('sv-SE', { maximumFractionDigits: 1, useGrouping: false })}`),
         material: object.material?.name || '—',
         quantity: 0,
+        length: materialLength(object),
+        unitWeight: metrics.massKg,
+        weight: null,
+        approximate: metrics.approximate,
       });
+    }
     rows.get(key).quantity++;
+    const row = rows.get(key);
+    row.weight = row.unitWeight == null ? null : row.unitWeight * row.quantity;
   }
   return [...rows.values()].sort((a, b) => a.mark.localeCompare(b.mark, 'sv'));
 }

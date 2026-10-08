@@ -78,7 +78,8 @@ test('assembly membership validates physical members, overlap and main part with
     ids = ['b', 'c', 'c'];
   assert.throws(() => createAssembly(state, ids, 'b'), /redan/);
   assert.deepEqual(ids, ['b', 'c', 'c']);
-  assert.throws(() => createAssembly(state, ['c'], 'c'), /minst två/);
+  assert.throws(() => createAssembly(state, [], 'c'), /minst en/);
+  assert.deepEqual(createAssembly(state, ['c'], 'c').memberIds, ['c']);
   assert.throws(() => createAssembly({ ...state, assemblies: [] }, ['b', 'c'], 'a'), /Huvuddelen/);
   assert.throws(
     () => createAssembly({ ...state, assemblies: [] }, ['b', 'missing'], 'b'),
@@ -223,8 +224,8 @@ test('assembly edits reject overlap, missing parts and removing the main part wi
     /Huvuddelen/,
   );
   assert.throws(
-    () => updateAssembly(state, 'assembly', { name: 'a', mainId: 'a', memberIds: ['a'] }),
-    /minst två/,
+    () => updateAssembly(state, 'assembly', { name: 'a', mainId: 'a', memberIds: [] }),
+    /minst en/,
   );
   assert.throws(
     () =>

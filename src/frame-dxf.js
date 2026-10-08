@@ -114,7 +114,15 @@ function polyline(e) {
 }
 export function frameFromDXF(
   doc,
-  { name = 'Importerat ramblock', factor = 1, scale = 1, origin = [0, 0] } = {},
+  {
+    name = 'Importerat ramblock',
+    factor = 1,
+    scale = 1,
+    origin = [0, 0],
+    maxSize = 5000,
+    maxEntities = 20000,
+    normalizeOrigin = true,
+  } = {},
 ) {
   const unit = factor * scale;
   if (!(unit > 0) || !Number.isFinite(unit) || !origin.every(Number.isFinite))
@@ -122,11 +130,17 @@ export function frameFromDXF(
   const entities = [],
     skipped = new Set(doc.omittedTypes || []);
   const push = (e) => {
-    if (entities.length >= 20000)
-      throw Error('DXF-filen innehåller för många objekt (högst 20 000).');
+    if (entities.length >= maxEntities)
+      throw Error(`DXF-filen innehåller för många objekt (högst ${maxEntities}).`);
     entities.push({ id: crypto.randomUUID(), ...e });
   };
-  function visit(e, transform = { point: [0, 0], scale: unit, angle: 0 }, stack = []) {
+  function visit(
+    e,
+    transform = { point: [0, 0], scale: unit, angle: 0 },
+    stack = [],
+    parentLayer = '0',
+  ) {
+    const layerName = !e.layer || e.layer === '0' ? parentLayer : e.layer;
     const extrusion = e.extrusionDirection || {
       x: e.extrusionDirectionX || 0,
       y: e.extrusionDirectionY || 0,
@@ -179,14 +193,18 @@ export function frameFromDXF(
         scale: size,
         angle,
       };
-      for (const child of block.entities || []) visit(child, next, [...stack, e.name]);
+      for (const child of block.entities || []) visit(child, next, [...stack, e.name], layerName);
       return;
     }
-    const layer = doc.tables?.layer?.layers?.[e.layer];
+    const layer = doc.tables?.layer?.layers?.[layerName];
     const rawColor = e.color ?? layer?.color;
     const color =
       rawColor && rawColor !== 0xffffff ? `#${rawColor.toString(16).padStart(6, '0')}` : '#233940';
-    const style = { color, stroke: e.lineweight > 0 ? e.lineweight / 100 : 0.25 };
+    const style = {
+      color,
+      stroke: e.lineweight > 0 ? e.lineweight / 100 : 0.25,
+      layer: layerName,
+    };
     if (['LINE', 'LWPOLYLINE', 'POLYLINE', 'CIRCLE', 'ARC'].includes(e.type)) {
       let points;
       if (e.type === 'LINE') points = e.vertices.map(xy);
@@ -253,6 +271,7 @@ export function frameFromDXF(
           align,
           font: 'Arial, sans-serif',
           color,
+          layer: layerName,
         });
       }
     } else skipped.add(e.type);
@@ -282,10 +301,10 @@ export function frameFromDXF(
   const max = [0, 1].map((i) => bounds.reduce((v, p) => Math.max(v, p[i]), -Infinity));
   const width = Math.max(1, max[0] - min[0]),
     height = Math.max(1, max[1] - min[1]);
-  if (Math.max(width, height) > 5000)
+  if (Math.max(width, height) > maxSize)
     throw Error('Ramblocket är större än 5 000 mm. Kontrollera enhet och skala.');
   for (const e of entities) {
-    const move = (p) => p.map((v, i) => v - min[i]);
+    const move = (p) => p.map((v, i) => v - (normalizeOrigin ? min[i] : 0));
     if (e.points) e.points = e.points.map(move);
     else e.point = move(e.point);
   }
@@ -295,7 +314,7 @@ export function frameFromDXF(
       name,
       width,
       height,
-      origin: origin.map((v, i) => v * unit - min[i]),
+      origin: origin.map((v, i) => v * unit - (normalizeOrigin ? min[i] : 0)),
       entities,
     },
     skipped: [...skipped],

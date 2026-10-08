@@ -1,6 +1,10 @@
 import { visibleGridEndpoints } from './grid-label-position.js';
 import { gridLabel } from './grid-labels.js';
-import { gridBubbleMetrics, projectedGridBubbleDiameter } from './grid-bubble-size.js';
+import {
+  gridBubbleMetrics,
+  projectedGridBubbleDiameter,
+  modelGridBubbleMetrics,
+} from './grid-bubble-size.js';
 import * as THREE from 'three';
 
 export const defaultGrid = { x: [0, 3000, 6000], y: [0, 4000, 8000] };
@@ -89,12 +93,17 @@ export class GridLines {
   updateLabels(camera, width, height, { keepVisible = false, diameter } = {}) {
     for (const { position, opposite, index, el } of this.labels) {
       const p = position.clone().project(camera);
-      const metrics = gridBubbleMetrics(
-        el.textContent,
-        diameter ?? projectedGridBubbleDiameter(camera, position, width, height),
-      );
+      const metrics =
+        diameter === undefined
+          ? modelGridBubbleMetrics(
+              el.textContent,
+              projectedGridBubbleDiameter(camera, position, width, height),
+            )
+          : gridBubbleMetrics(el.textContent, diameter);
       const labelRadius = metrics.radius;
-      el.style.width = el.style.height = `${labelRadius * 2}px`;
+      el.style.width = `${labelRadius * 2}px`;
+      el.style.height = `${diameter === undefined ? metrics.height : labelRadius * 2}px`;
+      el.style.whiteSpace = diameter === undefined ? 'nowrap' : '';
       el.style.fontSize = `${metrics.fontSize}px`;
       el.style.borderWidth = `${metrics.strokeWidth}px`;
       if (keepVisible) {
@@ -124,7 +133,6 @@ export class GridLines {
       el.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
       el.style.left = `${((p.x + 1) * width) / 2}px`;
       el.style.top = `${((1 - p.y) * height) / 2}px`;
-      el.style.width = el.style.height = `${labelRadius * 2}px`;
     }
   }
   snap(point, camera, width, height) {

@@ -14,6 +14,7 @@ import { visibleGridEndpoints } from './grid-label-position.js';
 import {
   DRAWING_GRID_BUBBLE_DIAMETER,
   MODEL_GRID_BUBBLE_DIAMETER,
+  modelGridBubbleMetrics,
   gridBubbleMetrics,
 } from './grid-bubble-size.js';
 import { DrawingSectionTool } from './drawing-section-tool.js';
@@ -987,23 +988,26 @@ export class PlanView {
         'stroke-dasharray': '7 4',
         fill: 'none',
       });
-      const metrics = gridBubbleMetrics(
-          line.label,
-          this.frameLayout
-            ? DRAWING_GRID_BUBBLE_DIAMETER * this.paperZoom
-            : (MODEL_GRID_BUBBLE_DIAMETER * h) / this.span,
-        ),
+      const metrics = this.frameLayout
+          ? gridBubbleMetrics(line.label, DRAWING_GRID_BUBBLE_DIAMETER * this.paperZoom)
+          : modelGridBubbleMetrics(line.label, (MODEL_GRID_BUBBLE_DIAMETER * h) / this.span),
         radius = metrics.radius,
         ends = visibleGridEndpoints(points[0], points[1], w, h, radius + metrics.inset);
       if (!ends) continue;
       ends.forEach((p, index) => {
         if (index && Math.hypot(p[0] - ends[0][0], p[1] - ends[0][1]) < radius * 2 + metrics.inset)
           return;
-        append('ellipse', {
-          cx: p[0],
-          cy: p[1],
-          rx: radius,
-          ry: metrics.height / 2,
+        append(this.frameLayout ? 'ellipse' : 'rect', {
+          ...(this.frameLayout
+            ? { cx: p[0], cy: p[1], rx: radius, ry: metrics.height / 2 }
+            : {
+                x: p[0] - radius,
+                y: p[1] - metrics.height / 2,
+                width: radius * 2,
+                height: metrics.height,
+                rx: metrics.height / 2,
+                ry: metrics.height / 2,
+              }),
           fill: '#edf3f5',
           stroke: '#718995',
           'stroke-width': metrics.strokeWidth,

@@ -42,8 +42,24 @@ import { objectGeometry, displayGeometry } from './model-object.js';
 import { partMatrix } from './part-marks.js';
 import { partStatus } from './part-marks.js';
 import { assemblyGeometry } from './assembly-geometry.js';
-import { normalizeAssemblySchedule, assemblyScheduleTable } from './assembly-schedule.js';
+import {
+  normalizeAssemblySchedule,
+  assemblyScheduleTable,
+  newMaterialSchedule,
+} from './assembly-schedule.js';
+import {
+  appendMaterialSchedule,
+  materialScheduleHeight,
+  materialSchedulePosition,
+} from './assembly-material-schedule.js';
 import { editAssemblySchedule } from './assembly-schedule-editor.js';
+import {
+  normalizeSinglePartMaterialSchedule,
+  singlePartMaterialPosition,
+  singlePartMaterialData,
+  appendSinglePartMaterialSchedule,
+  singlePartMaterialSize,
+} from './single-part-material-schedule.js';
 import { assemblySchedule } from './project/assemblies.js';
 import { assemblyDrawingMatrix } from './assembly-frames.js';
 import { drawingAssemblies } from './assembly-numbering.js';
@@ -140,8 +156,10 @@ export class SinglePartSheet {
       const update = () => {
         const settings = this.config.assemblySchedule;
         if (key === 'visible') settings.visible = input.checked;
-        else if (input.value.trim() && Number.isFinite(Number(input.value)))
+        else if (input.value.trim() && Number.isFinite(Number(input.value))) {
           settings.position[key === 'x' ? 0 : 1] = Number(input.value);
+          settings.dockToTitle = false;
+        }
         this.compose();
       };
       input.onchange = update;
@@ -161,7 +179,60 @@ export class SinglePartSheet {
         },
       );
     this.assemblyPanel.append(editSchedule);
+    const placeSchedule = document.createElement('button');
+    placeSchedule.textContent = 'Placera materiallista vid rithuvud';
+    placeSchedule.onclick = () => {
+      this.config.assemblySchedule.dockToTitle = true;
+      const table = assemblyScheduleTable(
+        assemblySchedule(this.assembly, this.getAttributeState()),
+        this.config.assemblySchedule,
+      );
+      this.config.assemblySchedule.position = materialSchedulePosition(
+        table,
+        this.paper,
+        this.frameLayout,
+      );
+      this.compose();
+    };
+    this.assemblyPanel.append(placeSchedule);
     inspector.append(this.assemblyPanel);
+    this.partMaterialPanel = document.createElement('details');
+    this.partMaterialPanel.hidden = true;
+    const materialSummary = document.createElement('summary');
+    materialSummary.textContent = 'Materiallista';
+    this.partMaterialPanel.append(materialSummary);
+    for (const [key, title] of [
+      ['visible', 'Visa på bladet'],
+      ['x', 'X på blad · mm'],
+      ['y', 'Y på blad · mm'],
+    ]) {
+      const label = document.createElement('label'),
+        input = document.createElement('input');
+      label.textContent = title;
+      input.type = key === 'visible' ? 'checkbox' : 'number';
+      input.dataset.materialField = key;
+      input.setAttribute('aria-label', 'Materiallista · ' + title);
+      if (key !== 'visible') input.step = 'any';
+      input.onchange = () => {
+        const settings = this.config.partMaterialSchedule;
+        if (key === 'visible') settings.visible = input.checked;
+        else if (input.value.trim() && Number.isFinite(Number(input.value))) {
+          settings.position[key === 'x' ? 0 : 1] = Number(input.value);
+          settings.dockToTop = false;
+        }
+        this.compose();
+      };
+      label.append(input);
+      this.partMaterialPanel.append(label);
+    }
+    const dockMaterial = document.createElement('button');
+    dockMaterial.textContent = 'Placera uppe till höger';
+    dockMaterial.onclick = () => {
+      this.config.partMaterialSchedule.dockToTop = true;
+      this.compose();
+    };
+    this.partMaterialPanel.append(dockMaterial);
+    inspector.append(this.partMaterialPanel);
     const hiddenLabel = document.createElement('label');
     hiddenLabel.className = 'drawing-check';
     hiddenLabel.innerHTML = '<input id=sheet-hidden-lines type=checkbox>Visa skymda kanter';
@@ -579,11 +650,16 @@ export class SinglePartSheet {
       side.position = [10, 10];
       this.config.views.push(side);
       this.config.assemblyViews = true;
-      this.config.assemblySchedule = { position: [10, 240], visible: true };
+      this.config.assemblySchedule ??= newMaterialSchedule();
     }
     if (this.assembly)
       this.config.assemblySchedule = normalizeAssemblySchedule(this.config.assemblySchedule);
     this.assemblyPanel.hidden = !this.assembly;
+    this.partMaterialPanel.hidden = !!this.assembly;
+    if (!this.assembly)
+      this.config.partMaterialSchedule = normalizeSinglePartMaterialSchedule(
+        this.config.partMaterialSchedule,
+      );
     this.svg.setAttribute(
       'aria-label',
       this.assembly ? 'Assembly ritningsblad' : 'Single Part ritningsblad',
@@ -604,14 +680,25 @@ export class SinglePartSheet {
       this.config.views.find((v) => v.id === 'front')?.id || this.config.views[0].id;
     this.syncInspector();
     this.render();
-    if (newSheet && this.frameLayout?.contentArea && !this.assembly) {
-      arrangePartViews(this.config.views, this.paper[0], this.frameLayout.contentArea);
+    if (newSheet && !this.assembly) {
+      const area = [
+        ...(this.frameLayout?.contentArea || [10, 10, this.paper[0] - 10, this.paper[1] - 60]),
+      ];
+      if (this.config.partMaterialSchedule.visible) area[1] += singlePartMaterialSize[1] + 2;
+      arrangePartViews(this.config.views, this.paper[0], area);
       this.compose();
     }
     if (this.assembly && !this.config.assemblyArranged) {
       arrangePartViews(this.config.views, this.paper[0], this.frameLayout?.contentArea);
       const bottom = Math.max(...this.config.views.map((v) => v.position[1] + v.size[1])) + 14;
-      this.config.assemblySchedule.position = [10, bottom];
+      const table = assemblyScheduleTable(
+        assemblySchedule(this.assembly, this.getAttributeState()),
+        this.config.assemblySchedule,
+      );
+      this.config.assemblySchedule.position =
+        table.settings.style === 'material'
+          ? materialSchedulePosition(table, this.paper, this.frameLayout)
+          : [10, bottom];
       this.config.assemblyArranged = true;
       this.compose();
     }
@@ -845,24 +932,54 @@ export class SinglePartSheet {
       drawingAttributeContext(this.record, this.getAttributeState()),
     );
     this.annotations.render(this.svg);
+    if (!this.assembly) {
+      const settings = this.config.partMaterialSchedule;
+      if (settings.dockToTop)
+        settings.position = singlePartMaterialPosition(this.paper, this.frameLayout);
+      const data = singlePartMaterialData(this.record, this.getAttributeState());
+      appendSinglePartMaterialSchedule(this.svg, data, settings);
+      for (const input of this.partMaterialPanel.querySelectorAll('input')) {
+        const key = input.dataset.materialField;
+        if (key === 'visible') input.checked = settings.visible;
+        else input.value = settings.position[key === 'x' ? 0 : 1];
+      }
+      if (settings.visible && data && !data.verified)
+        this.$('message').textContent =
+          'Numrera om detaljerna för att uppdatera materiallistans antal och totaler.';
+      if (
+        settings.visible &&
+        (settings.position[0] < 0 ||
+          settings.position[1] < 0 ||
+          settings.position[0] + singlePartMaterialSize[0] > w ||
+          settings.position[1] + singlePartMaterialSize[1] > h)
+      )
+        this.$('message').textContent =
+          'Materiallistan ligger utanför bladet. Ändra placering eller välj ett större format.';
+    }
     if (this.assembly) {
-      this.paintAssemblySchedule();
       const schedule = this.config.assemblySchedule;
+      const table = assemblyScheduleTable(
+        assemblySchedule(this.assembly, this.getAttributeState()),
+        schedule,
+      );
+      if (schedule.style === 'material' && schedule.dockToTitle)
+        schedule.position = materialSchedulePosition(table, this.paper, this.frameLayout);
+      this.paintAssemblySchedule();
       for (const input of this.assemblyPanel.querySelectorAll('input')) {
         const key = input.dataset.scheduleField;
         if (key === 'visible') input.checked = schedule.visible;
         else input.value = schedule.position[key === 'x' ? 0 : 1];
       }
-      const table = assemblyScheduleTable(
-        assemblySchedule(this.assembly, this.getAttributeState()),
-        schedule,
-      );
       if (
         schedule.visible &&
         (schedule.position[0] < 0 ||
           schedule.position[0] + table.width > w ||
-          schedule.position[1] - table.rowHeight < 0 ||
-          schedule.position[1] + table.values.length * table.rowHeight > h)
+          schedule.position[1] - (schedule.style === 'material' ? 0 : table.rowHeight) < 0 ||
+          schedule.position[1] +
+            (schedule.style === 'material'
+              ? materialScheduleHeight(table)
+              : table.values.length * table.rowHeight) >
+            h)
       )
         this.$('message').textContent =
           'Stycklistan ligger utanför bladet. Ändra placering under Stycklista eller välj ett större format.';
@@ -898,6 +1015,15 @@ export class SinglePartSheet {
         transform: `translate(${x},${y})`,
         'font-size': table.settings.textSize,
       });
+    if (table.settings.style === 'material') {
+      appendMaterialSchedule(
+        this.svg,
+        table,
+        this.assembly.id,
+        drawingAssemblies(this.record, this.getAttributeState()).length,
+      );
+      return;
+    }
     g.append(
       node(
         'text',

@@ -42,6 +42,7 @@ import { createComponentUI } from './components/ui.js';
 let componentUI = null;
 import { updateDisplayDetail } from './model/display-detail.js';
 import { ReferenceModels } from './references/reference-models.js';
+import { moveReferencePlacement } from './references/reference-placement.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { installDrawingSettings } from './drawing-settings.js';
 import { setupPWA } from './app/pwa.js';
@@ -272,7 +273,7 @@ function updateTypedLength() {
         0.001
       )
         throw new Error('Riktningen måste ligga i arbetsplanet.');
-    } else {
+    } else if (!tools.operation?.referenceId) {
       const error = candidates(end).map(validateSweep).find(Boolean);
       if (error) throw new Error(error);
     }
@@ -462,6 +463,7 @@ function dispose(o) {
   });
 }
 function clearPreview() {
+  referenceModels?.clearPlacementPreview();
   ui.componentPreview = false;
   objectFeedback.setModel(project.objects);
   objects.children.forEach((child) => (child.visible = isVisible(child.userData.id)));
@@ -616,10 +618,11 @@ function select(id, additive = false, keepTab = false) {
   setSelection(ids, keepTab);
 }
 function selectModelOrReference(id, additive = false) {
-  const reference = !id && referenceModels?.pickObject(raycaster);
+  const reference = !id && referenceModels?.pickReference(raycaster);
   if (reference) {
     setSelection([], true);
-    referenceModels.selectObject(reference);
+    if (reference.ifcId != null) referenceModels.selectObject(reference);
+    else referenceModels.showModel(reference.modelId);
     inspector.show('references');
     frameGate.invalidate();
   } else select(id, additive);
@@ -699,6 +702,7 @@ function restore(direction) {
   );
   if (!next) return;
   Object.assign(project, next);
+  referenceModels?.restore(project.references);
   levelsUI?.sync();
   fillSettings();
   grid.set({ ...project.grid, z: levelElevation(project.levels) });
@@ -819,7 +823,8 @@ function startDrawing() {
 }
 function syncOperationUI() {
   for (const id of ['move', 'copy', 'rotate']) {
-    $(id).disabled = !ui.selectedIds.size;
+    $(id).disabled =
+      !ui.selectedIds.size && !(id !== 'copy' && referenceModels?.transformSelection());
     $(id).classList.toggle('active', tools.operation?.mode === id);
     $(id).setAttribute('aria-pressed', String(tools.operation?.mode === id));
   }
@@ -860,6 +865,19 @@ function syncOperationUI() {
       : 'Skapa ↵';
 }
 function startTransform(mode) {
+  const reference = mode === 'move' && referenceModels?.transformSelection();
+  if (reference) {
+    setDrawing(true);
+    tools.operation = {
+      mode,
+      referenceId: reference.id,
+      placement: structuredClone(reference.placement),
+    };
+    syncOperationUI();
+    $('status').textContent = 'Flytta referens · Välj baspunkt';
+    renderer.domElement.focus({ preventScroll: true });
+    return;
+  }
   const sources = componentTransformSources(project.objects, ui.selectedIds);
   const source = sources[0];
   if (!source || ((mode === 'start' || mode === 'end') && sources.length !== 1)) return;
@@ -936,6 +954,17 @@ function candidates(target) {
   );
 }
 function commitPoint(target) {
+  if (tools.operation?.referenceId) {
+    const { referenceId, placement } = tools.operation;
+    const next = moveReferencePlacement(placement, tools.first, target);
+    clearPreview();
+    checkpoint();
+    referenceModels.setPlacement(referenceId, next);
+    setDrawing(false);
+    render();
+    $('status').textContent = 'Referensen flyttad';
+    return true;
+  }
   let batch;
   try {
     batch = candidates(target);
@@ -1197,6 +1226,14 @@ function point(e) {
 function showPreview(p) {
   clearPreview();
   guide.visible = false;
+  if (tools.operation?.referenceId) {
+    referenceModels.previewPlacement(
+      tools.operation.referenceId,
+      moveReferencePlacement(tools.operation.placement, tools.first, p),
+    );
+    frameGate.invalidate();
+    return;
+  }
   let batch;
   try {
     batch = candidates(p);
@@ -1328,6 +1365,12 @@ const { rotationHandle, rotationLine, showRotationLine, pickRotationAxis } =
     render,
     syncLocks,
     syncOperationUI,
+    getReference: () => referenceModels?.transformSelection(),
+    previewReference: (id, placement) => {
+      referenceModels.previewPlacement(id, placement);
+      frameGate.invalidate();
+    },
+    commitReference: (id, placement) => referenceModels.setPlacement(id, placement),
   });
 const {
   updatePlateNormal,
@@ -1682,7 +1725,7 @@ window.addEventListener('keydown', (e) => {
       document.activeElement.isContentEditable,
     settingsOpen: $('settings-dialog').open,
     modalOpen: !!document.querySelector('dialog[open]'),
-    hasSelection: !!ui.selectedIds.size,
+    hasSelection: !!ui.selectedIds.size || !!referenceModels?.transformSelection(),
     mode: tools.operation?.mode,
     picking: tools.operation?.picking,
     hasStart: !!tools.first,
@@ -1775,6 +1818,8 @@ function loadFrameExample(size) {
   checkpoint();
   setDrawing(false);
   Object.assign(project, example);
+  project.references = example.references || { folders: ['Standard'], models: [] };
+  referenceModels?.restore(project.references);
   projectHistory.prime(project);
   hiddenObjects.clear();
   modelFilter?.reset();
@@ -1884,6 +1929,7 @@ installProjectFiles({
     const apply = (state) => {
       setDrawing(false);
       Object.assign(project, state);
+      referenceModels?.restore(project.references);
       projectHistory.prime(project);
       hiddenObjects.clear();
       modelFilter?.reset();
@@ -2759,6 +2805,23 @@ setupPWA();
 referenceModels = new ReferenceModels({
   scene,
   inspector,
+  onChange: (references) => {
+    project.references = references;
+    frameGate.invalidate();
+    $('undo').disabled = !projectHistory.canUndo;
+    $('redo').disabled = !projectHistory.canRedo;
+  },
+  beforePlacementChange: checkpoint,
+  onSelect: (model) => {
+    if (model?.locked && tools.operation?.referenceId === model.id) setDrawing(false);
+    if (model && !tools.operation) {
+      ui.selectedIds.clear();
+      ui.selected = null;
+      render({ selectionOnly: true });
+      inspector.show('references');
+    }
+    syncOperationUI();
+  },
   fit: (bounds) => fit(undefined, bounds),
   status: (text) => {
     document.querySelector('footer [role=status]').textContent = text;

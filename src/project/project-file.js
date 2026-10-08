@@ -9,6 +9,7 @@ import { parsePositions } from '../grid-lines.js';
 import { validateGridLabels } from '../grid-labels.js';
 import { syncAssemblyDrawingIdentity } from './assemblies.js';
 import { validateProjectReports } from '../report-record.js';
+import { validateReferences } from '../references/reference-state.js';
 
 export const PROJECT_FILE_LIMIT = 100 * 1024 * 1024;
 const record = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
@@ -27,6 +28,7 @@ export function validateProjectFile(project) {
     fail('Projektversionen stöds inte av det här programmet.');
   finiteData(project);
   project.reports = validateProjectReports(project.reports);
+  project.references = validateReferences(project.references);
   if (!Array.isArray(project.objects) || project.objects.length > 100000)
     fail('Ogiltig objektlista.');
   const objects = new Map();
@@ -113,7 +115,7 @@ export function validateProjectFile(project) {
       typeof assembly.name !== 'string' ||
       !identity(assembly.mainId) ||
       !Array.isArray(assembly.memberIds) ||
-      assembly.memberIds.length < 2 ||
+      assembly.memberIds.length < 1 ||
       assembly.memberIds.length > 100000 ||
       !assembly.memberIds.every(identity) ||
       !assembly.memberIds.includes(assembly.mainId) ||
@@ -207,7 +209,10 @@ export function validateProjectFile(project) {
 export function serializeProject(project) {
   const snapshot = captureProject(project);
   validateProjectFile(snapshot);
-  return JSON.stringify({ format: 'LiraStructure', fileVersion: 1, project: snapshot });
+  const text = JSON.stringify({ format: 'LiraStructure', fileVersion: 1, project: snapshot });
+  if (new TextEncoder().encode(text).length > PROJECT_FILE_LIMIT)
+    fail('Projektfilen är för stor (högst 100 MB inklusive referensfiler).');
+  return text;
 }
 export function parseProjectFile(text) {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > PROJECT_FILE_LIMIT)

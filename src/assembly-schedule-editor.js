@@ -1,4 +1,10 @@
-import { normalizeAssemblySchedule, assemblyScheduleTable } from './assembly-schedule.js';
+import {
+  normalizeAssemblySchedule,
+  assemblyScheduleTable,
+  newMaterialSchedule,
+  materialScheduleFields,
+} from './assembly-schedule.js';
+const modelFields = ['mark', 'quantity', 'length', 'weight'];
 const node = (tag, text) => {
   const element = document.createElement(tag);
   if (text) element.textContent = text;
@@ -18,7 +24,7 @@ export function editAssemblySchedule(settings, rows, save) {
     header,
     node(
       'p',
-      'Detaljnummer och antal följer modellen. Profil/namn, material och egna fält kan ändras för den här ritningen. Ändrad tillverkningsdel får en ny rad utan tidigare textändringar.',
+      'Detaljnummer, antal, längd och vikt följer modellen. Vikt avser radens sammanlagda vikt per assembly och visas som — när densitet saknas. Profil/namn, material, anvisningar och egna fält kan ändras för den här ritningen. Ändrad tillverkningsdel får en ny rad utan tidigare textändringar.',
     ),
   );
   const setup = node('div');
@@ -30,6 +36,23 @@ export function editAssemblySchedule(settings, rows, save) {
     return label;
   };
   const size = node('input');
+  const style = node('select');
+  style.append(
+    new Option('Materiallista · enligt exempel', 'material'),
+    new Option('Stycklista · tabell', 'table'),
+  );
+  style.value = draft.style;
+  style.onchange = () => {
+    const preset = style.value === 'material' ? newMaterialSchedule() : normalizeAssemblySchedule();
+    draft.style = preset.style;
+    draft.dockToTitle = preset.dockToTitle;
+    draft.columns = preset.columns;
+    draft.textSize = preset.textSize;
+    size.value = draft.textSize;
+    notes.hidden = draft.style !== 'material';
+    renderColumns();
+    renderRows();
+  };
   size.type = 'number';
   size.min = '1';
   size.max = '10';
@@ -49,6 +72,8 @@ export function editAssemblySchedule(settings, rows, save) {
     ['name', 'Profil / namn'],
     ['material', 'Material'],
     ['quantity', 'Antal'],
+    ['length', 'Längd'],
+    ['weight', 'Vikt'],
   ])
     sort.append(new Option(title, id));
   sort.value = draft.sort;
@@ -64,11 +89,25 @@ export function editAssemblySchedule(settings, rows, save) {
     renderRows();
   };
   setup.append(
+    labelField('Utseende (återställer kolumner)', style),
     labelField('Textstorlek · mm', size),
     labelField('Sortera efter', sort),
     labelField('Sorteringsriktning', direction),
   );
   dialog.append(setup);
+  const notes = node('div');
+  notes.className = 'batch-setup';
+  notes.hidden = draft.style !== 'material';
+  for (const [id, title] of materialScheduleFields) {
+    const input = node('input');
+    input.maxLength = 200;
+    input.value = draft.notes[id];
+    input.oninput = () => {
+      draft.notes[id] = input.value;
+    };
+    notes.append(labelField(title, input));
+  }
+  dialog.append(notes);
   const columns = node('div'),
     cells = node('div');
   columns.className = cells.className = 'workflow-content';
@@ -103,6 +142,11 @@ export function editAssemblySchedule(settings, rows, save) {
       for (const c of data.columns.filter((c) => !['mark', 'quantity'].includes(c.id))) {
         const td = node('td'),
           input = node('input');
+        if (modelFields.includes(c.id)) {
+          td.textContent = data.values[data.rows.indexOf(row) + 1][data.columns.indexOf(c)];
+          tr.append(td);
+          continue;
+        }
         input.maxLength = 200;
         input.value = draft.cells[row.key]?.[c.id] ?? row[c.id] ?? '';
         input.setAttribute('aria-label', `${row.mark} · ${c.title}`);
@@ -149,7 +193,8 @@ export function editAssemblySchedule(settings, rows, save) {
         renderRows();
       };
       width.type = 'number';
-      width.min = '10';
+      width.min = '5';
+      width.step = '0.5';
       width.max = '300';
       width.value = column.width;
       width.setAttribute('aria-label', `Bredd ${index + 1} · mm`);

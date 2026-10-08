@@ -357,7 +357,7 @@ footer {
   width: 28px;
   height: 28px;
   border: 1px solid #718995;
-  border-radius: 50%;
+  border-radius: 9999px;
   background: #edf3f5;
   color: #425d69;
   font-size: 12px;
@@ -4102,6 +4102,102 @@ body > footer .pwa-install {
 #inspector-references .reference-fields span {
   overflow-wrap: anywhere;
   color: #60737a;
+}
+#inspector-references [data-cad-layers] summary {
+  display: list-item;
+}
+#inspector-references [data-layer-count] {
+  float: right;
+  color: #74868e;
+  font-size: 11px;
+  font-weight: 400;
+}
+#inspector-references .reference-layer-actions {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+#inspector-references .reference-layer-actions button {
+  padding: 3px 7px;
+  min-height: 24px;
+  font-size: 12px;
+}
+#inspector-references [data-layer-search] {
+  width: 100%;
+  min-height: 26px;
+  padding: 3px 6px;
+  margin-bottom: 4px;
+}
+#inspector-references .reference-layer-list {
+  max-height: 192px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+#inspector-references .reference-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 3px;
+  margin: 0;
+  font-size: 12px;
+  border-bottom: 1px solid #edf1f2;
+}
+#inspector-references .reference-layer-row input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  flex: 0 0 13px;
+}
+#inspector-references .reference-layer-color {
+  flex: 0 0 10px;
+  height: 2px;
+}
+#inspector-references .reference-layer-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#inspector-references .reference-layer-count {
+  color: #74868e;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+#inspector-references .reference-placement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+#inspector-references [data-placement-fields] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+#inspector-references [data-placement-fields] label {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 3px 0;
+}
+#inspector-references [data-placement-fields] label:has([data-cad-unit]),
+#inspector-references [data-placement-fields] label:has([data-cad-scale]) {
+  grid-column: 1 / -1;
+  grid-template-columns: 94px minmax(0, 1fr);
+}
+#inspector-references .reference-placement-actions label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+}
+#inspector-references .reference-placement-actions button {
+  font-size: 12px;
+  padding: 4px 7px;
 }
 #inspector-references input[type='checkbox'] {
   width: 15px;

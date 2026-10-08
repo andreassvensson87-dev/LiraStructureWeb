@@ -10,6 +10,7 @@ export function createProject({ grid, levels }) {
     parts: { registry: [], assignments: {} },
     drawings: [],
     reports: [],
+    references: { folders: ['Standard'], models: [] },
     assemblies: [],
     assemblyNumbering: { registry: [] },
     snap: {
@@ -38,6 +39,7 @@ export function projectData(project) {
     parts,
     drawings,
     reports = [],
+    references = { folders: ['Standard'], models: [] },
     snap,
     assemblies = [],
     assemblyNumbering = { registry: [] },
@@ -51,6 +53,7 @@ export function projectData(project) {
     parts,
     drawings,
     reports,
+    references,
     snap,
     assemblies,
     assemblyNumbering,

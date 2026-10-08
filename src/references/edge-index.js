@@ -41,7 +41,7 @@ export function edgeIndex(array) {
 }
 export function referenceCandidates(
   parts,
-  { ray, camera, pointer, width, height, corners = true, edges = true },
+  { ray, camera, pointer, width, height, corners = true, edges = true, labelPrefix = 'IFC' },
 ) {
   const result = [],
     cursor = new THREE.Vector2(...pointer);
@@ -49,18 +49,27 @@ export function referenceCandidates(
     const q = p.clone().project(camera);
     return new THREE.Vector2(((q.x + 1) * width) / 2, ((1 - q.y) * height) / 2);
   };
-  const radius = (Math.abs(camera.top - camera.bottom) / camera.zoom / height) * 16;
   for (const part of parts) {
-    const offset = part.mesh.getWorldPosition(new THREE.Vector3()),
-      localRay = ray.clone();
-    localRay.origin.sub(offset);
+    if (!part.mesh.visible) continue;
+    part.mesh.updateWorldMatrix(true, false);
+    const matrix = part.mesh.matrixWorld,
+      inverse = matrix.clone().invert(),
+      localRay = ray.clone().applyMatrix4(inverse);
+    const scale = new THREE.Vector3().setFromMatrixScale(matrix);
+    const span = camera.isPerspectiveCamera
+      ? (2 *
+          camera.position.distanceTo(part.mesh.getWorldPosition(new THREE.Vector3())) *
+          Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) /
+        camera.zoom
+      : Math.abs(camera.top - camera.bottom) / camera.zoom;
+    const radius = ((span / height) * 16) / Math.min(scale.x, scale.y, scale.z);
     for (const i of part.index.query(localRay, radius)) {
-      const a = new THREE.Vector3().fromArray(part.edges, i * 6).add(offset),
-        b = new THREE.Vector3().fromArray(part.edges, i * 6 + 3).add(offset);
+      const a = new THREE.Vector3().fromArray(part.edges, i * 6).applyMatrix4(matrix),
+        b = new THREE.Vector3().fromArray(part.edges, i * 6 + 3).applyMatrix4(matrix);
       if (corners)
         for (const p of [a, b])
           if (screen(p).distanceTo(cursor) < 14)
-            result.push({ coords: p.toArray(), label: 'IFC-hörn', symbol: 'square' });
+            result.push({ coords: p.toArray(), label: `${labelPrefix}-hörn`, symbol: 'square' });
       if (edges) {
         const sa = screen(a),
           delta = screen(b).sub(sa),
@@ -70,7 +79,7 @@ export function referenceCandidates(
         if (sa.addScaledVector(delta, t).distanceTo(cursor) < 10)
           result.push({
             coords: a.lerp(b, t).toArray(),
-            label: 'IFC-kant',
+            label: `${labelPrefix}-kant`,
             symbol: 'line',
             edge: true,
           });

@@ -5,6 +5,7 @@ import { ReferenceModels } from '../src/references/reference-models.js';
 import { IfcAPI } from 'web-ifc';
 import { readFileSync } from 'node:fs';
 import { createReferenceFixture } from '../scripts/ifc-memory-fixture.js';
+import { encodeReference } from '../src/references/reference-state.js';
 
 function referenceFixture() {
   const controls = new Map();
@@ -59,6 +60,73 @@ function fakeWorkers(run) {
       globalThis.Worker = previous;
     });
 }
+test('saved reference restoration reuses unchanged geometry and restores IFC visibility', async () => {
+  const references = referenceFixture(),
+    p = part(),
+    group = new THREE.Group();
+  group.add(p.mesh);
+  const source = encodeReference(new Uint8Array([1, 2, 3]).buffer);
+  const m = {
+    id: 'ifc',
+    format: 'IFC',
+    source,
+    fileName: 'a.ifc',
+    title: 'Old',
+    folder: 'Standard',
+    group,
+    parts: [p],
+    transparent: false,
+    corners: true,
+    edges: true,
+  };
+  p.opacity = 1;
+  references.models = [m];
+  references.group.add(group);
+  references.syncParts();
+  const saved = references.snapshot();
+  saved.models[0].title = 'Saved';
+  saved.models[0].visible = false;
+  saved.models[0].transparent = true;
+  await references.restore(saved);
+  assert.equal(references.models[0], m);
+  assert.equal(group.visible, false);
+  assert.equal(m.title, 'Saved');
+  assert.equal(p.mesh.material.opacity, 0.3);
+  assert.equal(p.disposed.geometry, 0);
+  await references.restore();
+  assert.equal(references.models.length, 0);
+  assert.equal(p.disposed.geometry, 1);
+});
+test('saved source is reloaded once and a newer project cancels the old restore queue', async () => {
+  await fakeWorkers(async (workers) => {
+    const references = referenceFixture();
+    const source = encodeReference(new Uint8Array([1, 2, 3]).buffer);
+    const saved = {
+      folders: ['Standard'],
+      models: [1, 2].map((i) => ({
+        id: `r${i}`,
+        format: 'IFC',
+        source,
+        fileName: `r${i}.ifc`,
+        title: `r${i}`,
+        folder: 'Standard',
+        visible: false,
+        transparent: false,
+        corners: true,
+        edges: true,
+      })),
+    };
+    const restoring = references.restore(saved);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual([...new Uint8Array(workers[0].posts[0])], [1, 2, 3]);
+    await references.restore();
+    await restoring;
+    assert.equal(workers.length, 1);
+    assert.equal(workers[0].terminated, 1);
+    assert.equal(references.models.length, 0);
+    assert.equal(references.restoring, false);
+  });
+});
 
 test('removing during import terminates the worker and disposes current and pending resources', async () => {
   await fakeWorkers(async (workers) => {
@@ -280,4 +348,44 @@ test('reference picking respects visibility and highlights only the selected IFC
   assert.equal(references.$('[data-convert]').disabled, true);
   references.models[0].group.visible = false;
   assert.equal(references.pickObject(rays), null);
+});
+
+test('DXF and DWG enter the same reference list, preserve CAD placement on replacement, and hide from IFC picking', async () => {
+  await fakeWorkers(async (workers) => {
+    const references = referenceFixture();
+    for (const name of ['plan.dxf', 'plan.dwg']) {
+      await references.load(
+        { name, arrayBuffer: async () => new ArrayBuffer(8) },
+        references.models.length ? { replaceId: references.models[0].id } : {},
+      );
+      const worker = workers.at(-1);
+      assert.equal(worker.posts[0].format, name.endsWith('dwg') ? 'DWG' : 'DXF');
+      worker.onmessage({
+        data: {
+          type: 'cad',
+          entities: [
+            {
+              type: 'line',
+              color: '#333333',
+              points: [
+                [0, 0],
+                [100, 0],
+              ],
+            },
+          ],
+          unitFactor: 1,
+          unitKnown: true,
+          skipped: [],
+        },
+      });
+      assert.equal(references.models.length, 1);
+      const model = references.models[0];
+      assert.equal(model.placement.offset[0], name.endsWith('dwg') ? 500 : 0);
+      model.placement.offset[0] = 500;
+      assert.equal(references.pickObject({ intersectObjects: () => [] }), null);
+    }
+    assert.equal(references.models[0].format, 'DWG');
+    references.clear();
+    assert.equal(references.parts.length, 0);
+  });
 });

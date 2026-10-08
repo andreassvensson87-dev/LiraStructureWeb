@@ -26,7 +26,7 @@ const number = (n, digits = 2) =>
   n == null
     ? '—'
     : n.toLocaleString('sv-SE', { maximumFractionDigits: digits, useGrouping: false });
-function profile(object) {
+export function materialProfile(object) {
   if (object.type === 'plate') return `PL ${number(object.thickness, 1)}`;
   if (object.type === 'fastener') return object.spec?.name || 'Skruv';
   if (object.section?.name) return object.section.name;
@@ -41,7 +41,7 @@ function profile(object) {
   };
   return `${names[object.profile] || object.profile || 'Profil'} ${number(object.width, 1)} × ${number(object.height, 1)}${object.thickness > 0 ? ' × ' + number(object.thickness, 1) : ''}`;
 }
-function length(object) {
+export function materialLength(object) {
   if (object.start && object.end)
     return Math.hypot(...object.end.map((v, i) => v - object.start[i]));
   if (object.polygon?.length) {
@@ -152,8 +152,8 @@ export function materialReportData(
       material:
         object.material?.name ||
         (metrics.densitySource === 'profile' ? 'Profilens densitet' : 'Material saknas'),
-      profile: profile(object),
-      length: length(object),
+      profile: materialProfile(object),
+      length: materialLength(object),
       unitWeight: metrics.massKg,
       unitVolume: metrics.volumeM3,
       approximate: metrics.approximate,
