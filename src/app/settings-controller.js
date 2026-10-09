@@ -8,7 +8,6 @@ import {
   orbitDamping,
   setOrbitDamping,
 } from '../input-device.js';
-import { parsePositions } from '../grid-lines.js';
 import { createGridLabelEditor } from './grid-label-editor.js';
 import { validateGridLabels } from '../grid-labels.js';
 import { FRAME_EXAMPLE_SIZES, frameExampleCounts } from '../project/frame-example.js';
@@ -26,6 +25,7 @@ export function createSettingsController({
   const $ = (id) => document.getElementById(id);
   const gridLabelEditor = createGridLabelEditor(
     document.querySelector('[data-settings-panel="grid"]'),
+    editGrid ? (axis, index) => openGrid({ axis, index }) : null,
   );
   if (editGrid) {
     const button = document.createElement('button');
@@ -33,26 +33,25 @@ export function createSettingsController({
     button.className = 'primary';
     button.textContent = 'Redigera i modellen';
     document.querySelector('[data-settings-panel="grid"]').prepend(button);
-    button.onclick = () => {
-      try {
-        const next = gridLabelEditor.read({
-          x: parsePositions($('grid-x').value),
-          y: parsePositions($('grid-y').value),
-        });
-        validateGridLabels(next);
-        if (JSON.stringify(next) !== JSON.stringify(project.grid)) {
-          checkpoint();
-          project.grid = next;
-          onGridChanged();
-          onChange();
-        }
-        $('settings-dialog').close();
-        editGrid();
-      } catch (error) {
-        $('settings-error').textContent = error.message;
-      }
-    };
+    button.onclick = () => openGrid();
   }
+  function openGrid(selection) {
+    try {
+      const next = gridLabelEditor.read(project.grid);
+      validateGridLabels(next);
+      if (JSON.stringify(next) !== JSON.stringify(project.grid)) {
+        checkpoint();
+        project.grid = next;
+        onGridChanged();
+        onChange();
+      }
+      $('settings-dialog').close();
+      editGrid(selection);
+    } catch (error) {
+      $('settings-error').textContent = error.message;
+    }
+  }
+
   const navigationButton = document.createElement('button');
   navigationButton.type = 'button';
   navigationButton.dataset.settings = 'navigation';
@@ -196,10 +195,7 @@ export function createSettingsController({
     e.preventDefault();
     let next;
     try {
-      next = gridLabelEditor.read({
-        x: parsePositions($('grid-x').value),
-        y: parsePositions($('grid-y').value),
-      });
+      next = gridLabelEditor.read(project.grid);
       validateGridLabels(next);
     } catch (error) {
       settingsCategory('grid');

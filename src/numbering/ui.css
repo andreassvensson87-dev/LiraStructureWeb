@@ -339,3 +339,50 @@
     grid-template-columns: 1fr;
   }
 }
+
+.numbering-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dce5e7;
+  border-radius: 6px;
+}
+.numbering-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.numbering-options select,
+.numbering-options input[type='number'] {
+  margin-left: auto;
+  width: min(260px, 48%);
+  padding: 7px;
+  border: 1px solid #bacbd0;
+  border-radius: 4px;
+}
+.numbering-options input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  accent-color: #178268;
+}
+.numbering-options {
+  min-width: 0;
+  align-content: start;
+}
+.numbering-options legend {
+  font-size: 13px;
+}
+@media (min-width: 760px) {
+  #numbering-settings:not([hidden]) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 18px;
+  }
+  #numbering-settings > p,
+  #numbering-settings > .numbering-kinds {
+    grid-column: 1 / -1;
+  }
+}

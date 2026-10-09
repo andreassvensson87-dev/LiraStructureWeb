@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import { gridSegments } from '../src/grid-geometry.js';
 import { createGridModelEditor } from '../src/app/grid-model-editor.js';
 
 function fixture(t) {
@@ -8,7 +9,8 @@ function fixture(t) {
     oldWindow = globalThis.window;
   const docEvents = {},
     hostEvents = {},
-    fields = new Map();
+    fields = new Map(),
+    created = [];
   function element() {
     return {
       dataset: {},
@@ -18,7 +20,9 @@ function fixture(t) {
       value: '',
       classList: { add() {}, remove() {}, toggle() {} },
       addEventListener() {},
-      setAttribute() {},
+      setAttribute(key, value) {
+        this[key] = value;
+      },
       prepend() {},
       append() {},
       contains: () => false,
@@ -34,7 +38,11 @@ function fixture(t) {
   }
   const lock = element();
   globalThis.document = {
-    createElement: element,
+    createElement: () => {
+      const el = element();
+      created.push(el);
+      return el;
+    },
     getElementById: element,
     querySelectorAll: () => [lock],
     addEventListener: (key, cb) => {
@@ -74,26 +82,17 @@ function fixture(t) {
     highlight() {},
     set(data) {
       group.clear();
-      for (const axis of ['x', 'y'])
-        data[axis].forEach((position, index) => {
-          const line = new THREE.Line(
-            new THREE.BufferGeometry().setFromPoints([
-              new THREE.Vector3(
-                axis === 'x' ? position : -1000,
-                axis === 'y' ? position : -1000,
-                0,
-              ),
-              new THREE.Vector3(
-                axis === 'x' ? position : 10000,
-                axis === 'y' ? position : 10000,
-                0,
-              ),
-            ]),
-            new THREE.LineBasicMaterial(),
-          );
-          line.userData.gridId = `${axis}:${index}`;
-          group.add(line);
-        });
+      for (const segment of gridSegments(data)) {
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(...segment.start, 0),
+            new THREE.Vector3(...segment.end, 0),
+          ]),
+          new THREE.LineBasicMaterial(),
+        );
+        line.userData.gridId = segment.pickId;
+        group.add(line);
+      }
     },
   };
   const camera = new THREE.OrthographicCamera(-10000, 10000, 10000, -10000, 0.1, 50000);
@@ -133,6 +132,7 @@ function fixture(t) {
   });
   return {
     editor,
+    created,
     fields,
     controls,
     project,
@@ -197,4 +197,36 @@ test('pointer cancellation discards a preview and preserves a previously disable
   assert.deepEqual(f.project, before);
   assert.equal(f.controls.enabled, false);
   assert.equal(f.counts().checkpoints, 0);
+});
+
+test('endpoint gestures tilt a line without moving its opposite endpoint and commit once', (t) => {
+  const f = fixture(t);
+  f.editor.start();
+  f.hostEvents.pointerdown(f.event());
+  f.hostEvents.pointerup(f.event());
+  const handle = f.created.find((el) => el.dataset.endpoint === '1');
+  f.hostEvents.pointerdown(f.event({ target: handle, clientX: 650, clientY: 25 }));
+  f.hostEvents.pointermove(f.event({ target: handle, clientX: 700, clientY: 25 }));
+  assert.equal(f.project.grid.lines, undefined);
+  f.hostEvents.pointerup(f.event({ target: handle, clientX: 700, clientY: 25 }));
+  assert.deepEqual(f.project.grid.lines.x[1].start, [3000, -1500]);
+  assert.deepEqual(f.project.grid.lines.x[1].end, [4000, 9500]);
+  assert.equal(f.counts().checkpoints, 1);
+});
+test('new lines require two points, Escape discards the first, and creation can be undone as one change', (t) => {
+  const f = fixture(t);
+  f.editor.start();
+  f.fields.get('[data-grid-axis]').value = 'x';
+  f.fields.get('[data-add]').onclick();
+  f.hostEvents.pointerdown(f.event({ clientX: 600, clientY: 450 }));
+  assert.equal(f.project.grid.lines, undefined);
+  f.docEvents.keydown(f.event({ key: 'Escape' }));
+  assert.equal(f.editor.active, true);
+  assert.equal(f.counts().checkpoints, 0);
+  f.fields.get('[data-add]').onclick();
+  f.hostEvents.pointerdown(f.event({ clientX: 600, clientY: 450 }));
+  f.hostEvents.pointerdown(f.event({ clientX: 750, clientY: 300 }));
+  assert.deepEqual(f.project.grid.lines.x[3].start, [2000, 1000]);
+  assert.deepEqual(f.project.grid.lines.x[3].end, [5000, 4000]);
+  assert.equal(f.counts().checkpoints, 1);
 });

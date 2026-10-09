@@ -601,7 +601,8 @@ export class DrawingManager {
         }
         if (
           !a.editable ||
-          (r.type === 'AS' && ['drawing.number', 'drawing.name'].includes(a.key))
+          (r.type === 'AS' && ['drawing.number', 'drawing.name'].includes(a.key)) ||
+          (r.type === 'SP' && a.key === 'drawing.name')
         ) {
           const span = document.createElement('span');
           span.textContent = attributeValue(a.key, context) || '—';

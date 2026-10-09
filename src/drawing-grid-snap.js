@@ -1,4 +1,11 @@
+import { gridSegments } from './grid-geometry.js';
 export function snapDrawingGrid(point, grid, tolerance) {
+  if (grid.lines)
+    return snapDrawingLines(
+      point,
+      gridSegments(grid).map((line) => [line.start, line.end]),
+      tolerance,
+    );
   const nearest = (values, value) =>
       values.reduce(
         (best, v) => (Math.abs(v - value) < Math.abs(best - value) ? v : best),

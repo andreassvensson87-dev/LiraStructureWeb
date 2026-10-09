@@ -1,3 +1,4 @@
+import { validateSeries } from '../numbering/rules.js';
 import { isPhysical } from '../model-object.js';
 import { partStatus } from '../part-marks.js';
 import { objectQuantities } from '../model/object-quantities.js';
@@ -73,11 +74,12 @@ export function addToAssembly(state, secondaryIds, mainId) {
   const assembly = createAssembly(state, [...ids, mainId], mainId);
   return { assemblies: [...(state.assemblies || []), assembly], drawings: state.drawings };
 }
-export function updateAssembly(state, id, { memberIds, mainId, name }) {
+export function updateAssembly(state, id, { memberIds, mainId, name, series }) {
   const old = (state.assemblies || []).find((a) => a.id === id);
   if (!old) throw Error('Assemblyn finns inte längre.');
   const next = {
     ...old,
+    ...(series ? { series: { ...validateSeries(series) } } : {}),
     memberIds: validatedMembers(state, memberIds, mainId, id),
     mainId,
     name:
@@ -89,13 +91,14 @@ export function updateAssembly(state, id, { memberIds, mainId, name }) {
     old.memberIds.length !== next.memberIds.length ||
     old.memberIds.some((id) => !next.memberIds.includes(id));
   const mainChanged = old.mainId !== next.mainId;
-  if (!membershipChanged && !mainChanged && old.name === next.name)
+  const seriesChanged = JSON.stringify(old.series) !== JSON.stringify(next.series);
+  if (!membershipChanged && !mainChanged && !seriesChanged && old.name === next.name)
     return { assemblies: state.assemblies, drawings: state.drawings };
   const peers = old.typeKey ? state.assemblies.filter((a) => a.typeKey === old.typeKey) : [old];
-  const renameType = !membershipChanged && !mainChanged && old.name !== next.name;
+  const renameType = !membershipChanged && !mainChanged && !seriesChanged && old.name !== next.name;
   const drawings = state.drawings.map((drawing) => {
     if (renameType && old.typeKey && drawing.type === 'AS' && drawing.assemblyKey === old.typeKey)
-      return { ...drawing, name: next.name };
+      return { ...drawing, name: old.mark };
     if (drawing.type !== 'AS' || drawing.assemblyId !== id) return drawing;
     if (peers.length > 1)
       return (
@@ -123,12 +126,12 @@ export function updateAssembly(state, id, { memberIds, mainId, name }) {
       );
     }
     edit.sourceId = next.mainId;
-    edit.name = next.name;
+    edit.name = next.mark;
     edit.number = next.mark;
     edit.mark = next.mark;
     for (const view of edit.sheet?.views || [])
       if (view.source?.objectId) view.source.objectId = next.mainId;
-    if (membershipChanged || mainChanged) {
+    if (membershipChanged || mainChanged || seriesChanged) {
       edit.needsReview = true;
       delete edit.reviewed;
     }
@@ -146,6 +149,7 @@ export function updateAssembly(state, id, { memberIds, mainId, name }) {
     ...(renameType && state.assemblyNumbering
       ? {
           assemblyNumbering: {
+            ...state.assemblyNumbering,
             registry: state.assemblyNumbering.registry.map((r) =>
               r.key === old.typeKey ? { ...r, name: next.name } : r,
             ),
@@ -212,13 +216,13 @@ export function createAssemblyDrawing(state, assemblyId, preset, uuid = () => cr
       id: uuid(),
       type: 'AS',
       number: assembly.mark,
-      name: assembly.name,
+      name: assembly.mark,
       mark: assembly.mark,
       assemblyId,
       ...(assembly.typeKey
         ? {
             assemblyKey: assembly.typeKey,
-            assemblyMembers: assemblyMemberKeys(assembly, state.objects),
+            assemblyMembers: assemblyMemberKeys(assembly, state.objects, state.parts),
           }
         : {}),
       sourceId: assembly.mainId,
@@ -231,6 +235,20 @@ export function syncAssemblyDrawingIdentity(state) {
   const assemblies = new Map((state.assemblies || []).map((a) => [a.id, a]));
   let changed = false;
   const drawings = state.drawings.map((drawing) => {
+    if (drawing.type === 'SP') {
+      const source = state.objects.find((object) => object.id === drawing.sourceId);
+      if (!source) return drawing;
+      const status = partStatus(source, state.objects, state.parts);
+      if (
+        status.valid &&
+        status.key === drawing.partKey &&
+        (drawing.name !== status.mark || drawing.mark !== status.mark)
+      ) {
+        changed = true;
+        return { ...drawing, name: status.mark, mark: status.mark };
+      }
+      return drawing;
+    }
     if (drawing.type === 'AS' && drawing.assemblyKey) {
       const resolved = resolveAssemblyDrawing(drawing, state);
       if (resolved && JSON.stringify(resolved) !== JSON.stringify(drawing)) {
@@ -243,12 +261,12 @@ export function syncAssemblyDrawingIdentity(state) {
     if (
       !assembly ||
       (drawing.number === assembly.mark &&
-        drawing.name === assembly.name &&
+        drawing.name === assembly.mark &&
         drawing.mark === assembly.mark)
     )
       return drawing;
     changed = true;
-    return { ...drawing, number: assembly.mark, name: assembly.name, mark: assembly.mark };
+    return { ...drawing, number: assembly.mark, name: assembly.mark, mark: assembly.mark };
   });
   return changed ? drawings : state.drawings;
 }

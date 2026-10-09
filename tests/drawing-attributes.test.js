@@ -53,3 +53,12 @@ test('custom attributes keep stable identifiers and support applicability', () =
   assert.equal(updateDrawingAttribute(records, 'b', attribute, '5'), records);
   assert.throws(() => updateDrawingAttribute(records, 'a', attribute, 'text'));
 });
+
+test('single-part drawing name is its part mark in the list and title block and cannot be overridden', () => {
+  const record = { id: 'd', type: 'SP', number: 'SP-001', name: 'Legacy title', mark: 'P100' };
+  assert.equal(attributeValue('drawing.name', drawingAttributeContext(record)), 'P100');
+  assert.throws(
+    () => updateDrawingAttribute([record], 'd', field('drawing.name'), 'Other title'),
+    /Part mark/,
+  );
+});

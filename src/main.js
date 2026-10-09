@@ -1,3 +1,5 @@
+import { installAssemblyPanel } from './inspector/assembly-panel.js';
+import { objectSeries, validateSeries } from './numbering/rules.js';
 import { createGridModelEditor } from './app/grid-model-editor.js';
 import { installDrawingTemplates } from './install-drawing-templates.js';
 import { installReports } from './report-module.js';
@@ -75,6 +77,8 @@ import { createRotationController } from './model/ui/rotation-controller.js';
 import { createSelectionController } from './model/ui/selection-controller.js';
 import { createPlateController } from './model/ui/plate-controller.js';
 import { createModelEditorState } from './model/editor-state.js';
+import { modelSelection } from './model/selection-mode.js';
+import { installModelChrome } from './model/ui/model-chrome.js';
 import { hasExactProfile, setModelProfilesExact } from './profile-detail.js';
 const ui = createModelEditorState();
 import { createToolSession, resetToolLength, resetToolInteraction } from './model/tool-session.js';
@@ -496,6 +500,7 @@ let renderedObjects = [];
 let renderedById = new Map();
 let renderedSelection = new Set();
 let snapIndex = null;
+let assemblyPanel;
 function render({ selectionOnly = false } = {}) {
   const renderStarted = performance.now();
   modelFilter?.sync(project);
@@ -601,6 +606,7 @@ function render({ selectionOnly = false } = {}) {
     planView?.sync();
     if (drawingManager?.dialog.open) drawingManager.render();
   }
+  assemblyPanel?.sync();
   interactionTimings.record('otherUiMs', uiStarted);
 }
 function setSelection(ids, keepTab = false) {
@@ -617,10 +623,13 @@ function select(id, additive = false, keepTab = false) {
   const ids = additive ? new Set(ui.selectedIds) : new Set();
   if (id) {
     if (additive && ids.has(id)) {
-      for (const memberId of groupSelection(project.objects, [id])) ids.delete(memberId);
-    } else ids.add(id);
+      for (const memberId of userSelection([id])) ids.delete(memberId);
+    } else for (const memberId of userSelection([id])) ids.add(memberId);
   }
   setSelection(ids, keepTab);
+}
+function userSelection(ids) {
+  return modelSelection(project.objects, project.assemblies, ids, ui.selectionMode);
 }
 function selectModelOrReference(id, additive = false) {
   const reference = !id && referenceModels?.pickReference(raycaster);
@@ -1347,7 +1356,7 @@ const { cancelBox, beginBox } = createSelectionController({
   ray,
   select: selectModelOrReference,
   selectionHit,
-  setSelection,
+  setSelection: (ids) => setSelection(userSelection(ids)),
   isVisible,
 });
 const { rotationHandle, rotationLine, showRotationLine, pickRotationAxis } =
@@ -1939,7 +1948,7 @@ const settingsController = createSettingsController({
   onClose: () => {
     if (tools.drawing) renderer.domElement.focus({ preventScroll: true });
   },
-  editGrid: () => gridEditor.start(),
+  editGrid: (selection) => gridEditor.start(selection),
   onGridChanged: () => {
     setDrawing(false);
     grid.set({ ...project.grid, z: levelElevation(project.levels) });
@@ -2327,6 +2336,27 @@ const partLabel = document.createElement('div');
 partLabel.className = 'part-mark-row';
 partLabel.innerHTML = '<span>Part mark</span><strong id=object-part-mark></strong>';
 identityFields.append(partLabel);
+const partSeriesFields = document.createElement('div');
+partSeriesFields.className = 'numbering-series-fields';
+identityFields.append(partSeriesFields);
+for (const [key, title] of [
+  ['prefix', 'Prefix'],
+  ['start', 'Startnummer'],
+]) {
+  const label = document.createElement('label');
+  label.textContent = title;
+  const input = document.createElement('input');
+  input.id = `part-series-${key}`;
+  input.setAttribute('aria-label', key === 'prefix' ? 'Partprefix' : 'Partstartnummer');
+  input.type = key === 'start' ? 'number' : 'text';
+  if (key === 'start') {
+    input.min = 1;
+    input.max = 999999999;
+    input.step = 1;
+  } else input.maxLength = 16;
+  label.append(input);
+  partSeriesFields.append(label);
+}
 $('object-prefix').parentElement.firstChild.textContent = 'Objektprefix';
 identityFields.addEventListener('input', (e) => e.stopPropagation());
 const commitIdentity = (e) => {
@@ -2337,10 +2367,27 @@ const commitIdentity = (e) => {
       ...source,
       prefix: $('object-prefix').value.trim().toUpperCase(),
       number: Number($('object-number').value),
+      ...(isPhysical(source)
+        ? {
+            partSeries: {
+              prefix: $('part-series-prefix').value.trim(),
+              start: Number($('part-series-start').value),
+            },
+          }
+        : {}),
     },
     error = identityError(updated, project.objects);
   $('inspector-error').textContent = error;
-  if (error || (source.prefix === updated.prefix && source.number === updated.number)) return;
+  let seriesError = '';
+  try {
+    if (isPhysical(source)) {
+      validateSeries(updated.partSeries);
+    }
+  } catch (problem) {
+    seriesError = problem.message;
+  }
+  $('inspector-error').textContent = error || seriesError;
+  if (error || seriesError || JSON.stringify(source) === JSON.stringify(updated)) return;
   inspector?.finish();
   checkpoint();
   project.objects = project.objects.map((s) => (s.id === updated.id ? updated : s));
@@ -2379,6 +2426,7 @@ function syncIdentity() {
   if (!root) return;
   const s = project.objects.find((s) => s.id === ui.selected);
   root.hidden = !s;
+  $('mode-label').hidden = !!s && isPhysical(s);
   root.inert = !!tools.operation;
   const shortcut = $('inspector-open-drawing'),
     record = selectedPartDrawing();
@@ -2393,6 +2441,12 @@ function syncIdentity() {
       : partStatus(s, project.objects, project.parts).label;
     $('object-prefix').value = s.prefix || '';
     $('object-number').value = s.number || '';
+    const physical = isPhysical(s);
+    $('object-prefix').closest('label').hidden = physical;
+    $('object-number').closest('label').hidden = physical;
+    partLabel.hidden = partSeriesFields.hidden = !physical;
+    const series = objectSeries(s);
+    for (const key of ['prefix', 'start']) $(`part-series-${key}`).value = series[key];
   }
 }
 function changeVisibility(action) {
@@ -2406,6 +2460,7 @@ function changeVisibility(action) {
 }
 modelTree = new ModelTree($('object-list'), {
   selectGroup: (ids, add) => {
+    ids = [...userSelection(ids)];
     if (ids.some((id) => !modelFilter.allows(id))) {
       modelFilter.reset();
       modelFilter.sync(project);
@@ -2619,7 +2674,7 @@ function updateObjectHover(e) {
           ? editablePlate(source)
           : editableSweep(source)));
   objectFeedback.setHover(
-    eligible ? [id] : [],
+    eligible ? (!tools.operation && !tools.drawing ? [...userSelection([id])] : [id]) : [],
     'canvas',
     fit ? objectFeedback.referenceCount : null,
   );
@@ -2807,6 +2862,15 @@ sweepPropertyUI = createPropertyCopyUI('sweep');
 platePropertyUI = createPropertyCopyUI('plate');
 restoreSweepDefaults();
 createGroupedToolbox(document.querySelector('.toolbox'));
+const editGridButton = document.createElement('button');
+editGridButton.type = 'button';
+editGridButton.id = 'edit-grid';
+editGridButton.setAttribute('aria-label', 'Redigera stomlinjer');
+editGridButton.title = 'Redigera stomlinjer';
+editGridButton.innerHTML =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v18M18 3v18M3 6h18M3 18h18"/></svg><span>Stomlinjer</span>';
+editGridButton.onclick = () => gridEditor.start();
+document.querySelector('#tools-panel-helpers .tool-group-items').append(editGridButton);
 updateForm();
 render();
 navigation.controls.update();
@@ -2884,6 +2948,7 @@ gridEditor = createGridModelEditor({
   elevation: () => levelElevation(project.levels),
   begin: () => {
     inspector.finish();
+    setDrawing(false);
     cancelBox();
     pendingPointer = null;
     select(null);
@@ -2900,6 +2965,37 @@ gridEditor = createGridModelEditor({
     $('status').textContent = text;
   },
   undo: restore,
+});
+
+assemblyPanel = installAssemblyPanel({
+  getState: () => ({
+    ...project,
+    selectedIds: ui.selectedIds,
+    mode: ui.selectionMode,
+    operation: tools.operation,
+    drawing: tools.drawing,
+  }),
+  commit: (patch) => {
+    inspector.finish();
+    checkpoint();
+    Object.assign(project, patch);
+    render();
+  },
+  selectPart: (id) => setSelection([id], true),
+});
+assemblyPanel.sync();
+installModelChrome({
+  getSelectionMode: () => ui.selectionMode,
+  setSelectionMode: (mode) => {
+    inspector.finish();
+    cancelBox();
+    ui.selectionMode = mode;
+    if (mode === 'assembly' && ui.selectedIds.size && !tools.operation && !tools.drawing)
+      setSelection(userSelection(ui.selectedIds), true);
+    else render({ selectionOnly: true });
+  },
+  front: () => navigation.lookAlongAxis('Y', -1),
+  side: () => navigation.lookAlongAxis('X', 1),
 });
 
 if (import.meta.env.DEV && new URLSearchParams(location.search).get('memory') === '1') {

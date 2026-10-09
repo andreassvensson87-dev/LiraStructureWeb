@@ -1,3 +1,5 @@
+import { validateGridGeometry } from '../grid-geometry.js';
+import { validateSeries } from '../numbering/rules.js';
 import { isComponent, resolveComponent, updateComponents } from '../components/fit.js';
 import { captureProject, PROJECT_SCHEMA_VERSION } from './project-state.js';
 import { validateObject, isCut, isPhysical } from '../model-object.js';
@@ -37,6 +39,8 @@ export function validateProjectFile(project) {
       fail('Objekten behöver unika identiteter.');
     const error = validateObject(object);
     if (error) fail(`${object.name || object.id}: ${error}`);
+    for (const key of ['partSeries', 'assemblySeries'])
+      if (object[key]) validateSeries(object[key]);
     objects.set(object.id, object);
   }
   for (const object of project.objects) {
@@ -78,6 +82,7 @@ export function validateProjectFile(project) {
     fail('Ogiltiga stomlinjer.');
   for (const axis of ['x', 'y']) parsePositions(project.grid[axis].join(' '));
   validateGridLabels(project.grid);
+  validateGridGeometry(project.grid);
   if (!record(project.levels) || !Array.isArray(project.levels.items)) fail('Ogiltiga nivåer.');
   validateLevels(project.levels);
   if (
@@ -103,6 +108,7 @@ export function validateProjectFile(project) {
     assemblyMarks = new Map(),
     members = new Set();
   for (const assembly of project.assemblies) {
+    if (assembly.series) validateSeries(assembly.series);
     if (
       !record(assembly) ||
       !identity(assembly.id) ||

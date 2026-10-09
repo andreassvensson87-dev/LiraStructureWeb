@@ -1,0 +1,88 @@
+#inspector-properties.assembly-inspector-active > :not(#assembly-inspector) {
+  display: none;
+}
+#assembly-inspector[hidden] {
+  display: none;
+}
+#assembly-inspector h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+#assembly-inspector h2 {
+  font-size: 13px;
+  margin: 22px 0 10px;
+}
+.assembly-inspector-mark {
+  color: #637a83;
+  font-size: 12px;
+}
+.assembly-series-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.assembly-series-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.assembly-inspector-error {
+  color: #ad3434;
+  font-size: 12px;
+}
+.assembly-inspector-error:empty {
+  display: none;
+}
+.assembly-member-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.assembly-member-list li {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e0e8e9;
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
+}
+.assembly-member-list li.assembly-main-member {
+  border-color: #75a99a;
+  background: #f1f7f4;
+}
+#assembly-inspector .assembly-member-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 7px;
+  text-align: left;
+}
+.assembly-member-pick strong,
+.assembly-member-pick span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assembly-member-pick span {
+  font-size: 11px;
+  color: #637a83;
+}
+#assembly-inspector .assembly-member-action {
+  padding: 5px;
+  width: 28px;
+  border: 0;
+  background: transparent;
+  color: #637a83;
+}
+
+body:has(.assembly-inspector-active) .selection-type-dock {
+  display: none;
+}

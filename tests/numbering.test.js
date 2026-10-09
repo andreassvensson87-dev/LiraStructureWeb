@@ -59,7 +59,7 @@ test('preview groups equal parts and assemblies and does not assign numbers befo
     ],
   );
   assert.equal(plan.rows[0].previous, '—');
-  assert.equal(plan.rows[0].proposed, 'B-001');
+  assert.equal(plan.rows[0].proposed, 'B1');
   const patch = applyNumbering(plan, state);
   assert.deepEqual(state, before);
   Object.assign(state, patch);
@@ -72,18 +72,15 @@ test('new series settings apply only to new types and preserve historical number
   run(state);
   state.objects.push({ ...beam('new'), width: 150 });
   const settings = defaultNumberingSettings();
-  settings.series.sweep = { prefix: 'SB', start: 101 };
+  state.objects.at(-1).partSeries = { prefix: 'SB', start: 101 };
   const plan = planNumbering(state, settings);
-  assert.equal(plan.rows.find((r) => r.status === 'new').proposed, 'SB-101');
-  assert.equal(
-    plan.rows.find((r) => r.kind === 'part' && r.status === 'unchanged').proposed,
-    'B-001',
-  );
+  assert.equal(plan.rows.find((r) => r.status === 'new').proposed, 'SB101');
+  assert.equal(plan.rows.find((r) => r.kind === 'part' && r.status === 'unchanged').proposed, 'B1');
   const fresh = fixture();
-  settings.series.assembly = { prefix: 'AS', start: 20 };
+  for (const object of fresh.objects) object.assemblySeries = { prefix: 'AS', start: 20 };
   assert.equal(
     planNumbering(fresh, settings).rows.find((r) => r.kind === 'assembly').proposed,
-    'AS-020',
+    'AS20',
   );
 });
 test('existing assembly callers preserve provisional custom marks when no series is supplied', () => {
@@ -98,10 +95,7 @@ test('changed geometry produces changed rows and a split drawing while preservin
   state.drawings = [drawing(state, 'a', 'SP-001')];
   state.objects[0].width = 140;
   const plan = planNumbering(state);
-  assert.equal(
-    plan.rows.find((r) => r.kind === 'part' && r.status === 'changed').previous,
-    'B-001',
-  );
+  assert.equal(plan.rows.find((r) => r.kind === 'part' && r.status === 'changed').previous, 'B1');
   const next = applyNumbering(plan, state, undefined, () => 'cloned-drawing');
   assert.equal(next.drawings.length, 2);
   assert.equal(next.drawings.find((d) => d.id === 'SP-001').sourceId, 'b');
@@ -150,6 +144,8 @@ test('detail-only and assembly-only runs preserve the other numbering state', ()
   assert.deepEqual(next.assemblies, state.assemblies);
   assert.deepEqual(next.assemblyNumbering, state.assemblyNumbering);
   const assembliesOnly = { ...defaultNumberingSettings(), parts: false };
+  assert.throws(() => planNumbering(state, assembliesOnly), /Numrera detaljerna först/);
+  Object.assign(state, next);
   assert.deepEqual(applyNumbering(planNumbering(state, assembliesOnly), state).parts, state.parts);
 });
 test('stale previews and invalid settings cannot be applied', () => {
@@ -185,4 +181,119 @@ test('numbering is a single reversible project change and survives save/load', (
   assert.deepEqual(loaded.assemblyNumbering, state.assemblyNumbering);
   assert.deepEqual(loaded.objects, state.objects);
   assert.deepEqual(history.undo(state), before);
+});
+
+test('per-object series separate equal parts and feed assembly part marks', () => {
+  const state = fixture();
+  for (const object of state.objects)
+    object.partSeries = { prefix: 'P', start: object.id === 'c' || object.id === 'd' ? 200 : 100 };
+  run(state);
+  assert.equal(state.parts.assignments.a.mark, 'P100');
+  assert.equal(state.parts.assignments.c.mark, 'P200');
+  assert.notEqual(state.assemblies[0].mark, state.assemblies[1].mark);
+  assert.ok(state.assemblies.every((a) => assemblyNumberStatus(a, state).valid));
+  state.objects[0].partSeries.start = 300;
+  assert.equal(partStatus(state.objects[0], state.objects, state.parts).valid, false);
+  assert.equal(assemblyNumberStatus(state.assemblies[0], state).valid, false);
+  const plan = planNumbering(state);
+  assert.ok(plan.rows.some((r) => r.kind === 'assembly' && r.status === 'changed'));
+});
+test('tolerances compare to a representative and preserve assembly marks', () => {
+  const state = fixture(),
+    settings = { ...defaultNumberingSettings(), tolerance: 1, assemblyTolerance: 1 };
+  run(state, settings);
+  const original = state.assemblies[0].mark;
+  state.objects[0].end[0] += 0.5;
+  assert.ok(partStatus(state.objects[0], state.objects, state.parts).valid);
+  assert.ok(assemblyNumberStatus(state.assemblies[0], state).valid);
+  run(state, settings);
+  assert.equal(state.assemblies[0].mark, original);
+  state.objects[0].end[0] += 1;
+  assert.equal(partStatus(state.objects[0], state.objects, state.parts).valid, false);
+});
+test('recycling, new-only allocation and renumber-all have distinct effects', () => {
+  const state = fixture();
+  state.assemblies = [];
+  state.objects = [beam('a'), { ...beam('b'), width: 140 }];
+  run(state);
+  state.assemblies = [];
+  state.objects = [
+    { ...beam('b'), width: 140 },
+    { ...beam('c'), width: 180 },
+  ];
+  const recycled = planNumbering(state, { ...defaultNumberingSettings(), reuseOldNumbers: true });
+  assert.equal(recycled.parts.parts.assignments.c.mark, 'B1');
+  assert.equal(planNumbering(state).parts.parts.assignments.c.mark, 'B3');
+  const reset = planNumbering(state, { ...defaultNumberingSettings(), renumberAll: true });
+  assert.equal(reset.parts.parts.assignments.b.mark, 'B1');
+  assert.equal(reset.parts.parts.assignments.c.mark, 'B2');
+});
+test('overlapping series never allocate duplicate marks', () => {
+  const state = fixture();
+  state.assemblies = [];
+  state.objects = [beam('a'), { ...beam('b'), width: 140 }];
+  state.objects[0].partSeries = { prefix: 'P', start: 100 };
+  state.objects[1].partSeries = { prefix: 'P', start: 100 };
+  run(state);
+  assert.deepEqual(
+    Object.values(state.parts.assignments).map((a) => a.mark),
+    ['P100', 'P101'],
+  );
+  const loaded = parseProjectFile(serializeProject(state));
+  assert.deepEqual(loaded.objects[0].partSeries, { prefix: 'P', start: 100 });
+});
+
+test('new-only policy avoids historical types but keeps active equal parts together', () => {
+  const state = fixture();
+  state.assemblies = [];
+  state.objects = [beam('a')];
+  run(state);
+  state.objects = [{ ...beam('b'), width: 150 }];
+  state.assemblies = [];
+  run(state);
+  state.objects.push(beam('c'), beam('d', 200));
+  const compare = planNumbering(state);
+  assert.equal(compare.parts.parts.assignments.c.mark, 'B1');
+  const fresh = planNumbering(state, { ...defaultNumberingSettings(), newParts: 'new' });
+  assert.equal(fresh.parts.parts.assignments.c.mark, 'B3');
+  assert.equal(fresh.parts.parts.assignments.d.mark, 'B3');
+  Object.assign(state, applyNumbering(fresh, state));
+  run(state);
+  assert.equal(state.parts.assignments.c.mark, 'B3');
+});
+test('cross-section tolerances and optional name comparison affect part groups', () => {
+  const state = fixture();
+  state.assemblies = [];
+  state.objects = [beam('a'), { ...beam('b'), width: 100.5, name: 'Annat namn' }];
+  const settings = { ...defaultNumberingSettings(), tolerance: 1 };
+  const equal = planNumbering(state, settings);
+  assert.equal(equal.parts.parts.assignments.a.mark, equal.parts.parts.assignments.b.mark);
+  const named = planNumbering(state, { ...settings, compareNames: true });
+  assert.notEqual(named.parts.parts.assignments.a.mark, named.parts.parts.assignments.b.mark);
+});
+test('assembly series comes from the main part and survives save/load', () => {
+  const state = fixture();
+  state.objects[0].assemblySeries = { prefix: 'AS', start: 3000 };
+  state.objects[2].assemblySeries = { prefix: 'AS', start: 4000 };
+  run(state);
+  assert.deepEqual(
+    state.assemblies.map((a) => a.mark),
+    ['AS3000', 'AS4000'],
+  );
+  const loaded = parseProjectFile(serializeProject(state));
+  assert.ok(loaded.assemblies.every((a) => assemblyNumberStatus(a, loaded).valid));
+});
+
+test('legacy drawing workflows respect the saved object numbering rules', () => {
+  const state = fixture();
+  state.objects[0].partSeries = { prefix: 'P', start: 100 };
+  run(state);
+  const parts = numberParts(state.objects, state.parts);
+  assert.equal(parts.assignments.a.mark, 'P100');
+  assert.ok(state.objects.every((o) => partStatus(o, state.objects, parts).valid));
+  const assemblies = planAssemblyNumbering(state);
+  assert.deepEqual(
+    assemblies.groups.map((g) => g.mark),
+    state.assemblies.map((a) => a.mark),
+  );
 });

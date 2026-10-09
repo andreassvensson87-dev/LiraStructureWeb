@@ -1,9 +1,12 @@
+import { gridSegments } from './grid-geometry.js';
 import { gridLabel } from './grid-labels.js';
 // Intersect a world coordinate plane with the visible rectangle of a section.
 function planeLine(frame, axis, value, [left, bottom, right, top]) {
-  const a = frame.x[axis],
-    b = frame.y[axis],
-    c = value - frame.origin[axis];
+  const normal = Array.isArray(axis) ? axis : [0, 1, 2].map((i) => (i === axis ? 1 : 0));
+  const dot = (vector) => vector.reduce((sum, v, i) => sum + v * normal[i], 0);
+  const a = dot(frame.x),
+    b = dot(frame.y),
+    c = value - dot(frame.origin);
   if (Math.hypot(a, b) < 1e-9) return null;
   const points = [],
     add = (x, y) => {
@@ -28,6 +31,25 @@ function planeLine(frame, axis, value, [left, bottom, right, top]) {
 }
 export function sectionGridLines(grid, frame, bounds) {
   const lines = [];
+  if (grid.lines) {
+    for (const line of gridSegments(grid)) {
+      const dx = line.end[0] - line.start[0],
+        dy = line.end[1] - line.start[1],
+        length = Math.hypot(dx, dy),
+        normal = [-dy / length, dx / length, 0],
+        value = normal[0] * line.start[0] + normal[1] * line.start[1],
+        points = planeLine(frame, normal, value, bounds);
+      if (!points) continue;
+      const same = lines.find((existing) =>
+        points.every((p) =>
+          existing.points.some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6),
+        ),
+      );
+      if (same) same.label += ' / ' + line.label;
+      else lines.push({ label: line.label, points });
+    }
+    return lines;
+  }
   for (const [axis, values] of [
     [0, grid.x],
     [1, grid.y],

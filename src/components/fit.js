@@ -219,6 +219,9 @@ export function updateComponents(before, after) {
               ? stiffenerMembers(component, after)
               : baseplateMembers(component, after);
     for (const member of members) {
+      const old = current.get(member.id);
+      for (const key of ['partSeries', 'assemblySeries'])
+        if (old?.[key]) member[key] = structuredClone(old[key]);
       result.push(
         member.prefix && member.number
           ? member

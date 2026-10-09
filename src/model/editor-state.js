@@ -4,6 +4,7 @@ export function createModelEditorState() {
     showHelpers: true,
     selectedIds: new Set(),
     selected: null,
+    selectionMode: 'part',
     boxMode: false,
     marquee: null,
     transparentView: false,

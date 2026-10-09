@@ -153,6 +153,9 @@ test('preview exposes reasons only for changes and keeps existing number allocat
     'Material ändrat',
   ]);
   assert.ok(plan.rows.filter((r) => r.status !== 'changed').every((r) => r.reasons.length === 0));
-  assert.deepEqual(plan.parts.parts, numberParts(state.objects, parts));
+  assert.deepEqual(
+    plan.parts.parts,
+    numberParts(state.objects, parts, {}, { ...defaultNumberingSettings(), assemblies: false }),
+  );
   assert.deepEqual(state, before);
 });

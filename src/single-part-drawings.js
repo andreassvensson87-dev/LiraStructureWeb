@@ -6,8 +6,8 @@ export function nextDrawingNumber(drawings, type = 'SP') {
   while (drawings.some((d) => d.number === `${type}-${String(i).padStart(3, '0')}`)) i++;
   return `${type}-${String(i).padStart(3, '0')}`;
 }
-export function planDrawingNumbering(objects, parts, drawings, series = {}) {
-  const nextParts = numberParts(objects, parts, series),
+export function planDrawingNumbering(objects, parts, drawings, series = {}, options) {
+  const nextParts = numberParts(objects, parts, series, options),
     groups = new Map();
   for (const object of objects.filter((o) => isPhysical(o))) {
     const next = nextParts.assignments[object.id];
@@ -73,7 +73,7 @@ export function applyDrawingNumbering(plan, choices = {}, uuid = () => crypto.ra
     record.sourceId = source.id;
     record.partKey = g.key;
     record.mark = g.mark;
-    if (record.name === old.mark) record.name = g.mark;
+    record.name = g.mark;
     for (const annotation of record.annotations || [])
       if (annotation.sourceId) annotation.sourceId = source.id;
     if (changed) {

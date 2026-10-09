@@ -23,6 +23,8 @@ export function partChangeReasons(previousKey, nextKey) {
   )
     return ['Tidigare jämförelsedata saknas'];
   const reasons = [];
+  if (previous.series && !equal(previous.series, next.series)) reasons.push('Nummerserie ändrad');
+  if (!equal(previous.name, next.name)) reasons.push('Detaljnamn ändrat');
   if (!equal(previous.shape, next.shape)) reasons.push('Geometri/profil ändrad');
   if (!equal(previous.material, next.material)) reasons.push('Material ändrat');
   if (!equal(cutsByKind(previous.cuts, true), cutsByKind(next.cuts, true)))
@@ -65,6 +67,8 @@ export function assemblyChangeReasons(assembly, nextKey, currentMembers) {
       if (!old || !now) continue;
       for (const reason of partChangeReasons(old.part, now.part))
         reasons.add(memberReasons[reason] || reason);
+      if (old.mark !== now.mark) reasons.add('Delarnas part marks ändrade');
+      if (!equal(old.series, now.series)) reasons.add('Assemblyserie ändrad');
       if (!equal(old.origin, now.origin)) reasons.add('Delarnas placering ändrad');
       if (!equal(old.axes, now.axes)) reasons.add('Delarnas orientering ändrad');
     }

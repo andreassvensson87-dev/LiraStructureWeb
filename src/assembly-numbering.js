@@ -1,10 +1,12 @@
-import { partKey, partFrame } from './part-marks.js';
+import { assemblySeries } from './assembly-series.js';
+import { matchingKey, allocateMark } from './numbering/rules.js';
+import { partKey, partFrame, partStatus } from './part-marks.js';
 import { assemblyDrawingMatrix, rebaseAssemblyViews } from './assembly-frames.js';
 import { clean } from './model/object-types/shape-key.js';
 import { isPhysical } from './model-object.js';
 
 /** Manufacturing identity plus placement/orientation in the main part's intrinsic frame. */
-export function assemblyMemberKeys(assembly, objects) {
+export function assemblyMemberKeys(assembly, objects, parts) {
   const byId = new Map(objects.map((o) => [o.id, o]));
   if (
     !assembly ||
@@ -19,7 +21,16 @@ export function assemblyMemberKeys(assembly, objects) {
         frame = partFrame(object);
       const token = JSON.stringify({
         main: id === assembly.mainId,
-        part: partKey(object, objects),
+        part:
+          parts?.options && partStatus(object, objects, parts).valid
+            ? parts.assignments[id].key
+            : partKey(object, objects, parts?.options),
+        ...(parts?.options
+          ? {
+              mark: parts.assignments?.[id]?.mark || null,
+              ...(id === assembly.mainId ? { series: assemblySeries(assembly, objects) } : {}),
+            }
+          : {}),
         origin: frame.origin.clone().applyMatrix4(matrix).toArray().map(clean),
         axes: [frame.x, frame.y, frame.z].map((v) =>
           v.clone().transformDirection(matrix).toArray().map(clean),
@@ -29,13 +40,18 @@ export function assemblyMemberKeys(assembly, objects) {
     })
     .sort((a, b) => a.token.localeCompare(b.token) || a.id.localeCompare(b.id));
 }
-export function assemblyKey(assembly, objects) {
-  const members = assemblyMemberKeys(assembly, objects);
+export function assemblyKey(assembly, objects, parts) {
+  const members = assemblyMemberKeys(assembly, objects, parts);
   return members ? JSON.stringify(members.map((m) => m.token)) : null;
 }
 export function assemblyNumberStatus(assembly, state) {
-  const key = assemblyKey(assembly, state.objects);
-  return { key, valid: !!key && key === assembly.typeKey };
+  const key = assemblyKey(assembly, state.objects, state.parts);
+  return {
+    key,
+    valid:
+      !!key &&
+      matchingKey(key, assembly.typeKey, state.assemblyNumbering?.options?.assemblyTolerance),
+  };
 }
 export function drawingForAssembly(state, assembly) {
   return state.drawings.find(
@@ -47,17 +63,19 @@ export function drawingForAssembly(state, assembly) {
 export function drawingAssemblies(record, state) {
   return (state.assemblies || []).filter((a) =>
     record.assemblyKey
-      ? a.typeKey === record.assemblyKey && assemblyKey(a, state.objects) === record.assemblyKey
-      : a.id === record.assemblyId && assemblyKey(a, state.objects),
+      ? a.typeKey === record.assemblyKey && assemblyNumberStatus(a, state).valid
+      : a.id === record.assemblyId && assemblyKey(a, state.objects, state.parts),
   );
 }
 /** Carry member-owned annotations between interchangeable instances, or onto a split copy. */
 export function assignAssemblyDrawing(record, assembly, state) {
   const copy = structuredClone(record),
-    members = assemblyMemberKeys(assembly, state.objects);
+    members = assemblyMemberKeys(assembly, state.objects, state.parts);
   const original = (state.assemblies || []).find((a) => a.id === record.assemblyId);
   const previous =
-    record.assemblyMembers || (original && assemblyMemberKeys(original, state.objects)) || [];
+    record.assemblyMembers ||
+    (original && assemblyMemberKeys(original, state.objects, state.parts)) ||
+    [];
   const remaining = [...members],
     ids = new Map();
   for (const member of previous) {
@@ -113,7 +131,7 @@ export function assignAssemblyDrawing(record, assembly, state) {
   copy.assemblyKey = assembly.typeKey;
   copy.assemblyMembers = members;
   copy.mark = copy.number = assembly.mark;
-  copy.name = assembly.name;
+  copy.name = assembly.mark;
   for (const annotation of copy.annotations || []) {
     if (ids.has(annotation.sourceId)) annotation.sourceId = ids.get(annotation.sourceId);
     for (const ref of annotation.references || [])
@@ -132,16 +150,36 @@ export function resolveAssemblyDrawing(record, state) {
   const assembly = candidates.find((a) => a.id === record.assemblyId) || candidates[0];
   return assembly ? assignAssemblyDrawing(record, assembly, state) : null;
 }
-export function planAssemblyNumbering(state, series) {
+export function planAssemblyNumbering(state, series, options) {
+  options ||= state.parts?.options && {
+    ...state.parts.options,
+    ...state.assemblyNumbering?.options,
+    renumberAll: false,
+  };
   const allocation = series || { prefix: 'A', start: 1 };
-  const registry = structuredClone(state.assemblyNumbering?.registry || []),
+  const registry = structuredClone(
+      options?.renumberAll ? [] : state.assemblyNumbering?.registry || [],
+    ),
     groups = new Map();
+  if (options && !options.renumberAll) {
+    for (const assembly of state.assemblies || []) {
+      const legacy = registry.find(
+        (r) =>
+          r.key === assembly.typeKey &&
+          !JSON.parse(r.key).some((token) => JSON.parse(token).mark !== undefined),
+      );
+      if (legacy && assemblyKey(assembly, state.objects) === assembly.typeKey)
+        legacy.key = assemblyKey(assembly, state.objects, state.parts);
+    }
+  }
   const used = new Set([
-    ...registry.map((r) => r.mark),
+    ...(options?.reuseOldNumbers ? [] : registry.map((r) => r.mark)),
     ...state.drawings.filter((d) => d.type !== 'AS').map((d) => d.number),
   ]);
   for (const assembly of state.assemblies || []) {
-    const key = assemblyKey(assembly, state.objects);
+    let key = assemblyKey(assembly, state.objects, state.parts);
+    if (options && key)
+      key = [...groups.keys()].find((k) => matchingKey(k, key, options.assemblyTolerance)) || key;
     if (!key) {
       used.add(assembly.mark);
       continue;
@@ -149,20 +187,34 @@ export function planAssemblyNumbering(state, series) {
     if (!groups.has(key)) groups.set(key, { key, assemblies: [], candidates: [] });
     groups.get(key).assemblies.push(assembly);
   }
+  if (options && !options.renumberAll)
+    for (const group of groups.values()) {
+      const existing = registry.find((r) =>
+        matchingKey(r.key, group.key, options.assemblyTolerance),
+      );
+      if (existing) used.add(existing.mark);
+    }
   // Reserve existing type numbers first; new split types cannot steal a historical number.
   for (const group of groups.values()) {
-    let identity = registry.find((r) => r.key === group.key);
-    if (!identity) {
-      let mark = group.assemblies.find((a) => {
-        if (!series) return !used.has(a.mark);
-        const number = Number(a.mark.slice(series.prefix.length + 1));
-        return (
-          a.mark.startsWith(series.prefix + '-') &&
-          Number.isSafeInteger(number) &&
-          number >= series.start &&
-          !used.has(a.mark)
+    let identity = options?.renumberAll
+      ? null
+      : registry.find((r) =>
+          options ? matchingKey(r.key, group.key, options.assemblyTolerance) : r.key === group.key,
         );
-      })?.mark;
+    if (identity && options) group.key = identity.key;
+    if (!identity) {
+      let mark = options
+        ? allocateMark(assemblySeries(group.assemblies[0], state.objects), registry, used, options)
+        : group.assemblies.find((a) => {
+            if (!series) return !used.has(a.mark);
+            const number = Number(a.mark.slice(series.prefix.length + 1));
+            return (
+              a.mark.startsWith(series.prefix + '-') &&
+              Number.isSafeInteger(number) &&
+              number >= series.start &&
+              !used.has(a.mark)
+            );
+          })?.mark;
       if (!mark) {
         let i = allocation.start;
         while (used.has(`${allocation.prefix}-${String(i).padStart(3, '0')}`)) i++;
@@ -182,7 +234,13 @@ export function planAssemblyNumbering(state, series) {
     );
     group.requiresChoice = group.candidates.length > 1;
   }
-  return { state, registry, groups: [...groups.values()] };
+  if (options) {
+    const active = new Map([...groups.values()].map((g) => [g.mark, g.key]));
+    for (let i = registry.length - 1; i >= 0; i--)
+      if (active.has(registry[i].mark) && active.get(registry[i].mark) !== registry[i].key)
+        registry.splice(i, 1);
+  }
+  return { state, registry, options, groups: [...groups.values()] };
 }
 export function applyAssemblyNumbering(plan, choices = {}, uuid = () => crypto.randomUUID()) {
   for (const group of plan.groups)
@@ -227,10 +285,13 @@ export function applyAssemblyNumbering(plan, choices = {}, uuid = () => crypto.r
   return {
     assemblies: assemblies.map((a) =>
       plan.groups.some((g) => g.key === a.typeKey && g.assemblies.some((m) => m.id === a.id))
-        ? { ...a, numberedMembers: assemblyMemberKeys(a, plan.state.objects) }
+        ? { ...a, numberedMembers: assemblyMemberKeys(a, plan.state.objects, plan.state.parts) }
         : a,
     ),
     drawings,
-    assemblyNumbering: { registry: plan.registry },
+    assemblyNumbering: {
+      registry: plan.registry,
+      ...(plan.options ? { options: plan.options } : {}),
+    },
   };
 }

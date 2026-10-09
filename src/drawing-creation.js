@@ -19,7 +19,9 @@ export function drawingCreationGroups(state, selection, type = 'all') {
   if (type === 'SP') return parts;
   const assemblies = new Map();
   for (const assembly of state.assemblies || []) {
-    const identityKey = assemblyKey(assembly, state.objects),
+    const identityKey = assemblyNumberStatus(assembly, state).valid
+        ? assembly.typeKey
+        : assemblyKey(assembly, state.objects, state.parts),
       key = `AS:${identityKey || assembly.id}`;
     if (!assemblies.has(key))
       assemblies.set(key, {

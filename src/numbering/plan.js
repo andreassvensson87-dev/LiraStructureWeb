@@ -1,3 +1,6 @@
+import { modelAssemblies } from '../assembly-series.js';
+import { partStatus } from '../part-marks.js';
+import { validateSeries } from './rules.js';
 import { planDrawingNumbering, applyDrawingNumbering } from '../single-part-drawings.js';
 import {
   planAssemblyNumbering,
@@ -11,6 +14,15 @@ import { isPhysical } from '../model-object.js';
 export const defaultNumberingSettings = () => ({
   parts: true,
   assemblies: true,
+  objectSeries: true,
+  renumberAll: false,
+  reuseOldNumbers: false,
+  newParts: 'compare',
+  modifiedParts: 'compare',
+  compareHoles: true,
+  compareNames: false,
+  tolerance: 0,
+  assemblyTolerance: 0,
   series: {
     sweep: { prefix: 'B', start: 1 },
     plate: { prefix: 'P', start: 1 },
@@ -19,13 +31,16 @@ export const defaultNumberingSettings = () => ({
 });
 export function validateNumberingSettings(settings) {
   if (!settings?.parts && !settings?.assemblies) throw Error('Välj detaljer eller assemblies.');
-  for (const type of ['sweep', 'plate', 'assembly']) {
-    const series = settings.series?.[type];
-    if (!series || !/^[\p{L}\p{N}_-]{1,16}$/u.test(series.prefix))
-      throw Error('Prefix: 1–16 bokstäver, siffror, _ eller -.');
-    if (!Number.isSafeInteger(series.start) || series.start < 1 || series.start > 999999999)
-      throw Error('Startnummer: ett heltal mellan 1 och 999999999.');
-  }
+  if (
+    !Number.isFinite(settings.tolerance) ||
+    settings.tolerance < 0 ||
+    !Number.isFinite(settings.assemblyTolerance) ||
+    settings.assemblyTolerance < 0
+  )
+    throw Error('Toleranser måste vara noll eller positiva tal i mm.');
+  for (const policy of ['newParts', 'modifiedParts'])
+    if (!['compare', 'new'].includes(settings[policy])) throw Error('Ogiltig numreringsregel.');
+  for (const series of Object.values(settings.series || {})) validateSeries(series);
   return settings;
 }
 export function numberingStamp(state) {
@@ -46,11 +61,35 @@ function description(object) {
 export function planNumbering(state, settings = defaultNumberingSettings()) {
   validateNumberingSettings(settings);
   const snapshot = structuredClone(state);
+  if (settings.assemblies && settings.objectSeries) snapshot.assemblies = modelAssemblies(snapshot);
   const parts = settings.parts
-    ? planDrawingNumbering(snapshot.objects, snapshot.parts, snapshot.drawings, settings.series)
+    ? planDrawingNumbering(
+        snapshot.objects,
+        snapshot.parts,
+        snapshot.drawings,
+        settings.series,
+        settings.objectSeries ? settings : undefined,
+      )
     : null;
+  if (
+    settings.objectSeries &&
+    settings.assemblies &&
+    !settings.parts &&
+    (snapshot.assemblies || []).some((a) =>
+      a.memberIds.some((id) => {
+        const object = snapshot.objects.find((o) => o.id === id);
+        return !object || !partStatus(object, snapshot.objects, snapshot.parts).valid;
+      }),
+    )
+  )
+    throw Error('Numrera detaljerna först, eller välj både detaljer och assemblies.');
+  const assemblyState = { ...snapshot, parts: parts?.parts || snapshot.parts };
   const assemblies = settings.assemblies
-    ? planAssemblyNumbering(snapshot, settings.series.assembly)
+    ? planAssemblyNumbering(
+        assemblyState,
+        settings.objectSeries ? undefined : settings.series.assembly,
+        settings.objectSeries ? settings : undefined,
+      )
     : null;
   if (
     assemblies &&
@@ -119,7 +158,7 @@ export function planNumbering(state, settings = defaultNumberingSettings()) {
               : assemblyChangeReasons(
                   assembly,
                   group.key,
-                  assemblyMemberKeys(assembly, snapshot.objects),
+                  assemblyMemberKeys(assembly, snapshot.objects, assemblyState.parts),
                 )
             : [],
           label: `Assembly · ${group.name}`,

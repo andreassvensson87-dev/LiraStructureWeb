@@ -1,0 +1,220 @@
+body:has(.model-statusbar) > main {
+  height: calc(100dvh - 98px);
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+main > aside.model-inspector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+.model-inspector-content {
+  padding: 16px 12px;
+  min-width: 0;
+  overflow-y: auto;
+}
+.model-inspector > .inspector-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 4px;
+  border: 0;
+  border-left: 1px solid #e7edee;
+  background: #fcfdfd;
+}
+.model-inspector > .inspector-tabs button {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  position: relative;
+  color: #647a83;
+}
+.model-inspector > .inspector-tabs button svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+.model-inspector > .inspector-tabs button[aria-selected='true'] {
+  color: #17654f;
+  background: #eaf3ef;
+}
+.model-inspector > .inspector-tabs button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: #287c65;
+}
+body > footer.model-statusbar {
+  height: 44px;
+  flex-wrap: nowrap;
+  padding: 0 12px;
+  background: #fff;
+  gap: 10px;
+  position: relative;
+  z-index: 25;
+}
+.model-bottom-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.model-selection-switch {
+  display: flex;
+  border: 1px solid #dfe8ea;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f7fafb;
+}
+.model-selection-switch button {
+  border: 0;
+  border-radius: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: transparent;
+}
+.model-selection-switch button[aria-pressed='true'] {
+  background: #203c45;
+  color: #fff;
+}
+.model-view-menu {
+  position: relative;
+  border-left: 1px solid #e1e8ea;
+  padding-left: 10px;
+}
+.model-view-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.model-view-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+.model-view-popup {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 238px;
+  max-height: min(480px, calc(100dvh - 120px));
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #dfe8ea;
+  border-radius: 8px;
+  box-shadow: 0 5px 22px #172b3220;
+}
+.model-view-popup button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 8px;
+  border: 0;
+  font-size: 12px;
+  text-align: left;
+}
+.model-view-popup button svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.model-view-popup button[aria-pressed='true'] {
+  background: #eaf3ef;
+  color: #17654f;
+}
+.model-bottom-controls .view-controls {
+  position: static;
+  display: flex;
+  padding: 0;
+  gap: 2px;
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.model-bottom-controls .view-controls button {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+}
+.model-bottom-controls .view-controls svg {
+  width: 18px;
+  height: 18px;
+}
+@media (max-width: 800px) {
+  body:has(.model-statusbar) > main {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .model-bottom-controls {
+    gap: 6px;
+  }
+  .model-selection-switch button {
+    padding: 6px 8px;
+  }
+  .model-statusbar .view-controls #top {
+    display: none;
+  }
+}
+@media (max-width: 580px) {
+  body:has(.model-statusbar) > main {
+    height: auto;
+  }
+  .model-inspector-content {
+    max-height: 45dvh;
+  }
+  body > footer.model-statusbar {
+    position: sticky;
+    bottom: 0;
+    padding: 0 6px;
+  }
+  .model-statusbar #snap-status,
+  .model-statusbar .pwa-status {
+    display: none;
+  }
+  .model-statusbar .view-controls #iso {
+    display: none;
+  }
+}
+
+.model-bottom-controls .level-controls {
+  position: static;
+  z-index: auto;
+  flex-shrink: 0;
+  background: #f7fafb;
+  padding: 2px;
+}
+.model-bottom-controls .level-controls select {
+  max-width: 180px;
+}
+@media (max-width: 800px) {
+  .model-bottom-controls .level-controls select {
+    max-width: 130px;
+  }
+}
+@media (max-width: 580px) {
+  .model-bottom-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex-shrink: 1;
+  }
+  body > footer.model-statusbar {
+    height: auto;
+    min-height: 44px;
+    padding-block: 4px;
+  }
+  .model-bottom-controls .level-controls select {
+    max-width: 110px;
+  }
+}

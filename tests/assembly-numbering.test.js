@@ -160,7 +160,7 @@ test('renaming a shared type updates all names; editing representative preserves
   draw(state);
   Object.assign(state, updateAssembly(state, 'one', { ...state.assemblies[0], name: 'Nytt namn' }));
   assert.ok(state.assemblies.every((a) => a.name === 'Nytt namn'));
-  assert.equal(state.drawings[0].name, 'Nytt namn');
+  assert.equal(state.drawings[0].name, state.assemblies[0].mark);
   Object.assign(state, updateAssembly(state, 'one', { ...state.assemblies[0], mainId: 'b' }));
   assert.equal(state.drawings[0].assemblyId, 'two');
   parseProjectFile(serializeProject(state));
@@ -218,14 +218,14 @@ test('a split with a different main preserves existing paper projection and maps
   assert.ok(projected.distanceTo(oldPoint) < 1e-8);
 });
 
-test('legacy renaming changes only the selected assembly drawing', () => {
+test('legacy assembly renaming keeps drawing names equal to assembly marks', () => {
   const state = fixture();
   state.drawings = state.assemblies.map((a, i) =>
     createAssemblyDrawing(state, a.id, {}, () => `d${i}`),
   );
   Object.assign(state, updateAssembly(state, 'one', { ...state.assemblies[0], name: 'Ny' }));
-  assert.equal(state.drawings[0].name, 'Ny');
-  assert.equal(state.drawings[1].name, 'Kopia');
+  assert.equal(state.drawings[0].name, state.assemblies[0].mark);
+  assert.equal(state.drawings[1].name, state.assemblies[1].mark);
 });
 test('assembly numbering and drawing merges undo and redo atomically', () => {
   let state = fixture();

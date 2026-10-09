@@ -207,7 +207,7 @@ test('editing membership retains assembly/drawing numbers and annotations and re
   assert.equal(next.assemblies[0].mark, old.assemblies[0].mark);
   assert.equal(next.drawings[0].id, 'drawing');
   assert.equal(next.drawings[0].number, 'A-001');
-  assert.equal(next.drawings[0].name, 'Ny grupp');
+  assert.equal(next.drawings[0].name, old.assemblies[0].mark);
   assert.equal(next.drawings[0].needsReview, true);
   assert.equal(next.drawings[0].reviewed, undefined);
   assert.deepEqual(next.drawings[0].annotations, state.drawings[0].annotations);
@@ -245,14 +245,14 @@ test('assembly edits reject overlap, missing parts and removing the main part wi
     /annan assembly/,
   );
 });
-test('no-op edit preserves state references; drawing identity follows assembly renaming', () => {
+test('no-op edit preserves state references; drawing name follows the mark after assembly renaming', () => {
   const state = fixture(),
     next = updateAssembly(state, 'assembly', state.assemblies[0]);
   assert.equal(next.assemblies, state.assemblies);
   assert.equal(next.drawings, state.drawings);
   state.drawings[0].name = 'Special drawing';
   const renamed = updateAssembly(state, 'assembly', { ...state.assemblies[0], name: 'Nytt namn' });
-  assert.equal(renamed.drawings[0].name, 'Nytt namn');
+  assert.equal(renamed.drawings[0].name, state.assemblies[0].mark);
 });
 test('changing main part preserves projected positions and stable references across different orientations', () => {
   const state = fixture();
@@ -380,13 +380,13 @@ test('membership and main-part edits undo as one project transaction', () => {
 test('assembly drawings use assembly identity and upgrade earlier AS numbers without losing edits', () => {
   const state = fixture();
   assert.equal(state.drawings[0].number, state.assemblies[0].mark);
-  assert.equal(state.drawings[0].name, state.assemblies[0].name);
+  assert.equal(state.drawings[0].name, state.assemblies[0].mark);
   state.drawings[0].number = 'AS-001';
   state.drawings[0].name = 'Old title';
   state.drawings[0].annotations = [{ comment: 'Keep', points: [[1, 2]] }];
   const next = syncAssemblyDrawingIdentity(state);
   assert.equal(next[0].number, 'A-001');
-  assert.equal(next[0].name, 'Balkpar');
+  assert.equal(next[0].name, 'A-001');
   assert.equal(next[0].id, state.drawings[0].id);
   assert.deepEqual(next[0].annotations, state.drawings[0].annotations);
   const loaded = parseProjectFile(serializeProject(state));
@@ -394,7 +394,7 @@ test('assembly drawings use assembly identity and upgrade earlier AS numbers wit
   assert.equal(syncAssemblyDrawingIdentity(loaded), loaded.drawings);
   const context = drawingAttributeContext(state.drawings[0], state);
   assert.equal(context.drawing.number, 'A-001');
-  assert.equal(context.drawing.name, 'Balkpar');
+  assert.equal(context.drawing.name, 'A-001');
   for (const key of ['drawing.number', 'drawing.name'])
     assert.throws(
       () =>
@@ -404,6 +404,6 @@ test('assembly drawings use assembly identity and upgrade earlier AS numbers wit
           builtInAttributes.find((a) => a.key === key),
           'Manual',
         ),
-      /följer assemblyn/,
+      /följer Part mark eller Assembly mark/,
     );
 });

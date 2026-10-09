@@ -1,6 +1,13 @@
+import { gridSegments } from '../grid-geometry.js';
 import * as THREE from 'three';
 import { gridLabel, GRID_LABEL_MAX_LENGTH } from '../grid-labels.js';
-import { addGridLine, changeGridLine, removeGridLine, gridSegmentDistance } from '../grid-edit.js';
+import {
+  addGridLine,
+  changeGridLine,
+  removeGridLine,
+  gridSegmentDistance,
+  parallelGridLine,
+} from '../grid-edit.js';
 
 /** Owns grid gestures only while explicitly activated. Project changes occur on confirmation. */
 export function createGridModelEditor({
@@ -22,14 +29,14 @@ export function createGridModelEditor({
   bar.hidden = true;
   bar.setAttribute('role', 'toolbar');
   bar.setAttribute('aria-label', 'Redigera stomlinjer');
-  bar.innerHTML = `<strong><i></i>Stomlinjer</strong><button type="button" data-move aria-pressed="true">↔ Flytta</button><button type="button" data-add aria-pressed="false">+ Ny</button><button type="button" data-remove title="Ta bort stomlinje" aria-label="Ta bort stomlinje">⌫</button><span class="grid-edit-separator"></span><label>Riktning<select data-grid-axis aria-label="Stomlinjeriktning"><option value="x">X</option><option value="y">Y</option></select></label><label>Linje<input data-label aria-label="Stomlinjebeteckning" maxlength="${GRID_LABEL_MAX_LENGTH}"></label><label>Position<input data-position aria-label="Stomlinjeposition" type="number" step="any"><small>mm</small></label><button type="button" data-snap aria-pressed="true" title="Snapping" aria-label="Snapping">⌁</button><small class="grid-edit-escape">Esc</small><button type="button" data-done class="primary">Klar</button>`;
+  bar.innerHTML = `<strong><i></i>Stomlinjer</strong><button type="button" data-move aria-pressed="true">↔ Flytta</button><button type="button" data-add aria-pressed="false">+ Ny</button><button type="button" data-remove title="Ta bort stomlinje" aria-label="Ta bort stomlinje">⌫</button><span class="grid-edit-separator"></span><label>Grupp<select data-grid-axis aria-label="Stomlinjeriktning"><option value="x">X</option><option value="y">Y</option></select></label><label>Linje<input data-label aria-label="Stomlinjebeteckning" maxlength="${GRID_LABEL_MAX_LENGTH}"></label><input data-position type="hidden"><button type="button" data-snap aria-pressed="true" title="Snapping" aria-label="Snapping">⌁</button><small class="grid-edit-escape">Esc</small><button type="button" data-done class="primary">Klar</button>`;
   host.append(bar);
   const $ = (selector) => bar.querySelector(selector);
   const handle = document.createElement('button');
   handle.type = 'button';
   handle.className = 'grid-edit-handle';
   handle.hidden = true;
-  handle.textContent = '↔';
+  handle.textContent = '✥';
   handle.setAttribute('aria-label', 'Dra markerad stomlinje');
   host.append(handle);
   const hint = document.createElement('div');
@@ -41,6 +48,26 @@ export function createGridModelEditor({
   note.hidden = true;
   note.textContent = 'Modellen är låst under stomlinjeredigering.';
   document.getElementById('inspector-model').prepend(note);
+  const panel = document.createElement('section');
+  panel.id = 'grid-inspector';
+  panel.hidden = true;
+  panel.innerHTML = `<h2>Stomlinje</h2><p data-grid-empty>Markera en linje eller bubbla i modellen.</p><div data-grid-fields><label class="field">Beteckning<input data-name maxlength="${GRID_LABEL_MAX_LENGTH}" aria-label="Linjenamn"></label><div class="grid-endpoint-fields"><h3>Startpunkt · mm</h3><label>X<input data-start-x type="number" step="any" aria-label="Startpunkt X"></label><label>Y<input data-start-y type="number" step="any" aria-label="Startpunkt Y"></label><h3>Slutpunkt · mm</h3><label>X<input data-end-x type="number" step="any" aria-label="Slutpunkt X"></label><label>Y<input data-end-y type="number" step="any" aria-label="Slutpunkt Y"></label></div><label class="field">Vinkel · °<input data-angle type="number" step="any" aria-label="Stomlinjevinkel"></label><h3>Parallell linje</h3><label class="field">Avstånd · mm<input data-offset type="number" step="any" value="3000" aria-label="Parallellavstånd"></label><button type="button" data-parallel>Skapa parallell linje</button></div><p class="inspector-note">Dra linjen för att flytta den. Dra ett ändpunktshandtag för att ändra riktningen.</p>`;
+  document.getElementById('inspector-properties').append(panel);
+  const field = (selector) => panel.querySelector(selector);
+  const endpoints = [0, 1].map((index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'grid-endpoint-handle';
+    button.hidden = true;
+    button.dataset.endpoint = String(index);
+    button.setAttribute(
+      'aria-label',
+      index ? 'Dra stomlinjens slutpunkt' : 'Dra stomlinjens startpunkt',
+    );
+    host.append(button);
+    return button;
+  });
+  let newStart = null;
   let active = false,
     selection = null,
     drag = null,
@@ -80,6 +107,7 @@ export function createGridModelEditor({
     invalidate();
   }
   function fields() {
+    if (active) document.getElementById('properties-tab')?.click?.();
     const selected = selection && project.grid[selection.axis]?.[selection.index] !== undefined;
     $('[data-label]').disabled = $('[data-position]').disabled = !selected || adding;
     $('[data-remove]').disabled = !selected || adding || project.grid[selection.axis].length <= 2;
@@ -87,6 +115,23 @@ export function createGridModelEditor({
       ? gridLabel(project.grid, selection.axis, selection.index)
       : '';
     $('[data-position]').value = selected ? project.grid[selection.axis][selection.index] : '';
+    panel.hidden = !active;
+    field('[data-grid-empty]').hidden = !!selected;
+    field('[data-grid-fields]').hidden = !selected || adding;
+    if (selected) {
+      const line = gridSegments(project.grid).find(
+        (line) => line.axis === selection.axis && line.index === selection.index,
+      );
+      field('[data-name]').value = line.label;
+      for (const end of ['start', 'end'])
+        for (const [i, coord] of ['x', 'y'].entries())
+          field(`[data-${end}-${coord}]`).value = +line[end][i].toFixed(3);
+      field('[data-angle]').value = +(
+        (Math.atan2(line.end[1] - line.start[1], line.end[0] - line.start[0]) * 180) /
+        Math.PI
+      ).toFixed(3);
+    }
+    if (!selected || adding) endpoints.forEach((button) => (button.hidden = true));
     if (selected && !adding) $('[data-grid-axis]').value = selection.axis;
     $('[data-move]').setAttribute('aria-pressed', String(!adding));
     $('[data-add]').setAttribute('aria-pressed', String(adding));
@@ -159,6 +204,10 @@ export function createGridModelEditor({
     active = false;
     selection = null;
     adding = false;
+    newStart = null;
+    panel.hidden = true;
+    document.getElementById('model-tab')?.click?.();
+    endpoints.forEach((button) => (button.hidden = true));
     for (const [element, inert] of locks) element.inert = inert;
     locks = [];
     bar.hidden = handle.hidden = note.hidden = true;
@@ -166,20 +215,27 @@ export function createGridModelEditor({
     display();
     message('Stomlinjer klara · Modellering aktiverad');
   }
-  function start() {
-    if (active) return;
+  function start(initialSelection = null) {
+    if (active) {
+      if (initialSelection) selection = initialSelection;
+      display();
+      fields();
+      return;
+    }
     begin();
     active = true;
-    selection = null;
+    selection = initialSelection;
     adding = false;
+    newStart = null;
     locks = [
       ...document.querySelectorAll(
-        '.toolbox, aside, .level-controls, #work-plane, #work-plane-view, header button:not(#undo):not(#redo), header details',
+        '.toolbox, #inspector-model, #inspector-filter, #inspector-references, .inspector-tabs button:not(#properties-tab), [role=tab]:not(#properties-tab), .model-selection-switch, .level-controls, #work-plane, #work-plane-view, header button:not(#undo):not(#redo), header details',
       ),
     ].map((element) => [element, element.inert]);
     for (const [element] of locks) element.inert = true;
     host.classList.add('grid-editing');
     bar.hidden = note.hidden = false;
+    document.getElementById('properties-tab')?.click?.();
     display();
     fields();
     message('Redigerar stomlinjer · Dra en linje eller bubbla · Esc avslutar');
@@ -194,18 +250,34 @@ export function createGridModelEditor({
         message('Byt till ovanifrån för att placera stomlinjen.');
         return;
       }
-      const axis = $('[data-grid-axis]').value;
+      const axis = $('[data-grid-axis]').value,
+        coords = [snap(p.x), snap(p.y)];
+      if (!newStart) {
+        newStart = coords;
+        message('Ny stomlinje · Klicka på slutpunkten · Esc avbryter');
+        invalidate();
+        return;
+      }
       try {
-        commit(addGridLine(project.grid, axis, snap(p[axis])), axis);
+        commit(
+          addGridLine(project.grid, axis, coords[axis === 'x' ? 0 : 1], {
+            start: newStart,
+            end: coords,
+          }),
+          axis,
+        );
+        newStart = null;
         adding = false;
         fields();
         message('Stomlinje tillagd · Kan ångras');
       } catch (error) {
         message(error.message);
       }
+
       return;
     }
-    const hit = e.target === handle ? selection : pick(e);
+    const endpoint = endpoints.indexOf(e.target);
+    const hit = e.target === handle || endpoint >= 0 ? selection : pick(e);
     selection = hit;
     display();
     fields();
@@ -234,8 +306,11 @@ export function createGridModelEditor({
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      start: p[hit.axis],
-      source: project.grid[hit.axis][hit.index],
+      start: [p.x, p.y],
+      source: gridSegments(project.grid).find(
+        (line) => line.axis === hit.axis && line.index === hit.index,
+      ),
+      endpoint,
       result: null,
       moved: false,
       controlsEnabled: controls().enabled,
@@ -253,15 +328,25 @@ export function createGridModelEditor({
     if (!p) return;
     drag.moved = true;
     const axis = selection.axis,
-      position = snap(drag.source + p[axis] - drag.start);
+      delta = [snap(p.x - drag.start[0]), snap(p.y - drag.start[1])],
+      position = project.grid[axis][selection.index] + delta[axis === 'x' ? 0 : 1],
+      patch =
+        drag.endpoint >= 0
+          ? {
+              [drag.endpoint ? 'end' : 'start']: drag.source[drag.endpoint ? 'end' : 'start'].map(
+                (v, i) => v + delta[i],
+              ),
+            }
+          : { translation: delta };
     try {
-      drag.result = changeGridLine(project.grid, axis, selection.index, { position });
+      drag.result = changeGridLine(project.grid, axis, selection.index, patch);
       const selected = selection;
       selection = { axis, index: drag.result.index };
       display(drag.result.grid);
       selection = selected;
       $('[data-position]').value = position;
-      hint.textContent = `${position - drag.source > 0 ? '+' : ''}${+(position - drag.source).toFixed(3)} mm`;
+      hint.textContent =
+        drag.endpoint >= 0 ? `${snap(p.x)}, ${snap(p.y)} mm` : `${delta[0]}, ${delta[1]} mm`;
       hint.style.left = `${e.clientX - host.getBoundingClientRect().left + 18}px`;
       hint.style.top = `${e.clientY - host.getBoundingClientRect().top + 18}px`;
       hint.hidden = false;
@@ -282,7 +367,7 @@ export function createGridModelEditor({
     cancelDrag();
     if (result) {
       commit(result, axis);
-      message('Stomlinje flyttad · Kan ångras');
+      message('Stomlinje uppdaterad · Kan ångras');
     }
   }
   host.addEventListener('pointerdown', down, true);
@@ -299,7 +384,14 @@ export function createGridModelEditor({
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopImmediatePropagation();
-        if (!cancelDrag()) finish();
+        if (!cancelDrag()) {
+          if (adding) {
+            adding = false;
+            newStart = null;
+            display();
+            fields();
+          } else finish();
+        }
         return;
       }
       if (!editing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -342,18 +434,21 @@ export function createGridModelEditor({
   $('[data-move]').onclick = () => {
     cancelDrag();
     adding = false;
+    newStart = null;
     fields();
     message('Dra en stomlinje eller bubbla.');
   };
   $('[data-add]').onclick = () => {
     cancelDrag();
     adding = true;
+    newStart = null;
     fields();
-    message('Ny stomlinje · Välj riktning och klicka i modellen');
+    message('Ny stomlinje · Välj grupp och klicka på start- och slutpunkt');
   };
   $('[data-grid-axis]').onchange = () => {
     cancelDrag();
     selection = null;
+    newStart = null;
     display();
     fields();
   };
@@ -391,6 +486,76 @@ export function createGridModelEditor({
         fields();
       }
     };
+  function updateField(patch) {
+    if (!selection || !active) return;
+    const current = gridSegments(project.grid).find(
+      (line) => line.axis === selection.axis && line.index === selection.index,
+    );
+    if (patch.label !== undefined && patch.label.trim() === current.label) return;
+    if (
+      patch.angle !== undefined &&
+      Math.abs(
+        Number(patch.angle) -
+          +(
+            (Math.atan2(current.end[1] - current.start[1], current.end[0] - current.start[0]) *
+              180) /
+            Math.PI
+          ).toFixed(3),
+      ) < 1e-9
+    )
+      return;
+    for (const end of ['start', 'end'])
+      if (
+        patch[end] &&
+        patch[end].every((v, i) => Math.abs(v - +current[end][i].toFixed(3)) < 1e-9)
+      )
+        return;
+    try {
+      commit(changeGridLine(project.grid, selection.axis, selection.index, patch), selection.axis);
+      message('Stomlinje uppdaterad · Kan ångras');
+    } catch (error) {
+      message(error.message);
+      fields();
+    }
+  }
+  field('[data-name]').onchange = () => updateField({ label: field('[data-name]').value });
+  field('[data-angle]').onchange = () => {
+    if (!field('[data-angle]').value.trim()) {
+      fields();
+      return;
+    }
+    updateField({ angle: field('[data-angle]').value });
+  };
+  for (const end of ['start', 'end'])
+    for (const coord of ['x', 'y'])
+      field(`[data-${end}-${coord}]`).onchange = () => {
+        const inputs = ['x', 'y'].map((key) => field(`[data-${end}-${key}]`));
+        if (inputs.some((input) => !input.value.trim())) {
+          fields();
+          return;
+        }
+        updateField({ [end]: inputs.map((input) => Number(input.value)) });
+      };
+  field('[data-parallel]').onclick = () => {
+    if (!selection) return;
+    try {
+      commit(
+        parallelGridLine(
+          project.grid,
+          selection.axis,
+          selection.index,
+          field('[data-offset]').value,
+        ),
+        selection.axis,
+      );
+      message('Parallell stomlinje skapad · Kan ångras');
+    } catch (error) {
+      message(error.message);
+    }
+  };
+  panel.addEventListener('focusout', (e) => {
+    if (active) e.target.onchange?.();
+  });
   return {
     start,
     finish,
@@ -407,6 +572,26 @@ export function createGridModelEditor({
       }
     },
     update() {
+      const selected =
+        active && selection && !adding
+          ? gridSegments(drag?.result?.grid ?? project.grid).find(
+              (line) => line.axis === selection.axis && line.index === selection.index,
+            )
+          : null;
+      const points = selected
+        ? [selected.start, selected.end]
+        : adding && newStart
+          ? [newStart]
+          : [];
+      endpoints.forEach((button, index) => {
+        const point = points[index];
+        button.hidden = !point;
+        if (!point) return;
+        const p = new THREE.Vector3(...point, elevation()).project(camera);
+        button.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+        button.style.left = `${((p.x + 1) * host.clientWidth) / 2 - (selected ? 28 : 0)}px`;
+        button.style.top = `${((1 - p.y) * host.clientHeight) / 2}px`;
+      });
       if (!active || !selection || adding) {
         handle.hidden = true;
         return;
@@ -417,14 +602,7 @@ export function createGridModelEditor({
       if (!label) return;
       handle.style.left = `${parseFloat(label.el.style.left) + 36}px`;
       handle.style.top = label.el.style.top;
-      const a = new THREE.Vector3(0, 0, elevation()).project(camera),
-        b = new THREE.Vector3(
-          selection.axis === 'x' ? 1000 : 0,
-          selection.axis === 'y' ? 1000 : 0,
-          elevation(),
-        ).project(camera);
-      const angle = Math.atan2(-(b.y - a.y) * host.clientHeight, (b.x - a.x) * host.clientWidth);
-      handle.style.transform = `translate(-50%, -50%) rotate(${angle}rad)`;
+      handle.style.transform = 'translate(-50%, -50%)';
     },
   };
 }

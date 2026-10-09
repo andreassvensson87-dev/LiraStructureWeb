@@ -1,3 +1,4 @@
+import { gridSegments, gridCrossings, gridProjection, lineIntersection } from './grid-geometry.js';
 import { roundProfile } from './round-profile.js';
 import { gridLabel } from './grid-labels.js';
 import * as THREE from 'three';
@@ -115,14 +116,14 @@ export function resolveSnap({
     [segmentPoints, 12],
     [referencePoints.filter((p) => p.edge), 10],
     [
-      (gridIntersections ? grid.x : []).flatMap((x, i) =>
-        grid.y.map((y, j) => ({
-          coords: [x, y, gridZ],
-          symbol: 'cross',
-          label: `Stomlinjekorsning ${gridLabel(grid, 'x', i)}/${gridLabel(grid, 'y', j)}`,
-          gridIds: [`x:${i}`, `y:${j}`],
-        })),
-      ),
+      gridIntersections
+        ? gridCrossings(grid).map(({ point, lines }) => ({
+            coords: [...point, gridZ],
+            symbol: 'cross',
+            label: `Stomlinjekorsning ${lines.map((line) => line.label).join('/')}`,
+            gridIds: lines.map((line) => line.pickId),
+          }))
+        : [],
       20,
     ],
   ]) {
@@ -178,6 +179,77 @@ export function resolveSnap({
       tracking?.point && origin
         ? new THREE.Vector3(...tracking.point).sub(origin).normalize()
         : null;
+    if (grid.lines) {
+      for (const line of gridSegments(grid)) {
+        const a = new THREE.Vector3(...line.start, gridZ),
+          b = new THREE.Vector3(...line.end, gridZ);
+        let candidate;
+        if (direction) {
+          if (Math.abs(direction.z) > 1e-8) {
+            candidate = origin.clone().addScaledVector(direction, (gridZ - origin.z) / direction.z);
+            const projection = gridProjection(candidate.toArray(), line);
+            if (
+              projection.t < 0 ||
+              projection.t > 1 ||
+              Math.hypot(projection.point[0] - candidate.x, projection.point[1] - candidate.y) >
+                0.01
+            )
+              continue;
+          } else {
+            if (Math.abs(origin.z - gridZ) > 0.01) continue;
+            const cross = lineIntersection(
+              line.start,
+              line.end,
+              origin.toArray(),
+              origin.clone().add(direction).toArray(),
+              false,
+            );
+            if (cross) {
+              const projection = gridProjection(cross, line);
+              if (projection.t < 0 || projection.t > 1) continue;
+              candidate = new THREE.Vector3(...cross, gridZ);
+            } else {
+              const projection = gridProjection(tracking.point, line);
+              if (
+                projection.t < 0 ||
+                projection.t > 1 ||
+                Math.hypot(
+                  projection.point[0] - tracking.point[0],
+                  projection.point[1] - tracking.point[1],
+                ) > 0.01
+              )
+                continue;
+              candidate = new THREE.Vector3(...tracking.point);
+            }
+          }
+        } else {
+          const sa = screen(a),
+            delta = screen(b).sub(sa);
+          if (delta.lengthSq() < 1) continue;
+          const t = cursor.clone().sub(sa).dot(delta) / delta.lengthSq();
+          if (t < 0 || t > 1) continue;
+          candidate = a.clone().lerp(b, t);
+        }
+        if (
+          !onLock(candidate) ||
+          !onPlane(candidate) ||
+          Math.abs(candidate.clone().project(camera).z) > 1
+        )
+          continue;
+        const distance = screen(candidate).distanceTo(cursor);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = {
+            point: candidate.toArray(),
+            kind: 'point',
+            symbol: 'line',
+            gridIds: [line.pickId],
+            label: `Stomlinje ${line.label}${tracking ? ' · ' + tracking.label : ''}`,
+          };
+        }
+      }
+      return best;
+    }
     for (const [axis, positions, other] of [
       [0, grid.x, grid.y],
       [1, grid.y, grid.x],

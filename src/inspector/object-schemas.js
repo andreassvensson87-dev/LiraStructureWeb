@@ -21,7 +21,8 @@ const shared = [
 ];
 const identity = {
   key: 'identity',
-  label: 'Identitet och numrering',
+  label: 'Numrering',
+  collapsible: false,
   content: '#identity-fields',
   id: 'sweep-identity-details',
 };
@@ -35,12 +36,13 @@ export const objectInspectorSchemas = {
     copyGroups: sweepPropertyGroups,
     unchecked: ['name'],
     isCreating: ({ drawing, operation }) => drawing && !operation,
-    labels: '#form label, #inspector-identity, #identity-fields > label',
+    labels: '#form label, #inspector-identity, #identity-fields label',
     lockContainers: '#form, #material-panel',
     sections: [
       identity,
       {
         key: 'placement',
+        collapsible: false,
         label: 'Insättning',
         content: '.profile-preview',
         className: 'sweep-preview-details',
@@ -58,9 +60,16 @@ export const objectInspectorSchemas = {
         row: 'self',
       }),
       field('rotation', 'Profilrotation', 'number', '#rotation', 'rotation', { unit: '°' }),
-      field('placement', 'Insättning', 'custom', '.sweep-preview-details summary', 'placement', {
-        row: 'self',
-      }),
+      field(
+        'placement',
+        'Insättning',
+        'custom',
+        '.sweep-preview-details .attribute-section-heading',
+        'placement',
+        {
+          row: 'self',
+        },
+      ),
     ],
   }),
   plate: defineAttributeSchema({
@@ -74,7 +83,7 @@ export const objectInspectorSchemas = {
     isCreating: ({ drawing, operation }) =>
       drawing && operation?.mode === 'plateCreate' && !operation.cutTargets && !operation.lineCut,
     labels:
-      '#plate-form > label, #plate-plane-fields label, #inspector-identity, #identity-fields > label',
+      '#plate-form > label, #plate-plane-fields label, #inspector-identity, #identity-fields label',
     lockContainers: '#plate-form, #material-panel',
     sections: [identity],
     fields: [

@@ -1,5 +1,5 @@
 import { visibleGridEndpoints } from './grid-label-position.js';
-import { gridLabel } from './grid-labels.js';
+import { gridSegments, gridCrossings } from './grid-geometry.js';
 import {
   gridBubbleMetrics,
   projectedGridBubbleDiameter,
@@ -47,7 +47,6 @@ export class GridLines {
     this.labels = [];
     this.highlighted = '';
     this.bounds = new THREE.Box3();
-    const extension = 1500;
     const add = (start, end, label, id) => {
       const points = [new THREE.Vector3(...start), new THREE.Vector3(...end)];
       const line = new THREE.Line(
@@ -65,22 +64,8 @@ export class GridLines {
         this.labels.push({ position, opposite: points[1 - index], index, el, id });
       });
     };
-    data.x.forEach((x, i) =>
-      add(
-        [x, data.y[0] - extension, data.z || 0],
-        [x, data.y.at(-1) + extension, data.z || 0],
-        gridLabel(data, 'x', i),
-        `x:${i}`,
-      ),
-    );
-    data.y.forEach((y, i) =>
-      add(
-        [data.x[0] - extension, y, data.z || 0],
-        [data.x.at(-1) + extension, y, data.z || 0],
-        gridLabel(data, 'y', i),
-        `y:${i}`,
-      ),
-    );
+    for (const line of gridSegments(data))
+      add([...line.start, data.z || 0], [...line.end, data.z || 0], line.label, line.pickId);
   }
   highlight(ids = []) {
     const key = ids.join('|');
@@ -100,6 +85,17 @@ export class GridLines {
               projectedGridBubbleDiameter(camera, position, width, height),
             )
           : gridBubbleMetrics(el.textContent, diameter);
+      if (diameter === undefined)
+        for (const key of ['radius', 'height', 'fontSize', 'strokeWidth', 'inset'])
+          metrics[key] *= this.data?.bubbleScale ?? 1;
+      if (
+        diameter === undefined &&
+        ((this.data?.bubbleEnds === 'start' && index === 1) ||
+          (this.data?.bubbleEnds === 'end' && index === 0))
+      ) {
+        el.hidden = true;
+        continue;
+      }
       const labelRadius = metrics.radius;
       el.style.width = `${labelRadius * 2}px`;
       el.style.height = `${diameter === undefined ? metrics.height : labelRadius * 2}px`;
@@ -139,16 +135,16 @@ export class GridLines {
     const projected = point.clone().project(camera);
     let nearest = null,
       distance = 14;
-    for (const x of this.data.x)
-      for (const y of this.data.y) {
-        const candidate = new THREE.Vector3(x, y, point.z);
-        const p = candidate.clone().project(camera);
-        const d = Math.hypot(((p.x - projected.x) * width) / 2, ((p.y - projected.y) * height) / 2);
-        if (d < distance) {
-          nearest = candidate;
-          distance = d;
-        }
+    for (const { point: coords } of gridCrossings(this.data)) {
+      const candidate = new THREE.Vector3(...coords, point.z);
+      const p = candidate.clone().project(camera);
+      const d = Math.hypot(((p.x - projected.x) * width) / 2, ((p.y - projected.y) * height) / 2);
+      if (d < distance) {
+        nearest = candidate;
+        distance = d;
       }
+    }
+
     return nearest;
   }
 }

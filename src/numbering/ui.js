@@ -24,7 +24,7 @@ export function installNumbering({
   let settings = defaultNumberingSettings();
   try {
     const saved = JSON.parse(localStorage.getItem(preferenceKey));
-    if (saved) settings = validateNumberingSettings(saved);
+    if (saved) settings = validateNumberingSettings({ ...settings, ...saved, objectSeries: true });
   } catch {
     /* Use defaults if the saved settings are unavailable. */
   }
@@ -32,18 +32,28 @@ export function installNumbering({
   dialog.setAttribute('aria-labelledby', 'numbering-title');
   dialog.innerHTML = `<header><h2 id="numbering-title">Numrering</h2><div><button type="button" class="numbering-model-toggle" hidden>Visa modellen</button><button type="button" aria-label="Stäng numrering">×</button></div></header>
     <nav class="numbering-tabs" role="tablist" aria-label="Numrering">
-      <button id="numbering-settings-tab" role="tab" aria-controls="numbering-settings" aria-selected="true">Inställningar</button>
-      <button id="numbering-preview-tab" role="tab" aria-controls="numbering-preview" aria-selected="false">Förhandsgranskning</button>
+      <button id="numbering-preview-tab" role="tab" aria-controls="numbering-preview" aria-selected="true">Numrering</button>
+      <button id="numbering-settings-tab" role="tab" aria-controls="numbering-settings" aria-selected="false">Inställningar</button>
     </nav>
     <section id="numbering-settings" role="tabpanel" aria-labelledby="numbering-settings-tab">
-      <p>Hela modellen · Befintliga nummer behålls för oförändrade typer.</p>
+      <p>Nummerserier anges på varje part i inspektorn. Assemblyns serie anges på huvuddelen.</p>
       <fieldset class="numbering-kinds"><legend>Numrera</legend>
         <label><input type="checkbox" name="parts">Detaljer</label>
         <label><input type="checkbox" name="assemblies">Assemblies</label>
       </fieldset>
-      <h3>Nummerserier för nya typer</h3>
-      <table class="numbering-series"><thead><tr><th>Typ</th><th>Prefix</th><th>Startnummer</th></tr></thead><tbody></tbody></table>
-      <p class="numbering-note">Lika geometri, profil, material och bearbetningar ger samma detaljnummer. Assemblies jämförs även utifrån delarnas placering och huvuddel.</p>
+      <fieldset class="numbering-options"><legend>Nummerhantering</legend>
+        <label><input type="checkbox" name="renumberAll">Numrera om allt från seriernas startnummer</label>
+        <label><input type="checkbox" name="reuseOldNumbers">Återanvänd lediga gamla nummer</label>
+        <label>Nya detaljer<select name="newParts"><option value="compare">Jämför med befintliga typer</option><option value="new">Tilldela nya nummer</option></select></label>
+        <label>Ändrade detaljer<select name="modifiedParts"><option value="compare">Jämför med befintliga typer</option><option value="new">Tilldela nya nummer</option></select></label>
+      </fieldset>
+      <fieldset class="numbering-options"><legend>Jämförelse och toleranser</legend>
+        <label><input type="checkbox" name="compareHoles">Jämför hål</label>
+        <label><input type="checkbox" name="compareNames">Jämför detaljnamn</label>
+        <label>Detaljernas måttolerans (mm)<input name="tolerance" type="number" min="0" step="0.01"></label>
+        <label>Placering i assembly (mm)<input name="assemblyTolerance" type="number" min="0" step="0.01"></label>
+      </fieldset>
+      <p class="numbering-note">Profil, material och bearbetningar jämförs alltid. Assemblies jämförs även med delarnas part marks, antal, huvuddel och orientering. Tolerans 0 innebär exakt jämförelse. Vid omnumrering kan befintliga marks ändras.</p>
     </section>
     <section id="numbering-preview" role="tabpanel" aria-labelledby="numbering-preview-tab" hidden>
       <p class="numbering-summary" aria-live="polite"></p>
@@ -83,41 +93,23 @@ export function installNumbering({
       tab === 'preview' &&
       (!plan?.rows.length || plan.conflicts.some((g) => !choices[g.kind][g.key]));
   };
-  for (const name of ['parts', 'assemblies']) {
-    const input = $(`[name="${name}"]`);
-    input.checked = settings[name];
-  }
-  for (const [type, label] of [
-    ['sweep', 'Sweep'],
-    ['plate', 'Plate'],
-    ['assembly', 'Assembly'],
-  ]) {
-    const row = element('tr');
-    row.append(element('td', label));
-    for (const key of ['prefix', 'start']) {
-      const cell = element('td'),
-        input = element('input');
-      input.type = key === 'start' ? 'number' : 'text';
-      input.value = settings.series[type][key];
-      input.dataset.series = type;
-      input.dataset.key = key;
-      input.setAttribute('aria-label', `${label} ${key === 'start' ? 'startnummer' : 'prefix'}`);
-      if (key === 'start') {
-        input.min = 1;
-        input.max = 999999999;
-        input.step = 1;
-      } else input.maxLength = 16;
-      cell.append(input);
-      row.append(cell);
-    }
-    $('.numbering-series tbody').append(row);
-  }
+  const checkNames = [
+    'parts',
+    'assemblies',
+    'renumberAll',
+    'reuseOldNumbers',
+    'compareHoles',
+    'compareNames',
+  ];
+  for (const name of checkNames) $(`[name="${name}"]`).checked = settings[name];
+  for (const name of ['newParts', 'modifiedParts', 'tolerance', 'assemblyTolerance'])
+    $(`[name="${name}"]`).value = settings[name];
   const readSettings = () => {
     const next = defaultNumberingSettings();
-    for (const name of ['parts', 'assemblies']) next[name] = $(`[name="${name}"]`).checked;
-    for (const input of dialog.querySelectorAll('[data-series]'))
-      next.series[input.dataset.series][input.dataset.key] =
-        input.dataset.key === 'start' ? Number(input.value) : input.value.trim();
+    for (const name of checkNames) next[name] = $(`[name="${name}"]`).checked;
+    for (const name of ['newParts', 'modifiedParts']) next[name] = $(`[name="${name}"]`).value;
+    for (const name of ['tolerance', 'assemblyTolerance'])
+      next[name] = Number($(`[name="${name}"]`).value);
     return validateNumberingSettings(next);
   };
   const renderRows = () => {
@@ -285,9 +277,9 @@ export function installNumbering({
     event.preventDefault();
     const next =
       event.key === 'Home'
-        ? 'settings'
+        ? 'preview'
         : event.key === 'End'
-          ? 'preview'
+          ? 'settings'
           : tab === 'settings'
             ? 'preview'
             : 'settings';
@@ -344,7 +336,7 @@ export function installNumbering({
       showModel(false);
       plan = null;
       $('.numbering-error').textContent = '';
-      show('settings');
+      preview();
       dialog.showModal();
       return new Promise((done) => {
         resolve = done;

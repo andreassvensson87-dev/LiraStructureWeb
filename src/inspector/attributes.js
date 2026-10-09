@@ -34,11 +34,13 @@ export function mountAttributeDisclosure(root, section) {
   const content = root.querySelector(section.content);
   if (!content) throw new Error(`Inspektoravsnitt saknas: ${section.content}`);
   if (content.parentElement.dataset.attributeSection === section.key) return content.parentElement;
-  const details = document.createElement('details');
+  const collapsible = section.collapsible !== false;
+  const details = document.createElement(collapsible ? 'details' : 'section');
   details.dataset.attributeSection = section.key;
   if (section.id) details.id = section.id;
   details.className = section.className || 'attribute-section';
-  const summary = document.createElement('summary');
+  const summary = document.createElement(collapsible ? 'summary' : 'div');
+  if (!collapsible) summary.className = 'attribute-section-heading';
   const caption = document.createElement('span');
   caption.textContent = section.label;
   summary.append(caption);

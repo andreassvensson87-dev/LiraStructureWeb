@@ -1904,7 +1904,8 @@ aside {
 #inspector-properties .material-quick-row input {
   margin: 0;
 }
-#inspector-properties #material-panel .material-quick-row button {
+#inspector-properties #material-panel .material-quick-row > button,
+#inspector-properties #material-panel .material-quick-row .property-color-copy > button {
   padding: 5px;
   margin: 0;
   height: 32px;
@@ -4608,11 +4609,12 @@ body > footer .pwa-install {
   grid-column: 2;
 }
 #inspector-properties:is(.sweep-inspector, .plate-inspector) .material-quick-row {
-  grid-template-columns: var(--inspector-label-width) minmax(0, 1fr) 24px 20px;
+  grid-template-columns: minmax(0, 1fr) 32px 26px;
   gap: 5px;
 }
 #inspector-properties:is(.sweep-inspector, .plate-inspector) .material-quick-row::before {
   content: 'Material';
+  grid-column: 1 / -1;
   font-size: 11px;
 }
 #inspector-properties:is(.sweep-inspector, .plate-inspector) #material-panel {
@@ -4695,7 +4697,7 @@ body > footer .pwa-install {
 }
 #inspector-properties:is(.sweep-inspector, .plate-inspector)
   .material-quick-row:has(.property-copy-check:not([hidden])) {
-  grid-template-columns: 76px minmax(0, 1fr) 41px 20px;
+  grid-template-columns: minmax(0, 1fr) 49px 26px;
 }
 #inspector-properties .object-property-copy button {
   padding: 6px 8px;
@@ -4747,33 +4749,16 @@ body > footer .pwa-install {
   margin: 6px 0;
   border-bottom: 1px solid #e4eaea;
 }
-#inspector-properties:is(.sweep-inspector, .plate-inspector) .sweep-preview-details summary {
+#inspector-properties:is(.sweep-inspector, .plate-inspector)
+  .sweep-preview-details
+  .attribute-section-heading {
   display: grid;
   grid-template-columns: var(--inspector-label-width) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: 28px;
-  cursor: pointer;
   font-size: 11px;
   color: #60737a;
-  list-style: none;
-}
-#inspector-properties:is(.sweep-inspector, .plate-inspector)
-  .sweep-preview-details
-  summary::-webkit-details-marker {
-  display: none;
-}
-#inspector-properties:is(.sweep-inspector, .plate-inspector)
-  .sweep-preview-details
-  summary
-  > span:first-child::before {
-  content: '▸ ';
-}
-#inspector-properties:is(.sweep-inspector, .plate-inspector)
-  .sweep-preview-details[open]
-  summary
-  > span:first-child::before {
-  content: '▾ ';
 }
 #sweep-placement-summary {
   color: #233941;
@@ -5321,4 +5306,152 @@ body:has(.grid-editing) .toolbox {
   background: #16815e;
   color: white;
   border-color: #16815e;
+}
+
+/* Material results use the full row, without inheriting the small toolbar button height. */
+#inspector-properties .material-quick-row {
+  position: relative;
+}
+#inspector-properties .material-search {
+  position: static;
+}
+#inspector-properties #material-panel .search-results button {
+  height: auto;
+  min-height: 40px;
+  padding: 8px 10px;
+  line-height: 1.4;
+}
+#inspector-properties #material-panel .search-results button span {
+  font-size: 12px;
+  font-weight: 500;
+}
+#inspector-properties #material-panel .search-results button small {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.grid-text-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 20px;
+}
+.grid-text-list input {
+  width: 76px;
+  min-width: 0;
+  text-align: center;
+}
+.grid-endpoint-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.grid-endpoint-fields h3 {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+}
+.grid-endpoint-fields label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.grid-endpoint-fields input {
+  min-width: 0;
+  width: 100%;
+}
+#grid-inspector h3 {
+  font-size: 12px;
+  color: #647b83;
+}
+#grid-inspector [data-parallel] {
+  width: 100%;
+}
+body:has(.grid-editing) #inspector-properties > :not(#grid-inspector),
+body:has(.grid-editing) .inspector-type-dock {
+  display: none !important;
+}
+body:has(.grid-editing) #inspector-properties > #grid-inspector:not([hidden]) {
+  display: block;
+}
+.grid-endpoint-handle {
+  position: absolute;
+  z-index: 34;
+  width: 15px;
+  height: 15px;
+  min-width: 0;
+  padding: 0;
+  border: 2px solid #16815e;
+  border-radius: 3px;
+  background: white;
+  box-shadow: 0 1px 5px #172b3240;
+  transform: translate(-50%, -50%);
+  cursor: crosshair;
+}
+.grid-endpoint-handle[hidden] {
+  display: none;
+}
+.grid-text-cell {
+  position: relative;
+}
+.grid-text-cell input {
+  padding-right: 23px;
+}
+.grid-text-cell button {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 24px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #74858b;
+  font-size: 12px;
+}
+.grid-text-cell button:hover {
+  color: #16815e;
+  background: #edf6f2;
+}
+
+#identity-fields > label[hidden],
+#identity-fields > .part-mark-row[hidden],
+#identity-fields > .numbering-series-fields[hidden] {
+  display: none;
+}
+.numbering-series-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+#inspector-properties #identity-fields .numbering-series-fields > label,
+#assembly-inspector .numbering-series-fields > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  color: #637a83;
+}
+.numbering-series-fields input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+[data-attribute-section='identity'] > .attribute-section-heading {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.assembly-inspector-mark {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.assembly-inspector-mark strong {
+  font-weight: 500;
 }
