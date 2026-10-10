@@ -1,3 +1,4 @@
+import { installEditorSurface } from './ui/editor-surface.js';
 import { inputWheelGesture } from './input-device.js';
 import { installDrawingPan } from './drawing-pan.js';
 import { pasteboardSize } from './drawing-pasteboard.js';
@@ -9,6 +10,7 @@ export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save,
   dialog.classList.add('drawing-editor');
   const back = dialog.querySelector('header button');
   back.textContent = 'Till modellen';
+  back.setAttribute('aria-label', 'Till modellen');
   back.onclick = () => {
     dialog.close();
     const manager = document.querySelector('#drawing-manager');
@@ -35,8 +37,15 @@ export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save,
   body.prepend(nav);
   // Snitt och detaljverktyg installeras också under konstruktörens samma körning.
   queueMicrotask(() => {
-    createDrawingToolbox(nav);
     installDrawingEditorHeader({ dialog, toolbar, save, annotations });
+    createDrawingToolbox(nav, toolbar);
+    installEditorSurface(dialog, {
+      layout: body,
+      inspector: dialog.querySelector('.drawing-inspector'),
+      footer: dialog.querySelector('.cad-statusbar'),
+      labels: 'label:not(:has(input[type="checkbox"]))',
+      observe: true,
+    });
   });
 }
 

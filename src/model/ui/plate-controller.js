@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { isCut, isPlate, objectAnchors, validateObject } from '../../model-object.js';
+import { isCut, isPlate, validateObject } from '../../model-object.js';
 import { isLineCut, lineCutFrame } from '../../line-cut.js';
 import { platePoint, plateLocal, plateArea, plateNormal, plateVertices } from '../../plate.js';
 import { editPlateVertex } from '../../plate-vertices.js';
 import { nextIdentity } from '../../object-identity.js';
 import { advancePlatePoint } from '../tools/plate-tool.js';
-import { applyObjectBatch } from '../tools/transform-tool.js';
 export function createPlateController({
+  modelEditor,
   project,
   tools,
   ui,
@@ -26,7 +26,6 @@ export function createPlateController({
   resetLength,
   plateLengthActive,
   validateSweep,
-  checkpoint,
   render,
   previewModelBatch,
   clearPreview,
@@ -346,8 +345,7 @@ export function createPlateController({
         $('plate-error').textContent = error;
         return;
       }
-      checkpoint();
-      project.objects = applyObjectBatch(project.objects, [result.object]).objects;
+      modelEditor.update([result.object]);
       setDrawing(false);
       render();
       $('status').textContent = 'Plate-hörn flyttat';
@@ -385,12 +383,11 @@ export function createPlateController({
       $('plate-error').textContent = error;
       return;
     }
-    checkpoint();
     s.id = crypto.randomUUID();
     s.name = `${isLineCut(s) ? 'Linecut' : isCut(s) ? 'Polygoncut' : 'Plate'} ${String(++ui.sequence).padStart(2, '0')}`;
     if (!isCut(s)) Object.assign(s, structuredClone(ui.draftMaterial));
     Object.assign(s, nextIdentity(s, project.objects));
-    project.objects.push(s);
+    modelEditor.add([s]);
     remember?.(s);
     ui.selected = s.id;
     ui.selectedIds = new Set([s.id]);
@@ -411,8 +408,7 @@ export function createPlateController({
       const next = editPlateVertex(source, index, removeVertex),
         error = validateSweep(next);
       if (error) throw Error(error);
-      checkpoint();
-      project.objects = applyObjectBatch(project.objects, [next]).objects;
+      modelEditor.update([next]);
       fillPlate(next);
       render();
       if (removeVertex) $('status').textContent = 'Hörnet borttaget';
@@ -475,8 +471,7 @@ export function createPlateController({
       $('plate-error').textContent = error;
       return;
     }
-    checkpoint();
-    project.objects = applyObjectBatch(project.objects, [s]).objects;
+    modelEditor.update([s]);
     remember?.(s);
     fillPlate(s);
     render();

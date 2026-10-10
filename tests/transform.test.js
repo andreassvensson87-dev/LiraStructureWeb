@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { transformSweep } from '../src/transform.js';
+import { transformCandidates } from '../src/model/tools/transform-tool.js';
+const transformSweep = (source, mode, base, target) =>
+  transformCandidates({ mode, sources: [source] }, base, target)[0];
 import { validateSweep } from '../src/sweep.js';
 const source = {
   id: 'original',

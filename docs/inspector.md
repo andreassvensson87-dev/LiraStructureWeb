@@ -19,7 +19,9 @@ och `artifacts/selection-scope-verified.png`. Endast vald Sweep och Plate
 
 ## Attributramverk
 
-Sweep och Plate använder `src/inspector/object-schemas.js` och samma layout- och kopieringsadapter. Fit, fotplåt, avstyvning, ändplåt, ändplåtskoppling och balkskarv använder `src/inspector/component-schemas.js`, som översätter komponentdefinitionernas parametrar och grupper till samma attributstruktur. Objektets attributbeskrivning anger nyckel, rubrik, kontrolltyp, enhet, befintlig kontroll/egen widget, kopieringsgrupp och hopfällbara avsnitt. `attributes.js` sköter rader, tillgängliga etiketter, avsnitt, synkroniserade kopieringsval, låsning av källkontroller under målval och meddelanden. Grundläggande radlayout, etikettbredd och kontrollhöjd ligger i de gemensamma `.attribute-inspector`/`.attribute-row`-reglerna i `src/style.css`.
+Sweep och Plate använder `src/inspector/object-schemas.js` och samma layout- och kopieringsadapter. Fit, fotplåt, avstyvning, ändplåt, ändplåtskoppling och balkskarv använder `src/inspector/component-schemas.js`, som översätter komponentdefinitionernas parametrar och grupper till samma attributstruktur. Objektets attributbeskrivning anger nyckel, rubrik, kontrolltyp, enhet, befintlig kontroll/egen widget, kopieringsgrupp och hopfällbara avsnitt. `attributes.js` sköter rader, tillgängliga etiketter, avsnitt, synkroniserade kopieringsval, låsning av källkontroller under målval och meddelanden. Grundläggande radlayout, etikettbredd och kontrollhöjd ligger i de gemensamma `.attribute-inspector`/`.attribute-row`-reglerna i `src/ui/inspector.css`.
+
+Grundstilarna för fält, etiketter, koordinatrader och numreringsserie ägs av `src/ui/inspector.css`. Befintliga etiketter ansluts med `adoptAttributeLabel`, så att kontroller och deras händelser behålls. `createNumberingSeriesFields` bygger samma två fält för part och assembly; respektive controller äger fortfarande validering och bekräftelse. Prefix och startnummer visas bredvid varandra utan hopfällning. Item använder samma attributrad för rotation. Assemblyns huvuddel markeras med en diskret ram och bakgrund i medlemslistan.
 
 ## Ansluta en objekttyp
 
@@ -103,7 +105,6 @@ olikformigt skalade block, blockarrayer, specialjusterad text och 3D-objekt
 utelämnas också. Importen begränsas till 20 000 konverterade objekt och
 5 000 mm i bredd/höjd. Filen läses lokalt; UTF-8 används med Windows-1252
 som reserv för äldre svenska filer.
-
 
 ### Revisionsblock som växer uppåt
 

@@ -1,0 +1,411 @@
+/* Shared editor surface. Domain adapters supply their existing canvas and controls. */
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  > .ui-editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector {
+  min-width: 0;
+  padding: 12px;
+  overflow: auto;
+  border-left: 1px solid var(--ui-border);
+  background: #fff;
+  font-size: 12px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  :is(.item-editor-nav, .item-editor-properties) {
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-section {
+  padding: 0 0 10px;
+  margin: 0 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-section
+  > summary {
+  padding: 7px 0 10px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ui-ink);
+  cursor: pointer;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  label.attribute-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  :is(input:not([type='checkbox']), select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  :is(fieldset, .coordinates) {
+  min-width: 0;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  .coordinates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  .coordinates
+  label.attribute-row {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  small {
+  display: block;
+  margin: 6px 0;
+  color: #73878e;
+  font-size: 11px;
+  line-height: 1.5;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-inspector
+  button {
+  min-height: 28px;
+  font-size: 11px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  > .ui-editor-footer {
+  display: block;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 0;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--ui-border);
+  background: #f3f5f6;
+  color: var(--ui-ink);
+  font-size: 11px;
+}
+.ui-editor-quick-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-quick-controls
+  :is(.section-tracking, .item-editor-tracking, #section-command) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  font-size: 11px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-quick-controls
+  label {
+  width: auto;
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-quick-controls
+  :is(input:not([type='checkbox']), select, button) {
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-instruction {
+  min-height: 16px;
+  margin: 5px 0 0;
+  padding: 0;
+  line-height: 1.4;
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  :is(
+      #section-editor,
+      #item-editor,
+      #frame-editor,
+      #plan-view,
+      #single-sheet,
+      #report-module
+    ).ui-standard-editor
+    > .ui-editor-body {
+    grid-template-columns: minmax(0, 1fr) 270px;
+  }
+  :is(
+      #section-editor,
+      #item-editor,
+      #frame-editor,
+      #plan-view,
+      #single-sheet,
+      #report-module
+    ).ui-standard-editor
+    .ui-editor-inspector
+    label.attribute-row {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+}
+#section-editor.ui-standard-editor .ui-editor-quick-controls #section-command input {
+  width: 60px;
+}
+:is(
+    #section-editor,
+    #item-editor,
+    #frame-editor,
+    #plan-view,
+    #single-sheet,
+    #report-module
+  ).ui-standard-editor
+  .ui-editor-instruction {
+  background: transparent;
+}
+
+/* Existing CAD status bars retain their settings, menus and feedback controller. */
+:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+  > .ui-editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+  .ui-editor-inspector
+  label:has(input[type='checkbox']) {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 11px;
+}
+:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+  .ui-editor-inspector
+  h3 {
+  margin: 0 0 12px;
+  padding: 7px 0;
+  color: var(--ui-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+#frame-editor.ui-standard-editor .ui-editor-inspector > section {
+  padding: 0 0 10px;
+  margin: 0 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+#frame-editor.ui-standard-editor .ui-editor-inspector .fe-pair {
+  display: block;
+}
+:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+  .ui-editor-inspector
+  [hidden] {
+  display: none !important;
+}
+:is(#plan-view, #single-sheet, #report-module).ui-standard-editor
+  .ui-editor-inspector
+  .drawing-view-fields
+  label.attribute-row {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+#report-module.ui-standard-editor > .ui-editor-body {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+#report-module.ui-standard-editor > .ui-editor-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+}
+#report-module.ui-standard-editor .report-column {
+  display: block;
+  padding: 0 0 10px;
+  margin: 0 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+#report-module.ui-standard-editor .report-column > summary {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#report-module.ui-standard-editor .report-column-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+#report-module.ui-standard-editor .report-column-options label.attribute-row {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+#report-module.ui-standard-editor .report-column-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+#report-module.ui-standard-editor .report-column-actions button {
+  width: 30px;
+  padding: 4px;
+}
+#report-module.ui-standard-editor .ui-editor-inspector label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 800px) {
+  #report-module.ui-standard-editor > .ui-editor-body {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { visibleGridEndpoints } from '../src/grid-label-position.js';
+import { gridBubbleCenter, visibleGridEndpoints } from '../src/grid-label-position.js';
 test('cropped grid bubbles stay at visible ends inside viewport', () => {
   assert.deepEqual(visibleGridEndpoints([50, -100], [50, 300], 100, 200), [
     [50, 16],
@@ -34,4 +34,19 @@ test('diagonal lines clip at intersections and very small viewports remain bound
     [5, 10],
     [5, 10],
   ]);
+});
+
+test('the insertion endpoint touches the bubble edge for all projected line directions', () => {
+  for (const opposite of [
+    [100, 0],
+    [0, 100],
+    [100, 100],
+    [-30, 60],
+  ]) {
+    const endpoint = [20, 30];
+    const center = gridBubbleCenter(endpoint, opposite, 24, 30);
+    const ellipse = ((endpoint[0] - center[0]) / 24) ** 2 + ((endpoint[1] - center[1]) / 15) ** 2;
+    assert.ok(Math.abs(ellipse - 1) < 1e-10);
+    assert.deepEqual(endpoint, [20, 30]);
+  }
 });

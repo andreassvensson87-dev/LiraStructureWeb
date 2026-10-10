@@ -214,7 +214,7 @@
 .drawing-editor .cad-warning:empty {
   display: none;
 }
-:is(#frame-editor, .drawing-editor):has(.cad-status-menu[open], .tool-group-panel:not([hidden]))
+:is(#frame-editor, .drawing-editor):has(.cad-status-menu[open], .ui-command-panel:popover-open)
   :is(.drawing-body, .canvas)
   :is(.cad-hint, .cad-dynamic-input) {
   visibility: hidden;

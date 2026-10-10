@@ -12,6 +12,8 @@ export function gridSegments(grid) {
         id: line?.id ?? `${axis}:${index}`,
         pickId: `${axis}:${index}`,
         label: gridLabel(grid, axis, index),
+        z: line?.z,
+        bubbleEnds: line?.bubbleEnds ?? grid.bubbleEnds ?? 'both',
         start:
           line?.start ?? (axis === 'x' ? [position, other[0] - 1500] : [other[0] - 1500, position]),
         end:
@@ -50,6 +52,12 @@ export function gridCrossings(grid) {
     result = [];
   for (let i = 0; i < lines.length; i++)
     for (let j = i + 1; j < lines.length; j++) {
+      if (
+        lines[i].z !== undefined &&
+        lines[j].z !== undefined &&
+        Math.abs(lines[i].z - lines[j].z) > 0.001
+      )
+        continue;
       const point = lineIntersection(lines[i].start, lines[i].end, lines[j].start, lines[j].end);
       if (point) result.push({ point, lines: [lines[i], lines[j]] });
     }
@@ -96,6 +104,8 @@ export function validateGridGeometry(grid) {
         Math.hypot(line.end[0] - line.start[0], line.end[1] - line.start[1]) < 0.001
       )
         throw Error('Ange två olika ändpunkter inom ±1 000 000 mm.');
+      if (line.bubbleEnds !== undefined && !['both', 'start', 'end'].includes(line.bubbleEnds))
+        throw Error('Ogiltig bubbelvisning för stomlinjen.');
       ids.add(line.id);
     }
   }

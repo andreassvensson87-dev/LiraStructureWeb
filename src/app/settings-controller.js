@@ -1,3 +1,4 @@
+import { installDialogPresentation } from '../ui/dialog-presentation.js';
 import {
   inputDevice,
   setInputDevice,
@@ -25,7 +26,6 @@ export function createSettingsController({
   const $ = (id) => document.getElementById(id);
   const gridLabelEditor = createGridLabelEditor(
     document.querySelector('[data-settings-panel="grid"]'),
-    editGrid ? (axis, index) => openGrid({ axis, index }) : null,
   );
   if (editGrid) {
     const button = document.createElement('button');
@@ -40,9 +40,10 @@ export function createSettingsController({
       const next = gridLabelEditor.read(project.grid);
       validateGridLabels(next);
       if (JSON.stringify(next) !== JSON.stringify(project.grid)) {
+        const previousGrid = project.grid;
         checkpoint();
         project.grid = next;
-        onGridChanged();
+        onGridChanged(previousGrid);
         onChange();
       }
       $('settings-dialog').close();
@@ -216,6 +217,7 @@ export function createSettingsController({
     setZoomInverted($('zoom-inverted').checked);
     setOrbitDamping($('orbit-damping').checked);
     onOrbitDampingChanged?.(orbitDamping());
+    const previousGrid = project.grid;
     const gridChanged = JSON.stringify(next) !== JSON.stringify(project.grid);
     checkpoint();
     project.grid = next;
@@ -223,6 +225,7 @@ export function createSettingsController({
       ['name', 'number', 'client'].map((key) => [key, $('project-' + key).value.trim()]),
     );
     project.snap = {
+      ...project.snap,
       ...Object.fromEntries(
         [
           'corners',
@@ -241,11 +244,12 @@ export function createSettingsController({
       rotation: $('snap-rotation').value,
     };
     if (gridChanged) {
-      onGridChanged();
+      onGridChanged(previousGrid);
     }
     onChange();
     $('settings-dialog').close();
     $('status').textContent = 'Inställningar uppdaterade';
   };
+  installDialogPresentation($('settings-dialog'));
   return { fill: fillSettings };
 }

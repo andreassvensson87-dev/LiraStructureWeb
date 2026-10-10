@@ -1,3 +1,5 @@
+import { installManagementDialog } from './ui/dialog-presentation.js';
+import { createRibbon } from './ui/ribbon.js';
 import { showDrawingRevision } from './drawing-revisions.js';
 import {
   createAttributeInput,
@@ -5,7 +7,6 @@ import {
   attributeInputUnchanged,
 } from './drawing-attribute-input.js';
 import { downloadDrawingPDF } from './drawing-pdf.js';
-import { positionDrawingMenu } from './drawing-menu-position.js';
 import {
   drawingAttributes,
   drawingAttributeContext,
@@ -21,7 +22,7 @@ import {
 } from './drawing-presets.js';
 import { findDrawingLayout, drawingLayoutStamp } from './drawing-layout.js';
 import { numberWithDrawings, showDrawingBatch } from './drawing-workflows.js';
-import { actionButton, actionMenu } from './drawing-toolbar.js';
+import { actionButton } from './drawing-toolbar.js';
 import { isPhysical } from './model-object.js';
 import { partStatus } from './part-marks.js';
 import { assemblyValid } from './project/assemblies.js';
@@ -247,12 +248,15 @@ export class DrawingManager {
       <div class="drawing-actions"><button id="drawing-new-ga">Ny GA</button><button id="drawing-new-part">Single Part från markering</button><button id="drawing-number">Numrera detaljer</button></div>
       <div class="drawing-manager-body"><nav class="drawing-categories" aria-label="Ritningsfilter"></nav><section class="drawing-manager-content"><input id="drawing-search" type="search" placeholder="Sök ritningar…" aria-label="Sök ritningar"><div class="drawing-list"></div></section></div>
       <footer class="drawing-manager-footer"><div class="drawing-selection-actions"><button id="drawing-open-selected">Öppna</button><button id="drawing-update-selected">Uppdatera</button><button id="drawing-duplicate-selected">Duplicera</button><button id="drawing-revision-selected">Revision…</button><button id="drawing-export-pdf">Exportera PDF</button></div><span id="drawing-count"></span></footer><p role="status" id="drawing-message"></p>`;
+    installManagementDialog(this.dialog);
+    this.dialog.querySelector('#drawing-open-selected').classList.add('primary');
     document.body.append(this.dialog);
     const button = document.createElement('button');
     button.id = 'drawings-open';
     button.textContent = 'Ritningar';
     document.querySelector('header .history').prepend(button);
     const createMenu = actionButton(document.createElement('button'), 'plus', 'Skapa ritningar');
+    createMenu.id = 'drawings-create';
     createMenu.onclick = () => showDrawingBatch(this);
     button.after(createMenu);
     this.filter = 'all';
@@ -328,56 +332,26 @@ export class DrawingManager {
       if (this.exporting) e.preventDefault();
     });
     const toolbar = this.dialog.querySelector('.drawing-actions');
-    toolbar.classList.add('drawing-commandbar');
+    toolbar.classList.add('drawing-commandbar', 'ui-management-toolbar');
     toolbar.setAttribute('aria-label', 'Ritningsåtgärder');
-    const create = actionMenu(toolbar, {
-      label: 'Ny ritning',
-      iconName: 'plus',
-      primary: true,
-      items: [
-        actionButton(this.$('new-ga'), 'page', 'GA · Översikt'),
-        actionButton(this.$('new-part'), 'page', 'Single Part / Assembly'),
-      ],
-    });
-    toolbar.prepend(create);
     const preset = drawingPresetPicker();
-    const presetChoice = document.createElement('div');
-    presetChoice.className = 'drawing-filters drawing-preset-choice';
     preset.select.title = 'Inställningar för nya ritningar';
-    presetChoice.append(preset.label);
-    create.after(presetChoice);
     this.presetSelect = preset.select;
-    const columns = document.createElement('details');
-    columns.className = 'drawing-columns';
-    const summary = document.createElement('summary');
-    summary.textContent = 'Kolumner';
     this.columnChoices = document.createElement('div');
-    columns.append(summary, this.columnChoices);
-    toolbar.append(columns);
-    const positionColumns = () => {
-      if (columns.open) positionDrawingMenu(summary, this.columnChoices);
-    };
-    columns.addEventListener('toggle', positionColumns);
-    window.addEventListener('resize', positionColumns);
-    document.addEventListener('pointerdown', (e) => {
-      if (!columns.contains(e.target)) columns.open = false;
-    });
-    columns.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && columns.open) {
-        e.preventDefault();
-        e.stopPropagation();
-        columns.open = false;
-        summary.focus();
-      }
-    });
-    this.dialog.addEventListener('close', () => {
-      columns.open = false;
-    });
+    this.columnChoices.className = 'ui-drawing-column-choices';
     this.visibleAttributes = new Set(['drawing.revision']);
-    actionMenu(toolbar, {
-      label: 'Mer',
-      items: [actionButton(this.$('number'), 'number', 'Numrera detaljer')],
-    });
+    createRibbon(toolbar, [
+      {
+        label: 'Ritningar',
+        items: [
+          { node: this.$('new-ga'), label: 'Ny GA', icon: 'page' },
+          { node: this.$('new-part'), label: 'Single Part / Assembly', icon: 'page' },
+          { node: this.$('number'), label: 'Numrera', icon: 'number' },
+          { node: preset.label },
+          { label: 'Kolumner', icon: 'library', menu: [{ node: this.columnChoices }] },
+        ],
+      },
+    ]);
     this.$('message').classList.add('drawing-feedback');
     this.$('new-ga').onclick = () => this.create('GA');
     this.$('new-part').onclick = () => this.create('SP');
@@ -511,7 +485,7 @@ export class DrawingManager {
       return;
     }
     const table = document.createElement('table');
-    table.className = 'drawing-table';
+    table.className = 'drawing-table ui-dialog-table';
     table.innerHTML = '<thead><tr></tr></thead><tbody></tbody>';
     const head = table.querySelector('thead tr');
     const selectCell = document.createElement('th'),

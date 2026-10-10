@@ -3,7 +3,11 @@ import { objectType } from './model/object-types/index.js';
 export const typeName = (s) => objectType(s).label;
 export const defaultPrefix = (s) => objectType(s).prefix;
 export const designation = (s) =>
-  s.prefix && s.number ? `${s.prefix}-${String(s.number).padStart(3, '0')}` : s.name;
+  s.type === 'gridline'
+    ? s.name
+    : s.prefix && s.number
+      ? `${s.prefix}-${String(s.number).padStart(3, '0')}`
+      : s.name;
 export function nextIdentity(s, objects) {
   const prefix = s.prefix || defaultPrefix(s);
   return nextNumber(prefix, objects);

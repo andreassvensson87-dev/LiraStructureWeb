@@ -1,50 +1,84 @@
 # Kodens ansvar och gränser
 
-## Befintlig struktur
+## Ägarskap
 
-- `src/project/`: projektdata, historik och ritningsändringar. Inga DOM- eller lagringsanrop.
-- `src/model/object-types/`: geometri, validering och ankare för objekttyper.
-- `src/model/tools/` och `src/model/ui/`: modelleringskommandon respektive deras UI-kopplingar.
-- `src/model/navigation.js`: ortografisk kamera, inpassning, arbetsplansvy och orbitcentrum. Ingen tillgång till projektet eller DOM. Kontroller kan bytas; konsumenter ska alltid läsa aktuell `navigation.controls`.
-- `src/model/viewport.js`: WebGL-renderer, ljus, resize, wheel och städning av dessa resurser.
-- `src/app/`: kopplar editorer till projektet och dess historik.
-- `src/drawing/ui/`: bygger GA- och Single Part-editorernas grundläggande DOM och returnerar elementreferenser. Ingen projektdata, geometri eller lagring.
-- `src/plan-view.js` och `src/single-part-sheet.js`: ritningscontroller, händelser och rendering; använder UI-fabrikerna ovan och gemensamma ritningsmoduler.
-- `src/references/`: lokal IFC-tolkning, referensgeometri och snapsökning.
+| Lager | Äger | Ska inte äga |
+| --- | --- | --- |
+| Projekt (`src/project/`) | Sparbara data, filvalidering, assemblies, ritningsändringar och historik | DOM, storage, aktiva verktyg |
+| Objekttyper (`src/model/object-types/`) | Geometri, validering, ankare, snappsegment och transformregler | UI, projektmutationer |
+| Verktygsregler (`src/model/tools/`) | Föreslagna objekt och beroende ändringar | Checkpoints, UI-händelser |
+| Modell-editor (`src/app/model-editor.js`) | Förbereda, validera och bekräfta objektändringar med en checkpoint | DOM, markering, kamera, rendering |
+| Editorstatus (`editor-state.js`, `tool-session.js`) | Markering, utkast, pågående kommando och punktval | Sparbara projektdata |
+| Punktplacering (`src/model/ui/placement-controller.js`) | Punktflöde, exakt avstånd, flytt/kopiering och adapter till specialverktyg | Egen snapmotor, direkt objektmutation |
+| Modellträffar (`src/model/ui/model-picking.js`) | Raycast, modellträffar och anrop till gemensam `resolveSnap` | Geometriredigering, nya snapinställningar |
+| Förhandsvisning (`src/model/ui/model-preview.js`) | Tillfällig geometri, beroende objekt, validering och återställning av visning | Commit eller historik |
+| Snapvisning (`src/model/ui/snap-overlay.js`) | Markör, riktningslinje och status för befintligt snapresultat | Snapbeslut eller nya kontroller |
+| Modell-UI (`src/model/ui/`, `src/inspector/`) | Kontroller, avsikter och presentation av förhandsvisningar | Direkt skrivning till objektlistan |
+| Visning (`viewport.js`, `object-mesh.js`, `navigation.js`) | Kamera, WebGL, visuell återkoppling och inpassning | Domänbeslut och historik |
+| Uppstart (`main.js`, `app/workspace-startup.js`) | Stilar, mallinstallation, återställning och start av appen | UI-händelser och modellregler |
+| App-koppling (`app/model-application.js`) | Skapa editor/visning och ansluta controllerer i rätt ordning | Händelsehantering, geometri och användarkommandon |
+| App-controllerer (`src/app/`) | Koppling mellan projekt, editorer, filer och storage | Egna geometriregler |
 
-`main.js` kopplar fortfarande ihop flera modelleringsflöden. Den är inte en ren
-startfil ännu. Ritningscontrollererna skapar fortfarande vissa dynamiska
-kontroller. Ram- och profileditorerna samt referenspanelen behöver motsvarande
-uppdelning när deras ansvar utökas. Många äldre ritningsmoduler ligger kvar i
-`src/`; flytta dem tillsammans med ansvar och uppdatera importerna, inte bara
-för att minska antalet filer där.
+## Modelländringarnas gemensamma väg
 
-## Vid utbyggnad
+```text
+UI / mus / tangentbord
+  → verktyg eller inspektor föreslår objekt
+  → befintlig snap och förhandsvisning
+  → modelEditor.prepare / update / add / replace
+  → validering av resultatet
+  → en checkpoint och ändring av projekt.objects
+  → markering och rendering
+```
 
-1. Lägg geometriska regler och projektändringar i moduler som kan testas utan DOM.
-2. Låt UI rapportera användarens avsikt; projektcontroller ansvarar för historik och ändringar.
-3. Dela beteende mellan GA och Single Part där reglerna är samma. Behåll projektion och källobjekt specifika för ritningstypen.
-4. Undvik att skicka hela appen eller editorn till en hjälpfunktion. Använd uttryckliga argument, callbacks och returnerade elementreferenser.
-5. Behåll importer enkelriktade. UI-fabriker får inte importera sin controller.
+`prepare` ändrar varken projektet eller historiken. `update` hanterar befintliga objekt och kopiering, inklusive beroende kopplingar och skruvar. `add` lägger till identifierade objekt. `replace` bekräftar ett färdigberäknat resultat, exempelvis efter radering eller en komponentändring. Ogiltiga resultat avvisas före checkpoint. Samma objektlista ger ingen ny checkpoint.
 
-`tests/architecture.test.js` bevakar utvalda gränser; det är inte en fullständig
-beroendeanalys. `tests/model-navigation.test.js` kontrollerar att orbitcentrum
-inte flyttar bilden, att arbetsplansvy bevarar verktygslås och att inpassning
-rymmer geometrin. Kör `npm run check` samt berörda användarflöden i webbläsaren
-innan publicering.
+Sweep, Plate, stomlinjer, inspektorändringar, flytt/kopiering/rotation, material, objektidentitet, skruvar, komponentegenskaper, Item och referenskonvertering använder denna commitgräns. UI visar fel och uppdaterar markering efteråt. Specialiserad geometrivalidering och förhandsvisning finns fortfarande i deras befintliga adaptrar.
 
-### Sweep-egenskaper i inspektorn
+Import av hela projekt, återställning, migrering och ändringar av andra projektdata (ritningar, numrering, inställningar och assemblies) har egna projekttransaktioner. Modell-editorn ersätter inte dessa med en objekttransaktion. Stomlinjernas äldre koordinatdata migreras av `grid-objects.js`; projektets grid-cache härleds sedan från objekten för ritningar och äldre konsumenter.
 
-Sweep och Plate använder det gemensamma attributramverket i `src/inspector/`. Attributscheman beskriver fält, enheter, egna kontroller, avsnitt och kopieringsgrupper; gemensamma presentationsregler och samma kopieringsadapter bygger inspektorn. Modellvalidering och transaktioner ligger kvar i objektens adaptrar. Se [inspektorramverket](inspector.md) för hur nya typer ansluts.
+## Gemensamma modelleringsfunktioner
 
-Sweep-inspektorn använder kompakta rader med etikett till vänster och kontroll till höger. Identitet och numrering ligger i ett hopfällbart avsnitt. Insättningen visar sitt aktuella värde i raden; öppna avsnittet för tvärsnittsbilden och placeringsmatrisen. Biblioteksprofiler visar profilnamnet och förhandsvisningen; deras låsta dimensionsfält upprepas inte.
+Alla 3D-objekt ansluts till objekttypsregistret. Det kräver geometri, validering, ankare, hörn, snappsegment, translation och rotation samt ritnings-/numreringsstöd för fysiska typer. Icke-fysiska stomlinjer och hjälpobjekt undantas från tillverkningsnumrering.
 
-**Kopiera till andra…** utgår från en markerad sweep och låter användaren välja flera målsweeps i modellen. Klick på ett redan valt mål avmarkerar det. Kryssrutor direkt vid egenskapsraderna väljer profil och mått, material, objektfärg, profilrotation, insättningspunkt och valfritt namn. Profilens och måttens kryssrutor är sammankopplade: profilvalet kopierar hela profilens snapshot och mått tillsammans. Valen går även att ändra under pågående målval; de ändrar inte källobjektets egenskaper. Koordinater, längd, identitet, numrering, arbetsplanets profilriktning och kopplingsreferenser tillhör målet. **Modifiera** eller Enter applicerar hela målgruppen som en gemensam transaktion, med uppdatering och validering av beroende kopplingar. Escape avbryter; Ångra återställer hela kopieringen.
+Modellens markering, `resolveSnap`, `selectionGrips`, transformverktyg och inspektorns förhandsvisning/commit ska återanvändas. Ny objekttyp är inte skäl att bygga en separat snapmotor, låsa resten av modellen eller skapa ett nytt editorläge. Snapinställningarna kommer från `project.snap`; kontroller flyttas inte mellan Settings och andra menyer som en bieffekt av implementationen.
 
-Senast använda sweep-egenskaper sparas separat från projektet i webbläsaren under `lirastructure.sweep-defaults.v1`. Nya och modifierade sweeps uppdaterar inställningarna; när en ny sweep startas från ett markerat objekt används dess egenskaper. Giltiga ändringar i en ny sweeps formulär sparas också. Profil, dimensioner, material, färg, rotation och insättning återanvänds även efter omladdning, inklusive profiler och material som finns som sparade snapshots. Koordinater, namn och objektidentiteter återanvänds inte. Ogiltiga formulärvärden ersätter inte de senast giltiga inställningarna. Om lagring är otillgänglig fungerar senaste värdena för den aktuella sessionen.
+Sweep och Plate har gemensamma attributscheman och layout-/kopieringsadapter. Stomlinjefälten använder den vanliga inspektorns transaktioner. Numrering och insättning är alltid synliga för fysiska delar. Se `docs/inspector.md` för attributramverket.
 
-### Plate-egenskaper i inspektorn
+## Ritningar och andra editorer
 
-Plate använder samma kompakta rader och kopieringsflöde. Tjocklek, material, objektfärg, placering på planets positiva/negativa sida och valfritt namn kan kopieras till flera fristående plåtar. Målplåtens kontur, konturoffset, arbetsplan, hål, identitet och numrering behålls. Modifiera eller Enter uppdaterar hela målgruppen och beroende kopplingar i en gemensam transaktion; Ångra återställer den. Kopplingsgenererade plåtar och skärobjekt ingår inte i egenskapskopieringen.
+`drawing/ui/` bygger GA- och Single Part-editorernas grundläggande DOM. Controllererna tillför projektdata och beteende via argument och callbacks. `app/drawing-controller.js` kopplar ritningseditorerna till projektets historik. Modell, ritning, rapport, ram-, profil- och Item-editorer använder de gemensamma UI-fabrikerna i `src/ui/`. Arbetsytornas adaptrar beskriver grupper och placering; befintliga controllerer behåller kommandon, data, snap och historik. Biblioteken använder gemensamma flyttbara fönster. En aktiv arbetsyta med tydlig återgång används utan dokumentflikar. Se `docs/ui.md` för kontrakten och navigeringen.
 
-Senaste tjocklek, placering, konturoffset, material och objektfärg för fristående plåtar sparas under `lirastructure.plate-defaults.v1`, separat från Sweep. Giltiga ändringar under insättning samt skapade och modifierade plåtar uppdaterar dessa värden. En ny Plate utgår från markerad fristående plåt eller de sparade värdena, även efter omladdning. Kontur, arbetsplan, namn och identitet återanvänds inte; skärobjekt och kopplingsgenererade plåtar ändrar inte förvalen.
+## Gränser som koden kontrollerar
+
+ESLint förbjuder DOM/storage och UI-importer i projektmoduler, objekttyper och verktygsregler. Ritningarnas UI-fabriker får inte importera projekt eller controllerer. Modell-UI, inspektorns adaptrar och de nya app-adaptrarna får inte tilldela eller mutera `project.objects` direkt: commit sker genom modell-editorn. `main.js` får enbart importera stilar och de två uppstartsmodulerna; händelsehantering och modellbeteende är förbjudet där. App-kopplingen får inte registrera UI-händelser. Oanvända beroenden kontrolleras i dessa controllerer.
+
+Reglerna kontrollerar konkreta beroenden och mutationer; de kan inte garantera bra UX eller upptäcka varje tänkbar indirekt mutation. `AGENTS.md` beskriver arbetsreglerna och `docs/testing.md` beskriver beteendeverifieringen.
+
+## Uppstart och controllerernas ägarskap
+
+`main.js` laddar stilar, väntar på `recoverWorkspace()` och anropar `createModelApplication()`. Uppstarten installerar mallar och återställer projektet med befintlig projektåterställning. App-kopplingen skapar gemensam editorstatus, verktygssession, historik, modell-editor och visning.
+
+Stabila beroenden skapas före controllerinstallation. Controllerer deklarerar vilka argument de behöver. `actions` innehåller namngivna callbacks med en ägare; fördröjda anrop löser kopplingen mellan exempelvis session, rendering och inspektor utan cirkulära importer. `controllers` innehåller handtag till UI som skapas senare. Båda tillhör en appinstans och får inte användas som globala tjänster eller importeras av domänmoduler. Gemensamma caches och den väntande pekarhändelsen har uttryckliga tillståndsobjekt. Renderloopen startar sist.
+
+| Ansvar | Ägare |
+| --- | --- |
+| Meshcache, återanvändning, snapindex och synkronisering av modellens UI | `model/ui/model-renderer.js` |
+| Markering, skapa/uppdatera/radera, historikåterställning, verktygsavbrott och standardvärden | `model/ui/model-session.js` |
+| Pointer- och tangentbordsrouting | `model/ui/model-input.js` |
+| Invalidation, väntande pointer och animation | `model/ui/model-frame-loop.js` |
+| Koppling till befintliga selection-, rotation-, plate- och helper-controllerer | `model/ui/model-tool-controllers.js` |
+| Verktygsmeny och cut-kommandon | `model/ui/model-toolbox-controller.js` |
+| Sweep-formulärets koppling till sessionen | `model/ui/model-sweep-form-controller.js` |
+| Synlighet, modellträd, filter, hover och kontextmeny | `model/ui/model-visibility.js`, `model-browser-controller.js`, `model-hover.js`, `model-context-menu.js` |
+| Inspektorns transaktioner, bibliotek, identitet och egenskapskopiering | `inspector/model-attributes-controller.js`, `model-library-controller.js`, `model-identity-controller.js`, `model-property-copy.js` |
+| Skruvar, komponenter och Item | `app/model-fasteners.js`, `model-components.js`, `model-items.js` |
+| Inställningar/import, nivåer, ritningar/numrering, rapporter, referenser och assemblies | Motsvarande `app/workspace-*.js` |
+| Autosparning, återställningsstatus och PWA | `app/workspace-recovery.js` |
+| Valfria utvecklarmätningar | `app/workspace-diagnostics.js` |
+
+`tests/model-session.test.js` kör session, modell-editor, historik, riktiga meshobjekt, synlighet och snapindex tillsammans med en ersatt UI-gräns. Det kontrollerar commit, ogiltiga ändringar, radering/ångra/gör om samt meshåteranvändning och frigöring. `tests/model-placement.test.js` verifierar punktplaceringens preview och flytt/kopiering med samma editor/historik. Webbläsarkontroll behövs fortfarande för den kompletta uppstarten och användarflödena.
+
+## Fortsatt strukturarbete utanför main
+
+Ram-, profil- och ritningscontrollererna blandar fortfarande en del presentation och arbetsflöde. Många äldre domänmoduler ligger direkt i `src/`. Dessa områden har inte byggts om i denna uppdelning. Flytta sammanhängande ansvar när det berörs, med tydliga argument/callbacks; undvik kosmetiska filflyttar och generella ramverk enbart för att minska radantalet.

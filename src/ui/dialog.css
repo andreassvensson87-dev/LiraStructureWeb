@@ -1,0 +1,212 @@
+/* Opt-in presentation for settings and small form dialogs. */
+dialog.ui-standard-dialog {
+  color: var(--ui-ink);
+  background: #fff;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  box-shadow: 0 16px 50px #20343b30;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+dialog.ui-standard-dialog [hidden] {
+  display: none !important;
+}
+dialog.ui-standard-dialog label.attribute-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+dialog.ui-standard-dialog :is(input:not([type='checkbox']), select, textarea) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+dialog.ui-standard-dialog :is(button, .settings-nav button) {
+  min-height: 30px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+dialog.ui-standard-dialog :is(footer, .settings-actions, .item-actions) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  height: auto;
+  padding: 12px 0 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--ui-border);
+  background: transparent;
+}
+dialog.ui-standard-dialog :is([role='alert'], [role='status']) {
+  font-size: 12px;
+  line-height: 1.5;
+}
+dialog.ui-standard-dialog [role='alert']:not(:empty) {
+  color: #a23b36;
+}
+#settings-dialog.ui-standard-dialog .setting-toggle {
+  box-sizing: border-box;
+  min-height: 32px;
+  margin: 0 0 4px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  dialog.ui-standard-dialog label.attribute-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* A shared frame for numbering, drawing management and revisions. */
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog {
+  padding: 0;
+  border-radius: 5px;
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog > header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  margin: 0;
+  border-bottom: 1px solid var(--ui-border);
+  background: #f4f7f8;
+  color: var(--ui-ink);
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+  > header
+  :is(h2, strong) {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+  > header
+  button {
+  color: var(--ui-ink);
+  background: transparent;
+  border: 0;
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+  .ui-dialog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+  .ui-dialog-table
+  :is(th, td) {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--ui-border);
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+  .ui-dialog-table
+  th {
+  background: #f4f7f8;
+  color: var(--ui-ink);
+  font-weight: 500;
+}
+:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog > footer {
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  margin: 0;
+  background: #f4f7f8;
+}
+.numbering-dialog.ui-managed-dialog > :is(nav, section, p) {
+  margin: 0;
+  padding: 12px 16px;
+}
+.numbering-dialog.ui-managed-dialog > .numbering-tabs {
+  padding: 0 16px;
+  gap: 20px;
+}
+.numbering-dialog.ui-managed-dialog .numbering-tabs button {
+  border-radius: 0;
+}
+.numbering-dialog.ui-managed-dialog .numbering-filters button {
+  border-radius: 4px;
+}
+.numbering-dialog.ui-managed-dialog .numbering-options {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 4px;
+}
+.numbering-dialog.ui-managed-dialog label.attribute-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+}
+.numbering-dialog.ui-managed-dialog.numbering-model-view {
+  padding: 0;
+}
+.numbering-dialog.ui-managed-dialog.numbering-model-view > :not(header) {
+  display: none;
+}
+#drawing-manager.ui-managed-dialog .drawing-actions.ui-ribbon {
+  height: auto;
+  min-height: 42px;
+  max-height: none;
+  padding: 6px 14px;
+  overflow: auto;
+  background: #fff;
+}
+#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-group {
+  padding: 0;
+  min-height: 30px;
+  border: 0;
+}
+#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-commands {
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+}
+#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-caption {
+  display: none;
+}
+#drawing-manager.ui-managed-dialog .drawing-list table {
+  font-size: 12px;
+}
+#drawing-manager.ui-managed-dialog #drawing-search {
+  width: 100%;
+}
+#drawing-manager.ui-managed-dialog .drawing-selection-actions {
+  flex-wrap: wrap;
+}
+.drawing-revision-dialog.ui-managed-dialog label:has(textarea) {
+  align-items: start;
+}
+@media (max-width: 600px) {
+  .numbering-dialog.ui-managed-dialog {
+    width: calc(100vw - 24px);
+  }
+}
+.ui-drawing-column-choices.ui-command {
+  display: grid;
+  gap: 6px;
+  width: min(360px, calc(100vw - 48px));
+  max-height: 50dvh;
+  overflow: auto;
+  padding: 8px;
+}
+.ui-drawing-column-choices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.ui-drawing-column-choices input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}

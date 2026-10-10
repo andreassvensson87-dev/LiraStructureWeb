@@ -20,6 +20,7 @@ import { isFastener } from '../fasteners/object-type.js';
 import { holesForPart } from '../fasteners/relations.js';
 import { holeDisplayMesh } from '../fasteners/display.js';
 import { hasExactProfile } from '../profile-detail.js';
+import { itemDisplayTemplate } from '../items/geometry.js';
 
 /** Change display mode without replacing model geometry or selection state. */
 export function updateObjectMeshTransparency(object, transparentView) {
@@ -63,7 +64,9 @@ export function updateObjectMeshSelection(object, s, selectedIds) {
   if (object.userData.selected === selected) return;
   object.userData.selected = selected;
   if (object.userData.helper) {
-    object.material.color.set(selected || object.userData.ghost ? 0x258e79 : 0x8765ad);
+    object.material.color.set(
+      selected || object.userData.ghost ? 0x258e79 : s.type === 'gridline' ? 0x82969f : 0x8765ad,
+    );
     return;
   }
   const cut = object.userData.cut;
@@ -112,7 +115,9 @@ export function createObjectMesh(
     ? geometryContext?.fastenerTemplate
       ? geometryContext.fastenerTemplate(s)
       : displayFastenerTemplate(s, model)
-    : null;
+    : s.type === 'item' && !(geometryContext?.hasCuts?.(s) ?? cachedDisplayHasCuts(s))
+      ? itemDisplayTemplate(s)
+      : null;
   const worldGeometry = template
     ? null
     : geometryContext?.geometry(s) || displayGeometry(s, model, profileDetail);

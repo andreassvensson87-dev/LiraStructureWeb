@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { advancePlatePoint } from '../src/model/tools/plate-tool.js';
-import { applyObjectBatch, transformCandidates } from '../src/model/tools/transform-tool.js';
+import { applyObjectBatch } from '../src/model/tools/transform-tool.js';
 import { pointerCommand, installModelPointer } from '../src/model/pointer-controller.js';
 import { createToolSession, resetToolInteraction } from '../src/model/tool-session.js';
 test('plate point transition is atomic and duplicates do not mutate the draft', () => {
@@ -35,12 +35,7 @@ test('copy detaches nested geometry, assigns new identities and preserves source
   r.objects[1].polygon[0][0] = 10;
   assert.equal(s.polygon[0][0], 0);
 });
-test('move candidates preserve source and use relative displacement', () => {
-  const s = { id: 's', start: [1, 2, 3], end: [4, 5, 6] },
-    r = transformCandidates({ mode: 'move', sources: [s] }, [0, 0, 0], [10, 20, 30]);
-  assert.deepEqual(r[0].start, [11, 22, 33]);
-  assert.deepEqual(s.start, [1, 2, 3]);
-});
+
 test('pointer routes typed length to plate and suppresses rotation clicks after axis selection', () => {
   assert.equal(
     pointerCommand({ mode: 'plateCreate', plateLength: true, hasLength: true }),

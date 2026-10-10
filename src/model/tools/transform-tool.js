@@ -51,7 +51,23 @@ export function applyObjectBatch(
       ...nextIdentity(s, [...objects, ...copies]),
       id: ids.get(s.id),
     };
+    if (s.type === 'item') object.item = s.item;
     object.name = designation(object);
+    if (object.type === 'gridline') {
+      object.gridIdentity = object.id;
+      const used = new Set(
+        [...objects, ...copies].filter((s) => s.type === 'gridline').map((s) => s.name),
+      );
+      let index = 1;
+      const label = () =>
+        object.gridAxis === 'x'
+          ? String(index)
+          : index <= 26
+            ? String.fromCharCode(64 + index)
+            : `A${index}`;
+      while (used.has(label())) index++;
+      object.name = label();
+    }
     if (object.type === 'component')
       object.references = object.references.map((id) => ids.get(id) || id);
     copies.push(remapFastenerCopy(object, ids));

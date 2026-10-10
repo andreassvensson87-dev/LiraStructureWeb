@@ -199,3 +199,53 @@ test('standard sweep input modifies every scoped sweep while preserving each axi
   assert.deepEqual(h.objects()[2].end, before[2].end);
   assert.deepEqual(h.objects()[1], before[1]);
 });
+
+test('grid dimensions and labels use the ordinary inspector preview, commit and rollback', () => {
+  let object = {
+    id: 'grid',
+    type: 'gridline',
+    name: '1',
+    gridAxis: 'x',
+    bubbleEnds: 'both',
+    start: [0, 0, 0],
+    end: [0, 1000, 0],
+  };
+  const inspector = Object.create(Inspector.prototype);
+  Object.assign(inspector, {
+    scope: new SelectionScope(),
+    session: null,
+    busy: false,
+    rawState: () => ({ selected: [object] }),
+    getState: () => ({ selected: [object] }),
+    validate: () => '',
+    preview(batch) {
+      this.previewBatch = batch;
+    },
+    cancel() {
+      this.previewBatch = null;
+    },
+    commit(batch) {
+      object = batch[0];
+    },
+    fill() {},
+    sync() {},
+    scopeChanged() {},
+    $: () => ({ textContent: '' }),
+  });
+  const input = (key, value, type = 'number') =>
+    inspector.input({
+      target: { id: key, dataset: { common: key }, type, value, matches: () => true },
+    });
+  input('gridAngle', '45');
+  assert.deepEqual(object.end, [0, 1000, 0]);
+  assert.ok(Math.abs(inspector.previewBatch[0].end[0] - inspector.previewBatch[0].end[1]) < 1e-8);
+  inspector.finish();
+  assert.ok(Math.abs(object.end[0] - 1000 / Math.sqrt(2)) < 1e-8);
+  input('name', 'S1', 'text');
+  inspector.finish();
+  assert.equal(object.name, 'S1');
+  input('gridLength', '0');
+  assert.match(inspector.session.error, /minst 1 mm/);
+  inspector.rollback();
+  assert.ok(Math.abs(Math.hypot(...object.end) - 1000) < 1e-8);
+});

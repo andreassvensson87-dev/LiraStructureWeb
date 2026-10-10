@@ -2,6 +2,7 @@ import { objectType } from './model/object-types/index.js';
 import { SelectionScope } from './inspector/selection-scope.js';
 import { installSelectionDock } from './inspector/selection-dock.js';
 import { FORM_OPTIONS, isRound, hasWall, normalizeForm } from './profile-forms.js';
+import { adoptAttributeLabel } from './inspector/attributes.js';
 // Inspector transactions keep the model unchanged until a field is confirmed.
 export class Inspector {
   constructor({
@@ -39,6 +40,7 @@ export class Inspector {
     this.busy = false;
     const $ = (id) => document.getElementById(id);
     this.$ = $;
+    $('inspector-properties').querySelectorAll('label.field').forEach(adoptAttributeLabel);
     this.dock = installSelectionDock(this);
     const note = document.createElement('p');
     note.id = 'inspector-scope-note';
@@ -461,6 +463,7 @@ export class Inspector {
         input.placeholder = 'Blandat';
       }
       label.append(input);
+      adoptAttributeLabel(label);
       root.append(label);
     }
   }
@@ -529,6 +532,14 @@ export class Inspector {
           if (key === 'name') {
             value = value.trim();
             if (!value) session.error = 'Ange ett namn.';
+          }
+          if (objectType(result).editAttribute) {
+            try {
+              return objectType(result).editAttribute(result, key, value);
+            } catch (error) {
+              session.error = error.message;
+              return result;
+            }
           }
           if (key.endsWith('Alignment'))
             result.placement = {

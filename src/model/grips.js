@@ -31,7 +31,7 @@ export function moveGripPoints(sources, refs, target) {
         if (Math.hypot(...target.map((v, i) => v - projected[i])) > 0.01)
           throw new Error('Hörnet måste ligga i objektets plan.');
         result.polygon[ref.kind] = local;
-      } else if (isFastener(source))
+      } else if (isFastener(source) || source.type === 'item')
         result = objectType(source).moveAnchor(result, ref.kind, target);
       else result[ref.kind] = [...target];
     }

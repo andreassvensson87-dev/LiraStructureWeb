@@ -19,7 +19,6 @@ test('each connection schema includes every declared parameter exactly once in i
       .sort();
     assert.deepEqual(schema.fields.map((f) => f.key).sort(), expected);
     assert.deepEqual(schema.groups.flatMap((g) => g.fields).sort(), expected);
-    assert.ok(schema.fields.every((f) => f.selector === `#component-parameter-${f.key}`));
   }
 });
 

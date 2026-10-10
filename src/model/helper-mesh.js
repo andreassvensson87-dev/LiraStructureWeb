@@ -19,7 +19,8 @@ export function helperMesh(s, { selectedIds, ghost = false }) {
   const geometry = new THREE.BufferGeometry().setFromPoints(
     [s.start, ...(s.end ? [s.end] : [])].map((p) => new THREE.Vector3(...p)),
   );
-  const color = selectedIds.has(s.id) || ghost ? 0x258e79 : 0x8765ad;
+  const color =
+    selectedIds.has(s.id) || ghost ? 0x258e79 : s.type === 'gridline' ? 0x82969f : 0x8765ad;
   const object =
     s.type === 'helperpoint'
       ? new THREE.Points(

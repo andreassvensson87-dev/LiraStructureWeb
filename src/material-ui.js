@@ -1,3 +1,6 @@
+import { installFloatingWindow } from './ui/floating-window.js';
+import { installLibraryWorkspace } from './ui/library-workspace.js';
+import { renderLibraryTree } from './ui/library-tree.js';
 import { SearchPicker } from './search-picker.js';
 import { ColorLibrary } from './color-library.js';
 import {
@@ -57,6 +60,7 @@ export class MaterialUI {
     this.dialog.innerHTML =
       '<header><strong>Materialbibliotek</strong><button type="button" id="material-close" aria-label="Stäng materialbibliotek">×</button></header><div class="material-layout"><nav aria-label="Materialkategorier"><input id="material-search" type="search" aria-label="Sök i materialbibliotek" placeholder="Sök material…"><div id="material-tree"></div><button type="button" id="material-new">Nytt material</button></nav><form id="material-edit"><label class="field">Materialtyp<select id="material-category"></select></label><label class="field">Undergrupp<input id="material-subgroup" maxlength="80"></label><label class="field">Namn<input id="material-name" maxlength="120" required></label><label class="field">Densitet · kg/m³<input id="material-density" type="number" min="0.001" max="100000" step="any" required></label><label class="field">Standardfärg<input id="material-color" type="color" value="#688391"></label><p id="material-note" class="inspector-note"></p><p id="material-version" class="inspector-note"></p><button type="submit" class="primary">Spara material</button></form></div><p id="material-error" role="alert"></p><footer><button type="button" id="material-export">Exportera</button><button type="button" id="material-import-open">Importera</button><input type="file" id="material-import" accept=".json,application/json" hidden></footer><p class="inspector-note">22 standardmaterial ingår offline. Egna material sparas i denna webbläsare. Exportera för säkerhetskopia. Befintliga objekt behåller sin materialversion.</p>';
     document.body.append(this.dialog);
+    this.window = installFloatingWindow(this.dialog);
     this.$ = (id) => this.dialog.querySelector('#material-' + id);
     options(this.$('category'));
     this.dialog.addEventListener('keydown', (e) => e.stopPropagation());
@@ -117,12 +121,51 @@ export class MaterialUI {
       }
       this.$('import').value = '';
     };
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.textContent = 'Redigera';
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.className = 'primary';
+    use.textContent = 'Använd';
+    use.onclick = () =>
+      this.run(() => {
+        if (!this.editing) return;
+        this.apply({ material: structuredClone(this.editing) });
+        this.dialog.close();
+      });
+    const preview = document.createElement('div');
+    preview.className = 'ui-material-preview';
+    preview.innerHTML =
+      '<h3></h3><div class="ui-material-swatch" aria-label="Materialets standardfärg"></div>';
+    this.$('edit').prepend(preview);
+    this.libraryUI = installLibraryWorkspace(this.dialog, {
+      search: this.$('search'),
+      tree: this.$('tree'),
+      details: this.$('edit'),
+      form: this.$('edit'),
+      save: this.$('edit').querySelector('[type=submit]'),
+      edit,
+      use,
+      refresh: () => this.tree(),
+      commands: [
+        { node: this.$('new'), label: 'Ny' },
+        { node: this.$('import-open'), label: 'Importera' },
+        { node: this.$('export'), label: 'Exportera' },
+      ],
+      message: this.$('error'),
+    });
+    this.dialog.append(this.$('import'));
+    this.dialog.querySelector('.material-layout').remove();
+    this.dialog.querySelector(':scope > .inspector-note')?.remove();
     this.edit(null);
   }
   openLibrary() {
+    if (!this.editing)
+      this.edit(this.sources?.[0]?.material || latestMaterials(this.records)[0] || null);
     this.tree();
     this.$('error').textContent = this.loadError;
-    this.dialog.showModal();
+    this.window.open();
   }
   persist(records) {
     localStorage.setItem(
@@ -153,40 +196,37 @@ export class MaterialUI {
         ? 'Standardmaterial · Ändringar sparas som ett eget material'
         : `Version ${m.revision} · Spara skapar en ny version`
       : 'Nytt material · ange egna materialdata';
+    this.dialog.querySelector('.ui-material-preview h3').textContent = m?.name || 'Nytt material';
+    this.dialog.querySelector('.ui-material-swatch').style.background = m?.color || '#688391';
+    this.libraryUI.setEditing(!m);
+    this.libraryUI.use.disabled = !m;
   }
   tree() {
-    const tree = this.$('tree');
-    const expanded = new Set([...tree.querySelectorAll('details[open]')].map((d) => d.dataset.key));
-    tree.replaceChildren();
     const query = this.$('search').value;
-    const branch = (key, label) => {
-      const group = document.createElement('details');
-      group.dataset.key = key;
-      group.open = Boolean(query.trim()) || expanded.has(key);
-      const title = document.createElement('summary');
-      title.textContent = label;
-      group.append(title);
-      return group;
-    };
-    for (const { id, name, count, groups } of materialGroups(this.records, query)) {
-      const group = branch(id, `${name} (${count})`);
-      for (const subgroup of groups) {
-        const child = branch(
-          `${id}/${subgroup.name}`,
-          `${subgroup.name} (${subgroup.materials.length})`,
-        );
-        for (const m of subgroup.materials) {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.textContent = m.name;
-          button.onclick = () => this.edit(m);
-          child.append(button);
-        }
-        group.append(child);
-      }
-      tree.append(group);
-    }
-    if (!tree.children.length) tree.textContent = 'Inga träffar';
+    renderLibraryTree(this.$('tree'), {
+      nodes: materialGroups(this.records, query).map((group) => ({
+        key: group.id,
+        label: group.name,
+        count: group.count,
+        children: group.groups.map((subgroup) => ({
+          key: `${group.id}/${subgroup.name}`,
+          label: subgroup.name,
+          children: subgroup.materials.map((material) => ({
+            key: `${material.id}:${material.revision}`,
+            label: material.name,
+            value: material,
+            title: `${material.name} · version ${material.revision}`,
+          })),
+        })),
+      })),
+      selectedKey: `${this.editing?.id}:${this.editing?.revision}`,
+      query,
+      onSelect: (node) => {
+        this.edit(node.value);
+        this.tree();
+      },
+      empty: 'Inga material matchar sökningen.',
+    });
   }
   sync(sources, visible, disabled = false, suggestions = []) {
     this.sources = sources;

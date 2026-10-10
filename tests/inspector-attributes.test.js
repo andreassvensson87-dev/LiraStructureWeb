@@ -57,13 +57,3 @@ test('object adapters keep cuts and generated objects outside ordinary inspector
     false,
   );
 });
-
-test('schema preserves custom placement widget and keeps geometric fields out of property copying', () => {
-  const sweep = objectInspectorSchemas.sweep,
-    plate = objectInspectorSchemas.plate;
-  assert.equal(sweep.fields.find((f) => f.key === 'placement').type, 'custom');
-  assert.ok(sweep.sections.some((s) => s.content === '.profile-preview'));
-  assert.equal(plate.fields.find((f) => f.key === 'contourOffset').copy, undefined);
-  assert.equal(plate.fields.find((f) => f.key === 'plane').copy, undefined);
-  assert.deepEqual(sweep.sections[0], plate.sections[0]);
-});

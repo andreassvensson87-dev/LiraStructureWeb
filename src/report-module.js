@@ -1,3 +1,7 @@
+import { createEditorSection } from './ui/editor-surface.js';
+import { installDialogPresentation } from './ui/dialog-presentation.js';
+import { adoptAttributeLabel } from './inspector/attributes.js';
+import { installReportWorkspace } from './ui/editor-workspace.js';
 import { drawingAttributes } from './drawing-attributes.js';
 import { readDrawingLayouts } from './drawing-layout.js';
 import { defaultReportLayout, layoutAppliesTo, REPORT_TEMPLATE_KEY } from './report-layout.js';
@@ -112,6 +116,7 @@ class ReportModule {
         this.refresh();
       }
     });
+    installReportWorkspace(dialog);
     this.$('add-column').onclick = () => {
       this.columns.push(
         this.kind === 'material-list'
@@ -195,10 +200,14 @@ class ReportModule {
         ? materialReportAttributes
         : drawingAttributes().filter((a) => !a.key.startsWith('report.'));
     const root = this.$('columns');
+    this.columnExpanded ??= new WeakMap();
     root.replaceChildren();
     this.columns.forEach((column, index) => {
-      const row = document.createElement('div');
-      row.className = 'report-column';
+      const row = createEditorSection(`Kolumn ${index + 1} · ${column.label}`, [], {
+        open: this.columnExpanded.get(column) ?? index === 0,
+      });
+      row.classList.add('report-column');
+      row.ontoggle = () => this.columnExpanded.set(column, row.open);
       const select = document.createElement('select');
       select.setAttribute('aria-label', `Kolumn ${index + 1} · attribut`);
       select.append(...attributes.map((a) => new Option(a.name, a.key)));
@@ -216,6 +225,7 @@ class ReportModule {
       label.setAttribute('aria-label', `Kolumn ${index + 1} · rubrik`);
       label.oninput = () => {
         column.label = label.value;
+        row.querySelector('summary').textContent = `Kolumn ${index + 1} · ${column.label}`;
         this.$('sort').options[index].textContent = label.value;
         this.refresh();
       };
@@ -259,7 +269,20 @@ class ReportModule {
         this.columnUI();
         this.refresh();
       };
-      row.append(select, label, width, up, remove, align);
+      const field = (caption, control) => {
+        const wrapper = document.createElement('label');
+        wrapper.textContent = caption;
+        wrapper.append(control);
+        adoptAttributeLabel(wrapper);
+        return wrapper;
+      };
+      const options = document.createElement('div');
+      options.className = 'report-column-options';
+      options.append(field('Bredd · andel', width), field('Justering', align));
+      const actions = document.createElement('div');
+      actions.className = 'report-column-actions';
+      actions.append(up, remove);
+      row.append(field('Attribut', select), field('Rubrik', label), options, actions);
       root.append(row);
     });
     const sort = this.$('sort'),
@@ -403,6 +426,7 @@ class ReportModule {
     dialog.innerHTML =
       '<form><h3>Spara rapportmall</h3><label>Namn<input required maxlength="120"></label><p role="status"></p><footer><button type="button">Avbryt</button><button type="submit">Spara</button></footer></form>';
     document.body.append(dialog);
+    installDialogPresentation(dialog);
     dialog.addEventListener('keydown', (e) => e.stopPropagation());
     dialog.querySelector('input').value =
       this.saved.find((t) => t.id === this.$('template').value)?.name || this.$('title').value;

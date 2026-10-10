@@ -55,8 +55,8 @@ export function mountAttributeDisclosure(root, section) {
   return details;
 }
 
-function adoptLabel(label) {
-  const control = label.querySelector('input:not(.property-copy-check),select');
+export function adoptAttributeLabel(label) {
+  const control = label.querySelector('input:not(.property-copy-check),select,textarea');
   if (!control) return;
   let caption = label.querySelector('.attribute-caption');
   if (!caption) {
@@ -80,7 +80,7 @@ export function mountAttributeLayout(
 ) {
   for (const section of schema.sections || []) mountAttributeDisclosure(root, section);
   for (const label of root.querySelectorAll(schema.labels || 'label.attribute-row'))
-    adoptLabel(label);
+    adoptAttributeLabel(label);
   for (const row of schema.captions || []) {
     const element = root.querySelector(row.selector);
     if (!element || element.querySelector('[data-attribute-caption]')) continue;
@@ -204,6 +204,34 @@ export function createAttributeRow(field, { value, onChange, custom } = {}) {
   control.setAttribute('aria-label', field.label);
   row.append(control);
   return row;
+}
+
+/** Part and assembly series share presentation; their controllers own commits. */
+export function createNumberingSeriesFields({ prefix, start, scope, idPrefix }) {
+  const root = document.createElement('div');
+  root.className = 'numbering-series-fields';
+  const inputs = {};
+  for (const [key, label, value] of [
+    ['prefix', 'Prefix', prefix],
+    ['start', 'Startnummer', start],
+  ]) {
+    const row = createAttributeRow(
+      {
+        key,
+        label,
+        type: key === 'start' ? 'number' : 'text',
+        ...(key === 'start' ? { min: 1, max: 999999999, step: 1 } : {}),
+      },
+      { value },
+    );
+    const input = row.querySelector('input');
+    input.setAttribute('aria-label', `${scope}${key === 'start' ? 'startnummer' : 'prefix'}`);
+    if (idPrefix) input.id = `${idPrefix}-${key}`;
+    if (key === 'prefix') input.maxLength = 16;
+    inputs[key] = input;
+    root.append(row);
+  }
+  return { root, inputs };
 }
 
 export function setAttributeMessage(element, message = '') {

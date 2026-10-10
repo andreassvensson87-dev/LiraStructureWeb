@@ -16,12 +16,16 @@ npm run dev
 
 Kör `npm run check` före ändringar lämnas vidare: formatering, lint, tester och produktionsbygge kontrolleras även av CI. Modulansvar och regler för vidareutveckling finns i [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Items från STEP
+
+Välj **Skapa → Item** för biblioteket, STEP-import och punkteditorn. Se [docs/items.md](docs/items.md).
+
 ## Omfattning
 
 - Skapa sweep genom två klick i XY-planet på startpunktens Z-nivå (fri placering eller valbar snapp), eller genom exakta XYZ-koordinater.
 - Rektangulärt massivt tvärsnitt, rektangulärt hålprofil och förenklat I-tvärsnitt. Mått i mm, rotation i grader.
 - Markera i 3D eller objektlista, ändra egenskaper, ta bort, ångra/gör om.
-- Stomlinjer med ändbubblor (1, 2, 3 / A, B, C), redigerbara X/Y-lägen, 1 500 mm förlängning och snapp till korsningar inom 14 skärmpixlar. Stomlinjeändringar ingår i ångra/gör om. Visa allt omfattar både stomlinjer och sweeps.
+- Stomlinjer med ändbubblor (1, 2, 3 / A, B, C), egna modellobjekt med redigerbara ändpunkter och vanlig modellsnappning. Stomlinjeändringar ingår i ångra/gör om. Visa allt omfattar både stomlinjer och sweeps.
 - Ortografisk kamera i alla vyer, med orbit, panorering, zoom, ovanifrån och anpassa vy.
 
 Spara och öppna projekt under Inställningar → Projekt. `.lira.json` innehåller objekt, använda material-/profil-/skruvvärden, hål, nivåer, numrering, ritningar och snapinställningar. Öppna ingår i ångra/gör om. Geometri och kameravy härleds på nytt; ingen automatisk sparning eller molnlagring finns. Formatet är separat från Mac-appens projektfiler. Tvärsnittsbiblioteket sparas separat lokalt och kan importeras/exporteras. Inga verifierade standardprofiler medföljer. Ingen dimensioneringsberäkning.
@@ -66,7 +70,7 @@ Markera en sweep, välj Flytta eller Kopiera i verktygslådan och klicka en basp
 
 Klicka på den markerade sweepens startcirkel eller slutfyrkant för att flytta bara den punkten. Klicka målpunkt eller ange riktning och avstånd. Den andra ändpunkten ligger kvar. Punkten flyttas med klick–klick (inte drag). Escape avbryter förhandsvisningen, och färdiga ändringar kan ångras/göras om. Kameran behålls. Flytt till nollängd eller utanför modellens koordinatgränser avvisas.
 
-Stomlinjesnappning använder linjernas verkliga XYZ-position (för närvarande Z=0), även vid Flytta/Kopiera eller ändpunktsflytt från annan höjd. Bas- och målpunkt ger då en verklig 3D-förflyttning. X/Y-låsning tillåter inte en träff på en annan höjd. Ingen dold projektion till startpunktens Z används.
+Stomlinjesnappning använder linjernas verkliga XYZ-position (stomlinjeobjektens höjd), även vid Flytta/Kopiera eller ändpunktsflytt från annan höjd. Bas- och målpunkt ger då en verklig 3D-förflyttning. X/Y-låsning tillåter inte en träff på en annan höjd. Ingen dold projektion till startpunktens Z används.
 
 ## Multimarkering
 
@@ -289,7 +293,7 @@ Markera objekt i modellen och använd **Ctrl+M** för Flytta, **Ctrl+C** för Ko
 
 För markerade sweeps flyttar **Shift+piltangent** insättningspunkten ett steg i profilens 3 × 3-ruta, med stopp vid kanten. **Shift+mellanslag** roterar profilen 90° runt längdaxeln. Samma kortkommandon används på Mac och Windows. Vid flerval ändras varje sweep från sitt eget läge; ett valt sweep-urval i inspektören kan också användas. Ändringen bekräftas direkt och går att ångra. Dessa kortkommandon är avstängda vid modellering, aktiva verktyg, dialoger och inmatning i textfält.
 
-Under **Inställningar → Stomlinjer** kan du ange egen bubbeltext för varje X- och Y-linje. Beteckningen följer linjens koordinat när lägen läggs till eller sorteras. Tom text ger standardbeteckningen. Tillämpa sparar beteckningarna i projektet och uppdaterar modell, ritningar och snappningshjälp; Avbryt lämnar tidigare värden. Ändringarna kan ångras och följer med projektfilen.
+Stomlinjer är egna, icke-fysiska modellobjekt. Markera linjen eller bubblan i vanligt modelläge och ändra beteckning, serie, bubblor, ändpunkter, längd och vinkel i inspektorn. Modellens vanliga Flytta, Kopiera, Rotera, ändpunktshandtag, snappning och Polar används även för stomlinjer. Skapa nya via Hjälpgeometri → Stomlinjer. Snapinställningar ligger kvar i Settings. Äldre stomlinjer konverteras till objekt vid öppning; de deltar inte i part- eller assemblynumrering. Settings → Stomlinjer styr bara bubbelvisning och textstorlek.
 
 Koordinatindikatorn ligger fast nere till höger i modellvyn och visar globala XYZ-riktningar när kameran roteras. Indikatorn är liten, utan bakgrund eller förklarande text. Klicka på en axelbubbla (+X, +Y eller +Z) för att se modellen från den sidan. Axelvyerna behåller zoom och kamerans målpunkt. Ett valt arbetsplan visas fortfarande med sin lokala indikator i modellen.
 

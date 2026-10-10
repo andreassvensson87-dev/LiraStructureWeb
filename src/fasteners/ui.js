@@ -1,3 +1,6 @@
+import { installFloatingWindow } from '../ui/floating-window.js';
+import { installLibraryWorkspace } from '../ui/library-workspace.js';
+import { renderLibraryTree } from '../ui/library-tree.js';
 import {
   FASTENER_LIBRARY_KEY,
   defaultHoleForSpec,
@@ -112,6 +115,7 @@ export class FastenerUI {
       </div>
       <footer><span>Sparas i webbläsaren · egna, ej verifierade produkter</span><div><button type="button" data-export title="Exportera bibliotek för säkerhetskopia">Exportera</button><button type="button" data-import>Importera</button><input type="file" data-file accept=".json,application/json" hidden></div></footer>`;
     document.body.append(this.library);
+    this.window = installFloatingWindow(this.library);
     this.library.addEventListener('keydown', (e) => e.stopPropagation());
     this.library.querySelector('[data-close]').onclick = () => this.library.close();
     this.library.querySelector('[data-new]').onclick = () => this.editSpec(null);
@@ -247,6 +251,40 @@ export class FastenerUI {
     this.library.addEventListener('close', () => {
       if (this.placeForm.isConnected) this.refreshSpecs(this.placeForm.elements.spec.value);
     });
+    const edit = button('Redigera', () => {});
+    const use = button(
+      'Använd',
+      () => {
+        if (!this.editingSpec) return;
+        this.refreshSpecs(`${this.editingSpec.id}:${this.editingSpec.revision}`);
+        this.library.close();
+        this.startCreation();
+      },
+      'primary',
+    );
+    use.className = 'primary';
+    const preview = document.createElement('div');
+    preview.className = 'ui-fastener-preview';
+    preview.innerHTML =
+      '<svg viewBox="0 0 300 160" aria-label="Skruvens mått"><path d="M55 55h30v50H55Z M85 65h150v30H85Z M95 65l12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30"/><text x="160" y="135" text-anchor="middle"></text></svg>';
+    this.editForm.querySelector('.fastener-edit-heading').after(preview);
+    this.libraryUI = installLibraryWorkspace(this.library, {
+      search: this.library.querySelector('[data-search]'),
+      tree: this.library.querySelector('[data-records]'),
+      details: this.editForm,
+      form: this.editForm,
+      save: this.editForm.querySelector('[type=submit]'),
+      edit,
+      use,
+      refresh: () => this.renderLibrary(),
+      commands: [
+        { node: this.library.querySelector('[data-new]'), label: 'Ny' },
+        { node: this.library.querySelector('[data-import]'), label: 'Importera' },
+        { node: this.library.querySelector('[data-export]'), label: 'Exportera' },
+      ],
+      message: this.library.querySelector('[data-error]'),
+    });
+    this.library.querySelector('.fastener-library-layout').remove();
     this.editSpec(null);
   }
   run(dialog, action) {
@@ -263,50 +301,54 @@ export class FastenerUI {
   }
   openLibrary({ preserveOperation = false } = {}) {
     if (!preserveOperation) this.finish();
+    if (!this.editingSpec) this.editSpec(latestFasteners(this.records)[0] || null);
     this.renderLibrary();
     this.library.querySelector('[data-error]').textContent = this.loadError || '';
-    this.library.showModal();
+    this.window.open();
   }
   renderLibrary() {
-    const root = this.library.querySelector('[data-records]');
-    root.replaceChildren();
-    const query = this.library.querySelector('[data-search]').value.toLocaleLowerCase('sv');
-    let count = 0;
-    for (const [kind, label] of FASTENER_KINDS) {
-      const specs = latestFasteners(this.records).filter(
-        (s) =>
-          s.kind === kind &&
-          `${s.name} ${s.diameter} ${s.length} ${s.standard || ''} ${s.manufacturer || ''} ${s.article || ''}`
-            .toLocaleLowerCase('sv')
-            .includes(query),
-      );
-      if (!specs.length) continue;
-      const heading = document.createElement('h3');
-      heading.textContent = `${label} · ${specs.length}`;
-      root.append(heading);
-      for (const spec of specs) {
-        const entry = button('', () => this.editSpec(spec));
-        entry.dataset.specId = spec.id;
-        entry.setAttribute('aria-pressed', String(this.editingSpec?.id === spec.id));
-        const name = document.createElement('strong');
-        name.textContent = spec.name;
-        const dimensions = document.createElement('span');
-        dimensions.textContent = `Ø${spec.diameter} × ${spec.length}`;
-        entry.title = `${spec.name} · ${dimensions.textContent} mm · version ${spec.revision}`;
-        entry.setAttribute('aria-label', entry.title);
-        entry.append(name, dimensions);
-        root.append(entry);
-        count++;
+    const query = this.library.querySelector('[data-search]').value;
+    const normalize = (value) => value.toLocaleLowerCase('sv').replace(/\s/g, '');
+    const nodes = FASTENER_KINDS.map(([kind, label]) => {
+      const groups = new Map();
+      for (const spec of latestFasteners(this.records).filter((record) => record.kind === kind)) {
+        const series = spec.series || spec.standard || 'Egna skruvar';
+        if (
+          !normalize(
+            `${label} ${series} ${spec.name} ${spec.diameter} ${spec.length} ${spec.manufacturer || ''} ${spec.article || ''}`,
+          ).includes(normalize(query))
+        )
+          continue;
+        if (!groups.has(series)) groups.set(series, []);
+        groups.get(series).push({
+          key: `${spec.id}:${spec.revision}`,
+          label: `${spec.name} · Ø${spec.diameter} × ${spec.length}`,
+          title: `${spec.name} · Ø${spec.diameter} × ${spec.length} mm · version ${spec.revision}`,
+          value: spec,
+        });
       }
-    }
-    if (!count) {
-      const empty = document.createElement('p');
-      empty.className = 'fastener-empty';
-      empty.textContent = query
+      return {
+        key: kind,
+        label,
+        children: [...groups].map(([series, children]) => ({
+          key: `${kind}/${series}`,
+          label: series,
+          children,
+        })),
+      };
+    }).filter((node) => node.children.length);
+    renderLibraryTree(this.library.querySelector('[data-records]'), {
+      nodes,
+      query,
+      selectedKey: `${this.editingSpec?.id}:${this.editingSpec?.revision}`,
+      onSelect: (node) => {
+        this.editSpec(node.value);
+        this.renderLibrary();
+      },
+      empty: query
         ? 'Inga skruvar matchar sökningen.'
-        : 'Biblioteket är tomt. Lägg till din första skruv eller importera ett bibliotek.';
-      root.append(empty);
-    }
+        : 'Biblioteket är tomt. Skapa en skruv eller importera ett bibliotek.',
+    });
   }
   editSpec(spec) {
     this.editingSpec = spec;
@@ -348,15 +390,18 @@ export class FastenerUI {
     this.editForm.elements.defaultHasCountersink.checked = !!spec?.holeDefaults?.countersink;
     this.library.querySelector('[data-library-holes]').open = false;
     this.syncHoleDefaults();
-    this.library.querySelector('[data-edit-title]').textContent = spec
-      ? 'Redigera skruv'
-      : 'Ny skruv';
+    this.library.querySelector('[data-edit-title]').textContent = spec ? spec.name : 'Ny skruv';
+    if (this.libraryUI) {
+      this.libraryUI.setEditing(!spec);
+      this.libraryUI.use.disabled = !spec;
+      this.library.querySelector('.ui-fastener-preview text').textContent = spec
+        ? `Ø${spec.diameter} × ${spec.length} mm`
+        : 'Ange skruvens mått';
+    }
     this.library.querySelector('[data-version]').textContent = spec
       ? `Version ${spec.revision}`
       : 'Ej sparad';
-    this.editForm.querySelector('[type=submit]').textContent = spec
-      ? 'Spara ny version'
-      : 'Spara skruv';
+    this.libraryUI.save.textContent = spec ? 'Spara ny version' : 'Spara skruv';
     this.library
       .querySelectorAll('[data-spec-id]')
       .forEach((entry) =>

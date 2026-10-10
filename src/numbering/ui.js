@@ -1,3 +1,4 @@
+import { installManagementDialog } from '../ui/dialog-presentation.js';
 import './ui.css';
 import {
   defaultNumberingSettings,
@@ -64,6 +65,7 @@ export function installNumbering({
     </section>
     <p class="numbering-error" role="alert"></p>
     <footer><span>Inga nummer ändras förrän du väljer Tilldela nummer.</span><div><button type="button" data-action="cancel">Avbryt</button><button type="button" data-action="apply" class="primary">Förhandsgranska</button></div></footer>`;
+  installManagementDialog(dialog);
   const $ = (selector) => dialog.querySelector(selector);
   const modelToggle = $('.numbering-model-toggle');
   const showModel = (visible) => {

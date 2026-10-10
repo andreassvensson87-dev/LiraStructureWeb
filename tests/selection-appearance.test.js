@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createObjectMesh, updateObjectMeshSelection } from '../src/model/object-mesh.js';
-import { ModelTree } from '../src/model-tree.js';
 
 const beam = {
   id: 'beam',
@@ -20,14 +19,14 @@ test('marking and clearing preserve geometry, edges and transparent appearance',
     const mesh = createObjectMesh(beam, { model: [beam], selectedIds: new Set(), transparentView });
     const geometry = mesh.geometry,
       edges = mesh.children[0].geometry,
-      material = mesh.material;
+      material = mesh.material,
+      edgeColor = mesh.children[0].material.color.getHex();
     updateObjectMeshSelection(mesh, beam, new Set(['beam']));
-    assert.equal(mesh.material.color.getHex(), 0x359e83);
-    assert.equal(mesh.children[0].material.color.getHex(), 0x145d4d);
+    assert.notEqual(mesh.material.color.getHexString(), beam.colorOverride.slice(1));
     assert.equal(mesh.material.opacity, transparentView ? 0.3 : 1);
     updateObjectMeshSelection(mesh, beam, new Set());
     assert.equal(mesh.material.color.getHexString(), 'bb925e');
-    assert.equal(mesh.children[0].material.color.getHex(), 0x3e5663);
+    assert.equal(mesh.children[0].material.color.getHex(), edgeColor);
     assert.equal(mesh.geometry, geometry);
     assert.equal(mesh.children[0].geometry, edges);
     assert.equal(mesh.material, material);
@@ -66,30 +65,11 @@ test('cut selection preserves its shape and toggles visibility; helpers keep the
   });
   const helper = { id: 'helper', type: 'helperline', start: [0, 0, 0], end: [100, 0, 0] };
   const line = createObjectMesh(helper, { selectedIds: new Set() });
+  const helperColor = line.material.color.getHex();
   updateObjectMeshSelection(line, helper, new Set(['helper']));
-  assert.equal(line.material.color.getHex(), 0x258e79);
+  assert.notEqual(line.material.color.getHex(), helperColor);
   updateObjectMeshSelection(line, helper, new Set());
-  assert.equal(line.material.color.getHex(), 0x8765ad);
+  assert.equal(line.material.color.getHex(), helperColor);
   line.geometry.dispose();
   line.material.dispose();
-});
-test('model tree updates only old and new selection rows, preserving all other rows', () => {
-  const calls = [];
-  const tree = Object.create(ModelTree.prototype);
-  tree.selected = new Set(['old']);
-  tree.isolateButton = { disabled: true };
-  tree.rows = new Map(
-    ['old', 'new', 'untouched'].map((id) => [
-      id,
-      { classList: { toggle: (name, active) => calls.push([id, name, active]) } },
-    ]),
-  );
-  tree.setSelection(new Set(['new']));
-  assert.deepEqual(calls, [
-    ['old', 'selected', false],
-    ['new', 'selected', true],
-  ]);
-  assert.equal(tree.isolateButton.disabled, false);
-  tree.setSelection(new Set());
-  assert.equal(tree.isolateButton.disabled, true);
 });

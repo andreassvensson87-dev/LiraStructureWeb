@@ -1,3 +1,4 @@
+import { installFrameWorkspace } from './ui/editor-workspace.js';
 import { createCadStatusbar, placeCadInput } from './cad-statusbar.js';
 import { CadTracking } from './cad-tracking.js';
 import { showStandardLayouts } from './frame-layout-wizard.js';
@@ -153,6 +154,7 @@ export class FrameEditor {
     );
     improveFrameTools(this.dialog);
     this.toolbox = createFrameToolbox(this.dialog);
+    installFrameWorkspace(this.dialog, this.toolbox);
     this.fileDialog = new FrameFileDialog(this.dialog);
     this.updatePalette = paletteControl(this.$('color'), () => this.changedProperties.add('color'));
     const button = document.createElement('button');
@@ -261,6 +263,7 @@ export class FrameEditor {
         this.checkpoint();
         this.frame[key] = v;
         this.$('paper').value = 'custom';
+        this.sync();
         this.fit();
       };
     this.$('anchor').onchange = () => {

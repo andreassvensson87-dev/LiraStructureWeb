@@ -1,6 +1,6 @@
-import { createGroupedToolbox } from './model/ui/toolbox.js';
+import { installEditorWorkspace } from './ui/editor-workspace.js';
 
-export function createDrawingToolbox(root) {
+export function createDrawingToolbox(root, toolbar) {
   const buttons = [...root.querySelectorAll('button')];
   const groups = [
     { id: 'select', label: 'Markera', categories: [{ label: 'Urval', buttons: [] }] },
@@ -47,17 +47,96 @@ export function createDrawingToolbox(root) {
       group.categories[0];
     category.buttons.push(button);
   }
-  root.replaceChildren(...buttons);
-  const definitions = groups
-    .filter((g) => g.categories.some((c) => c.buttons.length))
-    .map((g) => {
-      const categories = g.categories
-        .filter((c) => c.buttons.length)
-        .map((c) => ({ label: c.label, tools: c.buttons.map((b) => b.id) }));
-      const tools = categories.flatMap((c) => c.tools);
-      return { ...g, categories, tools, icon: tools[0] };
-    });
-  const toolbox = createGroupedToolbox(root, definitions);
-  root.closest('dialog').addEventListener('close', () => toolbox.close());
-  return toolbox;
+  const commands = (id) =>
+    groups
+      .find((g) => g.id === id)
+      .categories.flatMap((c) => c.buttons)
+      .map((node) => ({ node }));
+  const [select] = commands('select');
+  const modify = commands('modify');
+  const draw = commands('draw');
+  const measure = commands('measure');
+  const notes = commands('notes');
+  const views = commands('views');
+  const dialog = root.closest('dialog');
+  const toolbarNodes = [];
+  const collect = (node) => {
+    if (node.classList.contains('drawing-action-menu')) {
+      for (const child of node.querySelector('.drawing-action-panel').children) collect(child);
+    } else if (node.matches('.drawing-history-controls,.drawing-fit-controls')) {
+      for (const child of node.children) collect(child);
+    } else toolbarNodes.push({ node });
+  };
+  [...toolbar.children].forEach(collect);
+  const history = toolbarNodes.filter(({ node }) => node.dataset.drawingHistory);
+  const fit = toolbarNodes.find(({ node }) => node.textContent.trim() === 'Visa blad');
+  const more = toolbarNodes.filter((item) => !history.includes(item) && item !== fit);
+  const definitions = [
+    {
+      label: 'Ritning',
+      items: [{ node: dialog.querySelector('.drawing-document-save'), size: 'large' }],
+    },
+    {
+      label: 'Ändra',
+      items: [
+        { ...select, size: 'large' },
+        ...(modify.length ? [{ ...modify[0], size: 'large' }] : []),
+        ...(modify.length > 1 ? [{ stack: modify.slice(1) }] : []),
+      ],
+    },
+    ...(draw.length
+      ? [
+          {
+            label: 'Rita',
+            items: [{ label: 'Linje', primary: draw[0].node, size: 'large', menu: draw.slice(1) }],
+          },
+        ]
+      : []),
+    ...(measure.length
+      ? [
+          {
+            label: 'Annotera',
+            items: [
+              {
+                label: 'Måttsätt',
+                primary: measure[0].node,
+                size: 'large',
+                menu: measure.slice(1),
+              },
+              ...(notes.length ? [{ stack: notes }] : []),
+            ],
+          },
+        ]
+      : []),
+    ...(views.length
+      ? [
+          {
+            label: 'Vyer',
+            items: [
+              { ...views[0], size: 'large' },
+              ...(views.length > 1 ? [{ stack: views.slice(1) }] : []),
+            ],
+          },
+        ]
+      : []),
+    {
+      label: 'Blad och vy',
+      items: [
+        { stack: history },
+        ...(fit ? [{ ...fit, size: 'large' }] : []),
+        { label: 'Fler', menu: more },
+      ],
+    },
+    ...(commands('other').length
+      ? [
+          {
+            label: 'Bibliotek',
+            items: [{ label: 'Bibliotek', menu: commands('other'), icon: 'library' }],
+          },
+        ]
+      : []),
+  ];
+  const ribbon = installEditorWorkspace(dialog, { ribbon: root, groups: definitions });
+  toolbar.hidden = true;
+  return ribbon;
 }

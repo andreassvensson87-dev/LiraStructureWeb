@@ -343,19 +343,6 @@
   border-radius: 7px;
   background: transparent;
 }
-#frame-editor .fe-body > nav .tool-group-panel {
-  z-index: 30;
-}
-#frame-editor .fe-body > nav .tool-group-categories {
-  width: 252px;
-}
-#frame-editor .fe-body > nav .tool-category {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-#frame-editor .fe-body > nav .tool-category-heading {
-  grid-column: 1 / -1;
-}
 #frame-editor .fe-body > nav button svg {
   width: 20px;
   height: 20px;
@@ -371,7 +358,6 @@
   white-space: nowrap;
 }
 #frame-editor .fe-body > nav button[aria-pressed='true'],
-#frame-editor .fe-body > nav .tool-group-trigger.active,
 #frame-editor .fe-body > nav button:hover {
   background: #e0eeeb !important;
   color: #287c65 !important;

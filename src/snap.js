@@ -114,11 +114,24 @@ export function resolveSnap({
     [objectPoints, 14],
     [referencePoints.filter((p) => !p.edge), 14],
     [segmentPoints, 12],
+    [
+      endpoints
+        ? gridSegments(grid).flatMap((line) =>
+            [line.start, line.end].map((p) => ({
+              coords: [...p, line.z ?? gridZ],
+              symbol: 'square',
+              label: `Ändpunkt · Stomlinje ${line.label}`,
+              gridIds: [line.pickId],
+            })),
+          )
+        : [],
+      14,
+    ],
     [referencePoints.filter((p) => p.edge), 10],
     [
       gridIntersections
         ? gridCrossings(grid).map(({ point, lines }) => ({
-            coords: [...point, gridZ],
+            coords: [...point, lines[0].z ?? gridZ],
             symbol: 'cross',
             label: `Stomlinjekorsning ${lines.map((line) => line.label).join('/')}`,
             gridIds: lines.map((line) => line.pickId),
@@ -148,11 +161,11 @@ export function resolveSnap({
     }
     if (best) return best;
   }
-  function directionSnap(direction, label, forced = false) {
+  function directionSnap(direction, label, forced = false, base = origin) {
     if (normal && Math.abs(direction.dot(normal)) > 1e-6)
       return forced ? { point: null, label: 'Riktningen ligger utanför arbetsplanet' } : null;
-    const a = screen(origin),
-      delta = screen(origin.clone().addScaledVector(direction, 1000)).sub(a);
+    const a = screen(base),
+      delta = screen(base.clone().addScaledVector(direction, 1000)).sub(a);
     // A direction seen end-on has no unambiguous mouse distance.
     if (delta.length() < 1)
       return forced ? { point: null, label: `${label}: rotera vyn för att ange längd` } : null;
@@ -164,9 +177,10 @@ export function resolveSnap({
       .length();
     if (!forced && (distance > 10 || offset.length() < 24)) return null;
     return {
-      point: origin.clone().addScaledVector(direction, quantize(t)).toArray(),
+      point: base.clone().addScaledVector(direction, quantize(t)).toArray(),
       label,
       kind: 'direction',
+      trackingBase: base.toArray(),
       distance,
       axis: /^[XYZ]/.test(label) ? label[0] : null,
     };
@@ -181,12 +195,13 @@ export function resolveSnap({
         : null;
     if (grid.lines) {
       for (const line of gridSegments(grid)) {
-        const a = new THREE.Vector3(...line.start, gridZ),
-          b = new THREE.Vector3(...line.end, gridZ);
+        const lineZ = line.z ?? gridZ;
+        const a = new THREE.Vector3(...line.start, lineZ),
+          b = new THREE.Vector3(...line.end, lineZ);
         let candidate;
         if (direction) {
           if (Math.abs(direction.z) > 1e-8) {
-            candidate = origin.clone().addScaledVector(direction, (gridZ - origin.z) / direction.z);
+            candidate = origin.clone().addScaledVector(direction, (lineZ - origin.z) / direction.z);
             const projection = gridProjection(candidate.toArray(), line);
             if (
               projection.t < 0 ||
@@ -196,7 +211,7 @@ export function resolveSnap({
             )
               continue;
           } else {
-            if (Math.abs(origin.z - gridZ) > 0.01) continue;
+            if (Math.abs(origin.z - lineZ) > 0.01) continue;
             const cross = lineIntersection(
               line.start,
               line.end,
@@ -207,7 +222,7 @@ export function resolveSnap({
             if (cross) {
               const projection = gridProjection(cross, line);
               if (projection.t < 0 || projection.t > 1) continue;
-              candidate = new THREE.Vector3(...cross, gridZ);
+              candidate = new THREE.Vector3(...cross, lineZ);
             } else {
               const projection = gridProjection(tracking.point, line);
               if (

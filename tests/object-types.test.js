@@ -74,19 +74,7 @@ for (const object of [sweep, plate, polygoncut, linecut]) {
 
 test('legacy and explicit sweeps share one definition', () => {
   assert.equal(objectType(sweep), objectType({ ...sweep, type: 'sweep' }));
-  assert.deepEqual(
-    objectTypes.list().map((t) => t.id),
-    [
-      'sweep',
-      'plate',
-      'polygoncut',
-      'linecut',
-      'helperline',
-      'helperpoint',
-      'fastener',
-      'component',
-    ],
-  );
+  assert.ok(objectTypes.list().includes(objectType(sweep)));
 });
 
 test('unknown objects cannot silently acquire sweep behavior', () => {

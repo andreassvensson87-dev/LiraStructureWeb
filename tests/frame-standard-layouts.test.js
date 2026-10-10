@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { standardDrawingLayouts } from '../src/frame-standard-layouts.js';
-import { titleExampleBlock } from '../src/frame-title-example.js';
-import { revisionExampleBlock } from '../src/frame-revision-example.js';
+import { titleExampleBlock } from './fixtures/frame-blocks.js';
+import { revisionExampleBlock } from './fixtures/frame-blocks.js';
 import { expandLayout, instancePoint } from '../src/frame-layout.js';
 import { builtInAttributes } from '../src/frame-model.js';
 test('standard A4 A3 and A1 layouts place separate live blocks with exact margins and spacing', () => {

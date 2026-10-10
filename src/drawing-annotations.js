@@ -674,11 +674,11 @@ export class DrawingAnnotations {
   }
   key(e) {
     if (e.key === 'Escape') {
-      const menu = e.target?.closest?.('.cad-status-menu[open], .tool-group');
+      const menu = e.target?.closest?.('.cad-status-menu[open], .ui-command-menu');
       if (
         menu &&
         (menu.matches?.('.cad-status-menu') ||
-          menu.querySelector?.('.tool-group-panel:not([hidden])'))
+          menu.querySelector?.('.ui-command-panel:popover-open'))
       )
         return;
     }

@@ -5,6 +5,7 @@ import { objectType, objectTypes } from './model/object-types/index.js';
 import { holesForPart, holesByTarget } from './fasteners/relations.js';
 import { holeGeometry, fastenerDisplayTemplate, fastenerGeometry } from './fasteners/geometry.js';
 import { geometryEdges } from './fasteners/edges.js';
+import { itemDisplayTemplate, itemGeometry } from './items/geometry.js';
 import {
   profileDisplayObject,
   modelProfileDetail,
@@ -53,7 +54,7 @@ function compact(geometry) {
 // Display, picking and broad-phase snap use the local shared screw template.
 // Keep world-space vertex copies lazy for consumers that actually request them.
 // This separate scope retains only the screw, not a whole evaluation/model context.
-function lazyFastenerEntry(source, instance) {
+function lazyFastenerEntry(source, instance, build = fastenerGeometry) {
   let geometry = null;
   return {
     cuts: [],
@@ -62,7 +63,7 @@ function lazyFastenerEntry(source, instance) {
     bounds: instance.geometry.boundingBox.clone().applyMatrix4(instance.matrix),
     get geometry() {
       if (!geometry) {
-        geometry = fastenerGeometry(source);
+        geometry = build(source);
         geometry.computeBoundingBox();
         geometry.userData.linkedHoles = false;
       }
@@ -93,6 +94,11 @@ function evaluated(s, model = [], knownCuts = null, simplified = false) {
   if (entry && entry.cuts.length === cuts.length && entry.cuts.every((c, i) => c === cuts[i]))
     return entry;
   disposeEntry(entry);
+  if (simplified && s.type === 'item' && !cuts.length) {
+    entry = lazyFastenerEntry(s, itemDisplayTemplate(s), itemGeometry);
+    store.set(s, entry);
+    return entry;
+  }
   if (simplified && s.type === 'fastener' && !cuts.length) {
     entry = lazyFastenerEntry(s, fastenerDisplayTemplate(s));
     store.set(s, entry);
@@ -291,6 +297,7 @@ export function objectInstanceDescriptor(
   s = profileDisplayObject(s, detail);
   const entry = (simplified ? displayCache : cache).get(s);
   if (!entry) return null;
+  if (s.type === 'item') return entry.cuts.length ? null : itemDisplayTemplate(s);
   if (s.type === 'fastener') return entry.cuts.length ? null : fastenerDisplayTemplate(s);
   if (!['sweep', 'plate'].includes(s.type || 'sweep')) return null;
   if (entry.instance) return entry.instance;

@@ -1,3 +1,4 @@
+import { installManagementDialog } from './ui/dialog-presentation.js';
 import {
   drawingRevisionHistory,
   revisionFields,
@@ -76,6 +77,10 @@ export function showDrawingRevision(manager) {
   if (single) dialog.classList.add('drawing-revision-history-dialog');
   dialog.setAttribute('aria-label', single ? 'Revisioner' : 'Revision');
   dialog.innerHTML = `<header><strong>${single ? 'Revisioner' : 'Revision'}</strong><button type="button" aria-label="Stäng revision">×</button></header>${single ? '<section class="revision-list"><div class="revision-actions"><button type="button" data-new>Ny revision</button><button type="button" data-remove disabled>Ta bort revision</button></div><div class="revision-table-scroll"><table><thead><tr><th>Revision</th><th>Datum</th><th>Skapad av</th><th>Kommentar</th></tr></thead><tbody></tbody></table></div></section>' : ''}<form><label>Beteckning<input name="revision" required maxlength="20" placeholder="A eller 1"></label><label>Skapad av<input name="revisionCreatedBy" required maxlength="80"></label><label>Kommentar<textarea name="revisionComment" required maxlength="200" rows="3"></textarea></label><label>Datum<input name="revisionDate" type="date" required></label><p role="alert"></p><footer><button type="button" data-cancel>${single ? 'Stäng' : 'Avbryt'}</button><button type="submit">Spara revision</button></footer></form>`;
+  installManagementDialog(dialog);
+  dialog.querySelector('[type=submit]').classList.add('primary');
+  const commentRow = dialog.querySelector('[name=revisionComment]').closest('label');
+  commentRow.before(dialog.querySelector('[name=revisionDate]').closest('label'));
   const form = dialog.querySelector('form'),
     error = dialog.querySelector('[role=alert]'),
     submit = dialog.querySelector('[type=submit]');

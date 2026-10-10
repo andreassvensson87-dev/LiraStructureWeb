@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseFrameDXF, frameFromDXF } from '../src/frame-dxf.js';
 import { transformFrameEntity, builtInAttributes } from '../src/frame-model.js';
-import { revisionExampleBlock } from '../src/frame-revision-example.js';
+import { revisionExampleBlock } from './fixtures/frame-blocks.js';
 const dxf = (entities, extra = '') =>
   `0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n${extra}0\nSECTION\n2\nENTITIES\n${entities}0\nENDSEC\n0\nEOF\n`;
 const line = '0\nLINE\n10\n10\n20\n20\n11\n190\n21\n20\n';

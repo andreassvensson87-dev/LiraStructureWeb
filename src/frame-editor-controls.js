@@ -1,5 +1,6 @@
+import { installFloatingWindow } from './ui/floating-window.js';
 import { readColors } from './color-library.js';
-import { createGroupedToolbox } from './model/ui/toolbox.js';
+import { installEditorWorkspace } from './ui/editor-workspace.js';
 const paths = {
   select: 'm5 3 14 10-7 1-3 7Z',
   origin: 'M12 3v18M3 12h18M8 8h8v8H8Z',
@@ -59,21 +60,28 @@ export function createFrameToolbox(dialog) {
     const tools = categories.flatMap((category) => category.tools);
     return { id, label, categories, tools, icon: tools[0] };
   });
-  const toolbox = createGroupedToolbox(root, definitions);
+  const toolbox = installEditorWorkspace(dialog, {
+    ribbon: root,
+    groups: definitions.map((g) => {
+      const nodes = g.tools.map((id) => root.querySelector('#' + id));
+      return {
+        label: g.label,
+        items: [
+          { node: nodes[0], size: 'large' },
+          ...(nodes.length > 1 ? [{ stack: nodes.slice(1).map((node) => ({ node })) }] : []),
+        ],
+      };
+    }),
+  });
   dialog.addEventListener('close', () => toolbox.close());
   return {
     ...toolbox,
     syncVisibility() {
       toolbox.close();
-      for (const group of root.querySelectorAll('.tool-group')) {
-        for (const category of group.querySelectorAll('.tool-category'))
-          category.hidden = [...category.querySelectorAll('button')].every(
-            (button) => button.hidden,
-          );
+      for (const group of root.querySelectorAll('.ui-ribbon-group'))
         group.hidden = [...group.querySelectorAll('[data-tool],[data-action]')].every(
           (button) => button.hidden,
         );
-      }
     },
   };
 }
@@ -132,11 +140,14 @@ export class FrameFileDialog {
   constructor(parent) {
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'fe-file-dialog';
+    this.dialog.id = 'frame-library';
     parent.append(this.dialog);
     this.dialog.addEventListener('keydown', (e) => e.stopPropagation());
     this.dialog.addEventListener('cancel', (e) => e.stopPropagation());
   }
   shell(title) {
+    this.dialog.classList.remove('ui-library-window');
+    this.dialog.removeAttribute('style');
     this.dialog.replaceChildren();
     const header = document.createElement('header'),
       strong = document.createElement('strong'),
@@ -176,7 +187,9 @@ export class FrameFileDialog {
     search.oninput = render;
     root.append(search, list);
     render();
-    this.dialog.showModal();
+    this.window ||= installFloatingWindow(this.dialog);
+    this.dialog.classList.add('ui-library-window');
+    this.window.open();
   }
   manage({ kind, items, usage, onOpen, onChange }) {
     const root = this.shell('Öppna / hantera ' + (kind === 'layout' ? 'layouter' : 'ramblock')),
@@ -308,7 +321,9 @@ export class FrameFileDialog {
     };
     root.append(search, list, panel, message);
     render();
-    this.dialog.showModal();
+    this.window ||= installFloatingWindow(this.dialog);
+    this.dialog.classList.add('ui-library-window');
+    this.window.open();
   }
   save(name, kind, onSave) {
     const root = this.shell('Spara ' + kind),

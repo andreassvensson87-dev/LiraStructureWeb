@@ -5,6 +5,7 @@ import { objectAnchors } from '../../model-object.js';
 import { rotationCandidates, applyObjectBatch } from '../tools/transform-tool.js';
 import { rotateReferencePlacement } from '../../references/reference-placement.js';
 export function createRotationController({
+  modelEditor,
   guide,
   host,
   camera,
@@ -96,8 +97,7 @@ export function createRotationController({
         rotationHandle.error.textContent = error.message;
         return;
       }
-      checkpoint();
-      project.objects = next;
+      modelEditor.replace(next);
       setDrawing(false);
       render();
       $('status').textContent = 'Markeringen roterad';

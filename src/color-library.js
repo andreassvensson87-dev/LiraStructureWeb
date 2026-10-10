@@ -1,3 +1,4 @@
+import { installFloatingWindow } from './ui/floating-window.js';
 const KEY = 'lirastructure.colors.v1';
 const DEFAULTS = [
   ['Vit', '#f3f4f2'],
@@ -55,6 +56,7 @@ export class ColorLibrary {
     this.dialog.innerHTML =
       '<div class="panel-title"><h2>Färgbibliotek</h2><button type="button" aria-label="Stäng färgbibliotek">×</button></div><form><div class="color-edit-list"></div><p role="alert"></p><button class="primary">Spara färger</button></form><p class="inspector-note">Paletten sparas i webbläsaren. Befintliga objekt behåller sin färg.</p>';
     document.body.append(this.dialog);
+    this.window = installFloatingWindow(this.dialog);
     this.dialog.querySelector('button').onclick = () => this.dialog.close();
     this.dialog.addEventListener('keydown', (e) => e.stopPropagation());
     this.dialog.querySelector('form').onsubmit = (e) => {
@@ -94,6 +96,6 @@ export class ColorLibrary {
       list.append(row);
     });
     this.dialog.querySelector('[role=alert]').textContent = '';
-    this.dialog.showModal();
+    this.window.open();
   }
 }

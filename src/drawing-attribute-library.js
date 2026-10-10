@@ -1,3 +1,7 @@
+import { installLibraryWorkspace } from './ui/library-workspace.js';
+import { renderLibraryTree } from './ui/library-tree.js';
+import { adoptAttributeLabel } from './inspector/attributes.js';
+import { installFloatingWindow } from './ui/floating-window.js';
 import {
   drawingAttributes,
   builtInAttributes,
@@ -29,9 +33,10 @@ class DrawingAttributeLibrary {
     this.dialog.setAttribute('aria-label', 'Attributbibliotek');
     this.dialog.innerHTML = `<header><div><h2>Attributbibliotek</h2><p>Alla ritningsattribut, datatyper och fördefinierade val.</p></div><button type="button" aria-label="Stäng attributbibliotek">×</button></header>
       <div class="attribute-library-toolbar"><input type="search" aria-label="Sök attribut" placeholder="Sök namn, nyckel eller datatyp"><button type="button" data-new>Nytt attribut</button></div>
-      <div class="attribute-library-body"><div class="attribute-library-table"><table><thead><tr><th>Attribut</th><th>Datatyp</th><th>Gäller för</th><th>Källa</th><th>Redigerbart</th><th>Val</th></tr></thead><tbody></tbody></table><p data-empty hidden>Inga attribut matchar sökningen.</p></div>
+      <div class="attribute-library-body">
       <form><h3 data-editor-title></h3><label>Namn<input name="attributeName" required maxlength="80"></label><label>Attributnyckel<input name="key" readonly></label><label>Datatyp<select name="dataType"></select></label><label>Gäller för<select name="scope"></select></label><label data-options>Val · ett per rad<textarea name="options" rows="7" placeholder="För granskning&#10;Godkänd"></textarea></label><p data-help></p><p role="status" data-message></p><footer><button type="button" data-reset>Återställ formulär</button><button type="submit" class="primary">Spara attribut</button></footer></form></div>`;
     document.body.append(this.dialog);
+    this.window = installFloatingWindow(this.dialog);
     this.form = this.dialog.querySelector('form');
     this.fields = this.form.elements;
     this.search = this.dialog.querySelector('input[type=search]');
@@ -48,6 +53,28 @@ class DrawingAttributeLibrary {
     this.dialog.querySelector('[data-reset]').onclick = () => this.edit(this.selected);
     this.fields.dataType.onchange = () => this.optionsVisibility();
     this.dialog.addEventListener('keydown', (e) => e.stopPropagation());
+    this.save = this.form.querySelector('[type=submit]');
+    this.tree = document.createElement('div');
+    this.tree.setAttribute('aria-label', 'Attribut');
+    const oldBody = this.dialog.querySelector('.attribute-library-body');
+    const oldToolbar = this.dialog.querySelector('.attribute-library-toolbar');
+    const oldFooter = this.form.querySelector('footer');
+    this.form.querySelectorAll('label').forEach(adoptAttributeLabel);
+    installLibraryWorkspace(this.dialog, {
+      search: this.search,
+      tree: this.tree,
+      details: this.form,
+      commands: [
+        { node: this.dialog.querySelector('[data-new]'), label: 'Nytt attribut', icon: 'plus' },
+      ],
+      actions: [this.dialog.querySelector('[data-reset]'), this.save],
+      refresh: () => this.render(),
+    });
+    this.form.id = 'drawing-attribute-form';
+    this.save.setAttribute('form', this.form.id);
+    oldFooter.remove();
+    oldBody.remove();
+    oldToolbar.remove();
     this.form.onsubmit = (e) => {
       e.preventDefault();
       const message = this.dialog.querySelector('[data-message]');
@@ -76,7 +103,7 @@ class DrawingAttributeLibrary {
         attributes.find((a) => a.key === 'drawing.issueStatus'),
     );
     this.render();
-    this.dialog.showModal();
+    this.window.open();
   }
   optionsVisibility() {
     this.dialog.querySelector('[data-options]').hidden = !['choice', 'multichoice'].includes(
@@ -108,11 +135,13 @@ class DrawingAttributeLibrary {
     this.fields.scope.value = a.scope;
     this.fields.scope.disabled = builtin;
     this.fields.options.value = (a.options || []).join('\n');
-    this.dialog.querySelector('[data-help]').textContent = !configurable
-      ? 'Detta attribut har en fast datatyp. Värdet ändras där det hör hemma i projektet eller ritningen.'
-      : 'Val (ett) ger en vallista. Flerval tillåter flera värden på samma ritning. Tidigare värden behålls när listan ändras.';
+    this.dialog.querySelector('[data-help]').textContent =
+      `${source(a)} · Värdet redigerbart: ${a.editable ? 'Ja' : 'Nej'}. ` +
+      (!configurable
+        ? 'Detta attribut har en fast datatyp. Värdet ändras där det hör hemma i projektet eller ritningen.'
+        : 'Val (ett) ger en vallista. Flerval tillåter flera värden på samma ritning. Tidigare värden behålls när listan ändras.');
     this.dialog.querySelector('[data-message]').textContent = '';
-    this.form.querySelector('[type=submit]').disabled = builtin && !configurable;
+    this.save.disabled = builtin && !configurable;
     this.optionsVisibility();
     this.render();
     this.form.scrollTop = 0;
@@ -124,34 +153,36 @@ class DrawingAttributeLibrary {
         .toLocaleLowerCase('sv-SE')
         .includes(query),
     );
-    const body = this.dialog.querySelector('tbody');
-    body.replaceChildren();
-    for (const a of items) {
-      const row = document.createElement('tr');
-      row.dataset.selected = String(a.key === this.selected?.key);
-      const identity = document.createElement('td');
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = a.name;
-      button.setAttribute('aria-pressed', String(a.key === this.selected?.key));
-      button.onclick = () => this.edit(a);
-      const key = document.createElement('small');
-      key.textContent = a.key;
-      identity.append(button, key);
-      row.append(identity);
-      for (const value of [
-        attributeDataTypes[a.dataType],
-        scopes[a.scope],
-        source(a),
-        a.editable ? 'Ja' : 'Nej',
-        a.options?.join(' · ') || '—',
-      ]) {
-        const cell = document.createElement('td');
-        cell.textContent = value;
-        row.append(cell);
-      }
-      body.append(row);
-    }
-    this.dialog.querySelector('[data-empty]').hidden = !!items.length;
+    const groups = [
+      ['project.', 'Projekt'],
+      ['drawing.', 'Ritning'],
+      ['report.', 'Rapport'],
+      ['custom.', 'Egna attribut'],
+      ['', 'Modell och mängder'],
+    ];
+    const nodes = groups
+      .map(([prefix, label]) => ({
+        key: `group:${label}`,
+        label,
+        children: items
+          .filter((a) =>
+            prefix ? a.key.startsWith(prefix) : !groups.some(([p]) => p && a.key.startsWith(p)),
+          )
+          .map((a) => ({
+            key: a.key,
+            label: a.name,
+            badge: attributeDataTypes[a.dataType],
+            title: `${a.name} · ${attributeDataTypes[a.dataType]} · ${scopes[a.scope]} · ${source(a)} · Redigerbart: ${a.editable ? 'Ja' : 'Nej'}`,
+            attribute: a,
+          })),
+      }))
+      .filter((node) => node.children.length);
+    renderLibraryTree(this.tree, {
+      nodes,
+      selectedKey: this.selected?.key,
+      query,
+      onSelect: (node) => this.edit(node.attribute),
+      empty: 'Inga attribut matchar sökningen.',
+    });
   }
 }

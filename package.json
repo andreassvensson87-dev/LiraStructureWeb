@@ -6,19 +6,21 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build && node scripts/build-pwa.js",
-    "test": "node --test tests/*.test.js",
+    "test": "node scripts/test.mjs",
     "templates:import": "node scripts/import-drawing-templates.mjs",
     "benchmark:model": "node --expose-gc scripts/benchmark-model.mjs",
     "benchmark:history": "node --expose-gc scripts/benchmark-history.mjs",
     "format": "prettier --write \"src/**/*.{js,css}\" \"tests/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.{js,css}\" \"tests/**/*.js\"",
-    "check": "npm run format:check && npm run lint && npm test && npm run build",
-    "lint": "eslint src tests"
+    "check": "npm run format:check && npm run lint && npm run test:all && npm run build",
+    "lint": "eslint src tests",
+    "test:all": "node scripts/test.mjs all"
   },
   "dependencies": {
     "@mlightcad/libredwg-web": "0.7.15",
     "dxf-parser": "1.1.2",
     "jspdf": "4.2.1",
+    "occt-import-js": "0.0.23",
     "svg2pdf.js": "2.8.1",
     "three": "0.180.0",
     "three-bvh-csg": "0.0.18",

@@ -1,36 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { gridSegments, gridCrossings, gridWithGeometry } from '../src/grid-geometry.js';
-import { changeGridLine, parallelGridLine, removeGridLine } from '../src/grid-edit.js';
+import { gridSegments, gridCrossings } from '../src/grid-geometry.js';
+import { syncGridObjects } from '../src/model/grid-objects.js';
+import { applyObjectBatch, transformCandidates } from '../src/model/tools/transform-tool.js';
 import { gridReference, resolveReference } from '../src/annotation-references.js';
 import { snapDrawingGrid } from '../src/drawing-grid-snap.js';
 import { sectionGridLines } from '../src/section-grid.js';
 import { resolveSnap } from '../src/snap.js';
 import { createProject } from '../src/project/project-state.js';
-import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
-import { ProjectHistory } from '../src/project/project-history.js';
 const original = { x: [0, 3000, 6000], y: [0, 4000, 8000] };
 const close = (actual, expected) =>
   actual.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-6, `${actual} ≠ ${expected}`));
-function oblique() {
-  return changeGridLine(original, 'x', 1, { start: [0, 0], end: [8000, 8000], label: 'Sned' }).grid;
+function model() {
+  const p = createProject({
+    grid: original,
+    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
+  });
+  syncGridObjects(p);
+  p.objects = p.objects.map((s, i) =>
+    i === 1 ? { ...s, start: [0, 0, 0], end: [8000, 8000, 0], name: 'Sned' } : s,
+  );
+  syncGridObjects(p);
+  return p;
 }
-test('free endpoints, rotation and parallel copies retain labels and other lines', () => {
-  const grid = oblique(),
-    source = structuredClone(grid.lines.x[1]);
-  assert.equal(grid.labels.x[1], 'Sned');
-  assert.deepEqual(grid.lines.y, gridWithGeometry(original).lines.y);
-  const rotated = changeGridLine(grid, 'x', 1, { angle: 0 }).grid;
-  close(rotated.lines.x[1].start, [4000 - Math.sqrt(32000000), 4000]);
-  close(rotated.lines.x[1].end, [4000 + Math.sqrt(32000000), 4000]);
-  const parallel = parallelGridLine(grid, 'x', 1, 1000).grid;
-  close(parallel.lines.x[3].start, [-Math.SQRT1_2 * 1000, Math.SQRT1_2 * 1000]);
-  assert.notEqual(parallel.lines.x[3].id, source.id);
-  assert.deepEqual(grid.lines.x[1], source);
-  assert.throws(() => changeGridLine(grid, 'x', 1, { end: [0, 0] }));
-  assert.throws(() => changeGridLine(grid, 'x', 1, { angle: NaN }));
-});
+function oblique() {
+  return model().grid;
+}
 test('sloping intersections, line snaps and section drawings use actual endpoints', () => {
   const grid = oblique();
   assert.ok(
@@ -80,36 +76,23 @@ test('sloping intersections, line snaps and section drawings use actual endpoint
   });
   close(locked.point, [2000, 2000, 0]);
 });
-test('dimension references follow stable line identities after moving, adding and removing lines', () => {
-  let grid = oblique();
-  const crossing = gridReference([4000, 4000], grid),
-    along = gridReference([2000, 2000], grid);
-  grid = changeGridLine(grid, 'x', 1, { translation: [1000, 0] }).grid;
-  close(resolveReference(crossing, [], grid), [5000, 4000]);
-  close(resolveReference(along, [], grid), [3000, 2000]);
-  grid = removeGridLine(grid, 'x', 0).grid;
-  close(resolveReference(crossing, [], grid), [5000, 4000]);
-  grid = parallelGridLine(grid, 'x', 0, 500).grid;
-  grid = removeGridLine(grid, 'x', 0).grid;
-  assert.equal(resolveReference(crossing, [], grid), null);
-  assert.equal(resolveReference(along, [], grid), null);
-});
-test('geometry survives save and undo; corrupt identities and endpoints fail validation', () => {
-  const project = createProject({
-    grid: oblique(),
-    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
-  });
-  const history = new ProjectHistory();
-  history.checkpoint(project);
-  const before = structuredClone(project.grid);
-  project.grid = changeGridLine(project.grid, 'x', 1, { angle: 30 }).grid;
-  const saved = parseProjectFile(serializeProject(project));
-  assert.deepEqual(saved.grid, project.grid);
-  assert.deepEqual(history.undo(project).grid, before);
-  saved.grid.lines.x[1].id = saved.grid.lines.x[0].id;
-  assert.throws(() => serializeProject(saved), /ändpunkter/);
-  saved.grid = structuredClone(before);
-  saved.grid.lines.x[1].start[0] = Infinity;
-  assert.throws(() => serializeProject(saved), /ogiltiga tal/);
-  assert.equal(gridSegments(original).length, 6);
+test('dimension references follow object identities through normal move and delete', () => {
+  const p = model();
+  const source = p.objects[1];
+  const crossing = gridReference([4000, 4000], p.grid),
+    along = gridReference([2000, 2000], p.grid);
+  p.objects = applyObjectBatch(
+    p.objects,
+    transformCandidates({ mode: 'move', sources: [source] }, [0, 0, 0], [1000, 0, 0]),
+  ).objects;
+  syncGridObjects(p);
+  close(resolveReference(crossing, [], p.grid), [5000, 4000]);
+  close(resolveReference(along, [], p.grid), [3000, 2000]);
+  p.objects = p.objects.filter((s) => s.id !== p.objects[0].id);
+  syncGridObjects(p);
+  close(resolveReference(crossing, [], p.grid), [5000, 4000]);
+  p.objects = p.objects.filter((s) => s.id !== source.id);
+  syncGridObjects(p);
+  assert.equal(resolveReference(crossing, [], p.grid), null);
+  assert.equal(resolveReference(along, [], p.grid), null);
 });

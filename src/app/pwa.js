@@ -1,5 +1,5 @@
 import { watchAppUpdate } from '../update-ui.js';
-export function setupPWA() {
+export function setupPWA(beforeUpdate = async () => {}) {
   if (!import.meta.env.PROD) return;
   const footer = document.querySelector('body > footer');
   const status = document.createElement('span');
@@ -39,12 +39,11 @@ export function setupPWA() {
     .register('./sw.js', { updateViaCache: 'none' })
     .then((reg) => {
       watchAppUpdate(reg, updateButton, status, async () => {
-        if (
-          !window.confirm(
-            'Uppdatera och starta om appen? Den öppna modellen och osparade ändringar försvinner. Välj Avbryt om du vill fortsätta arbeta.',
-          )
-        )
-          return 'Uppdateringen väntar tills du är redo.';
+        try {
+          await beforeUpdate();
+        } catch (error) {
+          return `Uppdateringen väntar. ${error.message}`;
+        }
       });
     })
     .catch(() => {

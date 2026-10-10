@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { revisionExampleBlock } from '../src/frame-revision-example.js';
+import { revisionExampleBlock } from './fixtures/frame-blocks.js';
 import { expandRevisionBlock } from '../src/frame-revision-table.js';
 import { expandLayout } from '../src/frame-layout.js';
 import { updateDrawingAttribute, builtInAttributes } from '../src/drawing-attributes.js';

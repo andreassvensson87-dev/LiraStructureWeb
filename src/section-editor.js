@@ -1,3 +1,4 @@
+import { installProfileWorkspace } from './ui/profile-workspace.js';
 import { inputWheelGesture } from './input-device.js';
 import { sectionTemplate, TEMPLATE_KEYS, dimensionLabel } from './section-templates.js';
 import { PROFILE_TYPES, profileType, renderProfileTree } from './profile-tree.js';
@@ -56,7 +57,9 @@ export class SectionEditor {
   <section class="section-drawing"><div class="section-tools"><button data-mode="select">Markera</button><button data-mode="poly">Polylinje</button><button data-mode="rect">Rektangel</button><button data-mode="hole">Hål</button><button data-mode="anchor">Insättningspunkt</button><button data-action="finish">Slut kontur</button><button data-action="undo">↶</button><button data-action="redo">↷</button><button data-action="fit">Visa allt</button></div><div class="section-tracking"><label><input id="section-ortho" type="checkbox"> Ortho</label><label>Polar <select id="section-polar"><option value="0">Av</option><option value="15">15°</option><option value="45" selected>45°</option><option value="90">90°</option></select></label><label><input id="section-snap" type="checkbox" checked> Snap</label><span>Panorera: mitten/höger musknapp</span></div><canvas id="section-canvas" tabindex="0" aria-label="Rita tvärsnitt i millimeter"></canvas><form id="section-command"><label>X<input id="section-x" autocomplete="off" value="0"></label><label>Y<input id="section-y" autocomplete="off" value="0"></label><button type="submit">Punkt ↵</button><label>Längd<input id="section-length" inputmode="decimal" autocomplete="off" placeholder="mm"></label><button type="button" data-action="length">Lägg till</button><span id="section-coordinates"></span></form><p id="section-feedback" role="status"></p></section>
   <section class="section-properties"><label class="field">Profiltyp<select id="section-profileType"></select></label><label class="field">Storlek / profilnamn<input id="section-name" maxlength="120"></label><label class="field">Familj<input id="section-family" maxlength="120" placeholder="Exempelvis HEA"></label><details><summary>Identitet och källa</summary><label class="field">Standard<input id="section-standard" maxlength="120"></label><label class="field">Källa<input id="section-source" maxlength="300"></label><label class="field">Densitet · kg/m³<input id="section-density" type="number" min="0" max="30000"></label></details><div id="section-template-fields"></div><small id="section-template-note"></small><details open><summary>Parametrar</summary><textarea id="section-parameters" rows="3" placeholder="B = 200\nH = 300\nt = 10" aria-label="Parametrar"></textarea><small>En per rad. Koppla en parameter via punktens X- eller Y-uttryck nedan.</small><div id="section-parameter-links"></div><div class="section-library-actions"><button data-action="rectangle-template">B × H</button><button data-action="i-template">I-profil</button></div></details><details id="section-point-panel" open><summary>Punktkopplingar</summary><small id="section-point-hint">Välj en punkt i listan eller på profilen för att ändra dess uttryck.</small><div id="section-bindings"></div><div id="section-point-fields"><label class="field">X-uttryck<input id="section-point-x"></label><label class="field">Y-uttryck<input id="section-point-y"></label><button data-action="point">Ändra punkt</button></div><button data-action="delete">Ta bort markering</button><div id="section-contours"></div></details><details><summary>Insättningspunkt</summary><label class="field">X<input id="section-anchor-x"></label><label class="field">Y<input id="section-anchor-y"></label><button data-action="anchor">Ändra insättningspunkt</button></details><details open><summary>Beräknat från konturen</summary><dl id="section-metrics"></dl><small>X horisontell, Y vertikal. Ix kring X genom tyngdpunkten, Iy kring Y. Masseberäkning använder angiven densitet.</small></details><details><summary>Katalogvärden (separata)</summary><div id="section-catalog"></div><small>Katalogvärden ändrar inte geometrin och skrivs inte över av beräkningen.</small></details><p id="section-version"></p><div class="section-save"><button class="primary" data-action="save">Spara version</button><button data-action="use">Använd på sweep</button></div></section></div>`;
     document.body.append(this.dialog);
-    this.$ = (id) => this.dialog.querySelector('#section-' + id);
+    this.$ = (id) =>
+      this.dialog.querySelector('#section-' + id) ||
+      this.libraryDialog?.querySelector('#section-' + id);
     for (const [value, label] of PROFILE_TYPES)
       this.$('profileType').append(new Option(label, value));
     this.canvas = this.$('canvas');
@@ -196,6 +199,7 @@ export class SectionEditor {
     });
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(this.canvas);
+    this.libraryUI = installProfileWorkspace(this);
     this.sync();
   }
   run(fn) {
@@ -344,6 +348,8 @@ export class SectionEditor {
     });
     this.bindings();
     this.list();
+    this.libraryUI?.refreshProperties();
+    this.libraryUI?.preview();
     this.draw();
   }
   changeType() {
@@ -511,6 +517,11 @@ export class SectionEditor {
     });
   }
   open() {
+    this.list();
+    this.libraryUI.preview();
+    this.libraryWindow.open();
+  }
+  openEditor() {
     if (!this.dialog.open) this.dialog.showModal();
     this.resize();
     this.fit();

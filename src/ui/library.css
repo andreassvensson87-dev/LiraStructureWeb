@@ -1,0 +1,618 @@
+/* Four library adapters share this shell, tree, fields and action strip. */
+:is(
+  #profile-library,
+  #material-library,
+  #fastener-library,
+  #item-library,
+  #drawing-attribute-library
+).ui-standard-library {
+  container-type: inline-size;
+  overflow: hidden;
+  height: min(650px, calc(100dvh - 80px));
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  > .ui-library-toolbar.ui-ribbon.ui-ribbon {
+  height: auto;
+  min-height: 42px;
+  max-height: none;
+  padding: 5px 12px;
+  background: #fff;
+  overflow: auto;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-toolbar
+  .ui-ribbon-group {
+  padding: 0;
+  min-height: 30px;
+  border: 0;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-toolbar
+  .ui-ribbon-commands {
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-toolbar
+  .ui-ribbon-caption {
+  display: none;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  > .ui-library-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-browser {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--ui-border);
+  background: #fff;
+}
+.ui-library-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-search-row
+  input {
+  width: 100%;
+  min-width: 80px;
+  height: 30px;
+  flex: 1;
+  font-size: 12px;
+}
+.ui-library-tree-actions {
+  display: flex;
+  gap: 4px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree-actions
+  button {
+  font-size: 11px;
+  padding: 5px 6px;
+  height: 30px;
+  white-space: nowrap;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-size: 12px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree
+  details {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree
+  details
+  > :not(summary) {
+  margin-left: 16px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree
+  summary {
+  padding: 7px 5px;
+  color: var(--ui-ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-library-count {
+  margin-left: 5px;
+  color: #73878e;
+  font-weight: 400;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree
+  button {
+  display: block;
+  width: calc(100% - 16px);
+  min-height: 30px;
+  padding: 6px 8px;
+  margin: 0 0 2px 16px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ui-ink);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree
+  [aria-current='true'] {
+  background: #e8f3ed;
+  border-color: #75a99a;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-tree
+  :is(button, summary):hover {
+  background: #f0f5f3;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: #f8fafb;
+  color: var(--ui-ink);
+  font-size: 12px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  :is(form, .ui-profile-preview, .item-library-properties) {
+  display: block;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-edit-gate {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  :is(h3, .fastener-edit-heading) {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  label.field,
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  label.attribute-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  :is(input:not([type='checkbox']):not([type='color']), select) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  input[type='color'] {
+  width: 100%;
+  height: 30px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  :is(input, select):disabled {
+  color: var(--ui-ink);
+  opacity: 1;
+  -webkit-text-fill-color: var(--ui-ink);
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  .dimensions {
+  display: block;
+  margin: 0;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  :is(.ui-profile-preview > svg, .ui-fastener-preview svg, .item-library-preview) {
+  display: block;
+  width: 100%;
+  height: 220px;
+  margin: 0 0 14px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-profile-preview
+  > svg
+  path {
+  fill: #688391;
+  stroke: #405c67;
+  stroke-width: 0.6;
+}
+.ui-fastener-preview path {
+  fill: #d3dde1;
+  stroke: #607780;
+  stroke-width: 1.5;
+}
+.ui-fastener-preview text {
+  fill: #607780;
+  font-size: 13px;
+}
+.ui-material-swatch {
+  width: 140px;
+  height: 140px;
+  margin: 40px auto;
+  border: 1px solid #0002;
+  border-radius: 3px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  > footer.ui-library-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  background: #f3f5f6;
+  border-top: 1px solid var(--ui-border);
+}
+.ui-library-status {
+  flex: 1;
+  min-width: 0;
+  max-height: 48px;
+  overflow: auto;
+  color: #73878e;
+  font-size: 11px;
+}
+.ui-library-status :is(p, small) {
+  padding: 0;
+  margin: 0;
+  font-size: 11px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  > footer
+  button {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  [hidden] {
+  display: none !important;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-browser
+  .item-drop {
+  margin: 10px 0 0;
+  padding: 6px;
+  flex-shrink: 0;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .item-drop
+  :is(strong, small, [data-files]) {
+  display: none;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .item-drop
+  [data-destination] {
+  font-size: 11px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  [data-count] {
+  font-size: 11px;
+  color: #73878e;
+  margin: 6px 0 0;
+}
+@container (max-width: 650px) {
+  .ui-library-search-row {
+    flex-wrap: wrap;
+  }
+  :is(
+      #profile-library,
+      #material-library,
+      #fastener-library,
+      #item-library,
+      #drawing-attribute-library
+    ).ui-standard-library
+    .ui-library-details
+    label.field,
+  :is(
+      #profile-library,
+      #material-library,
+      #fastener-library,
+      #item-library,
+      #drawing-attribute-library
+    ).ui-standard-library
+    .ui-library-details
+    label.attribute-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  :is(
+      #profile-library,
+      #material-library,
+      #fastener-library,
+      #item-library,
+      #drawing-attribute-library
+    ).ui-standard-library
+    .ui-library-status {
+    max-width: 120px;
+  }
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  > .panel-title
+  h2 {
+  margin: 0;
+  font-size: 13px;
+}
+.ui-standard-library .fastener-subtitle {
+  display: none;
+}
+.ui-standard-library .ui-library-details input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+.ui-standard-library .ui-library-details input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+:is(
+    #profile-library,
+    #material-library,
+    #fastener-library,
+    #item-library,
+    #drawing-attribute-library
+  ).ui-standard-library
+  .ui-library-details
+  .fastener-head-fields {
+  display: block;
+}
+.ui-library-tree .ui-library-badge {
+  float: right;
+  margin-left: 8px;
+  padding: 1px 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 3px;
+  color: #73878e;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 16px;
+}

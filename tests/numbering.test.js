@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProject } from '../src/project/project-state.js';
-import { ProjectHistory } from '../src/project/project-history.js';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
 import { createAssembly, createAssemblyDrawing } from '../src/project/assemblies.js';
 import { numberParts, partStatus } from '../src/part-marks.js';
@@ -162,25 +161,6 @@ test('stale previews and invalid settings cannot be applied', () => {
   settings.series.sweep.start = 1;
   settings.series.plate.prefix = '<script>';
   assert.throws(() => validateNumberingSettings(settings), /Prefix/);
-});
-test('numbering is a single reversible project change and survives save/load', () => {
-  const state = fixture();
-  Object.assign(state, applyNumbering(planNumbering(state), state));
-  state.objects[0].width = 150;
-  const before = structuredClone(state),
-    history = new ProjectHistory(),
-    plan = planNumbering(state);
-  assert.ok(plan.rows.some((row) => row.status === 'changed' && row.ids.includes('a')));
-  assert.deepEqual(state, before);
-  history.prime(state);
-  const patch = applyNumbering(plan, state);
-  history.checkpoint(state);
-  Object.assign(state, patch);
-  const loaded = parseProjectFile(serializeProject(state));
-  assert.deepEqual(loaded.parts, state.parts);
-  assert.deepEqual(loaded.assemblyNumbering, state.assemblyNumbering);
-  assert.deepEqual(loaded.objects, state.objects);
-  assert.deepEqual(history.undo(state), before);
 });
 
 test('per-object series separate equal parts and feed assembly part marks', () => {

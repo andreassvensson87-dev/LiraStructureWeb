@@ -1,0 +1,208 @@
+/* Shared inspector presentation. Object adapters retain their controls and transactions. */
+/* Sweep properties use consistent label/value rows, leaving geometry and identity folded. */
+:is(#inspector-properties, .component-properties).attribute-inspector {
+  --inspector-label-width: 96px;
+}
+:is(#inspector-properties, .component-properties).attribute-inspector .attribute-row {
+  display: grid;
+  grid-template-columns: var(--inspector-label-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 11px;
+}
+.attribute-caption small {
+  color: #73878e;
+  font-size: 10px;
+  margin-left: 3px;
+}
+:is(#inspector-properties, .component-properties).attribute-inspector input,
+:is(#inspector-properties, .component-properties).attribute-inspector select {
+  min-height: 28px;
+  padding: 4px 7px;
+  margin: 0;
+  font-size: 12px;
+  min-width: 0;
+}
+
+/* Every schema-rendered object uses the same row and section structure. */
+.attribute-inspector .attribute-fields {
+  display: block;
+}
+.attribute-inspector .attribute-row {
+  min-width: 0;
+}
+.attribute-inspector .attribute-row > input[type='checkbox']:not(.property-copy-check) {
+  width: 15px;
+  min-height: 0;
+}
+.attribute-inspector .attribute-row .attribute-caption {
+  font-size: 11px;
+}
+.attribute-inspector .attribute-group {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  margin: 8px 0;
+}
+.attribute-inspector .attribute-group > legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+
+.numbering-series-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+#inspector-properties #identity-fields .numbering-series-fields > label,
+#assembly-inspector .numbering-series-fields > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  color: #637a83;
+}
+.numbering-series-fields input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#inspector-properties {
+  --inspector-label-width: 96px;
+  --inspector-control-height: 30px;
+  color: var(--ui-ink);
+  font-size: 12px;
+}
+#inspector-properties :is(h1, #assembly-inspector h1) {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+#inspector-properties :is(h2, h3, legend, .attribute-section-heading) {
+  color: var(--ui-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+#inspector-properties :is(input:not([type='checkbox']):not([type='color']), select) {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--inspector-control-height);
+  padding: 5px 7px;
+  margin: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  background: #f8fafb;
+  color: var(--ui-ink);
+  font-size: 12px;
+}
+#inspector-properties input[type='checkbox'] {
+  accent-color: var(--ui-accent);
+}
+#inspector-properties :is(input, select, button):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+#inspector-properties :is(input, select):disabled {
+  opacity: 0.6;
+}
+#inspector-properties label.attribute-row {
+  display: grid;
+  grid-template-columns: var(--inspector-label-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+#inspector-properties :is(.attribute-section, .inspector-geometry, #item-form fieldset) {
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  border-radius: 0;
+  padding: 0;
+  margin: 10px 0;
+  min-width: 0;
+}
+#inspector-properties :is(summary, .attribute-section-heading) {
+  padding: 8px 0;
+  color: var(--ui-ink);
+  font-size: 12px;
+}
+#inspector-properties .numbering-series-fields {
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+#inspector-properties .property-copy-row:has(> .property-copy-check:not([hidden])) {
+  padding-left: 20px;
+}
+#inspector-properties .numbering-series-fields > label.attribute-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+}
+#inspector-properties :is(.part-mark-row, .assembly-inspector-mark, .length) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: #60737a;
+}
+#inspector-properties :is(.part-mark-row, .assembly-inspector-mark, .length) strong {
+  font-weight: 500;
+  color: var(--ui-ink);
+}
+#inspector-properties :is(.inspector-note, small) {
+  color: #73878e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+#inspector-properties :is(.coordinates, .item-inspector-coordinates) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+#inspector-properties :is(.coordinates, .item-inspector-coordinates) label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 11px;
+}
+#inspector-properties :is(.coordinates, .item-inspector-coordinates) input {
+  width: 100%;
+}
+#inspector-properties
+  button:not(.placement-matrix button):not(.search-results button):not(.assembly-member-pick):not(
+    .assembly-member-action
+  ):not(#object-color-toggle) {
+  border-radius: 4px;
+  font-size: 12px;
+}
+#inspector-properties #assembly-inspector .assembly-member-list {
+  gap: 5px;
+}
+#inspector-properties #assembly-inspector .assembly-member-pick {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+}
+#inspector-properties #assembly-inspector .assembly-member-pick strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+#inspector-properties #assembly-inspector .assembly-member-pick span {
+  min-width: 0;
+  flex: 1;
+  text-align: right;
+}

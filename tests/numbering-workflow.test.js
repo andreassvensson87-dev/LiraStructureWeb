@@ -215,7 +215,7 @@ test('marks and drawing names survive project files and undo/redo without mutati
   state.objects.forEach((o) => (o.partSeries.start += 500));
   number(state);
   const loaded = parseProjectFile(serializeProject(state));
-  assert.deepEqual(loaded.drawings, state.drawings);
+  assert.deepEqual(loaded, state);
   const undone = history.undo(state);
   assert.deepEqual(undone, before);
   assert.deepEqual(history.redo(undone), state);

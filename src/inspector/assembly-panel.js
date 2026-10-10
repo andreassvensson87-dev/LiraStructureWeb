@@ -4,6 +4,7 @@ import { updateAssembly } from '../project/assemblies.js';
 import { assemblyNumberStatus } from '../assembly-numbering.js';
 import { designation } from '../object-identity.js';
 import { partStatus } from '../part-marks.js';
+import { createNumberingSeriesFields } from './attributes.js';
 
 export function installAssemblyPanel({ getState, commit, selectPart }) {
   const parent = document.getElementById('inspector-properties');
@@ -87,31 +88,12 @@ export function installAssemblyPanel({ getState, commit, selectPart }) {
       mark.append(markCaption, markValue);
       root.append(mark);
       const series = assemblySeries(assembly, state.objects);
-      const fields = document.createElement('div');
-      fields.className = 'assembly-series-fields numbering-series-fields';
-      const inputs = {};
-      for (const [name, labelText] of [
-        ['prefix', 'Prefix'],
-        ['start', 'Startnummer'],
-      ]) {
-        const label = document.createElement('label');
-        label.textContent = labelText;
-        const input = document.createElement('input');
-        input.setAttribute(
-          'aria-label',
-          name === 'start' ? 'Assemblystartnummer' : 'Assemblyprefix',
-        );
-        input.type = name === 'start' ? 'number' : 'text';
+      const { root: fields, inputs } = createNumberingSeriesFields({
+        ...series,
+        scope: 'Assembly',
+      });
+      for (const input of Object.values(inputs)) {
         input.setAttribute('data-independent-editor', '');
-        input.value = series[name];
-        if (name === 'start') {
-          input.min = 1;
-          input.max = 999999999;
-          input.step = 1;
-        } else input.maxLength = 16;
-        inputs[name] = input;
-        label.append(input);
-        fields.append(label);
         input.onchange = () =>
           edit(assembly, {
             series: { prefix: inputs.prefix.value.trim(), start: Number(inputs.start.value) },

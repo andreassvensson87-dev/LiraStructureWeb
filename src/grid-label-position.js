@@ -23,3 +23,15 @@ export function visibleGridEndpoints(a, b, width, height, inset = 16) {
     }),
   );
 }
+
+/** The model endpoint touches the inner edge of a camera-facing elliptical bubble. */
+export function gridBubbleCenter(endpoint, opposite, radius, height) {
+  const dx = endpoint[0] - opposite[0],
+    dy = endpoint[1] - opposite[1],
+    length = Math.hypot(dx, dy);
+  if (length < 1e-9) return [...endpoint];
+  const ux = dx / length,
+    uy = dy / length;
+  const offset = 1 / Math.sqrt((ux / radius) ** 2 + (uy / (height / 2)) ** 2);
+  return [endpoint[0] + ux * offset, endpoint[1] + uy * offset];
+}

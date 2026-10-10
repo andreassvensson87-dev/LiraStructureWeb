@@ -1,4 +1,4 @@
-import { visibleGridEndpoints } from './grid-label-position.js';
+import { visibleGridEndpoints, gridBubbleCenter } from './grid-label-position.js';
 import { gridSegments, gridCrossings } from './grid-geometry.js';
 import {
   gridBubbleMetrics,
@@ -47,7 +47,7 @@ export class GridLines {
     this.labels = [];
     this.highlighted = '';
     this.bounds = new THREE.Box3();
-    const add = (start, end, label, id) => {
+    const add = (start, end, label, id, bubbleEnds) => {
       const points = [new THREE.Vector3(...start), new THREE.Vector3(...end)];
       const line = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(points),
@@ -55,17 +55,27 @@ export class GridLines {
       );
       line.userData.gridId = id;
       line.computeLineDistances();
-      this.group.add(line);
+      if (!data.modelObjects) this.group.add(line);
+      else {
+        line.geometry.dispose();
+        line.material.dispose();
+      }
       points.forEach((position, index) => {
         this.bounds.expandByPoint(position);
         const el = document.createElement('span');
         el.textContent = label;
         this.overlay.append(el);
-        this.labels.push({ position, opposite: points[1 - index], index, el, id });
+        this.labels.push({ position, opposite: points[1 - index], index, el, id, bubbleEnds });
       });
     };
     for (const line of gridSegments(data))
-      add([...line.start, data.z || 0], [...line.end, data.z || 0], line.label, line.pickId);
+      add(
+        [...line.start, line.z ?? data.z ?? 0],
+        [...line.end, line.z ?? data.z ?? 0],
+        line.label,
+        line.pickId,
+        line.bubbleEnds,
+      );
   }
   highlight(ids = []) {
     const key = ids.join('|');
@@ -76,7 +86,7 @@ export class GridLines {
     for (const { el, id } of this.labels) el.classList.toggle('snap-active', ids.includes(id));
   }
   updateLabels(camera, width, height, { keepVisible = false, diameter } = {}) {
-    for (const { position, opposite, index, el } of this.labels) {
+    for (const { position, opposite, index, el, bubbleEnds } of this.labels) {
       const p = position.clone().project(camera);
       const metrics =
         diameter === undefined
@@ -90,8 +100,7 @@ export class GridLines {
           metrics[key] *= this.data?.bubbleScale ?? 1;
       if (
         diameter === undefined &&
-        ((this.data?.bubbleEnds === 'start' && index === 1) ||
-          (this.data?.bubbleEnds === 'end' && index === 0))
+        ((bubbleEnds === 'start' && index === 1) || (bubbleEnds === 'end' && index === 0))
       ) {
         el.hidden = true;
         continue;
@@ -127,8 +136,19 @@ export class GridLines {
         continue;
       }
       el.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
-      el.style.left = `${((p.x + 1) * width) / 2}px`;
-      el.style.top = `${((1 - p.y) * height) / 2}px`;
+      const q = opposite.clone().project(camera);
+      const endpoint = [((p.x + 1) * width) / 2, ((1 - p.y) * height) / 2];
+      const center =
+        diameter === undefined
+          ? gridBubbleCenter(
+              endpoint,
+              [((q.x + 1) * width) / 2, ((1 - q.y) * height) / 2],
+              labelRadius,
+              metrics.height,
+            )
+          : endpoint;
+      el.style.left = `${center[0]}px`;
+      el.style.top = `${center[1]}px`;
     }
   }
   snap(point, camera, width, height) {

@@ -1,3 +1,4 @@
+import { syncGridObjects } from '../model/grid-objects.js';
 import { validateGridGeometry } from '../grid-geometry.js';
 import { validateSeries } from '../numbering/rules.js';
 import { isComponent, resolveComponent, updateComponents } from '../components/fit.js';
@@ -12,6 +13,7 @@ import { validateGridLabels } from '../grid-labels.js';
 import { syncAssemblyDrawingIdentity } from './assemblies.js';
 import { validateProjectReports } from '../report-record.js';
 import { validateReferences } from '../references/reference-state.js';
+import { packItems, unpackItems } from '../items/data.js';
 
 export const PROJECT_FILE_LIMIT = 100 * 1024 * 1024;
 const record = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
@@ -80,7 +82,14 @@ export function validateProjectFile(project) {
     )
   )
     fail('Ogiltiga stomlinjer.');
-  for (const axis of ['x', 'y']) parsePositions(project.grid[axis].join(' '));
+  if (project.grid.objectBased === true) syncGridObjects(project);
+  if (!project.grid.objectBased)
+    for (const axis of ['x', 'y']) parsePositions(project.grid[axis].join(' '));
+  else if (
+    project.grid.objectBased !== true ||
+    ['x', 'y'].some((a) => project.grid[a].length > 100000)
+  )
+    fail('Ogiltiga stomlinjer.');
   validateGridLabels(project.grid);
   validateGridGeometry(project.grid);
   if (!record(project.levels) || !Array.isArray(project.levels.items)) fail('Ogiltiga nivåer.');
@@ -215,6 +224,7 @@ export function validateProjectFile(project) {
 export function serializeProject(project) {
   const snapshot = captureProject(project);
   validateProjectFile(snapshot);
+  Object.assign(snapshot, packItems(snapshot.objects));
   const text = JSON.stringify({ format: 'LiraStructure', fileVersion: 1, project: snapshot });
   if (new TextEncoder().encode(text).length > PROJECT_FILE_LIMIT)
     fail('Projektfilen är för stor (högst 100 MB inklusive referensfiler).');
@@ -231,7 +241,7 @@ export function parseProjectFile(text) {
   }
   if (file?.format !== 'LiraStructure' || file.fileVersion !== 1)
     fail('Filen är inte en projektfil från LiraStructure med en version som stöds.');
-  return validateProjectFile(file.project);
+  return validateProjectFile(unpackItems(file.project));
 }
 export function projectFilename(project) {
   const name = project.info.name

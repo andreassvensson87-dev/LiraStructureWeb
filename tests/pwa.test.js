@@ -86,3 +86,63 @@ test('manifest uses relative installation paths and standalone display', () => {
     ['192x192', '512x512'],
   );
 });
+
+test('app update awaits persisted work before activating and reloads only after approval', async () => {
+  const events = {},
+    messages = [];
+  let reloads = 0,
+    release;
+  const context = {
+    navigator: {
+      serviceWorker: {
+        addEventListener: (name, callback) => {
+          events[name] = callback;
+        },
+      },
+    },
+    location: { reload: () => reloads++ },
+    window: { addEventListener() {} },
+    document: { addEventListener() {}, hidden: false },
+    setInterval() {},
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    readFileSync(new URL('../src/update-ui.js', import.meta.url), 'utf8').replace(
+      'export function',
+      'function',
+    ),
+    context,
+  );
+  const reg = {
+    waiting: { postMessage: (message) => messages.push(message.type) },
+    addEventListener() {},
+  };
+  const button = { classList: { add() {} }, disabled: false },
+    status = {};
+  context.watchAppUpdate(
+    reg,
+    button,
+    status,
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = button.onclick();
+  events.controllerchange();
+  assert.equal(reloads, 0);
+  assert.deepEqual(messages, []);
+  release();
+  await pending;
+  assert.deepEqual(messages, ['ACTIVATE_UPDATE']);
+  events.controllerchange();
+  assert.equal(reloads, 1);
+  const rejectedButton = { classList: { add() {} }, disabled: false };
+  context.watchAppUpdate(reg, rejectedButton, status, async () => {
+    throw Error('Storage failed');
+  });
+  await rejectedButton.onclick();
+  assert.deepEqual(messages, ['ACTIVATE_UPDATE']);
+  assert.equal(rejectedButton.disabled, false);
+  assert.match(status.textContent, /Kunde inte förbereda/);
+});
