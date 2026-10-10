@@ -1,7 +1,7 @@
 import { loadPlateDefaults, editablePlate, storePlateDefaults } from '../plate-properties.js';
 import { loadSweepDefaults, editableSweep, storeSweepDefaults } from '../sweep-properties.js';
 import { groupSelection } from '../../fasteners/group-data.js';
-import { modelSelection } from '../selection-mode.js';
+import { modelSelection, canSelectModelObject } from '../selection-mode.js';
 import { isHelper, isCut, isPlate, isPhysical } from '../../model-object.js';
 import { nextIdentity, typeName } from '../../object-identity.js';
 import { componentDeletion } from '../../components/ownership.js';
@@ -53,6 +53,8 @@ export function installModelSession({
   const validateSweep = (...args) => actions.validateSweep(...args);
   Object.assign(actions, {
     setSelection,
+    isSelectable,
+    setGridSelectionLocked,
     select,
     userSelection,
     selectModelOrReference,
@@ -70,11 +72,29 @@ export function installModelSession({
   });
   let lastPlateDefaults = loadPlateDefaults(localStorage);
   let lastSweepDefaults = loadSweepDefaults(localStorage);
+  let selectableObjects = null,
+    selectionObjectsById = new Map();
+  function isSelectable(id) {
+    if (selectableObjects !== project.objects) {
+      selectableObjects = project.objects;
+      selectionObjectsById = new Map(project.objects.map((object) => [object.id, object]));
+    }
+    return canSelectModelObject(selectionObjectsById.get(id), ui);
+  }
+  function selectableIds(ids) {
+    return [...ids].filter(isSelectable);
+  }
+  function setGridSelectionLocked(locked) {
+    controllers.inspector?.finish();
+    actions.cancelBox?.();
+    ui.gridSelectionLocked = !!locked;
+    setSelection(ui.selectedIds, true);
+  }
   function setSelection(ids, keepTab = false) {
     controllers.referenceModels?.clearObjectSelection();
     controllers.inspector?.rollback();
     setDrawing(false);
-    ui.selectedIds = groupSelection(project.objects, ids);
+    ui.selectedIds = new Set(selectableIds(groupSelection(project.objects, selectableIds(ids))));
     ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
     if (ui.selected) fillForm(project.objects.find((s) => s.id === ui.selected));
     render({ selectionOnly: true });
@@ -90,7 +110,11 @@ export function installModelSession({
     setSelection(ids, keepTab);
   }
   function userSelection(ids) {
-    return modelSelection(project.objects, project.assemblies, ids, ui.selectionMode);
+    return new Set(
+      selectableIds(
+        modelSelection(project.objects, project.assemblies, selectableIds(ids), ui.selectionMode),
+      ),
+    );
   }
   function selectModelOrReference(id, additive = false) {
     const reference = !id && controllers.referenceModels?.pickReference(raycaster);

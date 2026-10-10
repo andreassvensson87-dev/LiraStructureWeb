@@ -52,6 +52,7 @@ export function installModelBrowser({
       if (isHelper(project.objects.find((s) => s.id === id))) ui.showHelpers = true;
       select(id, add, true);
     },
+    selectable: (id) => actions.isSelectable(id),
     visible: isVisible,
     toggle: (id) =>
       changeVisibility(() => {

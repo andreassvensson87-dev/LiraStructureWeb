@@ -7,6 +7,7 @@ const node = () => {
   return {
     children: [],
     attributes: {},
+    dataset: {},
     replacements: 0,
     classList: {
       toggle(name, active) {
@@ -39,6 +40,7 @@ function fixture(run) {
     closed: new Set(),
     isolateButton: {},
     visible: (id) => !hidden.has(id),
+    selectable: () => true,
     select: (id) => picks.push(id),
     toggle: (id) => hidden.add(id),
   });

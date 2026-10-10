@@ -2,6 +2,8 @@ const paths = {
   origin: 'M12 3v18M3 12h18M8 8h8v8H8Z',
   delete: 'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7',
   library: 'M3 4h5v16H3ZM10 4h5v16h-5ZM17 4l4 1-2 15-4-1',
+  gridLocked: 'M6 3v16M14 3v7M3 6h15M3 14h7M14 16v-3a3 3 0 0 1 6 0v3M12 16h10v6H12Z',
+  gridUnlocked: 'M6 3v16M14 3v7M3 6h15M3 14h7M16 16v-3a3 3 0 0 1 6 0M12 16h10v6H12Z',
   grid: 'M6 3v18M18 3v18M3 6h18M3 18h18',
   settings:
     'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M10 3h4l1 3 3 1 3 3v4l-3 1-1 3-3 3h-4l-1-3-3-1-3-3v-4l3-1 1-3Z',

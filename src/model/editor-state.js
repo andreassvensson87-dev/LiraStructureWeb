@@ -5,6 +5,7 @@ export function createModelEditorState() {
     selectedIds: new Set(),
     selected: null,
     selectionMode: 'part',
+    gridSelectionLocked: false,
     boxMode: false,
     marquee: null,
     transparentView: false,

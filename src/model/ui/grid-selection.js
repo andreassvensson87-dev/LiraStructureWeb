@@ -6,7 +6,7 @@ export function installGridSelection({ actions, grid, project, tools }) {
     const bubble = grid.labels.find((label) => label.el === e.target);
     if (!bubble) return;
     const object = project.objects.find((s) => s.type === 'gridline' && s.gridPickId === bubble.id);
-    if (object) {
+    if (object && actions.isSelectable(object.id)) {
       e.preventDefault();
       e.stopPropagation();
       setSelection([object.id]);

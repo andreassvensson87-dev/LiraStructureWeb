@@ -50,6 +50,36 @@ dialog.ui-standard-dialog :is([role='alert'], [role='status']) {
 dialog.ui-standard-dialog [role='alert']:not(:empty) {
   color: #a23b36;
 }
+/* Keep the frame stationary while categories have different content lengths. */
+#settings-dialog.ui-standard-dialog {
+  box-sizing: border-box;
+  height: min(660px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+#settings-form {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  height: 100%;
+  min-height: 0;
+}
+#settings-form > .panel-title {
+  grid-row: 1;
+}
+#settings-form > .settings-nav {
+  grid-row: 2;
+}
+#settings-form > [data-settings-panel] {
+  grid-area: 3 / 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+#settings-form > #settings-error {
+  grid-row: 4;
+}
+#settings-form > .settings-actions {
+  grid-row: 5;
+}
 #settings-dialog.ui-standard-dialog .setting-toggle {
   box-sizing: border-box;
   min-height: 32px;

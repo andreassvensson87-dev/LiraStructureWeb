@@ -1,4 +1,5 @@
 import './model-chrome.css';
+import { commandIcon } from '../../ui/icons.js';
 
 const icons = {
   properties: 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',
@@ -10,7 +11,14 @@ const svg = (path) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
 
 /** Move existing controls so their command handlers and state stay connected. */
-export function installModelChrome({ getSelectionMode, setSelectionMode, front, side }) {
+export function installModelChrome({
+  getSelectionMode,
+  setSelectionMode,
+  getGridSelectionLocked,
+  setGridSelectionLocked,
+  front,
+  side,
+}) {
   const $ = (id) => document.getElementById(id);
   const aside = document.querySelector('main > aside');
   const tabs = aside.querySelector('.inspector-tabs');
@@ -75,6 +83,26 @@ export function installModelChrome({ getSelectionMode, setSelectionMode, front, 
       );
   }
   syncSelection();
+
+  const gridLock = document.createElement('button');
+  gridLock.type = 'button';
+  gridLock.id = 'grid-selection-lock';
+  gridLock.className = 'model-grid-lock';
+  gridLock.setAttribute('aria-label', 'Lås markering av stomlinjer');
+  function syncGridLock() {
+    const locked = getGridSelectionLocked();
+    gridLock.setAttribute('aria-pressed', String(locked));
+    gridLock.title = locked
+      ? 'Stomlinjer låsta för markering · synliga och snappbara · klicka för att låsa upp'
+      : 'Stomlinjer kan markeras · klicka för att låsa markering';
+    gridLock.replaceChildren(commandIcon(locked ? 'gridLocked' : 'gridUnlocked'));
+  }
+  gridLock.onclick = () => {
+    setGridSelectionLocked(!getGridSelectionLocked());
+    syncGridLock();
+  };
+  syncGridLock();
+  controls.append(gridLock);
 
   const view = document.createElement('div');
   view.className = 'model-view-menu';

@@ -32,6 +32,8 @@ export function installWorkspaceAssemblies({
   });
   controllers.assemblyPanel.sync();
   installModelChrome({
+    getGridSelectionLocked: () => ui.gridSelectionLocked,
+    setGridSelectionLocked: (locked) => actions.setGridSelectionLocked(locked),
     getSelectionMode: () => ui.selectionMode,
     setSelectionMode: (mode) => {
       controllers.inspector.finish();

@@ -1,8 +1,20 @@
 import { designation, typeName } from './object-identity.js';
 const listingFields = ['id', 'name', 'prefix', 'number', 'type', 'material', 'section'];
 export class ModelTree {
-  constructor(root, { select, selectGroup, visible, toggle, isolate, showAll }) {
-    Object.assign(this, { root, select, selectGroup, visible, toggle, isolate, showAll });
+  constructor(
+    root,
+    { select, selectGroup, selectable = () => true, visible, toggle, isolate, showAll },
+  ) {
+    Object.assign(this, {
+      root,
+      select,
+      selectGroup,
+      selectable,
+      visible,
+      toggle,
+      isolate,
+      showAll,
+    });
     this.closed = new Set();
     const toolbar = document.createElement('div');
     toolbar.className = 'model-tools';
@@ -128,6 +140,9 @@ export class ModelTree {
         pick.className = selected.has(s.id) ? 'selected' : '';
         pick.textContent = designation(s);
         pick.title = `${s.name} · ${s.material?.name || 'Utan material'}`;
+        pick.dataset.objectTitle = pick.title;
+        pick.disabled = !this.selectable(s.id);
+        if (pick.disabled) pick.title = 'Stomlinjen är låst för markering';
         pick.onclick = (e) => this.select(s.id, e.shiftKey);
         const eye = document.createElement('button');
         eye.type = 'button';
@@ -152,6 +167,11 @@ export class ModelTree {
   }
   setSelection(selected) {
     this.isolateButton.disabled = !selected.size;
+    for (const [id, button] of this.rows || []) {
+      button.disabled = !this.selectable(id);
+      if (button.disabled) button.title = 'Stomlinjen är låst för markering';
+      else button.title = button.dataset.objectTitle;
+    }
     for (const id of new Set([...(this.selected || []), ...selected])) {
       if (this.selected?.has(id) === selected.has(id)) continue;
       this.rows?.get(id)?.classList.toggle('selected', selected.has(id));

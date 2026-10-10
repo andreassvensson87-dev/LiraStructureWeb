@@ -1,5 +1,8 @@
 import { groupSelection } from '../fasteners/group-data.js';
 
+export const canSelectModelObject = (object, ui) =>
+  !!object && !(ui.gridSelectionLocked && object.type === 'gridline');
+
 /** Expand user selections, without changing selections made by modeling tools. */
 export function modelSelection(objects, assemblies, ids, mode = 'part') {
   const selected = groupSelection(objects, ids);

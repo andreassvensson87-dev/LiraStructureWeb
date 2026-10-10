@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { isCut, isPhysical } from '../../model-object.js';
 import { levelElevation } from '../../levels.js';
 import { resolveSnap } from '../../snap.js';
+import { canSelectModelObject } from '../selection-mode.js';
 import { drawingWorkPlane } from '../../work-plane.js';
 
 // Converts viewport input into model hits and points using the shared snap engine.
@@ -83,6 +84,7 @@ export function createModelPicking({
         objects.children.filter(
           (o) =>
             o.visible &&
+            canSelectModelObject(getRenderedById().get(o.userData.id)?.source, ui) &&
             (camera.layers.test(o.layers) || o.userData.instanced) &&
             !o.userData.cut &&
             (tools.operation?.mode !== 'fastenerTargets' ||

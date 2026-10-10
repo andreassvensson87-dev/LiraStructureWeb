@@ -1,3 +1,4 @@
+import { canSelectModelObject } from '../selection-mode.js';
 import { enclosedSweeps } from '../../selection.js';
 export function createSelectionController({
   host,
@@ -75,7 +76,7 @@ export function createSelectionController({
       } else {
         camera.updateMatrixWorld();
         const hits = enclosedSweeps(
-          project.objects.filter((s) => isVisible(s.id)),
+          project.objects.filter((s) => isVisible(s.id) && canSelectModelObject(s, ui)),
           camera,
           host.clientWidth,
           host.clientHeight,

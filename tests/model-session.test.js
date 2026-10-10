@@ -10,6 +10,7 @@ import { createToolSession } from '../src/model/tool-session.js';
 import { createModelPreview } from '../src/model/ui/model-preview.js';
 import { createModelVisibility } from '../src/model/ui/model-visibility.js';
 import { installModelSession } from '../src/model/ui/model-session.js';
+import { createModelPicking } from '../src/model/ui/model-picking.js';
 import { installModelRenderer } from '../src/model/ui/model-renderer.js';
 import { InstanceBatches } from '../src/model/instance-batches.js';
 import { InteractionTimings } from '../src/model/interaction-timings.js';
@@ -187,4 +188,60 @@ test('selection reuses rendered geometry; edits refresh geometry and snapping an
   f.hiddenObjects.add('line');
   f.actions.render();
   assert.equal(f.objects.children[0].visible, false);
+});
+
+test('grid selection lock excludes picks and bulk selection while preserving visibility and snapping', (t) => {
+  const f = fixture(t);
+  f.project.objects.push({
+    ...f.project.objects[0],
+    id: 'grid',
+    type: 'gridline',
+    name: '1',
+    gridAxis: 'x',
+  });
+  f.project.objects[0] = { ...f.project.objects[0], start: [0, 0, -10], end: [1000, 0, -10] };
+  f.actions.render();
+  const gridMesh = f.renderState.renderedById.get('grid').child;
+  const snapIndex = f.renderState.snapIndex;
+  const camera = new THREE.OrthographicCamera(0, 1000, 500, -500, 1, 2000);
+  camera.position.set(0, 0, 1000);
+  camera.updateProjectionMatrix();
+  const picking = createModelPicking({
+    ...f,
+    camera,
+    host: {
+      clientWidth: 800,
+      clientHeight: 600,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+    },
+    getRenderedById: () => f.renderState.renderedById,
+    getSnapIndex: () => f.renderState.snapIndex,
+    getReferences: () => null,
+    workPlanePrompt: noop,
+    updateSnapOverlay: noop,
+  });
+  picking.ray({ clientX: 400, clientY: 300 });
+  assert.equal(picking.selectionHit(), 'grid');
+  f.actions.setSelection(['line', 'grid']);
+  f.actions.setGridSelectionLocked(true);
+  assert.deepEqual([...f.ui.selectedIds], ['line'], 'locking preserves other selected objects');
+  assert.equal(
+    picking.selectionHit(),
+    'line',
+    'locked geometry allows picking the object behind it',
+  );
+  assert.equal(f.actions.isSelectable('grid'), false);
+  assert.deepEqual([...f.actions.userSelection(['grid', 'line'])], ['line']);
+  f.actions.setSelection(['grid', 'line']);
+  assert.deepEqual([...f.ui.selectedIds], ['line'], 'bulk selection also respects the lock');
+  f.actions.select('grid');
+  assert.equal(f.ui.selectedIds.size, 0);
+  assert.equal(gridMesh.visible, true);
+  assert.equal(f.renderState.snapIndex, snapIndex);
+  assert.ok(snapIndex.model.some((object) => object.id === 'grid'));
+  assert.equal(f.projectHistory.canUndo, false, 'locking is UI state, not a model edit');
+  f.actions.setGridSelectionLocked(false);
+  f.actions.select('grid');
+  assert.equal(f.ui.selected, 'grid');
+  assert.equal(picking.selectionHit(), 'grid');
 });
