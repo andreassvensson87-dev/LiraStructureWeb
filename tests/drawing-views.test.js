@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ensureGAViews,
+  setDrawingViewScale,
+  drawingViewSelection,
+  viewsInRectangle,
   duplicateDrawingView,
   cropDrawingView,
   syncPartViews,
@@ -118,4 +121,65 @@ test('legacy Single Part scale maps migrate once and common records remain autho
   assert.equal(partViewScales(record.sheet).top, 25);
   assert.throws(() => setDrawingViewScale(record.sheet.views[0], NaN));
   assert.equal(partViewScales(record.sheet).top, 25);
+});
+
+test('changing scales together preserves paper centers and visible model extents after cropping', () => {
+  const views = [
+    {
+      id: 'a',
+      scale: 100,
+      position: [20, 30],
+      size: [80, 50],
+      camera: { center: [1200, 3400] },
+      settings: { hiddenLines: true },
+    },
+    {
+      id: 'b',
+      scale: 50,
+      position: [150, 60],
+      size: [40, 20],
+      camera: { center: [-100, 500] },
+      settings: {},
+    },
+  ].map((view) => cropDrawingView(view, 'se', [-5, -3]));
+  const before = structuredClone(views);
+  for (const view of views) setDrawingViewScale(view, 25);
+  views.forEach((view, index) => {
+    const old = before[index];
+    assert.deepEqual(view.camera, old.camera);
+    assert.deepEqual(view.settings, old.settings);
+    for (const axis of [0, 1]) {
+      assert.equal(
+        view.position[axis] + view.size[axis] / 2,
+        old.position[axis] + old.size[axis] / 2,
+      );
+      assert.equal(view.size[axis] * view.scale, old.size[axis] * old.scale);
+    }
+  });
+  const saved = structuredClone(views);
+  assert.throws(() => setDrawingViewScale(views[0], NaN));
+  assert.deepEqual(views, saved, 'invalid input leaves geometry unchanged');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(views)),
+    saved,
+    'paper rectangles and scales survive saving',
+  );
+});
+
+test('view selections toggle with Shift and window/crossing boxes select whole or intersected frames', () => {
+  const views = [
+    { id: 'a', position: [10, 10], size: [20, 20] },
+    { id: 'b', position: [40, 10], size: [20, 20] },
+  ];
+  let ids = drawingViewSelection(new Set(), 'a');
+  ids = drawingViewSelection(ids, 'b', true);
+  assert.deepEqual([...ids], ['a', 'b']);
+  assert.deepEqual(
+    [...drawingViewSelection(ids, 'a', false, true)],
+    ['a', 'b'],
+    'grabbing an existing handle keeps the group',
+  );
+  assert.deepEqual([...drawingViewSelection(ids, 'a', true)], ['b']);
+  assert.deepEqual(viewsInRectangle(views, [0, 0], [35, 35]), ['a']);
+  assert.deepEqual(viewsInRectangle(views, [45, 35], [20, 0]), ['a', 'b']);
 });

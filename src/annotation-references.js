@@ -16,6 +16,7 @@ export function referenceCandidates(points, source, identities = points) {
   const shape = `${axes.map((a) => a.length).join(':')}:${hash >>> 0}`;
   return points.map((p, i) =>
     Object.assign([...p], {
+      ...(p.snapKind ? { snapKind: p.snapKind } : {}),
       reference: { kind: 'corner', source, shape, rank: ranks[i] },
     }),
   );

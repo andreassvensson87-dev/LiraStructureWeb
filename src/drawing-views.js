@@ -100,8 +100,12 @@ export function viewById(sheet, id) {
 }
 export function setDrawingViewScale(view, scale) {
   if (!Number.isFinite(scale) || scale < 0.1 || scale > 10000) throw Error('Ogiltig vyskala.');
+  const factor = view.scale / scale;
+  const center = view.position.map((value, axis) => value + view.size[axis] / 2);
+  view.size = view.size.map((value) => value * factor);
   view.scale = scale;
   if (view.detail) updateDetailArea(view);
+  view.position = center.map((value, axis) => value - view.size[axis] / 2);
 }
 export function syncPartViews(record, config, boxes) {
   const views = ensurePartViews(record, config);
@@ -149,4 +153,30 @@ export function cropDrawingView(view, corner, delta, minSize = 15) {
     view.camera.center[1] - ((top + bottom) * view.scale) / 2,
   ];
   return next;
+}
+
+/** Keep an existing group while grabbing its move handle; Shift toggles membership. */
+export function drawingViewSelection(ids, id, additive = false, preserve = false) {
+  if (!id) return new Set();
+  if (preserve && ids.has(id) && !additive) return new Set(ids);
+  const next = additive ? new Set(ids) : new Set();
+  if (additive && next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+export function viewsInRectangle(views, a, b) {
+  const left = Math.min(a[0], b[0]),
+    right = Math.max(a[0], b[0]);
+  const top = Math.min(a[1], b[1]),
+    bottom = Math.max(a[1], b[1]);
+  const crossing = b[0] < a[0];
+  return views
+    .filter((view) => {
+      const [x, y] = view.position,
+        [w, h] = view.size;
+      return crossing
+        ? x <= right && x + w >= left && y <= bottom && y + h >= top
+        : x >= left && x + w <= right && y >= top && y + h <= bottom;
+    })
+    .map((view) => view.id);
 }

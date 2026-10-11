@@ -1,12 +1,21 @@
-import { createCadStatusbar, placeCadInput, defaultCadSettings } from './cad-statusbar.js';
-import { CadTracking, constrainCadPoint } from './cad-tracking.js';
-import { lengthPoint, snapFrame } from './frame-model.js';
+import { paintDrawingObject } from './drawing-object-renderer.js';
+import {
+  createDrawingPreview,
+  tintDrawingPreview,
+  paintDrawingOverlay,
+} from './drawing-overlay.js';
+import { installDrawingOrder, installDrawingGeometry } from './drawing-object-inspector.js';
+import { locateDrawingPoint } from './drawing-point-placement.js';
+import { DrawingRichTextEditor } from './drawing-rich-text-editor.js';
+import { installExactLength } from './ui/exact-length.js';
+import { createCadStatusbar } from './cad-statusbar.js';
+import { CadTracking } from './cad-tracking.js';
+import { lengthPoint } from './frame-model.js';
 import { actionButton } from './drawing-toolbar.js';
 import { DrawingDimensionAssistant } from './drawing-dimension-assistant.js';
 import { DrawingShapeTransform } from './drawing-shape-transform.js';
 import { shapeGrips, shapeWithGrip } from './drawing-shape-grips.js';
 import {
-  shapeStyle,
   installShapeStyle,
   shapeToolSettings,
   applyShapeToolSettings,
@@ -17,7 +26,7 @@ import {
   unlinkDimensions,
   linkedPaperOffsets,
 } from './dimension-links.js';
-import { shapeNames, shapePath, shapeSnapPoints, validateShape } from './drawing-shapes.js';
+import { shapeNames, validateShape } from './drawing-shapes.js';
 import {
   resolveReference,
   surfaceReference,
@@ -25,7 +34,6 @@ import {
 } from './annotation-references.js';
 import {
   dimensionAxis,
-  formatDimension,
   holeDimensionPoints,
   dimensionPaperOffset,
   chainGeometry,
@@ -48,6 +56,7 @@ export class DrawingAnnotations {
     this.future = [];
     this.mode = null;
     this.selected = null;
+    this.selectedIds = new Set();
     this.toolButtons = [];
     for (const [kind, label] of Object.entries(names)) {
       const button = actionButton(document.createElement('button'), 'dimension', label);
@@ -95,7 +104,19 @@ export class DrawingAnnotations {
     this.overlayHost.append(this.hint);
     for (const message of dialog.querySelectorAll('#plan-error, #sheet-message')) {
       message.classList.add('cad-hint', 'cad-warning');
-      this.overlayHost.append(message);
+      (footer || dialog).append(message);
+      message.tabIndex = 0;
+      const describe = () => {
+        message.title = message.textContent;
+        message.setAttribute('aria-label', message.textContent);
+        message.tabIndex = message.textContent ? 0 : -1;
+      };
+      new MutationObserver(describe).observe(message, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+      describe();
     }
     this.tracking = new CadTracking();
     this.cad = createCadStatusbar(dialog, footer || dialog, () => {
@@ -104,21 +125,24 @@ export class DrawingAnnotations {
       if (this.drag) this.drag.magnetPoint = null;
       if (this.record) this.adapter.redraw();
     });
-    this.dynamicInput = document.createElement('form');
-    this.dynamicInput.className = 'cad-dynamic-input';
-    if (this.dynamicInput) this.dynamicInput.hidden = true;
-    this.dynamicInput.innerHTML =
-      '<label><span>Längd · mm</span><input aria-label="Exakt längd eller radie" autocomplete="off" placeholder="mm"></label>';
-    this.overlayHost.append(this.dynamicInput);
+    const lengthLabel = document.createElement('label');
+    lengthLabel.innerHTML = '<span>Längd · mm</span>';
+    const lengthControl = installExactLength(footer || dialog, { label: lengthLabel });
+    this.dynamicInput = lengthControl.form;
+    this.dynamicInput.hidden = true;
     this.dynamicInput.onsubmit = (event) => {
       event.preventDefault();
+      if (this.transform?.active() && this.transform.base) {
+        this.transform.submit(this.dynamicInput.querySelector('input').value);
+        return;
+      }
       if (!this.draft || !this.hover) return;
       try {
         const base = this.draft.points.at(-1);
         const direction = this.mode === 'circle' ? [base[0] + 1, base[1]] : this.hover.point;
         const target = lengthPoint(base, direction, this.dynamicInput.querySelector('input').value);
         this.draft.points.push(target);
-        if (this.mode !== 'polyline') this.finishShape();
+        if (!['polyline', 'polygon'].includes(this.mode)) this.finishShape();
         this.dynamicInput.querySelector('input').value = '';
         this.surface.focus({ preventScroll: true });
         this.ui();
@@ -127,6 +151,16 @@ export class DrawingAnnotations {
         this.ui(error.message);
       }
     };
+    this.dynamicInput.querySelector('input').oninput = () => {
+      if (!this.transform?.active() || !this.transform.base) return;
+      const text = this.dynamicInput.querySelector('input').value.trim();
+      const value = Number(text.replace(',', '.'));
+      if (this.mode === 'rotate-shapes')
+        this.transform.numericAngle = text && Number.isFinite(value) ? value : null;
+      else this.transform.exactDistance = text && value > 0 ? text : null;
+      this.adapter.redraw();
+    };
+    if (adapter.paper) this.richText = new DrawingRichTextEditor(this, toolbar);
     this.contextMenu = document.createElement('div');
     this.contextMenu.className = 'annotation-context-menu';
     this.contextMenu.hidden = true;
@@ -157,12 +191,14 @@ export class DrawingAnnotations {
       this.mode = null;
       this.draft = null;
       this.selected = null;
+      this.selectedIds = new Set();
     });
     this.assistant = new DrawingDimensionAssistant(this, toolbar);
     this.transform = new DrawingShapeTransform(this, toolbar);
     this.ui();
   }
   open(record) {
+    this.richText?.cancel(false);
     this.record = record;
     this.items = record.annotations ??= [];
     this.history = [];
@@ -170,6 +206,7 @@ export class DrawingAnnotations {
     this.mode = null;
     this.draft = null;
     this.selected = null;
+    this.selectedIds = new Set();
     this.hover = null;
     this.ui();
   }
@@ -184,9 +221,12 @@ export class DrawingAnnotations {
     to.push(structuredClone(this.items));
     this.items = from.pop();
     this.record.annotations = this.items;
+    this.selected = null;
+    this.selectedIds?.clear();
     this.cancel();
   }
   cancel() {
+    this.richText?.cancel(false);
     this.assistant?.cancel();
     this.contextMenu.hidden = true;
     this.phase = 'points';
@@ -195,6 +235,7 @@ export class DrawingAnnotations {
     this.mode = null;
     this.draft = null;
     this.hover = null;
+    if (!this.selected) this.selectedIds?.clear();
     this.ui();
     this.adapter.redraw();
   }
@@ -204,6 +245,14 @@ export class DrawingAnnotations {
     this.tracking?.reset();
     if (this.dynamicInput) this.dynamicInput.hidden = true;
     this.selected = null;
+    this.selectedIds?.clear();
+    if (this.dynamicInput) {
+      this.dynamicInput.querySelector('.ui-exact-length-field span').textContent = 'mm';
+      this.dynamicInput
+        .querySelector('input')
+        .setAttribute('aria-label', 'Exakt längd eller radie · mm');
+      this.dynamicInput.querySelector('input').value = '';
+    }
     this.mode = mode;
     this.draft = null;
     this.hover = null;
@@ -217,6 +266,7 @@ export class DrawingAnnotations {
     return this.items.find((a) => a.id === this.selected);
   }
   ui(message) {
+    if (!this.selected && !this.mode) this.selectedIds?.clear();
     for (const button of this.toolButtons || [])
       button.setAttribute('aria-pressed', String(button.dataset.annotationMode === this.mode));
     this.surface.classList.toggle('annotating', !!this.mode);
@@ -224,6 +274,22 @@ export class DrawingAnnotations {
       this.panel.parentElement.classList.add('annotation-focused');
       this.transform.ui(message);
       this.assistant?.cancel();
+      return;
+    }
+    if (!this.mode && this.selectedIds?.size > 1) {
+      this.panel.replaceChildren();
+      const title = document.createElement('h3'),
+        text = document.createElement('p');
+      title.textContent = `${this.selectedIds.size} ritobjekt markerade`;
+      text.textContent =
+        'Använd Flytta, Kopiera eller Rotera i den övre menyn. Shift-klick ändrar urvalet.';
+      this.panel.append(title, text);
+      this.panel.parentElement.classList.add('annotation-focused');
+      this.hint.textContent = 'Shift-klick för flerval · Esc avmarkerar';
+      return;
+    }
+    if (this.richText && (this.mode === 'richtext' || this.item()?.type === 'richtext')) {
+      this.richText.ui();
       return;
     }
     this.panel.replaceChildren();
@@ -339,7 +405,11 @@ export class DrawingAnnotations {
             2.5,
         );
       }
-      if (item.type === 'shape') installShapeStyle(this, item);
+      if (item.type === 'shape') {
+        installDrawingGeometry(this, item);
+        installShapeStyle(this, item);
+      }
+      installDrawingOrder(this, item);
       if (item.type === 'dimension') {
         const linked = linkedDimensions(this.items, item);
         if (linked.length > 1) {
@@ -491,8 +561,15 @@ export class DrawingAnnotations {
         label.append(radius);
         this.panel.append(label);
       }
-      if (this.draft?.type === 'shape' && this.draft.shape === 'polyline')
-        button('Avsluta polylinje ↵', () => this.finishShape(), this.draft.points.length < 2);
+      if (this.draft?.type === 'shape' && ['polyline', 'polygon'].includes(this.draft.shape)) {
+        button(
+          this.mode === 'polygon' ? 'Stäng polygon ↵' : 'Avsluta polylinje ↵',
+          () => this.finishShape(),
+          this.draft.points.length < (this.mode === 'polygon' ? 3 : 2),
+        );
+        if (this.mode === 'polyline')
+          button('Stäng polylinje · C', () => this.finishShape(true), this.draft.points.length < 3);
+      }
       if (this.draft?.type === 'dimension' && this.phase === 'points')
         button('Placera måttlinje ↵', () => this.finishPoints(), this.draft.points.length < 2);
       button('Avbryt · Esc', () => this.cancel());
@@ -526,8 +603,8 @@ export class DrawingAnnotations {
               ? this.draft
                 ? 'Välj motsatt hörn.'
                 : 'Välj rektangelns första hörn.'
-              : this.mode === 'polyline'
-                ? 'Välj hörnpunkter · Enter avslutar · C sluter · Esc avbryter.'
+              : ['polyline', 'polygon'].includes(this.mode)
+                ? 'Välj hörnpunkter · klicka första punkten eller C för att stänga · Enter avslutar · Esc avbryter.'
                 : this.draft
                   ? 'Välj linjens slutpunkt.'
                   : 'Välj linjens startpunkt.'
@@ -557,16 +634,14 @@ export class DrawingAnnotations {
     this.hint.textContent = message || instructions || '';
     this.hint.title = this.hint.textContent;
     if (this.dynamicInput) {
-      this.dynamicInput.querySelector('span').textContent =
+      this.dynamicInput.querySelector('.ui-exact-length-label span').textContent =
         this.mode === 'circle' ? 'Radie · mm' : 'Längd · mm';
       this.dynamicInput.hidden = !(
         this.workflow === 'shape' &&
         this.draft?.points.length &&
-        ['line', 'polyline', 'circle'].includes(this.mode) &&
+        ['line', 'polyline', 'polygon', 'circle'].includes(this.mode) &&
         !this.drag
       );
-      if (!this.dynamicInput.hidden && this.lastCadPosition)
-        placeCadInput(this.dynamicInput, this.overlayHost, this.lastCadPosition);
     }
     this.assistant?.ui();
   }
@@ -585,7 +660,8 @@ export class DrawingAnnotations {
   finishShape(close = false) {
     if (!this.draft) return;
     try {
-      validateShape(this.draft.shape, this.draft.points);
+      close ||= this.draft.shape === 'polygon';
+      validateShape(this.draft.shape, this.draft.points, close);
       this.checkpoint();
       this.draft.closed = close;
       this.items.push(this.draft);
@@ -687,12 +763,26 @@ export class DrawingAnnotations {
       return;
     }
     if (
-      !e.target?.closest?.('input,select,textarea') &&
+      this.transform?.active() &&
+      this.transform.base &&
+      !e.target?.closest?.('input,select,textarea,[contenteditable="true"]') &&
+      /^[0-9+.,-]$/.test(e.key)
+    ) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.dynamicInput.hidden = false;
+      const input = this.dynamicInput.querySelector('input');
+      input.value = e.key;
+      input.focus();
+      return;
+    }
+    if (
+      !e.target?.closest?.('input,select,textarea,[contenteditable="true"]') &&
       /^[0-9+.,-]$/.test(e.key) &&
       this.draft &&
       this.hover &&
       this.workflow === 'shape' &&
-      ['line', 'polyline', 'circle'].includes(this.mode)
+      ['line', 'polyline', 'polygon', 'circle'].includes(this.mode)
     ) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -723,7 +813,7 @@ export class DrawingAnnotations {
       this.cancel();
       return;
     }
-    if (e.target.closest('input,select,textarea')) return;
+    if (e.target.closest('input,select,textarea,[contenteditable="true"]')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -743,7 +833,7 @@ export class DrawingAnnotations {
       else if (this.workflow === 'shape') this.finishShape();
       else this.finishPoints();
       this.adapter.redraw();
-    } else if (e.key.toLowerCase() === 'c' && this.mode === 'polyline') {
+    } else if (e.key.toLowerCase() === 'c' && ['polyline', 'polygon'].includes(this.mode)) {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.finishShape(true);
@@ -751,127 +841,14 @@ export class DrawingAnnotations {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.checkpoint();
-      this.items.splice(this.items.indexOf(this.item()), 1);
+      const ids = this.selectedIds?.size ? this.selectedIds : new Set([this.selected]);
+      this.items = this.record.annotations = this.items.filter((item) => !ids.has(item.id));
       this.selected = null;
       this.cancel();
     }
   }
-  location(e, view, snap = true, excludeId = null) {
-    this.lastCadPosition = { clientX: e.clientX, clientY: e.clientY };
-    const hit = this.adapter.locate(e, view);
-    if (!hit) return null;
-    const settings = this.cad?.get() || defaultCadSettings;
-    const base = this.transform?.base || this.draft?.points.at(-1) || this.drag?.grip?.point;
-    const rawPoint = [...hit.point];
-    const originPixel = this.adapter.project(hit.point, hit.view),
-      unitPixel = this.adapter.project([hit.point[0] + 1, hit.point[1]], hit.view);
-    const pixelSize =
-      1 /
-      Math.max(
-        1e-9,
-        Math.hypot(unitPixel[0] - originPixel[0], unitPixel[1] - originPixel[1]) *
-          this.adapter.pixelScale(),
-      );
-    if (snap && settings.snap) {
-      const p = this.adapter.project(hit.point, hit.view);
-      const magnetic = excludeId && this.drag?.shapeBefore;
-      if (magnetic && this.drag.magnetPoint) {
-        const q = this.adapter.project(this.drag.magnetPoint, hit.view);
-        if (Math.hypot(q[0] - p[0], q[1] - p[1]) * this.adapter.pixelScale() < 18) {
-          return { ...hit, point: [...this.drag.magnetPoint], snapped: true };
-        }
-        this.drag.magnetPoint = null;
-      }
-      let best = magnetic ? 14 : 10;
-      const drawn = this.items
-        .filter((item) => item.type === 'shape' && item.view === hit.view && item.id !== excludeId)
-        .flatMap((item) =>
-          magnetic ? shapeGrips(item).map((grip) => grip.point) : shapeSnapPoints(item),
-        );
-      const lines = this.items
-        .filter(
-          (item) =>
-            item.type === 'shape' &&
-            item.view === hit.view &&
-            item.id !== excludeId &&
-            ['line', 'polyline', 'rectangle'].includes(item.shape),
-        )
-        .map((item) => ({ type: 'line', points: shapeSnapPoints(item) }));
-      const additional = snapFrame(rawPoint, {
-        entities: lines,
-        base,
-        tolerance: pixelSize * best,
-        endpoints: false,
-        midpoints: settings.midpoints,
-        intersections: settings.intersections,
-        perpendicular: settings.perpendicular,
-      });
-      const candidates = settings.endpoints ? [...this.adapter.candidates(hit.view), ...drawn] : [];
-      if (additional.kind !== 'Fritt') candidates.push(additional.point);
-      for (const candidate of candidates) {
-        if (
-          settings.ortho &&
-          base &&
-          Math.min(Math.abs(candidate[0] - base[0]), Math.abs(candidate[1] - base[1])) > 1e-6
-        )
-          continue;
-        const q = this.adapter.project(candidate, hit.view),
-          distance = Math.hypot(q[0] - p[0], q[1] - p[1]) * this.adapter.pixelScale();
-        if (distance < best) {
-          best = distance;
-          hit.point = candidate;
-          hit.reference = candidate.reference || null;
-          hit.snapped = true;
-        }
-      }
-      if (!hit.snapped && this.adapter.gridSnap) {
-        const gridPoint = this.adapter.gridSnap(hit.point);
-        if (
-          gridPoint &&
-          (!settings.ortho ||
-            !base ||
-            Math.min(Math.abs(gridPoint[0] - base[0]), Math.abs(gridPoint[1] - base[1])) <= 1e-6)
-        ) {
-          hit.point = gridPoint;
-          hit.reference = this.adapter.gridReference?.(gridPoint) || null;
-          hit.snapped = true;
-        }
-      }
-      if (magnetic && hit.snapped) this.drag.magnetPoint = [...hit.point];
-    }
-    this.trackHit =
-      snap && settings.snap && settings.otrack
-        ? this.tracking.locate(rawPoint, {
-            view: hit.view,
-            snapped: !!hit.snapped,
-            point: hit.point,
-            tolerance: pixelSize * 8,
-          })
-        : null;
-    if (this.trackHit?.guides.length) {
-      hit.point = this.trackHit.point;
-      hit.reference = null;
-    } else if (!hit.snapped && snap)
-      hit.point = constrainCadPoint(hit.point, base, {
-        ortho: settings.ortho || (e.shiftKey && this.workflow === 'shape'),
-        polar: settings.polar,
-        tolerance: pixelSize * 8,
-      });
-    this.cad?.coordinates(hit.point);
-    if (this.dynamicInput)
-      this.dynamicInput.hidden = !(
-        this.workflow === 'shape' &&
-        this.draft?.points.length &&
-        ['line', 'polyline', 'circle'].includes(this.mode) &&
-        !this.drag
-      );
-    if (this.dynamicInput && !this.dynamicInput.hidden) {
-      this.dynamicInput.querySelector('span').textContent =
-        this.mode === 'circle' ? 'Radie · mm' : 'Längd · mm';
-      if (document.activeElement !== this.dynamicInput.querySelector('input'))
-        placeCadInput(this.dynamicInput, this.overlayHost, e);
-    }
-    return hit;
+  location(...args) {
+    return locateDrawingPoint(this, ...args);
   }
   down(e) {
     if (e.button !== 0) return;
@@ -880,7 +857,19 @@ export class DrawingAnnotations {
       if (target) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        this.selected = target.dataset.annotation;
+        const id = target.dataset.annotation;
+        this.selectedIds ??= new Set();
+        if (e.shiftKey) {
+          if (this.selected && !this.selectedIds.size) this.selectedIds.add(this.selected);
+          if (this.selectedIds.has(id)) this.selectedIds.delete(id);
+          else this.selectedIds.add(id);
+          this.selected = [...this.selectedIds].at(-1) || null;
+          this.ui();
+          this.adapter.redraw();
+          return;
+        }
+        this.selected = id;
+        this.selectedIds = new Set([id]);
         if (this.item()?.type === 'shape') {
           const handle = e.target.closest('[data-shape-grip]');
           if (handle) {
@@ -938,6 +927,7 @@ export class DrawingAnnotations {
         this.adapter.redraw();
       } else if (this.selected) {
         this.selected = null;
+        this.selectedIds?.clear();
         this.ui();
         this.adapter.redraw();
       }
@@ -969,11 +959,21 @@ export class DrawingAnnotations {
       if (this.record)
         applyShapeToolSettings(this.draft, shapeToolSettings(this.record, this.mode));
       if (
+        this.draft.points.length >= 3 &&
+        ['polyline', 'polygon'].includes(this.mode) &&
+        Math.hypot(this.draft.points[0][0] - hit.point[0], this.draft.points[0][1] - hit.point[1]) <
+          1e-7
+      ) {
+        this.finishShape(true);
+        return;
+      }
+      if (
         this.draft.points.some((p) => Math.hypot(p[0] - hit.point[0], p[1] - hit.point[1]) < 1e-7)
       )
         return;
       this.draft.points.push([...hit.point]);
-      const required = this.mode === 'arc' ? 3 : this.mode === 'polyline' ? Infinity : 2;
+      const required =
+        this.mode === 'arc' ? 3 : ['polyline', 'polygon'].includes(this.mode) ? Infinity : 2;
       if (this.draft.points.length === required) {
         this.finishShape();
         if (this.draft?.points.length === required) this.draft.points.pop();
@@ -1088,6 +1088,15 @@ export class DrawingAnnotations {
         references: [hit.reference || null],
       };
     else {
+      if (
+        this.draft.points.length >= 3 &&
+        ['polyline', 'polygon'].includes(this.mode) &&
+        Math.hypot(this.draft.points[0][0] - hit.point[0], this.draft.points[0][1] - hit.point[1]) <
+          1e-7
+      ) {
+        this.finishShape(true);
+        return;
+      }
       if (
         this.draft.points.some((p) => Math.hypot(p[0] - hit.point[0], p[1] - hit.point[1]) < 1e-5)
       )
@@ -1225,9 +1234,18 @@ export class DrawingAnnotations {
     this.adapter.redraw();
   }
   render(root) {
-    const layer = el('g', { class: 'drawing-annotations' });
-    root.append(layer);
+    if (!this.selected && !this.mode) this.selectedIds?.clear();
+    const back = el('g', { class: 'drawing-annotations drawing-annotations-back' }),
+      front = el('g', { class: 'drawing-annotations drawing-annotations-front' });
+    const boundary = root.querySelector(':scope > [data-paper-boundary]');
+    root.insertBefore(back, boundary ? boundary.nextSibling : root.firstChild);
+    root.append(front);
+    this.overlay = el('g', { class: 'drawing-overlay', 'data-annotation-helper': 'overlay' });
+    root.append(this.overlay);
+    let layer = front;
     for (const item of this.items) {
+      if (item.type === 'richtext') continue;
+      layer = item.drawOrder === 'back' ? back : front;
       if (this.adapter.visible && !this.adapter.visible(item)) continue;
       const broken = updateAnnotationReferences(
         item,
@@ -1246,6 +1264,7 @@ export class DrawingAnnotations {
         layer,
         display,
         item.id === this.selected ||
+          this.selectedIds?.has(item.id) ||
           (this.transform?.active() && this.transform.ids.includes(item.id)),
       );
       if (broken.length) {
@@ -1256,6 +1275,7 @@ export class DrawingAnnotations {
             x: p[0] + 5 * this.adapter.unit(),
             y: p[1],
             fill: '#b45309',
+            'data-annotation-helper': 'reference-warning',
             'font-size': 5 * this.adapter.unit(),
             'font-weight': 'bold',
           },
@@ -1264,56 +1284,22 @@ export class DrawingAnnotations {
         warning.append(
           el('title', {}, 'Bruten modellkoppling. Flytta måttpunkten till en ny snappunkt.'),
         );
-        layer.append(warning);
+        this.overlay.append(warning);
       }
     }
+    layer = this.overlay;
     if (this.draft) {
       if (this.draft.type === 'shape' && this.hover) {
         const preview = { ...this.draft, points: [...this.draft.points, this.hover.point] };
-        this.paint(layer, preview, true);
+        this.paint(layer, preview, false, true);
         for (const p of this.draft.points) this.dot(layer, p, this.draft.view);
       } else if ((this.phase === 'place' || this.draft.type === 'leader') && this.hover)
-        this.paint(layer, { ...this.draft, line: this.hover.point }, true);
+        this.paint(layer, { ...this.draft, line: this.hover.point }, false, true);
       else for (const p of this.draft.points) this.dot(layer, p, this.draft.view);
-    }
-    if (this.hover && this.trackHit?.guides.length) {
-      const target = this.adapter.project(this.hover.point, this.hover.view);
-      for (const { anchor } of this.trackHit.guides) {
-        const start = this.adapter.project(anchor, this.hover.view);
-        layer.append(
-          el('line', {
-            x1: start[0],
-            y1: start[1],
-            x2: target[0],
-            y2: target[1],
-            stroke: '#bc873b',
-            'stroke-dasharray': '5 4',
-            'stroke-width': 1,
-            'vector-effect': 'non-scaling-stroke',
-            'pointer-events': 'none',
-            'data-annotation-helper': 'tracking',
-          }),
-        );
-      }
     }
     this.assistant?.render(layer);
     if (this.transform?.active()) this.transform.render(layer);
-    if (this.hover?.snapped && (this.mode || this.drag)) {
-      const p = this.adapter.project(this.hover.point, this.hover.view),
-        r = this.adapter.unit() * 1.2;
-      layer.append(
-        el('rect', {
-          x: p[0] - r,
-          y: p[1] - r,
-          width: 2 * r,
-          height: 2 * r,
-          fill: 'white',
-          stroke: '#299378',
-          'stroke-width': 1,
-          'vector-effect': 'non-scaling-stroke',
-        }),
-      );
-    }
+    if (this.hover?.view !== 'paper' || !this.richText) paintDrawingOverlay(layer, this);
   }
   referenceFor(hit, source) {
     const id = this.adapter.referenceSource?.(source) || source;
@@ -1333,226 +1319,10 @@ export class DrawingAnnotations {
     const q = this.adapter.project(p, view);
     root.append(el('circle', { cx: q[0], cy: q[1], r: this.adapter.unit(), fill: '#299378' }));
   }
-  paint(root, item, selected) {
-    const project = (p) => this.adapter.project(p, item.view),
-      unit = this.adapter.unit(),
-      fontSize =
-        (item.textSize ??
-          this.record?.drawingPreset?.[item.type === 'leader' ? 'leaderSize' : 'dimensionSize'] ??
-          2.5) * unit,
-      g = el('g', {
-        'data-annotation': item.id,
-        class: 'drawing-annotation',
-        fill: 'none',
-        stroke: selected ? '#287c65' : '#263a42',
-        'stroke-width': (this.record?.drawingPreset?.lineWidth ?? 0.22) * unit,
-      });
-    root.append(g);
-    if (item.type === 'shape') {
-      try {
-        const style = shapeStyle(item, this.record?.drawingPreset, unit);
-        g.setAttribute('stroke', style.color);
-        g.setAttribute('stroke-width', style.width);
-        const path = shapePath(item.shape, item.points, project) + (item.closed ? 'Z' : '');
-        g.append(
-          el('path', {
-            d: path,
-            fill: style.fill,
-            'stroke-dasharray': style.dash,
-            'stroke-linecap': style.lineType === 'dotted' ? 'round' : 'butt',
-          }),
-        );
-        g.append(
-          el('path', {
-            d: path,
-            stroke: 'transparent',
-            'stroke-width': 5 * unit,
-            class: 'annotation-hit',
-          }),
-        );
-        if (selected && !this.mode) {
-          const size = 6 / this.adapter.pixelScale();
-          for (const [index, grip] of shapeGrips(item).entries()) {
-            const q = project(grip.point);
-            const target = el('g', {
-              'data-shape-grip': index,
-              class: 'shape-grip-target',
-              role: 'img',
-              'aria-label':
-                grip.kind === 'move'
-                  ? 'Dra för att flytta objektet'
-                  : 'Dra för att ändra geometrin',
-            });
-            const hitSize = 18 / this.adapter.pixelScale();
-            target.append(
-              el('rect', {
-                x: q[0] - hitSize / 2,
-                y: q[1] - hitSize / 2,
-                width: hitSize,
-                height: hitSize,
-                fill: 'transparent',
-                stroke: 'none',
-                class: 'shape-grip-hit',
-              }),
-            );
-            target.append(
-              el('rect', {
-                x: q[0] - size / 2,
-                y: q[1] - size / 2,
-                width: size,
-                height: size,
-                fill: '#287c65',
-                stroke: 'white',
-                'stroke-width': 1 / this.adapter.pixelScale(),
-                class: 'shape-grip',
-              }),
-            );
-            g.append(target);
-          }
-        }
-      } catch {
-        /* Three-point arc preview can be collinear until the last point is picked. */
-      }
-      return;
-    }
-    const line = (a, b, hit = false) =>
-      g.append(
-        el('path', {
-          d: `M${a}L${b}`,
-          ...(hit
-            ? { stroke: 'transparent', 'stroke-width': 5 * unit, class: 'annotation-hit' }
-            : {}),
-        }),
-      );
-    const text = (p, value, angle = 0) =>
-      g.append(
-        el(
-          'text',
-          {
-            x: p[0],
-            y: p[1],
-            transform: `rotate(${angle} ${p[0]} ${p[1]})`,
-            fill: selected ? '#287c65' : '#263a42',
-            stroke: 'white',
-            'stroke-width': 0.8 * unit,
-            'paint-order': 'stroke',
-            'text-anchor': 'middle',
-            'font-size': fontSize,
-          },
-          value,
-        ),
-      );
-    if (item.type === 'leader') {
-      const a = project(item.points[0]),
-        b = project(item.line),
-        sign = b[0] >= a[0] ? 1 : -1,
-        mark = this.adapter.mark(item.sourceId) || 'Ej numrerad',
-        label = item.manual
-          ? item.comment || ''
-          : item.comment?.trim()
-            ? `${item.comment.trim()} · ${mark}`
-            : mark,
-        labelWidth = Math.max(14 * unit, label.length * fontSize * 0.65 + 2 * unit),
-        end = [b[0] + sign * labelWidth, b[1]];
-      line(a, b);
-      line(b, end);
-      line(a, b, true);
-      const d = [b[0] - a[0], b[1] - a[1]],
-        len = Math.hypot(...d) || 1,
-        u = d.map((v) => v / len),
-        n = [-u[1], u[0]];
-      g.append(
-        el('path', {
-          d: `M${a}L${[a[0] + u[0] * 2.5 * unit + n[0] * 0.65 * unit, a[1] + u[1] * 2.5 * unit + n[1] * 0.65 * unit]}L${[a[0] + u[0] * 2.5 * unit - n[0] * 0.65 * unit, a[1] + u[1] * 2.5 * unit - n[1] * 0.65 * unit]}Z`,
-          fill: selected ? '#287c65' : '#263a42',
-        }),
-      );
-      text([(b[0] + end[0]) / 2, b[1] - unit], label);
-    } else {
-      let chain;
-      try {
-        chain = chainGeometry(item);
-      } catch {
-        return;
-      }
-      for (const p of chain.points) {
-        const a = project(p.point),
-          b = project(p.end),
-          d = [b[0] - a[0], b[1] - a[1]],
-          len = Math.hypot(...d) || 1;
-        line(
-          [a[0] + (d[0] / len) * 0.8 * unit, a[1] + (d[1] / len) * 0.8 * unit],
-          [b[0] + (d[0] / len) * 1.2 * unit, b[1] + (d[1] / len) * 1.2 * unit],
-        );
-        line([b[0] - unit, b[1] + unit], [b[0] + unit, b[1] - unit]);
-      }
-      for (const segment of chain.segments) {
-        const a = project(segment.a),
-          b = project(segment.b);
-        line(a, b);
-        line(a, b, true);
-        let angle = (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
-        if (angle > 90) angle -= 180;
-        if (angle < -90) angle += 180;
-        const rad = (angle * Math.PI) / 180;
-        text(
-          [(a[0] + b[0]) / 2 + Math.sin(rad) * unit, (a[1] + b[1]) / 2 - Math.cos(rad) * unit],
-          formatDimension(segment.length, item.precision),
-          angle,
-        );
-      }
-      if (item.comment?.trim()) {
-        const ends = chain.points.map((p) => project(p.end)),
-          left = ends.reduce((a, b) => (b[0] < a[0] ? b : a)),
-          vertical = Math.abs(ends[0][0] - ends.at(-1)[0]) < 0.001,
-          y = vertical ? (ends[0][1] + ends.at(-1)[1]) / 2 : left[1] - unit;
-        g.append(
-          el(
-            'text',
-            {
-              class: 'annotation-comment',
-              x: left[0] - 3 * unit,
-              y,
-              fill: selected ? '#287c65' : '#263a42',
-              stroke: 'white',
-              'stroke-width': 0.8 * unit,
-              'paint-order': 'stroke',
-              'text-anchor': 'end',
-              'font-size': fontSize,
-            },
-            item.comment.trim(),
-          ),
-        );
-      }
-    }
-    if (selected) {
-      for (const [index, p] of item.points.entries()) {
-        const q = project(p),
-          r = 5 / this.adapter.pixelScale();
-        const handle = el('rect', {
-          'data-anchor': index,
-          class: 'annotation-anchor',
-          x: q[0] - r,
-          y: q[1] - r,
-          width: 2 * r,
-          height: 2 * r,
-          rx: r * 0.3,
-          fill: 'white',
-          stroke: '#287c65',
-          'stroke-width': 1.5,
-          'vector-effect': 'non-scaling-stroke',
-        });
-        handle.append(
-          el(
-            'title',
-            {},
-            item.type === 'leader'
-              ? 'Klicka för att flytta hänvisningens fästpunkt'
-              : 'Klicka för att flytta måttpunkt',
-          ),
-        );
-        g.append(handle);
-      }
-    }
+  paint(root, item, selected, preview = false) {
+    if (item.type === 'richtext') return;
+    const target = preview ? createDrawingPreview(root) : root;
+    paintDrawingObject(this, target, item, selected);
+    if (preview) tintDrawingPreview(target);
   }
 }

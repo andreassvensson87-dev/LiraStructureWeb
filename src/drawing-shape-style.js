@@ -1,10 +1,12 @@
+import { installDrawingHatch } from './drawing-object-inspector.js';
+import { createEditorSection } from './ui/editor-surface.js';
 export const shapeLineTypes = {
   solid: 'Heldragen',
   dashed: 'Streckad',
   dotted: 'Prickad',
   center: 'Centrumlinje',
 };
-const styleKeys = ['strokeColor', 'strokeWidth', 'lineType', 'fillColor'];
+const styleKeys = ['strokeColor', 'strokeWidth', 'lineType', 'fillColor', 'hatch', 'drawOrder'];
 export function shapeToolSettings(record, shape) {
   const settings = (record.shapeToolSettings ??= {});
   return (settings[shape] ??= { shape });
@@ -12,7 +14,7 @@ export function shapeToolSettings(record, shape) {
 export function applyShapeToolSettings(draft, settings) {
   for (const key of styleKeys) {
     if (settings[key] === undefined) delete draft[key];
-    else draft[key] = settings[key];
+    else draft[key] = structuredClone(settings[key]);
   }
   return draft;
 }
@@ -78,6 +80,7 @@ export function installShapeStyle(editor, item) {
     panel.append(label);
     return field;
   };
+  const start = panel.children.length;
   input('Linjefärg', 'strokeColor', 'color', style.color, color);
   installLineWeights(
     input(
@@ -101,7 +104,7 @@ export function installShapeStyle(editor, item) {
   };
   label.append(select);
   panel.append(label);
-  if (['circle', 'rectangle'].includes(item.shape) || item.closed) {
+  if (['circle', 'rectangle', 'polygon'].includes(item.shape) || item.closed) {
     const label = document.createElement('label'),
       check = document.createElement('input');
     label.className = 'shape-fill-toggle';
@@ -125,11 +128,15 @@ export function installShapeStyle(editor, item) {
       editor.adapter.redraw();
     };
   }
+  const fields = [...panel.children].slice(start);
+  panel.append(createEditorSection('Utseende', fields));
+  installDrawingHatch(editor, item);
   const reset = document.createElement('button');
   reset.textContent = 'Återställ utseende';
   reset.onclick = () => {
     editor.checkpoint();
-    for (const key of ['strokeColor', 'strokeWidth', 'lineType', 'fillColor']) delete item[key];
+    for (const key of ['strokeColor', 'strokeWidth', 'lineType', 'fillColor', 'hatch'])
+      delete item[key];
     editor.ui();
     editor.adapter.redraw();
   };

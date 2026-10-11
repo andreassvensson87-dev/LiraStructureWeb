@@ -1,7 +1,18 @@
+import { installExactLength } from './exact-length.js';
 import { createRibbon } from './ribbon.js';
 
 export function installModelWorkspace({ root, controllers }) {
   document.body.classList.add('ui-model-workspace');
+  const footer = document.querySelector('body > footer');
+  const hint = document.createElement('div');
+  hint.className = 'ui-command-hint';
+  hint.append(document.getElementById('status'), document.getElementById('snap-status'));
+  footer.prepend(hint);
+  installExactLength(footer, {
+    form: document.getElementById('draw-length-form'),
+    input: document.getElementById('draw-length'),
+    label: document.querySelector('#draw-length-form > label'),
+  });
   const header = document.body.querySelector(':scope > header');
   header.after(root);
   const button = (id, size = 'small', label) => ({

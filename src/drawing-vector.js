@@ -24,6 +24,11 @@ function clipPolygon(points, planes) {
 // Orthographic hidden-line removal in view coordinates, looking from positive Z.
 // Split edges analytically at triangle boundaries and depth crossings; no pixels.
 export function vectorDrawing(surfaces, edgeSets) {
+  return projectedDrawing(surfaces, edgeSets).edges;
+}
+
+// Faces and visible edges share the same clipping and projection geometry.
+export function projectedDrawing(surfaces, edgeSets) {
   const triangles = [];
   for (const { geometry, planes = [] } of surfaces) {
     const p = geometry.attributes.position,
@@ -158,12 +163,15 @@ export function vectorDrawing(surfaces, edgeSets) {
     }
     result.push({ visible, hidden, dashed, color, sourceId });
   }
-  return result;
+  return { edges: result, faces: triangles.map((t) => t.points.map((p) => p.slice(0, 2))) };
 }
 
 export function geometryVectors(geometry, planes = []) {
+  return geometryProjection(geometry, planes).edges;
+}
+export function geometryProjection(geometry, planes = []) {
   const edges = geometryEdges(geometry, 5);
-  const result = vectorDrawing([{ geometry, planes }], [{ geometry: edges, planes }]);
+  const result = projectedDrawing([{ geometry, planes }], [{ geometry: edges, planes }]);
   edges.dispose();
   return result;
 }
@@ -186,4 +194,15 @@ export function appendVectorDrawing(
   };
   if (hidden) for (const set of data) append(set.hidden, '#849399', true);
   for (const set of data) append(set.visible, set.color, set.dashed);
+}
+
+export function appendModelFaces(root, faces, project) {
+  if (!faces?.length) return;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('data-model-faces', '');
+  path.setAttribute('d', faces.map((face) => `M${face.map(project).join('L')}Z`).join(''));
+  path.setAttribute('fill', 'white');
+  path.setAttribute('stroke', 'none');
+  path.setAttribute('pointer-events', 'none');
+  root.append(path);
 }

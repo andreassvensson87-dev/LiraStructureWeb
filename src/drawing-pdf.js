@@ -51,6 +51,8 @@ export function gaPDFPage(editor) {
   const { width, height } = editor.frameLayout;
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  if (editor.annotations.richText?.backPaper)
+    svg.append(namespaceSVG(cleanSVG(editor.annotations.richText.backPaper), 'paper-back'));
   for (const view of editor.views.items) {
     editor.views.load(view);
     editor.rebuild();

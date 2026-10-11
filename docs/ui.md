@@ -28,11 +28,19 @@ Adaptrarna i `profile-workspace.js` och `editor-workspace.js` väljer sektioner 
 
 Bibliotekscontrollererna behåller ägarskapet för import/export, versioner, lagring och användning i modellen. Den gemensamma presentationen ändrar inga domänregler.
 
+Materialets sektionsmönster lagras i materialversionens `hatch`: mönster, vinkel, avstånd och linjetjocklek. Äldre material använder standardmönster efter materialtyp; inget material ger ingen hatchning. Befintliga objekt behåller sin materialversion när biblioteket redigeras. `ui/preview-select.js` är ett gemensamt dropdown-byggblock med förhandsvisningar från adaptern, native popover, piltangenter och Esc. `material-hatch-ui.js` använder detta i bibliotekets befintliga formulär, redigeringsgrind och versionsflöde. Vinkel och avstånd ligger på samma rad, linjetjocklek under Avancerat.
+
+`material-hatch.js` äger validering, slutna snittkonturer, begränsning till snittbredd och mönsterklippning utan DOM. Varje del hatchas för sitt eget material, med tomma hål enligt jämnt/udda-regeln. `drawing-hatch.js` visar de klippta vektorlinjerna i befintliga SVG-lager för GA, Single Part och Assembly; samma lager exporteras till PDF. Måtten gäller pappersmillimeter. Vyns `settings.materialHatch` styr visning utan att ändra materialet, med visning som standard.
+
 `floating-window.js` ger samma titelrad, drag med pointer capture, resize, Esc och begränsning till fönstret. Bibliotekscontrollererna äger listor, sökning, formulär, versioner och användning av valda objekt. Profilbibliotekets lista har separerats från profileditorns arbetsyta; samma profildefinition och editor används när användaren väljer Redigera.
 
 Bibliotek öppnas utan modal låsning från modellen. Om ett bibliotek öppnas inifrån en modal arbetsyta använder det browserns modallager, så det hamnar ovanpå arbetsytan och går att använda. Tangentbord i biblioteket stannar där; modellens tangentbordsrouting blockerar bara verkliga modala dialoger.
 
 ## Kontrollerade flöden
+
+Ritningstext lagras som `richtext`-anteckningar på bladet, med stycken, textdelar och uttryckliga format. `drawing-rich-text.js` äger radbrytning och listnumrering utan DOM. `drawing-rich-text-editor.js` äger placering på bladet, inspektor och ett tillfälligt redigeringsutkast. Bekräftelse ger en checkpoint i ritningens befintliga anteckningshistorik; Esc återställer utan att spara utkastet. Inklistring använder vanlig text. SVG-renderingen delas av bladet och PDF-exporten; textstorlek och bredd anges i pappersmillimeter och påverkas inte av vyskalan. Text ligger i bladets SVG-lager, även för GA med flera vyer, och exporteras en gång per blad.
+
+`exact-length.js` och `exact-length.css` äger det gemensamma kompakta måttfältet i modellens och ritningarnas nederkant. Komponenten adopterar modellens befintliga input/form och bygger motsvarande formulär för ritningar. Verktygen behåller riktning, snap, validering och Enter-kommandon. Ett reserverat fältutrymme och en avgränsad instruktionstext gör placeringen oberoende av textlängd och om fältet visas. Modellens riktningslås visas ovanför fältet vid fokus.
 
 UI-flytten har kontrollerats i webbläsaren: modelleringsverktyg, disabled/aktiv-status, sökning och profilförhandsvisning, bibliotek → editor → bibliotek, ritningsverktyg och ångra, tangentbordsmenyer, rapport → rameditor → rapport samt Item-editor. Regressionstester skyddar domänbeteenden; CSS- eller källtexttester har inte lagts till för denna presentationsändring.
 
@@ -51,3 +59,9 @@ Rapportläget använder samma editorarbetsyta, högerpanel, egenskapsrader och n
 `installManagementDialog` ger numrering, ritningshanteraren och revisioner samma titelrad, tabellstil, egenskapsrader och knapprad. Numrering öppnar fortfarande förhandsgranskningen först, med Inställningar som andra flik. Prefix och startnummer ägs av inspektorn. Ritningshanterarens verktygsrad använder `createRibbon`; kolumnval ligger i samma popoverlager som övriga menyer. Revisionernas historik, validering och projekttransaktioner behålls.
 
 Attributbiblioteket använder `installLibraryWorkspace` och `renderLibraryTree`, med grupper för projekt, ritning, rapport och egna attribut. Datatyp kan visas som en diskret badge på trädraden; namn, nyckel, tillämpning, källa och redigerbarhet finns kvar i egenskaper eller tooltip. Spara-knappen kopplas till det befintliga formuläret även när den ligger i fönstrets nederkant. Låsta standardattribut och konfigurerbara vallistor styrs fortfarande av attributdefinitionerna.
+
+## Ritobjekt, punktval och hatch
+
+Polygon ligger i befintliga Rita-menyn. Flytta/Kopiera/Rotera behåller samma kommandon och knappar, använder förvalda ritobjekt direkt och tillåter flerval inom samma vy eller bland bladtexter. Inspektorn använder gemensamma sektioner för geometri, utseende och framför/bakom modellen. Den kompakta hatchväljaren och dess fält delas med materialbiblioteket. Centrum och kvadranter finns i befintliga Snappunkter-menyn. Exakt längd och vinkel använder samma reserverade fält i nederkanten.
+
+Sparad grafik påverkas inte av markeringsfärgen. Blå markeringskonturer och gröna previews är ett eget hjälplager som inte exporteras. Snapmarkörer och text har konstant skärmstorlek. Sluten polygon kan avslutas med Enter, C eller klick på första hörnet; öppna polylinjer kan stängas på samma sätt med C/första hörnet eller via inspektorn. Hatch följer den slutna formen och anger avstånd/linjetjocklek i pappersmillimeter.

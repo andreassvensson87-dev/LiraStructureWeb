@@ -1,3 +1,4 @@
+import { installDrawingViewDeselection } from '../src/drawing-view-actions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dependentViewIds, alignDrawingView } from '../src/drawing-view-actions.js';
@@ -58,4 +59,61 @@ test('duplicate preserves section crop and copies annotations with independent i
   assert.equal(copy.annotations[0].view, copy.view.id);
   copy.annotations[0].points[0][0] = 99;
   assert.equal(annotation.points[0][0], 1);
+});
+
+test('empty paper deselects a view and Escape cancels tools before clearing selection', async () => {
+  const listeners = {},
+    surfaceListeners = {};
+  let selected = true,
+    busy = false,
+    cancelled = 0;
+  installDrawingViewDeselection({
+    dialog: {
+      addEventListener: (type, callback) => {
+        listeners[type] = callback;
+      },
+    },
+    surface: {
+      addEventListener: (type, callback) => {
+        surfaceListeners[type] = callback;
+      },
+    },
+    hit: (event) => event.view,
+    selected: () => selected,
+    busy: () => busy,
+    clear: () => {
+      selected = false;
+    },
+    cancel: () => {
+      busy = false;
+      cancelled++;
+    },
+  });
+  await Promise.resolve();
+  const event = (extra = {}) => ({
+    button: 0,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {},
+    ...extra,
+  });
+  surfaceListeners.pointerdown(event({ view: 'front' }));
+  assert.equal(selected, true, 'a view hit keeps the selection');
+  busy = true;
+  surfaceListeners.pointerdown(event());
+  assert.equal(selected, true, 'point placement does not deselect');
+  listeners.keydown(event({ key: 'Escape' }));
+  assert.equal(cancelled, 1);
+  assert.equal(selected, true, 'first Escape cancels the tool');
+  listeners.keydown(event({ key: 'Escape', defaultPrevented: true }));
+  assert.equal(selected, true, 'menus and annotations retain priority');
+  const escape = event({ key: 'Escape' });
+  listeners.keydown(escape);
+  assert.equal(selected, false);
+  assert.equal(escape.defaultPrevented, true, 'deselection keeps the editor open');
+  selected = true;
+  surfaceListeners.pointerdown(event());
+  assert.equal(selected, false, 'empty paper clears selection');
 });

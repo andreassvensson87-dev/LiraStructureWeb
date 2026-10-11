@@ -47,6 +47,6 @@ export function shapeWithGrip(item, grip, target) {
       b[1] = target[1];
     }
   } else next.points[grip.index] = [...target];
-  validateShape(next.shape, next.points);
+  validateShape(next.shape, next.points, next.closed && next.shape === 'polyline');
   return next;
 }

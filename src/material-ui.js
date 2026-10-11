@@ -1,6 +1,7 @@
 import { installFloatingWindow } from './ui/floating-window.js';
 import { installLibraryWorkspace } from './ui/library-workspace.js';
 import { renderLibraryTree } from './ui/library-tree.js';
+import { installMaterialHatch } from './material-hatch-ui.js';
 import { SearchPicker } from './search-picker.js';
 import { ColorLibrary } from './color-library.js';
 import {
@@ -62,6 +63,7 @@ export class MaterialUI {
     document.body.append(this.dialog);
     this.window = installFloatingWindow(this.dialog);
     this.$ = (id) => this.dialog.querySelector('#material-' + id);
+    this.hatch = installMaterialHatch(this.$('edit'));
     options(this.$('category'));
     this.dialog.addEventListener('keydown', (e) => e.stopPropagation());
     this.$('close').onclick = () => this.dialog.close();
@@ -81,6 +83,7 @@ export class MaterialUI {
             name: this.$('name').value.trim(),
             density: Number(this.$('density').value),
             color: this.$('color').value,
+            hatch: this.hatch.get(),
           },
           crypto.randomUUID(),
         );
@@ -191,6 +194,7 @@ export class MaterialUI {
     this.$('note').textContent = m?.note || '';
     this.$('density').value = m?.density ?? '';
     this.$('color').value = m?.color || '#688391';
+    this.hatch.set(m || { category: this.$('category').value });
     this.$('version').textContent = m
       ? isBuiltinMaterial(m)
         ? 'Standardmaterial · Ändringar sparas som ett eget material'

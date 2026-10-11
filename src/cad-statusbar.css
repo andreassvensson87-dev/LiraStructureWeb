@@ -202,17 +202,30 @@
   outline-offset: 1px;
 }
 .drawing-editor :is(#plan-error, #sheet-message).cad-warning {
-  position: absolute;
-  left: 92px;
-  bottom: 76px;
-  max-width: calc(100% - 365px);
+  position: static;
+  flex: 0 0 22px;
+  width: 22px;
+  max-width: 22px;
   margin: 0;
-  padding: 6px 9px;
-  height: auto;
-  z-index: 12;
+  padding: 0;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0;
+  color: #a87922;
+  text-align: center;
+  cursor: help;
+  pointer-events: auto;
+}
+.drawing-editor .cad-warning::before {
+  content: '⚠';
+  font-size: 16px;
+  line-height: 22px;
 }
 .drawing-editor .cad-warning:empty {
-  display: none;
+  display: block;
+  visibility: hidden;
 }
 :is(#frame-editor, .drawing-editor):has(.cad-status-menu[open], .ui-command-panel:popover-open)
   :is(.drawing-body, .canvas)

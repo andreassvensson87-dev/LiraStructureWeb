@@ -10,7 +10,11 @@ import { drawingAttributeContext } from './drawing-attributes.js';
 import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
 import { migrateIndependentPartViews, arrangePartViews } from './part-view-migration.js';
 import { migratePartSection } from './part-section-migration.js';
-import { DrawingViewActions } from './drawing-view-actions.js';
+import {
+  DrawingViewActions,
+  installDrawingViewDeselection,
+  installDrawingViewMarquee,
+} from './drawing-view-actions.js';
 import { duplicateDrawingView } from './drawing-views.js';
 import { nextSectionName } from './drawing-sections.js';
 import { nextDetailLabel } from './drawing-details.js';
@@ -26,6 +30,7 @@ import {
   partViewScales,
   viewById,
   setDrawingViewScale,
+  drawingViewSelection,
   drawingViewAtPoint,
 } from './drawing-views.js';
 import { DrawingWorkspace, drawingEditorShell } from './drawing-workspace.js';
@@ -123,7 +128,7 @@ export class SinglePartSheet {
         const g = e.target.closest('[data-view]');
         if (g) {
           e.preventDefault();
-          this.selectView(g.dataset.view);
+          this.selectView(g.dataset.view, e.shiftKey);
         }
       }
     });
@@ -238,8 +243,9 @@ export class SinglePartSheet {
     hiddenLabel.innerHTML = '<input id=sheet-hidden-lines type=checkbox>Visa skymda kanter';
     inspector.querySelector('.view-properties').append(hiddenLabel);
     this.$('hidden-lines').onchange = () => {
-      viewById(this.config, this.selectedView).settings.hiddenLines =
-        this.$('hidden-lines').checked;
+      const view = viewById(this.config, this.selectedView);
+      if (!view) return;
+      view.settings.hiddenLines = this.$('hidden-lines').checked;
       this.render();
     };
     this.profileDetailControl = installDrawingProfileDetail(
@@ -270,13 +276,28 @@ export class SinglePartSheet {
       surface: this.svg,
       toolbar,
       adapter: {
+        paper: this.svg,
+        paperSize: () => this.paper,
         cancelTools: () => this.cancelInteraction(),
         redraw: () => this.compose(),
         pixelScale: () => this.svg.getBoundingClientRect().width / this.paper[0],
         unit: () => 1,
-        project: (p, v) => this.projectAnnotation(p, v),
+        project: (p, v) => (v === 'paper' ? p : this.projectAnnotation(p, v)),
         locate: (e, v) => this.locateAnnotation(e, v),
-        candidates: (v) => this.annotationCandidates[v] || [],
+        candidates: (v) =>
+          v === 'paper'
+            ? Object.entries(this.annotationCandidates).flatMap(([view, points]) =>
+                points.map((p) =>
+                  Object.assign(this.projectAnnotation(p, view), { reference: p.reference }),
+                ),
+              )
+            : this.annotationCandidates[v] || [],
+        snapEntities: (view) => {
+          const data = this.extraSections.cache.get(view);
+          return data
+            ? [...data.cut, ...data.behind].map((points) => ({ type: 'line', points }))
+            : [];
+        },
         referenceSource: (id) => (this.record.type === 'AS' ? id : 'part'),
         pick: (_event, hit) =>
           this.record.type === 'AS' ? hit.reference?.source : this.record.sourceId,
@@ -338,7 +359,12 @@ export class SinglePartSheet {
       const group = e.target.closest('[data-view]');
       if (!group || e.button !== 0) return;
       e.preventDefault();
-      this.selectView(group.dataset.view);
+      this.selectView(
+        group.dataset.view,
+        e.shiftKey,
+        !!e.target.closest('[data-view-grip],.viewport-grip,[data-section-crop]'),
+      );
+      if (e.shiftKey) return;
       if (!e.target.closest('.viewport-grip,[data-section-crop],[data-view-grip]')) return;
       this.svg.setPointerCapture(e.pointerId);
       this.drag = {
@@ -352,6 +378,10 @@ export class SinglePartSheet {
               view: structuredClone(this.extraSections.selected()),
             }
           : null,
+        positions: this.selectedViews().map((view) => ({
+          id: view.id,
+          position: [...view.position],
+        })),
         extra: this.extraSections.selected() ? [...this.extraSections.selected().position] : null,
         factor: this.paper[0] / this.svg.getBoundingClientRect().width,
       };
@@ -367,8 +397,10 @@ export class SinglePartSheet {
         return;
       }
       if (d.extra) {
-        const view = this.config.views.find((v) => v.id === d.view);
-        view.position = [d.extra[0] + dx, d.extra[1] + dy];
+        for (const original of d.positions) {
+          const view = this.config.views.find((v) => v.id === original.id);
+          view.position = [original.position[0] + dx, original.position[1] + dy];
+        }
         this.compose();
         return;
       }
@@ -398,6 +430,12 @@ export class SinglePartSheet {
     this.extraSections = new PartSections(this);
     this.viewPlacement = createDrawingViewInspector(this.dialog.querySelector('.view-properties'), {
       selected: () => this.config?.views.find((v) => v.id === this.selectedView),
+      selectedViews: () => this.selectedViews(),
+      move: (dx, dy) => {
+        for (const view of this.selectedViews())
+          view.position = [view.position[0] + dx, view.position[1] + dy];
+        this.compose();
+      },
       changed: (view, key, axis, value) => {
         if (key === 'position') view.position[axis] = value;
         else
@@ -448,6 +486,7 @@ export class SinglePartSheet {
         this.annotations.history = [];
         this.annotations.future = [];
         this.selectedView = this.config.views[0].id;
+        this.selectedViewIds = new Set([this.selectedView]);
         this.render();
       },
       changed: (id) => {
@@ -506,8 +545,60 @@ export class SinglePartSheet {
         update: (view) => this.extraSections.update(view),
       },
     });
+    this.viewMarquee = installDrawingViewMarquee({
+      dialog: this.dialog,
+      surface: this.workspace,
+      paper: this.svg,
+      paperSize: () => this.paper,
+      views: () => this.config.views,
+      ids: () => this.selectedViewIds,
+      change: (ids) => {
+        this.selectedViewIds = ids;
+        this.selectView([...ids].at(-1) || null, false, true);
+      },
+      hit: (event) =>
+        event.target.closest(
+          '[data-view],[data-annotation],[data-section-marker],[data-detail-marker]',
+        ),
+      busy: () =>
+        !!(
+          this.drag ||
+          this.annotations.mode ||
+          this.annotations.drag ||
+          this.viewTool.pending ||
+          this.viewActions.pending ||
+          this.sectionTool.draft ||
+          this.detailTool.draft
+        ),
+    });
+    installDrawingViewDeselection({
+      dialog: this.dialog,
+      surface: this.workspace,
+      hit: (event) =>
+        event.target.closest(
+          '[data-view],[data-annotation],[data-section-marker],[data-detail-marker]',
+        ),
+      busy: () =>
+        !!(
+          this.drag ||
+          this.annotations.mode ||
+          this.annotations.drag ||
+          this.viewActions.pending ||
+          this.viewTool.pending ||
+          this.sectionTool.draft ||
+          this.detailTool.draft ||
+          this.navigation.pan.active
+        ),
+      selected: () => !!this.selectedView,
+      clear: () => this.selectView(null),
+      cancel: () => {
+        this.cancelInteraction();
+        this.compose();
+      },
+    });
   }
   cancelInteraction() {
+    this.viewMarquee?.cancel();
     this.viewActions?.cancel();
     this.viewTool?.cancel();
     this.sectionTool?.cancel();
@@ -520,10 +611,11 @@ export class SinglePartSheet {
         Object.assign(this.extraSections.selected(), drag.crop.view);
         this.extraSections.build();
       }
-      if (drag.extra) {
-        const view = this.config.views.find((v) => v.id === drag.view);
-        if (view) view.position = [...drag.extra];
-      }
+      if (drag.extra)
+        for (const original of drag.positions) {
+          const view = this.config.views.find((v) => v.id === original.id);
+          if (view) view.position = [...original.position];
+        }
       if (this.svg.hasPointerCapture(drag.pointerId))
         this.svg.releasePointerCapture(drag.pointerId);
     }
@@ -678,6 +770,7 @@ export class SinglePartSheet {
     this.dialog.showModal();
     this.selectedView =
       this.config.views.find((v) => v.id === 'front')?.id || this.config.views[0].id;
+    this.selectedViewIds = new Set([this.selectedView]);
     this.syncInspector();
     this.render();
     if (newSheet && !this.assembly) {
@@ -759,19 +852,30 @@ export class SinglePartSheet {
     }
     return variant;
   }
-  selectView(view) {
+  selectedViews() {
+    return this.config.views.filter((view) => this.selectedViewIds?.has(view.id));
+  }
+  selectView(view, additive = false, preserve = false) {
     this.annotations.selected = null;
     this.annotations.ui();
-    this.selectedView = view;
+    this.selectedViewIds = drawingViewSelection(
+      this.selectedViewIds || new Set(),
+      view,
+      additive,
+      preserve,
+    );
+    this.selectedView = this.selectedViewIds.has(view)
+      ? view
+      : [...this.selectedViewIds].at(-1) || null;
     this.syncInspector();
     for (const group of this.svg.querySelectorAll('[data-view]')) {
-      const active = group.dataset.view === view;
+      const active = this.selectedViewIds.has(group.dataset.view);
       group.setAttribute('aria-pressed', String(active));
       group
         .querySelector('.viewport-frame')
         ?.setAttribute('stroke', active ? '#589383' : '#c5d0d4');
     }
-    if (this.extraSections?.items.length) this.compose();
+    this.compose();
   }
   syncInspector() {
     this.profileDetailControl?.sync();
@@ -782,7 +886,9 @@ export class SinglePartSheet {
         '';
     this.$('hidden-lines').checked = !!viewById(this.config, this.selectedView)?.settings
       .hiddenLines;
-    this.$('selected-view').value = this.selectedView;
+    this.$('selected-view').value = this.selectedView || '';
+    this.$('hidden-lines').disabled = !this.selectedView;
+    if (this.viewName) this.viewName.disabled = !this.selectedView;
     for (const v of ['top', 'front', 'section']) this.$('scale-' + v).parentElement.hidden = true;
     this.$('section').parentElement.hidden = true;
     this.$('scale-section').parentElement.hidden = true;
@@ -796,7 +902,7 @@ export class SinglePartSheet {
       'aria-label',
       id === 'top' ? 'Välj vy ovanifrån' : id === 'front' ? 'Välj huvudvy' : 'Välj sektion A–A',
     );
-    group.setAttribute('aria-pressed', String(this.selectedView === id));
+    group.setAttribute('aria-pressed', String(this.selectedViewIds?.has(id)));
     group.append(
       node('rect', {
         class: 'viewport-grip',
@@ -821,7 +927,7 @@ export class SinglePartSheet {
         height,
         rx: 1,
         fill: 'transparent',
-        stroke: this.selectedView === id ? '#589383' : '#c5d0d4',
+        stroke: this.selectedViewIds?.has(id) ? '#589383' : '#c5d0d4',
         'stroke-width': 1,
         'vector-effect': 'non-scaling-stroke',
       }),
@@ -844,6 +950,7 @@ export class SinglePartSheet {
     const r = this.svg.getBoundingClientRect(),
       x = ((e.clientX - r.left) * this.paper[0]) / r.width,
       y = ((e.clientY - r.top) * this.paper[1]) / r.height;
+    if (view === 'paper') return { view, point: [x, y] };
     view ??=
       e.target.closest('[data-view]')?.dataset.view ||
       drawingViewAtPoint(this.config.views, [x, y], this.selectedView)?.id;
@@ -918,7 +1025,7 @@ export class SinglePartSheet {
       ([x, y, r, bot]) => x < 0 || y < 0 || r > w || bot > h,
     )
       ? 'En vy ligger utanför bladet. Ändra skala, format eller placering.'
-      : `${this.frameLayout?.name || c.paper.name} · ${w} × ${h} mm · skalor anges vid respektive vy`;
+      : '';
     this.extraSections.paint();
     this.extraSections.options();
     for (const view of this.config.views) {
@@ -932,6 +1039,7 @@ export class SinglePartSheet {
       drawingAttributeContext(this.record, this.getAttributeState()),
     );
     this.annotations.render(this.svg);
+    this.annotations.richText?.paint(this.svg);
     if (!this.assembly) {
       const settings = this.config.partMaterialSchedule;
       if (settings.dockToTop)
@@ -984,8 +1092,7 @@ export class SinglePartSheet {
         this.$('message').textContent =
           'Stycklistan ligger utanför bladet. Ändra placering under Stycklista eller välj ett större format.';
     }
-    const selected = this.config.views.find((view) => view.id === this.selectedView);
-    if (selected) {
+    for (const selected of this.selectedViews()) {
       const handles = node('g', {
         'data-view': selected.id,
         class: 'drawing-view-grips-layer',

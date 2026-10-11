@@ -4,7 +4,12 @@ import { installDrawingProfileDetail } from './drawing-profile-detail.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
-import { vectorDrawing, appendVectorDrawing } from './drawing-vector.js';
+import {
+  vectorDrawing,
+  projectedDrawing,
+  appendVectorDrawing,
+  appendModelFaces,
+} from './drawing-vector.js';
 import { setDrawingViewScale } from './drawing-views.js';
 import { DrawingDetailTool } from './drawing-detail-tool.js';
 import { appendViewTitle } from './drawing-view-title.js';
@@ -44,6 +49,8 @@ import { partHoleSchedule, partHoleCandidates } from './fasteners/drawing.js';
 import { roundProfile } from './round-profile.js';
 import { GridLines } from './grid-lines.js';
 import { sectionSegments, planHeights } from './plan-section.js';
+import { sectionContours } from './material-hatch.js';
+import { appendMaterialHatch } from './drawing-hatch.js';
 const svgNS = 'http://www.w3.org/2000/svg';
 export class PlanView {
   constructor({ getState, getSnapSettings = () => ({ polar: 45 }) }) {
@@ -77,6 +84,20 @@ export class PlanView {
         }, 120);
       };
     this.$('fit').onclick = () => this.navigation.fit(true);
+    const hatchLabel = document.createElement('label');
+    hatchLabel.textContent = 'Visa materialhatchning';
+    this.hatchControl = document.createElement('input');
+    this.hatchControl.type = 'checkbox';
+    this.hatchControl.checked = true;
+    hatchLabel.append(this.hatchControl);
+    inspector.append(hatchLabel);
+    this.hatchControl.onchange = () => {
+      this.record.settings.materialHatch = this.hatchControl.checked;
+      for (const view of this.views?.selectedViews() || [])
+        view.settings.materialHatch = this.hatchControl.checked;
+      this.draw();
+      this.views?.refresh();
+    };
     this.partViews.querySelector('select').onchange = () => this.rebuild(true);
     this.dialog.addEventListener('close', () => {
       this.captureSettings();
@@ -99,11 +120,13 @@ export class PlanView {
     this.paperScale.onchange = () => {
       const n = +this.paperScale.value;
       if (!Number.isFinite(n) || n < 0.1 || n > 10000) return;
-      this.record.sheet.viewScale = n;
-      if (this.views?.active) {
-        setDrawingViewScale(this.views.active, n);
-      }
+      if (!this.views?.selectedViews().length) return;
+      this.captureSettings();
+      for (const view of this.views.selectedViews()) setDrawingViewScale(view, n);
+      this.views.load(this.views.active);
+      this.views.refresh();
       this.refreshPaper();
+      this.views.list();
     };
     const hiddenLabel = document.createElement('label');
     hiddenLabel.className = 'drawing-check';
@@ -159,6 +182,8 @@ export class PlanView {
       surface: this.host,
       toolbar,
       adapter: {
+        paper: this.page,
+        paperSize: () => [this.frameLayout.width, this.frameLayout.height],
         cancelTools: () => this.cancelInteraction(),
         manualLeaders: true,
         visible: (item) => !this.views?.active || item.view === this.views.active.id,
@@ -176,12 +201,33 @@ export class PlanView {
         redraw: () => this.draw(),
         pixelScale: () => 1,
         unit: () => (this.frameLayout ? this.paperZoom : 4),
-        project: (p) => [
-          ((p[0] - this.center.x) / this.span) * this.host.clientHeight + this.host.clientWidth / 2,
-          this.host.clientHeight / 2 -
-            ((p[1] - this.center.y) / this.span) * this.host.clientHeight,
-        ],
-        locate: (e) => {
+        project: (p, view) =>
+          view === 'paper'
+            ? [
+                p[0] * this.paperZoom +
+                  this.page.getBoundingClientRect().left -
+                  this.host.getBoundingClientRect().left,
+                p[1] * this.paperZoom +
+                  this.page.getBoundingClientRect().top -
+                  this.host.getBoundingClientRect().top,
+              ]
+            : [
+                ((p[0] - this.center.x) / this.span) * this.host.clientHeight +
+                  this.host.clientWidth / 2,
+                this.host.clientHeight / 2 -
+                  ((p[1] - this.center.y) / this.span) * this.host.clientHeight,
+              ],
+        locate: (e, view) => {
+          if (view === 'paper') {
+            const rect = this.page.getBoundingClientRect();
+            return {
+              view,
+              point: [
+                ((e.clientX - rect.left) * this.frameLayout.width) / rect.width,
+                ((e.clientY - rect.top) * this.frameLayout.height) / rect.height,
+              ],
+            };
+          }
           const r = this.host.getBoundingClientRect(),
             u = this.span / this.host.clientHeight;
           return {
@@ -192,7 +238,29 @@ export class PlanView {
             ],
           };
         },
-        candidates: () => this.annotationCandidates || [],
+        candidates: (view) =>
+          view === 'paper' && this.views?.active
+            ? (this.annotationCandidates || []).map((p) =>
+                Object.assign(
+                  [
+                    this.views.active.position[0] +
+                      this.views.active.size[0] / 2 +
+                      (p[0] - this.views.active.camera.center[0]) / this.views.active.scale,
+                    this.views.active.position[1] +
+                      this.views.active.size[1] / 2 -
+                      (p[1] - this.views.active.camera.center[1]) / this.views.active.scale,
+                  ],
+                  { reference: p.reference, snapKind: p.snapKind },
+                ),
+              )
+            : this.annotationCandidates || [],
+        snapEntities: (view) =>
+          view === 'paper'
+            ? []
+            : [
+                ...(this.sections || []),
+                ...(this.vectorCache || []).flatMap((set) => set.visible || []),
+              ].map((points) => ({ type: 'line', points: points.map((p) => p.slice(0, 2)) })),
         pick: (e, hit) => this.pickPart(hit.point),
         mark: (id) => {
           const state = this.getState(),
@@ -251,7 +319,7 @@ export class PlanView {
         feedback: this.annotations,
         cancel: () => this.cancelInteraction(),
         views: () => this.record.sheet.views || [],
-        selected: () => this.views.active,
+        selected: () => (this.views.selected ? this.views.active : null),
         markers: (id) => this.references.markers('section', id),
         namingViews: () => this.references.namingViews(),
         locate: (e, id) => {
@@ -278,7 +346,7 @@ export class PlanView {
         feedback: this.annotations,
         cancel: () => this.cancelInteraction(),
         views: () => this.record.sheet.views || [],
-        selected: () => this.views.active,
+        selected: () => (this.views.selected ? this.views.active : null),
         markers: (id) => this.references.markers('detail', id),
         namingViews: () => this.references.namingViews(),
         locate: (e, id) => {
@@ -362,6 +430,7 @@ export class PlanView {
     this.views.open();
   }
   cancelInteraction() {
+    this.views?.marquee.cancel();
     this.views?.actions.cancel();
     this.sectionTool?.cancel();
     this.detailTool?.cancel();
@@ -372,7 +441,11 @@ export class PlanView {
     }
     if (this.drag?.position) {
       this.record.sheet.viewPosition = [...this.drag.position];
-      if (this.views?.active) this.views.active.position = [...this.drag.position];
+      for (const original of this.drag.positions) {
+        const view = this.views.items.find((view) => view.id === original.id);
+        if (view) view.position = [...original.position];
+      }
+      this.views.position();
     }
     const id = this.drag?.pointerId;
     this.drag = null;
@@ -436,6 +509,7 @@ export class PlanView {
         saved,
         drawingAttributeContext(this.record, this.getState()),
       );
+    this.annotations?.richText?.paint(this.frameSVG);
     if (fit) this.navigation.fit();
     else this.navigation.size();
   }
@@ -526,6 +600,11 @@ export class PlanView {
     this.observer.observe(this.host);
     this.host.onpointerdown = (e) => {
       if (e.button !== 0) return;
+      const grip = e.target.closest('.ga-view-grip,.ga-viewport-grip,.ga-crop-grip');
+      const partPick =
+        e.shiftKey && !grip && this.pickPart(this.annotations.adapter.locate(e).point);
+      this.views.activate(this.views.active.id, e.shiftKey && !partPick, !!grip || !!partPick);
+      if (e.shiftKey && !partPick) return;
       if (e.target.closest('.ga-view-grip')) {
         this.annotations.selected = null;
         this.annotations.ui();
@@ -538,6 +617,9 @@ export class PlanView {
         x: e.clientX,
         y: e.clientY,
         shift: e.shiftKey,
+        positions: this.views
+          .selectedViews()
+          .map((view) => ({ id: view.id, position: [...view.position] })),
         crop: this.views.startDrag(e),
         position: e.target.closest('[data-viewport-grip]')
           ? [...(this.record.sheet.viewPosition || [10, 10])]
@@ -560,7 +642,14 @@ export class PlanView {
         d.position[0] + (e.clientX - d.x) / this.paperZoom,
         d.position[1] + (e.clientY - d.y) / this.paperZoom,
       ];
-      if (this.views.active) this.views.active.position = [...this.record.sheet.viewPosition];
+      for (const original of d.positions) {
+        const view = this.views.items.find((view) => view.id === original.id);
+        view.position = [
+          original.position[0] + (e.clientX - d.x) / this.paperZoom,
+          original.position[1] + (e.clientY - d.y) / this.paperZoom,
+        ];
+      }
+      this.views.position();
       this.navigation.size();
     };
     this.host.onpointerup = (e) => {
@@ -604,6 +693,7 @@ export class PlanView {
       this.group.remove(c);
     }
     this.sections = [];
+    this.hatchSurfaces = [];
     this.svg?.replaceChildren();
   }
   rebuild(fit = false) {
@@ -682,6 +772,7 @@ export class PlanView {
                 pos.getY(i) * (1 - t) + pos.getY(i + 1) * t,
               ]);
               const p = objectCandidates.at(-1);
+              p.snapKind = t === 0.5 ? 'Mittpunkt' : 'Ändpunkt';
               identities.push(new THREE.Vector3(p[0], p[1], z).applyMatrix4(localMatrix).toArray());
             }
           }
@@ -729,7 +820,9 @@ export class PlanView {
         above.computeLineDistances();
         above.renderOrder = 2;
         this.group.add(above);
-        this.sections.push(...sectionSegments(g, h.cut));
+        const cut = sectionSegments(g, h.cut);
+        this.sections.push(...cut);
+        this.hatchSurfaces.push({ contours: sectionContours(cut), material: s.material });
       }
       this.grid.set({ ...state.grid, z: h.cut });
       for (const line of this.grid.group.children) {
@@ -846,6 +939,7 @@ export class PlanView {
         depth,
       );
       this.sections.push(...snapData.cut);
+      this.hatchSurfaces.push({ contours: snapData.faces[0], material: object.material });
       const snapGeometry = displayGeometry(
         object,
         this.getState().objects,
@@ -1125,7 +1219,9 @@ export class PlanView {
           color: '#' + o.material.color.getHexString(),
           sourceId: o.userData.sourceId,
         }));
-      this.vectorCache = vectorDrawing(surfaces, edgeSets);
+      const projection = projectedDrawing(surfaces, edgeSets);
+      this.vectorCache = projection.edges;
+      this.modelFaces = projection.faces;
     }
     this.grid.updateLabels(this.camera, w, h, {
       keepVisible: true,
@@ -1159,6 +1255,10 @@ export class PlanView {
       ((p[0] - this.center.x) / this.span) * h + w / 2,
       h / 2 - ((p[1] - this.center.y) / this.span) * h,
     ];
+    if (this.annotations.items.some((item) => item.drawOrder === 'back'))
+      appendModelFaces(content, this.modelFaces, project);
+    if (this.record.settings.materialHatch !== false)
+      appendMaterialHatch(content, this.hatchSurfaces, project, this.paperZoom || 1);
     appendVectorDrawing(
       content,
       this.vectorCache.map((set) =>
@@ -1190,6 +1290,7 @@ export class PlanView {
     this.drawSectionGrid(content, w, h);
     this.drawSectionLevels(content, w, h);
     this.annotations.render(content);
+    this.annotations.richText?.paint(this.frameSVG);
     if (this.views?.active) {
       this.references.sync();
       this.sectionTool?.paint(

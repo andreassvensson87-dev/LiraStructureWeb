@@ -59,7 +59,7 @@ test('translation preserves geometry and metadata without mutating the original 
   assert.equal(Math.hypot(...result[1].points[1].map((v, i) => v - result[1].points[0][i])), 5);
   assert.equal(arcGeometry(result[2].points).radius, arcGeometry(items[2].points).radius);
 });
-test('copies have independent ids and geometry and reject mixed views, dimensions and zero moves', () => {
+test('copies have independent ids and geometry and reject mixed views, unsupported objects and zero moves', () => {
   const items = shapes();
   const copies = translatedShapes(items, ['line', 'circle'], [0, 0], [30, 0], true);
   assert.notEqual(copies[0].id, items[0].id);
@@ -69,7 +69,7 @@ test('copies have independent ids and geometry and reject mixed views, dimension
   assert.throws(() => translatedShapes(items, ['line'], [0, 0], [NaN, 0]));
   items[1].view = 'front';
   assert.throws(() => translatedShapes(items, ['line', 'circle'], [0, 0], [10, 0]));
-  items[0].type = 'dimension';
+  items[0].type = 'model';
   assert.throws(() => translatedShapes(items, ['line'], [0, 0], [10, 0]));
 });
 test('two point move and copy commit a multi-selection once and support undo and redo', () => {

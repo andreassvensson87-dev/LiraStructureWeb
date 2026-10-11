@@ -1,3 +1,4 @@
+import { validateHatch } from './material-hatch.js';
 export const MATERIAL_TYPES = [
   ['steel', 'Stål'],
   ['concrete', 'Betong'],
@@ -23,6 +24,7 @@ export function validateMaterial(m) {
   if (!Number.isFinite(m.density) || m.density <= 0 || m.density > 100000)
     throw new Error('Densiteten måste vara större än 0 och högst 100 000 kg/m³.');
   if (!/^#[0-9a-f]{6}$/i.test(m.color)) throw new Error('Ogiltig materialfärg.');
+  if (m.hatch !== undefined) validateHatch(m.hatch);
   for (const [key, limit] of [
     ['subgroup', 80],
     ['note', 500],

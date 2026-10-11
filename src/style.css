@@ -2694,7 +2694,7 @@ button.insertion-point.edge-add:hover {
   cursor: default;
 }
 .drawing-paper .viewport-frame {
-  pointer-events: none;
+  pointer-events: all;
 }
 .drawing-paper .viewport-grip {
   cursor: grab;

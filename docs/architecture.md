@@ -82,3 +82,15 @@ Stabila beroenden skapas före controllerinstallation. Controllerer deklarerar v
 ## Fortsatt strukturarbete utanför main
 
 Ram-, profil- och ritningscontrollererna blandar fortfarande en del presentation och arbetsflöde. Många äldre domänmoduler ligger direkt i `src/`. Dessa områden har inte byggts om i denna uppdelning. Flytta sammanhängande ansvar när det berörs, med tydliga argument/callbacks; undvik kosmetiska filflyttar och generella ramverk enbart för att minska radantalet.
+
+## Ritobjektens arbetsflöde
+
+`drawing-annotations.js` äger urval, anteckningshistorik, routing och bekräftelse. `drawing-object-transform.js` beräknar kopior och transformationer utan DOM eller projektmutationer. Verktygssessionen i `drawing-shape-transform.js` äger urval → baspunkt → tillpunkt/vinkel och använder samma resultat för preview och commit. Förvalda objekt går direkt till baspunkt; Shift-klick ger flerval. En transaktion omfattar hela urvalet. Objekt från olika vyer blandas inte i samma transformation; bladtext använder papperskoordinater. Positiva numeriska vinklar är moturs både på bladet och i vyer.
+
+`drawing-point-placement.js` samordnar befintliga CAD-inställningar, snappunkter, `snapFrame`, riktningslås och `CadTracking`. Resultatet behåller snappunktens typ, modellreferens och eventuella spårningsguider. `drawing-snap-geometry.js` begränsar segmentens parvisa skärningssökning till pekarens träffområde. Exakta objektträffar prioriteras före spårning och polar. Snapinställningarna och längdfältet ligger kvar i sina befintliga kontroller.
+
+`drawing-object-renderer.js` och `drawing-rich-text-renderer.js` ritar sparade objekt för skärm och PDF. `drawing-overlay.js` äger enbart tillfälliga markeringar, grepp, snappunktssymboler, gummiband, spårningsguider och grön preview. Hjälpgrafiken märks `data-annotation-helper` och tas bort vid export. Ritobjekt renderas före eller efter modellens geometri; modellens projicerade ytor ger korrekt täckning för bakomliggande ritobjekt. Bladtext har motsvarande bakre lager för GA-export och visning.
+
+Slutna polygoner valideras före sparning och efter greppändringar. Hatch använder samma `material-hatch.js`-geometri och pappersmått som sektionshatchning, och samma `ui/hatch-control.js` i inspektor och materialbibliotek. `hatch-control.js` är den domänmedvetna adaptern; UI-fabriken tar alternativ och validering som argument. Linjeutseende, geometri och ritordning använder `createEditorSection`.
+
+Transformation av en modellkopplad måttpunkt eller leader gör fästpunkten fristående; inspektorn beskriver detta före bekräftelse. En ångring återställer referenserna. Kopierade måttkedjor får nya länkidentiteter så att original och kopia inte påverkar varandra.

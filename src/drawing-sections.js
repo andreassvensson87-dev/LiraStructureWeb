@@ -1,8 +1,9 @@
-import { geometryVectors, vectorDrawing } from './drawing-vector.js';
+import { geometryProjection, projectedDrawing } from './drawing-vector.js';
 import { sectionClipPlanes, clipSectionSegment } from './section-extents.js';
 import * as THREE from 'three';
 import { geometryEdges } from './fasteners/edges.js';
 import { sectionSegments } from './plan-section.js';
+import { sectionContours, clipContours } from './material-hatch.js';
 const vec = (a) => new THREE.Vector3(...a);
 export function sectionFrame(parent, points, side = 1, orientation = 'upright') {
   const [a, b] = points,
@@ -85,13 +86,16 @@ export function createSectionView(parent, points, side, position, views) {
 export function sectionDrawing(geometries, frame, depth) {
   if (!Number.isFinite(depth) || depth <= 0) throw Error('Snittdjupet måste vara större än noll.');
   const cut = [],
+    faces = [],
     behind = [],
     bounds = new THREE.Box2(),
     matrix = frameMatrix(frame),
     planes = sectionClipPlanes(frame, depth);
   for (const source of geometries) {
     const g = source.clone().applyMatrix4(matrix);
-    for (const [a, b] of sectionSegments(g, 0)) {
+    const segments = sectionSegments(g, 0);
+    faces.push(clipContours(sectionContours(segments), frame.span));
+    for (const [a, b] of segments) {
       const line = clipSectionSegment(a, b, planes);
       if (line) cut.push(line.map((p) => p.slice(0, 2)));
     }
@@ -111,15 +115,18 @@ export function sectionDrawing(geometries, frame, depth) {
   for (const line of [...cut, ...behind])
     for (const p of line) bounds.expandByPoint(new THREE.Vector2(...p));
   if (bounds.isEmpty()) bounds.set(new THREE.Vector2(-50, -50), new THREE.Vector2(50, 50));
-  return { cut, behind, bounds };
+  return { cut, behind, bounds, faces };
 }
 export function sectionVectors(geometry, frame, section) {
+  return sectionProjection(geometry, frame, section).edges;
+}
+export function sectionProjection(geometry, frame, section) {
   if (Array.isArray(geometry)) {
     const planes = section ? sectionClipPlanes(frame, section.depth) : [];
     const solids = geometry.map((g) => g.clone().applyMatrix4(frameMatrix(frame)));
     const edges = solids.map((g) => geometryEdges(g, 5));
     try {
-      return vectorDrawing(
+      return projectedDrawing(
         solids.map((g) => ({ geometry: g, planes })),
         edges.map((g) => ({ geometry: g, planes })),
       );
@@ -129,7 +136,7 @@ export function sectionVectors(geometry, frame, section) {
     }
   }
   const g = geometry.clone().applyMatrix4(frameMatrix(frame));
-  const data = geometryVectors(g, section ? sectionClipPlanes(frame, section.depth) : []);
+  const data = geometryProjection(g, section ? sectionClipPlanes(frame, section.depth) : []);
   g.dispose();
   return data;
 }

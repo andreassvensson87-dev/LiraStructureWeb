@@ -1,4 +1,5 @@
-import { appendVectorDrawing } from './drawing-vector.js';
+import { appendVectorDrawing, appendModelFaces } from './drawing-vector.js';
+import { appendMaterialHatch } from './drawing-hatch.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { referenceCandidates } from './annotation-references.js';
 import { partHoleCandidates } from './fasteners/drawing.js';
@@ -8,7 +9,12 @@ import { detailSource } from './drawing-details.js';
 import { frameMatrix } from './drawing-sections.js';
 import { resizeDrawingView, setDrawingViewScale } from './drawing-views.js';
 import * as THREE from 'three';
-import { sectionFrame, sectionDrawing, sectionVectors } from './drawing-sections.js';
+import {
+  sectionFrame,
+  sectionDrawing,
+  sectionVectors,
+  sectionProjection,
+} from './drawing-sections.js';
 const NS = 'http://www.w3.org/2000/svg';
 function node(tag, attrs, text) {
   const n = document.createElementNS(NS, tag);
@@ -29,11 +35,21 @@ export class PartSections {
     this.scale.step = 'any';
     label.append(this.scale);
     editor.dialog.querySelector('.view-properties').append(label);
+    const hatchLabel = document.createElement('label');
+    hatchLabel.textContent = 'Visa materialhatchning';
+    this.hatch = document.createElement('input');
+    this.hatch.type = 'checkbox';
+    hatchLabel.append(this.hatch);
+    label.after(hatchLabel);
+    this.hatch.onchange = () => {
+      for (const view of editor.selectedViews()) view.settings.materialHatch = this.hatch.checked;
+      editor.compose();
+    };
     this.scale.onchange = () => {
-      const view = this.selected(),
+      const views = editor.selectedViews(),
         scale = Number(this.scale.value);
-      if (view && Number.isFinite(scale) && scale >= 0.1 && scale <= 1000) {
-        setDrawingViewScale(view, scale);
+      if (views.length && Number.isFinite(scale) && scale >= 0.1 && scale <= 1000) {
+        for (const view of views) setDrawingViewScale(view, scale);
         this.build();
         editor.compose();
       }
@@ -90,7 +106,9 @@ export class PartSections {
           const point = new THREE.Vector3()
             .fromBufferAttribute(p, i)
             .lerp(new THREE.Vector3().fromBufferAttribute(p, i + 1), t);
-          candidates.push([point.x, point.y]);
+          candidates.push(
+            Object.assign([point.x, point.y], { snapKind: t === 0.5 ? 'Mittpunkt' : 'Ändpunkt' }),
+          );
           identities.push(point.applyMatrix4(inverse).toArray());
         }
       }
@@ -110,17 +128,28 @@ export class PartSections {
         entries: this.e.assemblyEntries,
       };
       const data = this.data(view, source.geometry);
-      data.vectors = sectionVectors(
+      const projection = sectionProjection(
         source.entries?.map((e) => e.geometry) || source.geometry,
         data.frame,
         data.section,
       );
-      if (source.entries && data.section)
-        data.cut = sectionDrawing(
-          source.entries.map((e) => e.geometry),
+      data.vectors = projection.edges;
+      data.modelFaces = projection.faces;
+      if (data.section) {
+        const entries = source.entries || [
+          { id: this.e.record.sourceId, geometry: source.geometry },
+        ];
+        const section = sectionDrawing(
+          entries.map((e) => e.geometry),
           data.frame,
           data.section.depth,
-        ).cut;
+        );
+        data.cut = section.cut;
+        data.surfaces = entries.map((entry, i) => ({
+          contours: section.faces[i],
+          material: this.e.getObjects().find((o) => o.id === entry.id)?.material,
+        }));
+      }
       data.holeCenters = !data.section
         ? partHoleCandidates(this.e.holeSchedule || [], data.frame, this.e.drawingReflection)
         : [];
@@ -191,8 +220,16 @@ export class PartSections {
   }
   sync() {
     const view = this.selected();
+    this.hatch.parentElement.hidden = !view || !this.cache.get(view.id)?.section;
+    this.hatch.checked = view?.settings.materialHatch !== false;
+    this.hatch.indeterminate = this.e
+      .selectedViews()
+      .some((v) => (v.settings.materialHatch !== false) !== this.hatch.checked);
     this.scale.parentElement.hidden = !view;
-    if (view) this.scale.value = view.scale;
+    const views = this.e.selectedViews();
+    const mixed = views.some((v) => v.scale !== views[0].scale);
+    this.scale.value = views.length && !mixed ? views[0].scale : '';
+    this.scale.placeholder = mixed ? 'Blandade' : '';
     this.e.$('hidden-lines').parentElement.hidden = false;
     if (view) this.e.$('hidden-lines').checked = !!view.settings.hiddenLines;
     this.e.sectionTool?.sync();
@@ -226,6 +263,10 @@ export class PartSections {
         w / 2 + (p[0] - view.camera.center[0]) / view.scale,
         h / 2 - (p[1] - view.camera.center[1]) / view.scale,
       ];
+      if (e.annotations.items.some((item) => item.drawOrder === 'back'))
+        appendModelFaces(content, data.modelFaces, project);
+      if (view.settings.materialHatch !== false)
+        appendMaterialHatch(content, data.surfaces, project);
       appendVectorDrawing(content, data.vectors, project, { hidden: view.settings.hiddenLines });
       for (const hole of data.holeCenters) {
         const [x, y] = project(hole.point);

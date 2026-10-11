@@ -1,0 +1,77 @@
+.drawing-rich-editor {
+  position: absolute;
+  z-index: 45;
+  color: #263a42;
+}
+.drawing-rich-editor[hidden] {
+  display: none;
+}
+.drawing-rich-content {
+  outline: 1px solid #287c65;
+  min-height: 1.2em;
+  background: #ffffffee;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.drawing-rich-content :is(div, p, ul, ol, li) {
+  margin: 0;
+  padding: 0;
+}
+.drawing-rich-content :is(ul, ol) {
+  padding-left: 1.5em;
+}
+.drawing-rich-tools {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid #c1d3cf;
+  border-radius: 4px;
+  background: #f7faf9;
+  box-shadow: 0 3px 12px #172b3215;
+}
+.drawing-editor .drawing-rich-tools button {
+  min-width: 26px;
+  padding: 4px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: #263a42;
+}
+.drawing-editor .drawing-rich-tools button:hover {
+  background: #dceee7;
+}
+.drawing-rich-layer [data-rich-text] {
+  pointer-events: all;
+  cursor: move;
+}
+.drawing-rich-layer [data-rich-width] {
+  cursor: ew-resize;
+}
+.drawing-editor .annotation-inspector .drawing-rich-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.drawing-editor .drawing-rich-check input[type='checkbox'] {
+  width: 14px;
+  flex: 0 0 14px;
+  margin: 0;
+}
+
+.drawing-paper-back {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.drawing-paper-back [data-rich-text] {
+  pointer-events: all;
+}

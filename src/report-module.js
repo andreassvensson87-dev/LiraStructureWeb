@@ -97,7 +97,6 @@ class ReportModule {
     dialog.addEventListener('keydown', (e) => e.stopPropagation());
     dialog.addEventListener('cancel', (e) => {
       e.preventDefault();
-      dialog.close();
     });
     for (const key of ['title', 'first', 'next', 'font', 'type', 'search', 'sort'])
       this.$(key).oninput = () => this.refresh();

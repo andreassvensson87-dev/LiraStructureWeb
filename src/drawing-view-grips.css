@@ -97,3 +97,14 @@
   margin: 4px 0 0;
   min-width: 0;
 }
+
+#plan-view .plan-canvas.view-unselected {
+  outline: none;
+}
+#plan-view .view-unselected :is(.ga-view-grip, .ga-viewport-grip, .ga-crop-grip) {
+  display: none;
+}
+
+#plan-view .ga-view-snapshot.view-selected {
+  outline: 1px solid #589383;
+}

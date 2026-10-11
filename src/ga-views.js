@@ -1,8 +1,17 @@
 import { detailSource, nextDetailLabel } from './drawing-details.js';
 import { nextSectionName } from './drawing-sections.js';
-import { ensureGAViews, duplicateDrawingView, resizeDrawingView } from './drawing-views.js';
+import {
+  ensureGAViews,
+  duplicateDrawingView,
+  resizeDrawingView,
+  drawingViewSelection,
+} from './drawing-views.js';
 import { actionButton } from './drawing-toolbar.js';
-import { DrawingViewActions } from './drawing-view-actions.js';
+import {
+  DrawingViewActions,
+  installDrawingViewDeselection,
+  installDrawingViewMarquee,
+} from './drawing-view-actions.js';
 import { drawingProfileDetail } from './profile-detail.js';
 import { createDrawingViewInspector } from './drawing-view-inspector.js';
 import { viewGripCursor } from './drawing-view-grips.js';
@@ -10,6 +19,7 @@ export class GAViews {
   constructor(editor, inspector, toolbar) {
     this.e = editor;
     this.snapshots = new Map();
+    this.selectedIds = new Set();
     this.actions = new DrawingViewActions(editor.dialog, {
       views: () => this.items,
       drawingType: () => 'GA',
@@ -60,7 +70,15 @@ export class GAViews {
     section.querySelector('.ga-view-actions').append(remove);
     this.removeButton = remove;
     this.placement = createDrawingViewInspector(section, {
-      selected: () => this.active,
+      selected: () => (this.selected ? this.active : null),
+      selectedViews: () => this.selectedViews(),
+      move: (dx, dy) => {
+        for (const view of this.selectedViews())
+          view.position = [view.position[0] + dx, view.position[1] + dy];
+        editor.record.sheet.viewPosition = [...this.active.position];
+        editor.navigation.size();
+        this.position();
+      },
       changed: (view, key, axis, value) => {
         if (key === 'position') view.position[axis] = value;
         else
@@ -85,6 +103,74 @@ export class GAViews {
       grip.title = corner === 'move' ? 'Flytta vyn' : 'Beskär vyn · skalan behålls';
       editor.host.append(grip);
     }
+    this.marquee = installDrawingViewMarquee({
+      dialog: editor.dialog,
+      surface: editor.paperWorkspace,
+      paper: editor.page,
+      paperSize: () => [editor.frameLayout.width, editor.frameLayout.height],
+      views: () => this.items,
+      ids: () => this.selectedIds,
+      change: (ids) => {
+        this.selectedIds = ids;
+        if (ids.size) this.activate([...ids].at(-1), false, true);
+        else this.setSelected(false);
+      },
+      hit: (event) =>
+        event.target.closest(
+          '.plan-canvas,.ga-view-snapshot,[data-annotation],[data-section-marker],[data-detail-marker]',
+        ),
+      busy: () =>
+        !!(
+          editor.drag ||
+          editor.annotations.mode ||
+          editor.annotations.drag ||
+          this.actions.pending ||
+          editor.sectionTool?.draft ||
+          editor.detailTool?.draft
+        ),
+    });
+    installDrawingViewDeselection({
+      dialog: editor.dialog,
+      surface: editor.paperWorkspace,
+      hit: (event) =>
+        event.target.closest(
+          '.plan-canvas,.ga-view-snapshot,[data-annotation],[data-section-marker],[data-detail-marker]',
+        ),
+      busy: () =>
+        !!(
+          editor.drag ||
+          editor.annotations.mode ||
+          editor.annotations.drag ||
+          this.actions.pending ||
+          editor.sectionTool?.draft ||
+          editor.detailTool?.draft ||
+          editor.navigation?.pan.active
+        ),
+      selected: () => this.selected,
+      clear: () => {
+        this.setSelected(false);
+        editor.draw();
+      },
+      cancel: () => {
+        editor.cancelInteraction();
+        editor.draw();
+      },
+    });
+  }
+  selectedViews() {
+    return this.items.filter((view) => this.selectedIds.has(view.id));
+  }
+  setSelected(selected) {
+    if (!selected) this.selectedIds.clear();
+    else if (!this.selectedIds.size && this.active) this.selectedIds.add(this.active.id);
+    this.selected = !!this.selectedIds.size;
+    this.e.host.classList.toggle('view-unselected', !this.selectedIds.has(this.active?.id));
+    for (const [id, snapshot] of this.snapshots) {
+      snapshot.classList.toggle('view-selected', this.selectedIds.has(id));
+      snapshot.setAttribute('aria-pressed', String(this.selectedIds.has(id)));
+    }
+    this.list();
+    this.placement?.sync();
   }
   get items() {
     return this.e.record.sheet.views;
@@ -95,6 +181,8 @@ export class GAViews {
     this.active = null;
   }
   open() {
+    this.selected = true;
+    this.e.host.classList.remove('view-unselected');
     const e = this.e;
     ensureGAViews(
       e.record,
@@ -110,6 +198,7 @@ export class GAViews {
       this.snapshot();
     }
     this.load(this.items[0]);
+    this.selectedIds = new Set([this.active.id]);
     e.rebuild();
     e.refreshPaper();
     this.ready = true;
@@ -142,6 +231,7 @@ export class GAViews {
     e.$('level').value = view.settings.levelId;
     for (const k of ['lower', 'cut', 'upper']) e.$(k).value = view.settings[k];
     e.$('hidden-lines').checked = !!view.settings.hiddenLines;
+    e.hatchControl.checked = view.settings.materialHatch !== false;
     view.settings.profileDetail = drawingProfileDetail(view, 'GA');
     e.record.settings.profileDetail = view.settings.profileDetail;
     e.profileDetailControl?.sync(view);
@@ -159,12 +249,18 @@ export class GAViews {
   }
   list() {
     this.select.replaceChildren(...this.items.map((v) => new Option(v.name, v.id)));
-    this.select.value = this.active.id;
-    this.name.value = this.active.name;
-    this.removeButton.disabled = this.items.length < 2;
+    this.select.value = this.selected ? this.active.id : '';
+    this.name.value = this.selected ? this.active.name : '';
+    this.name.disabled = !this.selected;
+    this.removeButton.disabled = !this.selected || this.items.length < 2;
     this.removeButton.title = this.removeButton.disabled
       ? 'Minst en vy måste finnas kvar på bladet.'
       : '';
+    const selected = this.selectedViews();
+    const mixed = selected.some((view) => view.scale !== selected[0].scale);
+    this.e.paperScale.value = selected.length && !mixed ? selected[0].scale : '';
+    this.e.paperScale.placeholder = mixed ? 'Blandade' : '';
+    this.e.paperScale.disabled = !selected.length;
     this.e.sectionTool?.sync();
   }
   snapshot() {
@@ -200,11 +296,11 @@ export class GAViews {
     container.dataset.zoom = e.paperZoom;
     content.style.width = e.host.clientWidth + 'px';
     content.style.height = e.host.clientHeight + 'px';
-    container.onclick = () => this.activate(view.id);
+    container.onclick = (event) => this.activate(view.id, event.shiftKey);
     container.onkeydown = (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        this.activate(view.id);
+        this.activate(view.id, event.shiftKey);
       }
     };
     e.page.insertBefore(container, e.host);
@@ -236,11 +332,20 @@ export class GAViews {
     }
     this.load(this.items.find((v) => v.id === id));
     this.e.rebuild();
-    this.list();
+    this.setSelected(!!this.selectedIds.size);
     this.e.navigation.size();
   }
-  activate(id) {
-    if (this.active?.id === id) return;
+  activate(id, additive = false, preserve = false) {
+    this.selectedIds = drawingViewSelection(this.selectedIds, id, additive, preserve);
+    if (!this.selectedIds.size) {
+      this.setSelected(false);
+      return;
+    }
+    if (!this.selectedIds.has(id)) id = [...this.selectedIds].at(-1);
+    if (this.active?.id === id) {
+      this.setSelected(true);
+      return;
+    }
     const next = this.items.find((v) => v.id === id);
     if (!next) return;
     const e = this.e;
@@ -250,6 +355,7 @@ export class GAViews {
     e.rebuild();
     this.snapshot();
     this.load(next);
+    this.setSelected(true);
     e.rebuild();
     this.list();
     e.navigation.size();

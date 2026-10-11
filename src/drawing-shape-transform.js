@@ -1,56 +1,13 @@
 import { actionButton } from './drawing-toolbar.js';
-import { shapeSnapPoints } from './drawing-shapes.js';
+import { lengthPoint } from './frame-model.js';
 
-export function rotatedShapes(items, ids, center, angle) {
-  const chosen = items.filter((item) => ids.includes(item.id));
-  if (
-    !chosen.length ||
-    chosen.some((item) => item.type !== 'shape' || item.view !== chosen[0].view)
-  )
-    throw Error('Välj ritad geometri i samma vy.');
-  if (
-    !center?.every(Number.isFinite) ||
-    !Number.isFinite(angle) ||
-    Math.abs(angle % (2 * Math.PI)) < 1e-9
-  )
-    throw Error('Ange en vinkel som ändrar objektens riktning.');
-  const c = Math.cos(angle),
-    s = Math.sin(angle);
-  return chosen.map((item) => ({
-    ...structuredClone(item),
-    ...(item.shape === 'rectangle' ? { shape: 'polyline', closed: true } : {}),
-    points: shapeSnapPoints(item).map(([x, y]) => [
-      center[0] + (x - center[0]) * c - (y - center[1]) * s,
-      center[1] + (x - center[0]) * s + (y - center[1]) * c,
-    ]),
-  }));
-}
-
-export function rotationAngle(center, reference, target) {
-  if ([reference, target].some((p) => Math.hypot(p[0] - center[0], p[1] - center[1]) < 1e-7))
-    throw Error('Välj en riktning en bit från rotationscentrum.');
-  const angle =
-    Math.atan2(target[1] - center[1], target[0] - center[0]) -
-    Math.atan2(reference[1] - center[1], reference[0] - center[0]);
-  return Math.atan2(Math.sin(angle), Math.cos(angle));
-}
-
-export function translatedShapes(items, ids, from, to, copy = false) {
-  const chosen = items.filter((item) => ids.includes(item.id));
-  if (
-    !chosen.length ||
-    chosen.some((item) => item.type !== 'shape' || item.view !== chosen[0].view)
-  )
-    throw Error('Välj ritad geometri i samma vy.');
-  const delta = to.map((v, i) => v - from[i]);
-  if (delta.length !== 2 || !delta.every(Number.isFinite) || Math.hypot(...delta) < 1e-7)
-    throw Error('Välj en annan tillpunkt.');
-  return chosen.map((item) => ({
-    ...structuredClone(item),
-    id: copy ? crypto.randomUUID() : item.id,
-    points: item.points.map((point) => point.map((v, i) => v + delta[i])),
-  }));
-}
+import {
+  translatedShapes,
+  rotatedShapes,
+  rotationAngle,
+  transformableDrawingObject,
+} from './drawing-object-transform.js';
+export { translatedShapes, rotatedShapes, rotationAngle } from './drawing-object-transform.js';
 
 export class DrawingShapeTransform {
   constructor(editor, toolbar) {
@@ -79,12 +36,26 @@ export class DrawingShapeTransform {
   }
   start(mode) {
     const selected = this.editor.item();
-    this.ids = selected?.type === 'shape' ? [selected.id] : [];
-    this.view = selected?.type === 'shape' ? selected.view : null;
-    this.phase = 'select';
+    this.ids = [
+      ...(this.editor.selectedIds?.size
+        ? this.editor.selectedIds
+        : new Set(selected ? [selected.id] : [])),
+    ].filter((id) => transformableDrawingObject(this.editor.items.find((item) => item.id === id)));
+    if (
+      new Set(
+        this.editor.items.filter((item) => this.ids.includes(item.id)).map((item) => item.view),
+      ).size > 1
+    ) {
+      this.editor.hint.textContent = 'Välj ritobjekt i samma vy eller text på bladet.';
+      return;
+    }
+    this.view = this.ids.length ? selected.view : null;
+    this.phase = this.ids.length ? 'base' : 'select';
     this.base = null;
     this.reference = null;
     this.numericAngle = null;
+    this.exactDistance = null;
+    if (this.editor.dynamicInput) this.editor.dynamicInput.querySelector('input').value = '';
     this.editor.start(mode);
   }
   ui(message) {
@@ -93,10 +64,10 @@ export class DrawingShapeTransform {
     const title = document.createElement('h3');
     const rotate = a.mode === 'rotate-shapes';
     title.textContent = rotate
-      ? 'Rotera geometri'
+      ? 'Rotera ritobjekt'
       : a.mode === 'copy-shapes'
-        ? 'Kopiera geometri'
-        : 'Flytta geometri';
+        ? 'Kopiera ritobjekt'
+        : 'Flytta ritobjekt';
     const count = document.createElement('p');
     count.textContent = `${this.ids.length} objekt valda`;
     a.panel.append(title, count);
@@ -123,6 +94,12 @@ export class DrawingShapeTransform {
         a.ui();
         a.adapter.redraw();
       });
+    if (this.ids.some((id) => a.items.find((item) => item.id === id)?.references?.some(Boolean))) {
+      const note = document.createElement('p');
+      note.textContent =
+        'Transformerade fästpunkter blir fristående från modellen. Ångra återställer kopplingarna.';
+      a.panel.append(note);
+    }
     if (rotate && this.base) {
       const label = document.createElement('label'),
         input = document.createElement('input');
@@ -146,7 +123,12 @@ export class DrawingShapeTransform {
         if (this.numericAngle === null) return;
         try {
           this.commit(
-            rotatedShapes(a.items, this.ids, this.base, (this.numericAngle * Math.PI) / 180),
+            rotatedShapes(
+              a.items,
+              this.ids,
+              this.base,
+              ((this.numericAngle * Math.PI) / 180) * (this.view === 'paper' ? -1 : 1),
+            ),
           );
         } catch (error) {
           this.ui(error.message);
@@ -173,10 +155,20 @@ export class DrawingShapeTransform {
     button('Avbryt · Esc', () => a.cancel());
     button('Ångra', () => a.undo(), !a.history.length);
     button('Gör om', () => a.undo(true), !a.future.length);
+    if (a.dynamicInput) {
+      a.dynamicInput.hidden = !(this.base && (rotate || this.phase === 'destination'));
+      a.dynamicInput.querySelector('.ui-exact-length-field span').textContent = rotate ? '°' : 'mm';
+      a.dynamicInput
+        .querySelector('input')
+        .setAttribute('aria-label', rotate ? 'Exakt vinkel · grader' : 'Exakt längd · mm');
+      a.dynamicInput.querySelector('.ui-exact-length-label span').textContent = rotate
+        ? 'Vinkel · °'
+        : 'Längd · mm';
+    }
     a.hint.textContent =
       message ||
       (this.phase === 'select'
-        ? 'Klicka på ritade objekt för flerval · klick igen tar bort valet · Enter fortsätter'
+        ? 'Klicka på ritobjekt för flerval · klick igen tar bort valet · Enter fortsätter'
         : this.phase === 'base'
           ? rotate
             ? 'Klicka rotationscentrum · snappning till hörn och ändpunkter'
@@ -200,8 +192,8 @@ export class DrawingShapeTransform {
     if (this.phase === 'select') {
       const id = e.target.closest('[data-annotation]')?.dataset.annotation;
       const item = a.items.find((item) => item.id === id);
-      if (item?.type !== 'shape') {
-        this.ui('Välj linjer, cirklar eller annan ritad geometri.');
+      if (!transformableDrawingObject(item)) {
+        this.ui('Välj ritad geometri, text, mått eller hänvisningar.');
         return;
       }
       if (this.ids.length && item.view !== this.view) {
@@ -260,38 +252,63 @@ export class DrawingShapeTransform {
           a.items.find((original) => original.id === item.id),
           item,
         );
-    a.selected = result.length === 1 ? result[0].id : null;
+    a.selected = result.at(-1).id;
+    a.selectedIds = new Set(result.map((item) => item.id));
     a.cancel();
   }
-  render(layer) {
-    if (this.editor.mode === 'rotate-shapes' && this.base) {
-      this.editor.dot(layer, this.base, this.view);
-      try {
+  submit(value) {
+    try {
+      const rotate = this.editor.mode === 'rotate-shapes';
+      const number = Number(String(value).replace(',', '.'));
+      if (!Number.isFinite(number) || !String(value).trim()) throw Error('Ange ett giltigt värde.');
+      const result = rotate
+        ? rotatedShapes(
+            this.editor.items,
+            this.ids,
+            this.base,
+            ((number * Math.PI) / 180) * (this.view === 'paper' ? -1 : 1),
+          )
+        : translatedShapes(
+            this.editor.items,
+            this.ids,
+            this.base,
+            lengthPoint(this.base, this.editor.hover?.point || this.base, value),
+            this.editor.mode === 'copy-shapes',
+          );
+      this.commit(result);
+      this.editor.dynamicInput.querySelector('input').value = '';
+      this.editor.surface.focus({ preventScroll: true });
+    } catch (error) {
+      this.ui(error.message);
+    }
+  }
+  preview() {
+    if (!this.base) return [];
+    try {
+      if (this.editor.mode === 'rotate-shapes') {
         const angle =
           this.numericAngle !== null
-            ? (this.numericAngle * Math.PI) / 180
+            ? ((this.numericAngle * Math.PI) / 180) * (this.view === 'paper' ? -1 : 1)
             : this.reference && this.editor.hover
               ? rotationAngle(this.base, this.reference, this.editor.hover.point)
               : null;
-        if (angle !== null)
-          for (const item of rotatedShapes(this.editor.items, this.ids, this.base, angle))
-            this.editor.paint(layer, item, true);
-      } catch {
-        /* A coincident or zero angle has no preview. */
+        return angle === null ? [] : rotatedShapes(this.editor.items, this.ids, this.base, angle);
       }
-      return;
-    }
-    if (this.phase !== 'destination' || !this.editor.hover) return;
-    try {
-      for (const item of translatedShapes(
-        this.editor.items,
-        this.ids,
-        this.base,
-        this.editor.hover.point,
-      ))
-        this.editor.paint(layer, item, true);
+      return this.phase === 'destination' && this.editor.hover
+        ? translatedShapes(
+            this.editor.items,
+            this.ids,
+            this.base,
+            this.exactDistance
+              ? lengthPoint(this.base, this.editor.hover.point, this.exactDistance)
+              : this.editor.hover.point,
+          )
+        : [];
     } catch {
-      /* Coincident points have no preview. */
+      return [];
     }
+  }
+  render(layer) {
+    for (const item of this.preview()) this.editor.paint(layer, item, false, true);
   }
 }

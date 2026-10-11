@@ -1,10 +1,5 @@
-const ns = 'http://www.w3.org/2000/svg';
 import { constrainCadPoint } from './cad-tracking.js';
-const node = (tag, attrs) => {
-  const n = document.createElementNS(ns, tag);
-  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
-  return n;
-};
+import { paintDrawingOverlay } from './drawing-overlay.js';
 export function polarPoint(point, base, step, tolerance) {
   if (!base || !Number.isFinite(step) || step <= 0) return null;
   const dx = point[0] - base[0],
@@ -133,58 +128,21 @@ export class DrawingToolFeedback {
     t.hover = this.hit?.point;
     t.adapter.redraw();
   }
-  paint(root, parentId, project, u) {
+  paint(root, parentId, project) {
     const hit = this.hit;
     if (!this.tool.draft || !hit || hit.view !== parentId || this.placing()) return;
-    const p = project(hit.point),
-      g = node('g', { 'pointer-events': 'none', class: 'drawing-point-feedback' }),
-      r = 3 * u;
-    if (hit.polar) {
-      const a = project(hit.base);
-      g.append(
-        node('path', {
-          d: `M${a}L${p}`,
-          stroke: '#32937d',
-          'stroke-width': 1,
-          'stroke-dasharray': '6 4',
-          'vector-effect': 'non-scaling-stroke',
-        }),
-      );
-    }
-    g.append(
-      node('path', {
-        d: `M${p[0] - r * 2},${p[1]}h${r * 4}M${p[0]},${p[1] - r * 2}v${r * 4}`,
-        stroke: '#456775',
-        'stroke-width': 1,
-        'vector-effect': 'non-scaling-stroke',
-      }),
+    const feedback = this.tool.adapter.feedback;
+    paintDrawingOverlay(
+      root,
+      {
+        adapter: feedback.adapter,
+        mode: this.type,
+        hover: { ...hit, kind: hit.kind || (hit.polar ? 'Polar' : undefined), guideBase: hit.base },
+        trackHit: feedback.trackHit,
+        draft: this.tool.draft,
+      },
+      project,
+      feedback.adapter.pixelScale(),
     );
-    if (hit.snapped || hit.polar)
-      g.append(
-        node(
-          hit.snapped ? 'rect' : 'circle',
-          hit.snapped
-            ? {
-                x: p[0] - r,
-                y: p[1] - r,
-                width: r * 2,
-                height: r * 2,
-                fill: 'white',
-                stroke: '#23977a',
-                'stroke-width': 1.5,
-                'vector-effect': 'non-scaling-stroke',
-              }
-            : {
-                cx: p[0],
-                cy: p[1],
-                r,
-                fill: 'white',
-                stroke: '#23977a',
-                'stroke-width': 1.5,
-                'vector-effect': 'non-scaling-stroke',
-              },
-        ),
-      );
-    root.append(g);
   }
 }

@@ -1,3 +1,4 @@
+import { viewsInRectangle } from './drawing-views.js';
 export function dependentViewIds(views, id) {
   const ids = new Set([id]);
   let changed = true;
@@ -148,4 +149,142 @@ export class DrawingViewActions {
       return;
     this.adapter.remove(ids);
   }
+}
+
+/** Tool capture handlers get first refusal; deselection runs only on idle input. */
+export function installDrawingViewDeselection({
+  dialog,
+  surface,
+  hit,
+  busy,
+  selected,
+  clear,
+  cancel,
+}) {
+  surface.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || event.defaultPrevented || busy() || hit(event)) return;
+    clear();
+  });
+  queueMicrotask(() =>
+    dialog.addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        if (busy()) {
+          event.preventDefault();
+          event.stopPropagation();
+          cancel();
+        } else if (selected()) {
+          event.preventDefault();
+          event.stopPropagation();
+          clear();
+        }
+      },
+      true,
+    ),
+  );
+}
+
+/** Shared window/crossing selection on the empty drawing pasteboard. */
+export function installDrawingViewMarquee({
+  dialog,
+  surface,
+  paper,
+  paperSize,
+  views,
+  ids,
+  change,
+  busy,
+  hit,
+}) {
+  const box = document.createElement('div');
+  box.className = 'selection-box';
+  box.hidden = true;
+  surface.append(box);
+  let gesture = null;
+  const point = (event) => {
+    const rect = paper.getBoundingClientRect(),
+      size = paperSize();
+    return [
+      ((event.clientX - rect.left) * size[0]) / rect.width,
+      ((event.clientY - rect.top) * size[1]) / rect.height,
+    ];
+  };
+  const cancel = () => {
+    const old = gesture;
+    gesture = null;
+    box.hidden = true;
+    if (old && surface.hasPointerCapture(old.id)) surface.releasePointerCapture(old.id);
+  };
+  surface.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (event.button !== 0 || busy() || hit(event) || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      gesture = {
+        id: event.pointerId,
+        start: point(event),
+        x: event.clientX,
+        y: event.clientY,
+        ids: new Set(ids()),
+        additive: event.shiftKey,
+      };
+      surface.setPointerCapture(event.pointerId);
+    },
+    true,
+  );
+  surface.addEventListener(
+    'pointermove',
+    (event) => {
+      if (!gesture || event.pointerId !== gesture.id) return;
+      event.stopImmediatePropagation();
+      const rect = surface.getBoundingClientRect();
+      box.hidden = false;
+      box.classList.toggle('crossing', event.clientX < gesture.x);
+      Object.assign(box.style, {
+        left: Math.min(event.clientX, gesture.x) - rect.left + surface.scrollLeft + 'px',
+        top: Math.min(event.clientY, gesture.y) - rect.top + surface.scrollTop + 'px',
+        width: Math.abs(event.clientX - gesture.x) + 'px',
+        height: Math.abs(event.clientY - gesture.y) + 'px',
+      });
+    },
+    true,
+  );
+  surface.addEventListener(
+    'pointerup',
+    (event) => {
+      if (!gesture || event.pointerId !== gesture.id) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const previous = gesture,
+        end = point(event);
+      const found =
+        Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 4
+          ? []
+          : viewsInRectangle(views(), previous.start, end);
+      cancel();
+      change(previous.additive ? new Set([...previous.ids, ...found]) : new Set(found));
+    },
+    true,
+  );
+  surface.addEventListener('pointercancel', cancel);
+  dialog.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Escape' && gesture) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        cancel();
+      }
+    },
+    true,
+  );
+  dialog.addEventListener('close', cancel);
+  return {
+    cancel,
+    get active() {
+      return !!gesture;
+    },
+  };
 }

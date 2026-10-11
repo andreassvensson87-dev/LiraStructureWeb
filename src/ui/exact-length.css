@@ -1,0 +1,130 @@
+.ui-length-statusbar {
+  --command-width: 240px;
+}
+body > footer.ui-length-statusbar,
+.drawing-editor footer.ui-length-statusbar,
+#frame-editor .ui-length-statusbar {
+  padding: 0 12px !important;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+body > footer .ui-command-hint,
+.drawing-editor .ui-length-statusbar > .cad-hint,
+#frame-editor .ui-length-statusbar > .cad-hint {
+  flex: 0 0 var(--command-width);
+  width: var(--command-width);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drawing-editor .ui-length-statusbar > .cad-hint:not(.cad-warning):empty,
+#frame-editor .ui-length-statusbar > .cad-hint:not(.cad-warning):empty {
+  display: block;
+  visibility: hidden;
+}
+.ui-command-hint > :is(#status, #snap-status) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-command-hint #status:has(+ #snap-status:not(:empty)),
+.ui-command-hint #snap-status:empty {
+  display: none;
+}
+.ui-exact-length-slot {
+  flex: 0 0 130px;
+  width: 130px;
+  position: relative;
+}
+form.ui-exact-length {
+  position: static !important;
+  transform: none;
+  display: block !important;
+  width: 130px;
+  max-width: none;
+  padding: 0 !important;
+  margin: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-height: 0;
+  height: 28px;
+}
+form.ui-exact-length[hidden] {
+  display: none !important;
+}
+form.ui-exact-length .ui-exact-length-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 1px solid #c1d3cf;
+  border-radius: 4px;
+  background: white;
+  color: #61777c;
+  font-size: 11px;
+}
+.ui-exact-length-field:focus-within {
+  border-color: #287c65;
+}
+.ui-exact-length-field svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  flex-shrink: 0;
+}
+form.ui-exact-length input {
+  width: 100% !important;
+  min-width: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  outline: none;
+  box-shadow: none !important;
+  background: transparent;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ui-exact-length .ui-exact-length-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.ui-exact-length > div:empty {
+  display: none;
+}
+.ui-exact-length > .axis-locks,
+.ui-exact-length > #draw-length-error:not(:empty) {
+  position: absolute;
+  bottom: 36px;
+  left: 0;
+  background: white;
+  border: 1px solid #d5dfe1;
+  border-radius: 4px;
+  padding: 6px;
+  white-space: nowrap;
+}
+.ui-exact-length > .axis-locks {
+  display: none;
+}
+.ui-exact-length:focus-within > .axis-locks {
+  display: flex;
+}
+.ui-exact-length > #draw-length-error:not(:empty) {
+  bottom: 75px;
+  white-space: normal;
+  width: 240px;
+}
+@media (max-width: 900px) {
+  .ui-length-statusbar {
+    --command-width: 120px;
+  }
+}

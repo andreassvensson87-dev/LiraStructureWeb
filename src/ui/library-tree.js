@@ -11,7 +11,7 @@ export function renderLibraryTree(
 ) {
   let state = states.get(root);
   if (!state) {
-    state = { expanded: new Map(), query: '', selected: null };
+    state = { expanded: new Map(), searchExpanded: new Map(), query: '', selected: null };
     states.set(root, state);
     root.addEventListener('keydown', (event) => {
       const targets = [...root.querySelectorAll('summary, button')].filter((node) => {
@@ -58,15 +58,16 @@ export function renderLibraryTree(
       }
     });
   }
-  if (!state.query)
-    for (const branch of root.querySelectorAll('details'))
-      state.expanded.set(branch.dataset.key, branch.open);
+  for (const branch of root.querySelectorAll('details'))
+    (state.query ? state.searchExpanded : state.expanded).set(branch.dataset.key, branch.open);
   const changed = selectedKey !== state.selected;
   const focusKey = root.contains(document.activeElement)
     ? document.activeElement.dataset.key
     : null;
   const scrollTop = root.scrollTop;
-  state.query = query.trim();
+  const nextQuery = query.trim();
+  if (nextQuery !== state.query) state.searchExpanded.clear();
+  state.query = nextQuery;
   state.selected = selectedKey;
   root.classList.add('ui-library-tree');
   root.replaceChildren();
@@ -74,10 +75,10 @@ export function renderLibraryTree(
     if (node.children) {
       const branch = document.createElement('details');
       branch.dataset.key = node.key;
-      branch.open =
-        !!state.query ||
-        (changed && contains(node, selectedKey)) ||
-        (state.expanded.get(node.key) ?? contains(node, selectedKey));
+      branch.open = state.query
+        ? (state.searchExpanded.get(node.key) ?? true)
+        : (changed && node.key !== selectedKey && contains(node, selectedKey)) ||
+          (state.expanded.get(node.key) ?? contains(node, selectedKey));
       const summary = document.createElement('summary');
       summary.dataset.key = `summary:${node.key}`;
       summary.title = node.label;
@@ -88,7 +89,14 @@ export function renderLibraryTree(
       summary.append(count);
       if (node.key === selectedKey) summary.setAttribute('aria-current', 'true');
       if (node.selectable)
-        summary.addEventListener('click', () => queueMicrotask(() => onSelect?.(node)));
+        summary.addEventListener('click', (event) => {
+          // Selection can redraw the tree. Toggle before that callback, rather
+          // than relying on the native action of a now-detached summary.
+          event.preventDefault();
+          branch.open = !branch.open;
+          (state.query ? state.searchExpanded : state.expanded).set(node.key, branch.open);
+          onSelect?.(node);
+        });
       branch.append(summary);
       node.children.forEach((child) => append(branch, child));
       parent.append(branch);
@@ -127,6 +135,6 @@ export function setLibraryTreeExpanded(root, open) {
   const state = states.get(root);
   for (const branch of root.querySelectorAll('details')) {
     branch.open = open;
-    state?.expanded.set(branch.dataset.key, open);
+    if (state) (state.query ? state.searchExpanded : state.expanded).set(branch.dataset.key, open);
   }
 }

@@ -18,6 +18,12 @@ export default [
       'src/app/workspace-*.js',
       'src/model/ui/**/*.js',
       'src/inspector/model-*.js',
+      'src/drawing-object-*.js',
+      'src/drawing-point-placement.js',
+      'src/drawing-overlay.js',
+      'src/drawing-rich-text-*.js',
+      'src/hatch-control.js',
+      'src/ui/hatch-control.js',
     ],
     rules: { 'no-unused-vars': ['error', { args: 'none' }] },
   },
@@ -31,7 +37,7 @@ export default [
           patterns: [
             {
               regex:
-                '^(?!\\./(?:app/(?:workspace-startup|model-application)\\.js|(?:style|cad-statusbar|drawing-editor-header|drawing-view-grips)\\.css)$)',
+                '^(?!\\./(?:app/(?:workspace-startup|model-application)\\.js|(?:style|cad-statusbar|drawing-editor-header|drawing-view-grips|drawing-rich-text|ui/exact-length)\\.css)$)',
               message:
                 'main.js only loads styles, recovers the workspace and starts the application.',
             },
@@ -59,6 +65,11 @@ export default [
       'src/model/object-types/**/*.js',
       'src/model/tools/**/*.js',
       'src/model/navigation.js',
+      'src/drawing-object-transform.js',
+      'src/drawing-snap-geometry.js',
+      'src/drawing-shapes.js',
+      'src/material-hatch.js',
+      'src/drawing-rich-text.js',
       'src/app/model-editor.js',
     ],
     rules: {
