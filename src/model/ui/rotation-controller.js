@@ -1,3 +1,4 @@
+import { cadFeedback } from '../../ui/cad-feedback.js';
 import { componentTransformSources } from '../../components/ownership.js';
 import * as THREE from 'three';
 import { RotationHandle } from '../../rotation-handle.js';
@@ -110,7 +111,12 @@ export function createRotationController({
   });
   const rotationLine = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-    new THREE.LineDashedMaterial({ color: 0x258e79, depthTest: false, dashSize: 120, gapSize: 60 }),
+    new THREE.LineDashedMaterial({
+      color: cadFeedback.preview,
+      depthTest: false,
+      dashSize: 120,
+      gapSize: 60,
+    }),
   );
   rotationLine.visible = false;
   rotationLine.renderOrder = 12;

@@ -91,7 +91,7 @@ test('rounded roots follow dimension edits and reject radii that no longer fit',
 
 test('catalog beams keep their geometry and catalog snapshots through project save and reload', () => {
   const project = createProject({
-    grid: { x: [0, 1000], y: [0, 1000] },
+    grid: { x: [], y: [] },
     levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
   });
   for (const family of [

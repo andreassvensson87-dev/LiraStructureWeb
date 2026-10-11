@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { syncGridObjects } from '../src/model/grid-objects.js';
+import { syncGridObjects, gridPickIds, gridObjectId } from '../src/model/grid-objects.js';
 import { gridSegments } from '../src/grid-geometry.js';
 import { createProject } from '../src/project/project-state.js';
 import { initialLevels } from '../src/levels.js';
@@ -16,7 +16,7 @@ const fixture = () => {
   syncGridObjects(p);
   return p;
 };
-test('legacy grids become independent nonphysical objects without changing endpoints or labels', () => {
+test('new projects create independent nonphysical grid objects with endpoints and labels', () => {
   const p = createProject({ grid: defaultGrid, levels: initialLevels() });
   const old = gridSegments(p.grid);
   syncGridObjects(p);
@@ -82,4 +82,36 @@ test('grid object edits undo and redo through ordinary project history', () => {
   Object.assign(p, history.redo(p));
   syncGridObjects(p);
   assert.deepEqual(p, edited);
+});
+
+test('grid display addresses follow deletion without mutating model objects or history', () => {
+  const p = fixture();
+  const objects = p.objects;
+  const snapshots = objects.map((object) => JSON.stringify(object));
+  syncGridObjects(p);
+  assert.equal(p.objects, objects);
+  p.objects.forEach((object, index) => {
+    assert.equal(object, objects[index]);
+    assert.equal(JSON.stringify(object), snapshots[index]);
+  });
+  const selected = p.objects[1];
+  assert.deepEqual(gridPickIds(p.grid, new Set([selected.id])), ['x:1']);
+  assert.equal(gridObjectId(p.grid, 'x:1'), selected.id);
+  const history = new ProjectHistory();
+  history.prime(p);
+  history.checkpoint(p);
+  p.objects = p.objects.slice(1);
+  const remaining = p.objects;
+  syncGridObjects(p);
+  assert.equal(p.objects, remaining);
+  assert.equal(p.objects[0], selected);
+  assert.deepEqual(gridPickIds(p.grid, new Set([selected.id])), ['x:0']);
+  assert.equal(gridObjectId(p.grid, 'x:0'), selected.id);
+  assert.equal(gridObjectId(p.grid, 'x:99'), undefined);
+  const past = history.past.length;
+  syncGridObjects(p);
+  assert.equal(history.past.length, past);
+  Object.assign(p, history.undo(p));
+  syncGridObjects(p);
+  assert.deepEqual(gridPickIds(p.grid, new Set([selected.id])), ['x:1']);
 });

@@ -2,12 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createProject } from '../src/project/project-state.js';
-import { defaultGrid } from '../src/grid-lines.js';
 import { initialLevels } from '../src/levels.js';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
 import { ProjectRecovery, ProjectAutosave } from '../src/app/project-recovery.js';
 import { placeItem } from '../src/items/geometry.js';
-const create = () => createProject({ grid: defaultGrid, levels: initialLevels() });
+const create = () => createProject({ grid: { x: [], y: [] }, levels: initialLevels() });
 class MemoryStore {
   constructor() {
     this.records = new Map();

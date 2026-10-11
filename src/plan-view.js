@@ -1,27 +1,22 @@
+import { buildPlanObjects, buildSectionObjects } from './plan-view-geometry.js';
+import { paintPlanView, paintSectionGrid, paintSectionLevels } from './plan-view-renderer.js';
+import { updateScreenGrips } from './ui/grip.js';
+import { beginDrawingViewGrip } from './drawing-view-grip-editor.js';
+
 import { createGAShell } from './drawing/ui/ga-shell.js';
 import { drawingProfileDetail } from './profile-detail.js';
 import { installDrawingProfileDetail } from './drawing-profile-detail.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { drawingAttributeContext } from './drawing-attributes.js';
 import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
-import {
-  vectorDrawing,
-  projectedDrawing,
-  appendVectorDrawing,
-  appendModelFaces,
-} from './drawing-vector.js';
+import { projectedDrawing } from './drawing-vector.js';
 import { setDrawingViewScale } from './drawing-views.js';
 import { DrawingDetailTool } from './drawing-detail-tool.js';
-import { appendViewTitle } from './drawing-view-title.js';
+
 import { detailSource } from './drawing-details.js';
 import { sectionGridLines, sectionLevelLines } from './section-grid.js';
-import { visibleGridEndpoints } from './grid-label-position.js';
-import {
-  DRAWING_GRID_BUBBLE_DIAMETER,
-  MODEL_GRID_BUBBLE_DIAMETER,
-  modelGridBubbleMetrics,
-  gridBubbleMetrics,
-} from './grid-bubble-size.js';
+
+import { DRAWING_GRID_BUBBLE_DIAMETER } from './grid-bubble-size.js';
 import { DrawingSectionTool } from './drawing-section-tool.js';
 import { frameMatrix, sectionDrawing } from './drawing-sections.js';
 import { sectionClipPlanes } from './section-extents.js';
@@ -35,25 +30,30 @@ import {
 } from './drawing-layout.js';
 import { pointOnPart, partAnchor } from './drawing-part-anchor.js';
 import { snapDrawingGrid, snapDrawingLines } from './drawing-grid-snap.js';
-import { hiddenEdges } from './drawing-hidden-lines.js';
+
 import { DrawingAnnotations } from './drawing-annotations.js';
 import { GADrawingReferences } from './ga-drawing-references.js';
+import { DrawingIFCReferences } from './drawing-ifc-references.js';
+import { drawingReferenceSnapIndex } from './references/drawing-reference-geometry.js';
 import { captureDrawingDefinitions, modelViewFrame } from './model-drawing-references.js';
-import { referenceCandidates, gridReference, surfaceReference } from './annotation-references.js';
+import { gridReference, surfaceReference } from './annotation-references.js';
 import { partStatus } from './part-marks.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { partMatrix } from './part-marks.js';
 import * as THREE from 'three';
-import { objectGeometry, displayGeometry, isPhysical } from './model-object.js';
-import { partHoleSchedule, partHoleCandidates } from './fasteners/drawing.js';
+import { objectGeometry, isPhysical } from './model-object.js';
+
 import { roundProfile } from './round-profile.js';
 import { GridLines } from './grid-lines.js';
-import { sectionSegments, planHeights } from './plan-section.js';
-import { sectionContours } from './material-hatch.js';
-import { appendMaterialHatch } from './drawing-hatch.js';
+import { planHeights } from './plan-section.js';
+
 const svgNS = 'http://www.w3.org/2000/svg';
 export class PlanView {
-  constructor({ getState, getSnapSettings = () => ({ polar: 45 }) }) {
+  constructor({
+    getState,
+    getSnapSettings = () => ({ polar: 45 }),
+    getReferenceModels = () => [],
+  }) {
     this.getSnapSettings = getSnapSettings;
     this.selectedParts = new Set();
     this.getState = getState;
@@ -72,6 +72,9 @@ export class PlanView {
       frameSVG: shell.frameSVG,
     });
     this.dialog.addEventListener('close', () => {
+      clearTimeout(this.pending);
+      this.pending = null;
+      this.annotations?.grips?.cancel();
       this.drag = null;
       this.clear();
     });
@@ -102,6 +105,8 @@ export class PlanView {
     this.dialog.addEventListener('close', () => {
       this.captureSettings();
       this.saveRecord?.(this.record);
+      this.views?.reset();
+      this.frameSVG.replaceChildren();
     });
     this.layoutSelect = layoutPicker(inspector, 'plan-frame-layout', (id) => {
       this.record.sheet ??= {};
@@ -184,6 +189,24 @@ export class PlanView {
       adapter: {
         paper: this.page,
         paperSize: () => [this.frameLayout.width, this.frameLayout.height],
+        beginViewGrip: (event, node) =>
+          beginDrawingViewGrip({
+            event,
+            node,
+            paper: this.page,
+            paperSize: () => [this.frameLayout.width, this.frameLayout.height],
+            views: () => this.views.items,
+            selected: () => this.views.selectedViews(),
+            annotations: this.annotations,
+            render: () => {
+              this.record.sheet.viewPosition = [...this.views.active.position];
+              if (node.dataset.cropCorner) {
+                this.views.load(this.views.active);
+                this.rebuild();
+              } else this.views.position();
+              this.navigation.size();
+            },
+          }),
         cancelTools: () => this.cancelInteraction(),
         manualLeaders: true,
         visible: (item) => !this.views?.active || item.view === this.views.active.id,
@@ -238,7 +261,7 @@ export class PlanView {
             ],
           };
         },
-        candidates: (view) =>
+        candidates: (view, point, tolerance) =>
           view === 'paper' && this.views?.active
             ? (this.annotationCandidates || []).map((p) =>
                 Object.assign(
@@ -253,13 +276,16 @@ export class PlanView {
                   { reference: p.reference, snapKind: p.snapKind },
                 ),
               )
-            : this.annotationCandidates || [],
-        snapEntities: (view) =>
+            : [...(this.annotationCandidates || []), ...this.referenceCandidates(point, tolerance)],
+        snapEntities: (view, point, tolerance) =>
           view === 'paper'
             ? []
             : [
                 ...(this.sections || []),
-                ...(this.vectorCache || []).flatMap((set) => set.visible || []),
+                ...(this.vectorCache || [])
+                  .filter((set) => !set.referenceId)
+                  .flatMap((set) => set.visible || []),
+                ...(point ? this.referenceSnapQuery?.(point, tolerance) || [] : []),
               ].map((points) => ({ type: 'line', points: points.map((p) => p.slice(0, 2)) })),
         pick: (e, hit) => this.pickPart(hit.point),
         mark: (id) => {
@@ -300,15 +326,17 @@ export class PlanView {
       paper: this.page,
       getPaper: () => [this.frameLayout.width, this.frameLayout.height],
       getBounds: () => this.paperBounds(),
-      blocked: () => !!(this.drag || this.annotations.drag),
+      blocked: () => !!(this.drag || this.annotations.drag || this.annotations.grips?.session),
       onScale: (scale) => {
         this.paperZoom = scale;
         this.positionView();
         if (this.scene) this.draw();
+        updateScreenGrips(this.dialog);
       },
     });
     this.views = new GAViews(this, inspector, toolbar);
     this.references = new GADrawingReferences(this, inspector);
+    this.ifcReferences = new DrawingIFCReferences(this, inspector, getReferenceModels);
     this.sectionTool = new DrawingSectionTool({
       dialog: this.dialog,
       workspace: this.paperWorkspace,
@@ -430,6 +458,7 @@ export class PlanView {
     this.views.open();
   }
   cancelInteraction() {
+    this.annotations?.grips?.cancel();
     this.views?.marquee.cancel();
     this.views?.actions.cancel();
     this.sectionTool?.cancel();
@@ -686,6 +715,9 @@ export class PlanView {
   }
   clear() {
     this.vectorCache = null;
+    this.modelFaces = null;
+    this.referenceSnapQuery = null;
+    this.annotationCandidates = [];
     if (!this.group) return;
     for (const c of [...this.group.children]) {
       c.geometry.dispose();
@@ -733,97 +765,19 @@ export class PlanView {
       new THREE.Plane(new THREE.Vector3(0, 0, -1), hi),
     ];
     try {
-      for (const s of state.objects.filter((s) => isPhysical(s))) {
-        const detail = drawingProfileDetail(this.views?.active, this.record.type);
-        const g = objectGeometry(s, this.getState().objects, detail);
-        g.computeBoundingBox();
-        const b = g.boundingBox;
-        if (b.isEmpty() || b.max.z < h.lower || b.min.z > h.upper) {
-          g.dispose();
-          continue;
-        }
-        this.bounds.union(b);
-        const edge = geometryEdges(g, roundProfile(s) ? 5 : 1);
-        const fill = new THREE.Mesh(
-          g,
-          new THREE.MeshBasicMaterial({
-            color: 0xfbfcfc,
-            side: THREE.DoubleSide,
-            clippingPlanes: planes(h.lower, h.cut),
-            polygonOffset: true,
-            polygonOffsetFactor: 1,
-            polygonOffsetUnits: 1,
-          }),
-        );
-        fill.userData.sourceId = s.id;
-        this.group.add(fill);
-        const snapGeometry = displayGeometry(s, this.getState().objects, 'schematic'),
-          snapEdges = geometryEdges(snapGeometry, roundProfile(s) ? 5 : 1),
-          pos = snapEdges.attributes.position;
-        const objectCandidates = [];
-        const identities = [],
-          localMatrix = partMatrix(s);
-        for (let i = 0; i < pos.count; i += 2) {
-          for (const t of [0, 0.5, 1]) {
-            const z = pos.getZ(i) * (1 - t) + pos.getZ(i + 1) * t;
-            if (z >= h.lower && z <= h.upper) {
-              objectCandidates.push([
-                pos.getX(i) * (1 - t) + pos.getX(i + 1) * t,
-                pos.getY(i) * (1 - t) + pos.getY(i + 1) * t,
-              ]);
-              const p = objectCandidates.at(-1);
-              p.snapKind = t === 0.5 ? 'Mittpunkt' : 'Ändpunkt';
-              identities.push(new THREE.Vector3(p[0], p[1], z).applyMatrix4(localMatrix).toArray());
-            }
-          }
-        }
-        this.annotationCandidates.push(...referenceCandidates(objectCandidates, s.id, identities));
-        const schedule = partHoleSchedule(s, state.objects, new THREE.Matrix4()).filter(
-          (hole) => hole.center[2] >= h.lower && hole.center[2] <= h.upper,
-        );
-        for (const hole of partHoleCandidates(schedule, {
-          origin: [0, 0, 0],
-          x: [1, 0, 0],
-          y: [0, 1, 0],
-          normal: [0, 0, 1],
-        })) {
-          hole.point.reference.source = s.id;
-          this.annotationCandidates.push(hole.point);
-        }
-        snapEdges.dispose();
-        snapGeometry.dispose();
-        const lines = new THREE.LineSegments(
-          edge,
-          new THREE.LineBasicMaterial({ color: 0x53666d, clippingPlanes: planes(h.lower, h.cut) }),
-        );
-        lines.userData.sourceId = s.id;
-        lines.renderOrder = 2;
-        this.group.add(lines);
-        if (this.$('hidden-lines').checked)
-          this.group.add(
-            hiddenEdges(edge.clone(), {
-              dashSize: 100,
-              gapSize: 60,
-              clippingPlanes: planes(h.lower, h.cut),
-            }),
-          );
-        const above = new THREE.LineSegments(
-          edge.clone(),
-          new THREE.LineDashedMaterial({
-            color: 0x99a5ab,
-            dashSize: 100,
-            gapSize: 70,
-            depthTest: false,
-            clippingPlanes: planes(h.cut + 0.01, h.upper),
-          }),
-        );
-        above.computeLineDistances();
-        above.renderOrder = 2;
-        this.group.add(above);
-        const cut = sectionSegments(g, h.cut);
-        this.sections.push(...cut);
-        this.hatchSurfaces.push({ contours: sectionContours(cut), material: s.material });
-      }
+      buildPlanObjects({
+        bounds: this.bounds,
+        group: this.group,
+        annotationCandidates: this.annotationCandidates,
+        sections: this.sections,
+        hatchSurfaces: this.hatchSurfaces,
+        objects: state.objects,
+        detail: drawingProfileDetail(this.views?.active, this.record.type),
+        hiddenLines: this.$('hidden-lines').checked,
+        h: h,
+        planes: planes,
+      });
+      this.ifcReferences.add({ heights: h, planes: planes(h.lower, h.cut) });
       this.grid.set({ ...state.grid, z: h.cut });
       for (const line of this.grid.group.children) {
         line.material.depthTest = false;
@@ -837,6 +791,14 @@ export class PlanView {
       this.$('error').textContent = 'Planvyn kunde inte beräknas: ' + e.message;
       this.draw();
     }
+  }
+  referenceCandidates(point, tolerance) {
+    if (!point) return [];
+    return (this.referenceSnapQuery?.(point, tolerance) || []).flatMap(([a, b]) => [
+      Object.assign([...a], { snapKind: 'Ändpunkt' }),
+      Object.assign([...b], { snapKind: 'Ändpunkt' }),
+      Object.assign([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { snapKind: 'Mittpunkt' }),
+    ]);
   }
   sectionSource() {
     const view = this.views?.active;
@@ -852,7 +814,14 @@ export class PlanView {
         objectGeometry(s, this.getState().objects, drawingProfileDetail(view, this.record.type)),
       );
     try {
-      return sectionDrawing(geometries, this.sectionFrameFor(view), view.section.depth).bounds;
+      const frame = this.sectionFrameFor(view);
+      return sectionDrawing(geometries, frame, view.section.depth).bounds.union(
+        this.ifcReferences.sectionBounds(
+          view,
+          frameMatrix(frame),
+          sectionClipPlanes(frame, view.section.depth),
+        ),
+      );
     } finally {
       geometries.forEach((g) => g.dispose());
     }
@@ -895,73 +864,22 @@ export class PlanView {
     const frame = this.sectionFrameFor(view),
       matrix = frameMatrix(frame),
       planes = sectionClipPlanes(frame, depth);
-    for (const object of this.getState().objects.filter((s) => isPhysical(s))) {
-      const detail = drawingProfileDetail(view, this.record.type);
-      const g = objectGeometry(object, this.getState().objects, detail).applyMatrix4(matrix);
-      g.computeBoundingBox();
-      if (g.boundingBox.max.z < -depth || g.boundingBox.min.z > 0) {
-        g.dispose();
-        continue;
-      }
-      this.bounds.union(g.boundingBox);
-      const mesh = new THREE.Mesh(
-        g,
-        new THREE.MeshBasicMaterial({
-          color: 0xfbfcfc,
-          side: THREE.DoubleSide,
-          clippingPlanes: planes,
-          polygonOffset: true,
-          polygonOffsetFactor: 1,
-          polygonOffsetUnits: 1,
-        }),
-      );
-      mesh.userData.sourceId = object.id;
-      this.group.add(mesh);
-      const edges = geometryEdges(g, roundProfile(object) ? 5 : 1),
-        lines = new THREE.LineSegments(
-          edges,
-          new THREE.LineBasicMaterial({ color: 0x53666d, clippingPlanes: planes }),
-        );
-      lines.userData.sourceId = object.id;
-      lines.renderOrder = 2;
-      this.group.add(lines);
-      if (view.settings.hiddenLines)
-        this.group.add(
-          hiddenEdges(edges.clone(), {
-            dashSize: 2 * view.scale,
-            gapSize: view.scale,
-            clippingPlanes: planes,
-          }),
-        );
-      const snapData = sectionDrawing(
-        [g],
-        { origin: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], normal: [0, 0, 1], span: frame.span },
-        depth,
-      );
-      this.sections.push(...snapData.cut);
-      this.hatchSurfaces.push({ contours: snapData.faces[0], material: object.material });
-      const snapGeometry = displayGeometry(
-        object,
-        this.getState().objects,
-        'schematic',
-      ).applyMatrix4(matrix);
-      const candidates = sectionDrawing(
-        [snapGeometry],
-        { origin: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], normal: [0, 0, 1], span: frame.span },
-        depth,
-      );
-      snapGeometry.dispose();
-      this.annotationCandidates.push(
-        ...referenceCandidates(
-          [...candidates.cut, ...candidates.behind].flatMap(([a, b]) => [
-            a,
-            b,
-            [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
-          ]),
-          object.id,
-        ),
-      );
-    }
+    buildSectionObjects({
+      bounds: this.bounds,
+      group: this.group,
+      sections: this.sections,
+      hatchSurfaces: this.hatchSurfaces,
+      annotationCandidates: this.annotationCandidates,
+      objects: this.getState().objects,
+      detail: drawingProfileDetail(view, this.record.type),
+      hiddenLines: view.settings.hiddenLines,
+      scale: view.scale,
+      depth: depth,
+      matrix: matrix,
+      planes: planes,
+      frame: frame,
+    });
+    this.ifcReferences.add({ matrix, heights: { lower: -depth, cut: 0, upper: 0 }, planes });
     this.$('error').textContent = this.group.children.length
       ? ''
       : 'Snittet träffar inga objekt inom valt djup.';
@@ -974,7 +892,7 @@ export class PlanView {
     );
     const hit = ray
       .intersectObjects(
-        this.group.children.filter((o) => o.isMesh),
+        this.group.children.filter((o) => o.isMesh && !o.userData.referenceId),
         false,
       )
       .find((h) => h.point.z >= this.heights.lower && h.point.z <= this.heights.upper);
@@ -1054,135 +972,44 @@ export class PlanView {
     );
   }
   drawSectionGrid(root, w, h) {
-    const view = this.views?.active;
-    if (!this.sectionSource()?.section || view.settings.showGrid === false) return;
-    const width = (this.span * w) / h,
-      bounds = [
-        this.center.x - width / 2,
-        this.center.y - this.span / 2,
-        this.center.x + width / 2,
-        this.center.y + this.span / 2,
-      ];
-    const layer = document.createElementNS(svgNS, 'g');
-    layer.setAttribute('class', 'section-grid');
-    layer.setAttribute('pointer-events', 'none');
-    root.append(layer);
-    const append = (tag, attrs, text) => {
-      const node = document.createElementNS(svgNS, tag);
-      for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-      if (text) node.textContent = text;
-      layer.append(node);
-    };
-    for (const line of sectionGridLines(this.getState().grid, this.sectionFrameFor(view), bounds)) {
-      const points = line.points.map((p) => this.annotations.adapter.project(p));
-      append('path', {
-        d: `M${points[0]}L${points[1]}`,
-        stroke: '#82969f',
-        'stroke-width': 1,
-        'stroke-dasharray': '7 4',
-        fill: 'none',
-      });
-      const metrics = this.frameLayout
-          ? gridBubbleMetrics(line.label, DRAWING_GRID_BUBBLE_DIAMETER * this.paperZoom)
-          : modelGridBubbleMetrics(line.label, (MODEL_GRID_BUBBLE_DIAMETER * h) / this.span),
-        radius = metrics.radius,
-        ends = visibleGridEndpoints(points[0], points[1], w, h, radius + metrics.inset);
-      if (!ends) continue;
-      ends.forEach((p, index) => {
-        if (index && Math.hypot(p[0] - ends[0][0], p[1] - ends[0][1]) < radius * 2 + metrics.inset)
-          return;
-        append(this.frameLayout ? 'ellipse' : 'rect', {
-          ...(this.frameLayout
-            ? { cx: p[0], cy: p[1], rx: radius, ry: metrics.height / 2 }
-            : {
-                x: p[0] - radius,
-                y: p[1] - metrics.height / 2,
-                width: radius * 2,
-                height: metrics.height,
-                rx: metrics.height / 2,
-                ry: metrics.height / 2,
-              }),
-          fill: '#edf3f5',
-          stroke: '#718995',
-          'stroke-width': metrics.strokeWidth,
-        });
-        append(
-          'text',
-          {
-            x: p[0],
-            y: p[1],
-            'text-anchor': 'middle',
-            'dominant-baseline': 'central',
-            'font-size': metrics.fontSize,
-            'font-family': 'Arial, sans-serif',
-            fill: '#425d69',
-          },
-          line.label,
-        );
-      });
-    }
+    return paintSectionGrid(
+      {
+        views: this.views,
+        sectionSource: this.sectionSource.bind(this),
+        span: this.span,
+        center: this.center,
+        getState: this.getState,
+        sectionFrameFor: this.sectionFrameFor.bind(this),
+        annotations: this.annotations,
+        frameLayout: this.frameLayout,
+        paperZoom: this.paperZoom,
+      },
+      root,
+      w,
+      h,
+    );
   }
   drawSectionLevels(root, w, h) {
-    const view = this.views?.active;
-    if (!this.sectionSource()?.section || view.settings.showLevels === false) return;
-    const width = (this.span * w) / h,
-      bounds = [
-        this.center.x - width / 2,
-        this.center.y - this.span / 2,
-        this.center.x + width / 2,
-        this.center.y + this.span / 2,
-      ],
-      layer = document.createElementNS(svgNS, 'g');
-    layer.setAttribute('class', 'section-levels');
-    layer.setAttribute('pointer-events', 'none');
-    root.append(layer);
-    const append = (tag, attrs, text) => {
-      const node = document.createElementNS(svgNS, tag);
-      for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-      if (text) node.textContent = text;
-      layer.append(node);
-      return node;
-    };
-    for (const level of sectionLevelLines(
-      this.getState().levels.items,
-      this.sectionFrameFor(view),
-      bounds,
-    )) {
-      const [a, b] = level.points.map((p) => this.annotations.adapter.project(p)),
-        left = a[0] <= b[0] ? a : b;
-      append('path', {
-        d: `M${a}L${b}`,
-        stroke: '#758e9b',
-        'stroke-width': 1,
-        'stroke-dasharray': '10 4 2 4',
-        fill: 'none',
-      });
-      const x = Math.max(7, Math.min(w - 7, left[0] + 7)),
-        y = left[1];
-      append('path', { d: `M${x},${y}l5,-5h-10Z`, fill: '#758e9b' });
-      const label =
-        level.name +
-        ' · ' +
-        (level.elevation >= 0 ? '+' : '') +
-        level.elevation.toLocaleString('sv-SE') +
-        ' mm';
-      append(
-        'text',
-        {
-          x: Math.max(7, Math.min(w - 10, left[0] + 16)),
-          y: Math.max(13, Math.min(h - 5, y - 7)),
-          'font-size': 11,
-          'font-family': 'Arial, sans-serif',
-          fill: '#425d69',
-          stroke: 'white',
-          'stroke-width': 3,
-          'paint-order': 'stroke',
-        },
-        label,
-      );
-    }
+    return paintSectionLevels(
+      {
+        views: this.views,
+        sectionSource: this.sectionSource.bind(this),
+        span: this.span,
+        center: this.center,
+        getState: this.getState,
+        sectionFrameFor: this.sectionFrameFor.bind(this),
+        annotations: this.annotations,
+      },
+      root,
+      w,
+      h,
+    );
   }
   draw() {
+    this.host.classList.toggle(
+      'object-grip-focused',
+      !!(this.annotations?.selected || this.annotations?.mode),
+    );
     applyDrawingFont(this.page, this.record);
     const w = this.host.clientWidth,
       h = this.host.clientHeight;
@@ -1218,94 +1045,45 @@ export class PlanView {
           overlay: o.material.depthTest === false,
           color: '#' + o.material.color.getHexString(),
           sourceId: o.userData.sourceId,
+          referenceId: o.userData.referenceId,
+          referenceSnap: o.userData.referenceSnap,
+          showHidden: o.userData.showHidden,
         }));
-      const projection = projectedDrawing(surfaces, edgeSets);
-      this.vectorCache = projection.edges;
-      this.modelFaces = projection.faces;
+      const projection = edgeSets.some((set) => set.referenceId)
+        ? this.ifcReferences.projection(surfaces, edgeSets)
+        : projectedDrawing(surfaces, edgeSets);
+      this.vectorCache = projection?.edges || [];
+      this.modelFaces = projection?.faces || [];
+      this.referenceSnapQuery = drawingReferenceSnapIndex(this.vectorCache);
     }
     this.grid.updateLabels(this.camera, w, h, {
       keepVisible: true,
       diameter: this.frameLayout ? DRAWING_GRID_BUBBLE_DIAMETER * this.paperZoom : undefined,
     });
-    this.svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute(
-      'd',
-      (this.sections || [])
-        .map(
-          ([a, b]) =>
-            `M${((a[0] - this.center.x) / this.span) * h + w / 2},${h / 2 - ((a[1] - this.center.y) / this.span) * h}L${((b[0] - this.center.x) / this.span) * h + w / 2},${h / 2 - ((b[1] - this.center.y) / this.span) * h}`,
-        )
-        .join(''),
-    );
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', '#20343b');
-    path.setAttribute('stroke-width', '2');
-    const defs = document.createElementNS(svgNS, 'defs'),
-      clip = document.createElementNS(svgNS, 'clipPath'),
-      rect = document.createElementNS(svgNS, 'rect');
-    clip.id = 'ga-active-crop';
-    rect.setAttribute('width', w);
-    rect.setAttribute('height', h);
-    clip.append(rect);
-    defs.append(clip);
-    const content = document.createElementNS(svgNS, 'g');
-    content.setAttribute('clip-path', 'url(#ga-active-crop)');
-    const project = (p) => [
-      ((p[0] - this.center.x) / this.span) * h + w / 2,
-      h / 2 - ((p[1] - this.center.y) / this.span) * h,
-    ];
-    if (this.annotations.items.some((item) => item.drawOrder === 'back'))
-      appendModelFaces(content, this.modelFaces, project);
-    if (this.record.settings.materialHatch !== false)
-      appendMaterialHatch(content, this.hatchSurfaces, project, this.paperZoom || 1);
-    appendVectorDrawing(
-      content,
-      this.vectorCache.map((set) =>
-        this.selectedParts.has(set.sourceId) ? { ...set, color: '#16815e' } : set,
-      ),
-      project,
-      {
-        hidden: this.$('hidden-lines').checked,
-        width: 0.18 * this.paperZoom,
-        dash: 2 * this.paperZoom,
-        gap: this.paperZoom,
-      },
-    );
-    if (this.grid.group.visible) {
-      const gridLines = this.grid.group.children.map((line) => ({
-        geometry: line.geometry,
-        overlay: true,
-        dashed: true,
-        color: '#82969f',
-      }));
-      appendVectorDrawing(content, vectorDrawing([], gridLines), project, {
-        width: 0.15 * this.paperZoom,
-        dash: 4 * this.paperZoom,
-        gap: 2 * this.paperZoom,
-      });
-    }
-    content.append(path);
-    this.svg.replaceChildren(defs, content);
-    this.drawSectionGrid(content, w, h);
-    this.drawSectionLevels(content, w, h);
-    this.annotations.render(content);
-    this.annotations.richText?.paint(this.frameSVG);
-    if (this.views?.active) {
-      this.references.sync();
-      this.sectionTool?.paint(
-        content,
-        this.views.active.id,
-        (p) => this.annotations.adapter.project(p),
-        this.paperZoom,
-      );
-      this.detailTool?.paint(
-        content,
-        this.views.active.id,
-        (p) => this.annotations.adapter.project(p),
-        this.paperZoom,
-      );
-      appendViewTitle(this.svg, this.views.active, this.paperZoom, h, this.paperZoom);
-    }
+
+    return paintPlanView({
+      svg: this.svg,
+      sections: this.sections,
+      center: this.center,
+      span: this.span,
+      annotations: this.annotations,
+      modelFaces: this.modelFaces,
+      record: this.record,
+      hatchSurfaces: this.hatchSurfaces,
+      paperZoom: this.paperZoom,
+      vectorCache: this.vectorCache,
+      selectedParts: this.selectedParts,
+      $: this.$,
+      grid: this.grid,
+      drawSectionGrid: this.drawSectionGrid.bind(this),
+      drawSectionLevels: this.drawSectionLevels.bind(this),
+      frameSVG: this.frameSVG,
+      views: this.views,
+      references: this.references,
+      sectionTool: this.sectionTool,
+      detailTool: this.detailTool,
+      w: this.host.clientWidth,
+      h: this.host.clientHeight,
+    });
   }
 }

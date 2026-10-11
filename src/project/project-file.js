@@ -8,7 +8,6 @@ import { isFastener } from '../fasteners/object-type.js';
 import { validateFastenerTargets } from '../fasteners/relations.js';
 import { validateFastenerGroups } from '../fasteners/group-data.js';
 import { validateLevels } from '../levels.js';
-import { parsePositions } from '../grid-lines.js';
 import { validateGridLabels } from '../grid-labels.js';
 import { syncAssemblyDrawingIdentity } from './assemblies.js';
 import { validateProjectReports } from '../report-record.js';
@@ -31,7 +30,9 @@ export function validateProjectFile(project) {
   if (!record(project) || project.schemaVersion !== PROJECT_SCHEMA_VERSION)
     fail('Projektversionen stöds inte av det här programmet.');
   finiteData(project);
+  if (!Array.isArray(project.reports)) fail('Ogiltig rapportlista.');
   project.reports = validateProjectReports(project.reports);
+  if (!record(project.references)) fail('Ogiltiga referenser i projektfilen.');
   project.references = validateReferences(project.references);
   if (!Array.isArray(project.objects) || project.objects.length > 100000)
     fail('Ogiltig objektlista.');
@@ -82,14 +83,9 @@ export function validateProjectFile(project) {
     )
   )
     fail('Ogiltiga stomlinjer.');
-  if (project.grid.objectBased === true) syncGridObjects(project);
-  if (!project.grid.objectBased)
-    for (const axis of ['x', 'y']) parsePositions(project.grid[axis].join(' '));
-  else if (
-    project.grid.objectBased !== true ||
-    ['x', 'y'].some((a) => project.grid[a].length > 100000)
-  )
+  if (project.grid.objectBased !== true || ['x', 'y'].some((a) => project.grid[a].length > 100000))
     fail('Ogiltiga stomlinjer.');
+  syncGridObjects(project);
   validateGridLabels(project.grid);
   validateGridGeometry(project.grid);
   if (!record(project.levels) || !Array.isArray(project.levels.items)) fail('Ogiltiga nivåer.');
@@ -110,7 +106,6 @@ export function validateProjectFile(project) {
       fail('Ogiltig detaljnumrering.');
   if (!Array.isArray(project.drawings) || project.drawings.length > 10000)
     fail('Ogiltig ritningslista.');
-  project.assemblies ??= [];
   if (!Array.isArray(project.assemblies) || project.assemblies.length > 10000)
     fail('Ogiltig assemblylista.');
   const assemblyIds = new Set(),
@@ -144,7 +139,6 @@ export function validateProjectFile(project) {
     assemblyMarks.set(assembly.mark, assembly.typeKey);
     assembly.memberIds.forEach((id) => members.add(id));
   }
-  project.assemblyNumbering ??= { registry: [] };
   if (!record(project.assemblyNumbering) || !Array.isArray(project.assemblyNumbering.registry))
     fail('Ogiltig assemblynumrering.');
   const typeKeys = new Set(),

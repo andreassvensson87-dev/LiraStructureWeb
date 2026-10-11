@@ -5,6 +5,7 @@ import { pasteboardSize } from './drawing-pasteboard.js';
 import { actionButton } from './drawing-toolbar.js';
 import { createDrawingToolbox } from './drawing-toolbox.js';
 import { installDrawingEditorHeader } from './drawing-editor-header.js';
+import { installDrawingInspectorPanels } from './drawing/ui/inspector-panels.js';
 
 export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save, annotations }) {
   dialog.classList.add('drawing-editor');
@@ -39,6 +40,11 @@ export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save,
   queueMicrotask(() => {
     installDrawingEditorHeader({ dialog, toolbar, save, annotations });
     createDrawingToolbox(nav, toolbar);
+    installDrawingInspectorPanels(
+      dialog,
+      annotations(),
+      dialog.querySelector('.drawing-ifc-panel'),
+    );
     installEditorSurface(dialog, {
       layout: body,
       inspector: dialog.querySelector('.drawing-inspector'),

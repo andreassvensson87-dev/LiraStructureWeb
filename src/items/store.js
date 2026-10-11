@@ -106,34 +106,6 @@ export function mergeBundledItems(library, catalog, catalogId) {
     bundledCatalogs: [...(library.bundledCatalogs || []), catalogId],
   });
 }
-/** A one-time folder migration leaves item revisions and user edits intact. */
-export function organizeWeland(library) {
-  const marker = 'weland-folders-v1';
-  if (library.bundledCatalogs?.includes(marker)) return library;
-  const roots = library.folders.filter(
-    (f) =>
-      f.name === 'Sectional Railing' &&
-      (f.id.startsWith('sectional-folder-') ||
-        library.items.some((e) => e.folder === f.id && e.definition.id.startsWith('sectional-')) ||
-        library.bundledCatalogs?.includes('sectional-railing-2026-10-v2')),
-  );
-  if (!roots.length) return library;
-  const supplier = library.folders.find((f) => f.name === 'Weland' && f.parent == null) || {
-    id: 'weland',
-    name: 'Weland',
-    parent: null,
-  };
-  return validateItemLibrary({
-    ...library,
-    folders: [
-      ...library.folders
-        .filter((f) => f.id !== supplier.id)
-        .map((f) => (roots.includes(f) ? { ...f, parent: supplier.id } : f)),
-      supplier,
-    ],
-    bundledCatalogs: [...(library.bundledCatalogs || []), marker],
-  });
-}
 export function folderPath(library, id) {
   const folders = new Map(library.folders.map((f) => [f.id, f]));
   const path = [];
@@ -218,11 +190,10 @@ export class ItemStore {
       };
       request.onerror = () => reject(Error('Item-biblioteket kunde inte läsas.'));
     });
-    const seeded =
+    const merged =
       !this.loadBundled || library.bundledCatalogs?.includes(this.catalogId)
         ? library
         : mergeBundledItems(library, await this.loadBundled(), this.catalogId);
-    const merged = organizeWeland(seeded);
     if (merged !== library) await this.save(merged);
     return merged;
   }

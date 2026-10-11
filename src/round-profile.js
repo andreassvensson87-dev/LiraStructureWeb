@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 export const ROUND_SEGMENTS = 96;
 const recognized = new WeakMap();
-// Recognize legacy library circles only when the actual contour still matches a circle.
+// Recognize library circles only when the actual contour still matches a circle.
 export function roundProfile(s) {
   if (s.profile === 'circle' || s.profile === 'chs')
     return { outer: s.width / 2, inner: s.profile === 'chs' ? s.width / 2 - s.thickness : 0 };

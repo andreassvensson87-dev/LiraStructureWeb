@@ -1,3 +1,4 @@
+import { gridPickIds } from '../grid-objects.js';
 import { updateFastenerDetail } from '../fastener-detail.js';
 import { updateDisplayDetail } from '../display-detail.js';
 import { platePoint } from '../../plate.js';
@@ -71,9 +72,12 @@ export function installModelFrameLoop({
     connectionMarkers.update(camera);
     grid.updateLabels(camera, host.clientWidth, host.clientHeight);
     const visibleGridIds = new Set(
-      project.objects
-        .filter((s) => s.type === 'gridline' && isVisible(s.id))
-        .map((s) => s.gridPickId),
+      gridPickIds(
+        project.grid,
+        new Set(
+          project.objects.filter((s) => s.type === 'gridline' && isVisible(s.id)).map((s) => s.id),
+        ),
+      ),
     );
     for (const label of grid.labels) if (!visibleGridIds.has(label.id)) label.el.hidden = true;
     insertionPoints.update(

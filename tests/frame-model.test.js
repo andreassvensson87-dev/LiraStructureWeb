@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   snapFrame,
+  intersection,
   transformFrameEntity,
   lengthPoint,
   attributeValue,
@@ -73,4 +74,97 @@ test('boundary snap preserves ortho and polar direction and respects finite edge
   assert.ok(Math.abs(p[0] - 297) < 1e-9);
   assert.equal(p[1], 297);
   assert.equal(snapFrame([-0.5, 310], { entities: [], bounds: [420, 297] }).kind, 'Fritt');
+});
+
+test('local crossing search matches exhaustive finite-segment snap, including ortho and duplicates', () => {
+  let seed = 457;
+  const random = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+  const lines = Array.from({ length: 80 }, () => ({
+    type: 'line',
+    points: Array.from({ length: 2 }, () => [
+      Math.floor(random() * 200) - 100,
+      Math.floor(random() * 200) - 100,
+    ]),
+  }));
+  lines.push(
+    {
+      type: 'line',
+      points: [
+        [-10000, 0],
+        [10000, 0],
+      ],
+    },
+    {
+      type: 'line',
+      points: [
+        [0, -10000],
+        [0, 10000],
+      ],
+    },
+    {
+      type: 'line',
+      points: [
+        [0, 0],
+        [0, 0],
+      ],
+    },
+    ...lines.slice(0, 10),
+  );
+  for (let trial = 0; trial < 200; trial++) {
+    const raw = [random() * 300 - 150, random() * 300 - 150],
+      tolerance = 0.5 + random() * 40,
+      base = [0, 0],
+      ortho = trial % 3 === 0;
+    let expected = null,
+      best = tolerance;
+    for (let i = 0; i < lines.length; i++)
+      for (let j = i + 1; j < lines.length; j++) {
+        const point = intersection(...lines[i].points, ...lines[j].points);
+        if (!point || (ortho && Math.min(Math.abs(point[0]), Math.abs(point[1])) > 1e-7)) continue;
+        const d = Math.hypot(raw[0] - point[0], raw[1] - point[1]);
+        if (d < best) {
+          expected = point;
+          best = d;
+        }
+      }
+    const hit = snapFrame(raw, {
+      entities: lines,
+      tolerance,
+      base,
+      ortho,
+      endpoints: false,
+      midpoints: false,
+      perpendicular: false,
+    });
+    assert.equal(hit.kind === 'Korsning', !!expected);
+    if (expected)
+      assert.ok(Math.hypot(hit.point[0] - expected[0], hit.point[1] - expected[1]) < 1e-8);
+  }
+});
+test('crossing snap retains pair tie order, endpoint precedence and finite extents', () => {
+  const lines = [
+    [
+      [-1, -10],
+      [-1, 10],
+    ],
+    [
+      [1, -10],
+      [1, 10],
+    ],
+    [
+      [-10, 0],
+      [10, 0],
+    ],
+  ].map((points) => ({ type: 'line', points }));
+  const options = {
+    entities: lines,
+    tolerance: 2,
+    endpoints: false,
+    midpoints: false,
+    perpendicular: false,
+  };
+  assert.deepEqual(snapFrame([0, 0], options), { kind: 'Korsning', point: [-1, 0] });
+  assert.equal(snapFrame([0, 0], { ...options, intersections: false }).kind, 'Fritt');
+  assert.equal(snapFrame([0, 12], options).kind, 'Fritt');
+  assert.equal(snapFrame([-1, 10], { ...options, endpoints: true }).kind, 'Ändpunkt');
 });

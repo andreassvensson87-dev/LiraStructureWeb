@@ -1,3 +1,5 @@
+import { readRichText } from './drawing-rich-text-content.js';
+import { renderRichTextInspector } from './drawing-rich-text-inspector.js';
 import { paintDrawingText } from './drawing-rich-text-renderer.js';
 import {
   createDrawingPreview,
@@ -18,56 +20,6 @@ const svg = (tag, attrs, text) => {
 };
 
 // Only text and explicit formatting are saved; pasted markup is never persisted.
-export function readRichText(root) {
-  const paragraphs = [];
-  const inline = (node, style = {}, runs = []) => {
-    if (node.nodeType === 3) {
-      runs.push({ text: node.textContent, ...style });
-      return runs;
-    }
-    if (node.nodeName === 'BR') {
-      runs.push({ text: '\n', ...style });
-      return runs;
-    }
-    const next = { ...style };
-    if (['B', 'STRONG'].includes(node.nodeName) || Number(node.style?.fontWeight) >= 600)
-      next.bold = true;
-    if (['I', 'EM'].includes(node.nodeName) || node.style?.fontStyle === 'italic')
-      next.italic = true;
-    if (node.nodeName === 'U' || node.style?.textDecoration?.includes('underline'))
-      next.underline = true;
-    for (const child of node.childNodes) inline(child, next, runs);
-    return runs;
-  };
-  const blocks = new Set(['P', 'DIV', 'UL', 'OL', 'LI']);
-  const collect = (parent, align = 'left', list = null) => {
-    if (parent.childNodes.length === 1 && parent.childNodes[0].nodeName === 'BR') {
-      paragraphs.push({ runs: [{ text: '' }], align, list });
-      return;
-    }
-    let loose = [];
-    const flush = () => {
-      if (loose.length) {
-        paragraphs.push({ runs: loose, align, list });
-        loose = [];
-      }
-    };
-    for (const child of parent.childNodes) {
-      if (['UL', 'OL'].includes(child.nodeName)) {
-        flush();
-        for (const li of child.children)
-          collect(li, li.style.textAlign || align, child.nodeName === 'OL' ? 'number' : 'bullet');
-      } else if (blocks.has(child.nodeName)) {
-        flush();
-        collect(child, child.style.textAlign || align, list);
-      } else inline(child, {}, loose);
-    }
-    flush();
-    if (!parent.childNodes.length) paragraphs.push({ runs: [{ text: '' }], align, list });
-  };
-  collect(root);
-  return paragraphs.length ? paragraphs : [{ runs: [{ text: '' }], align: 'left', list: null }];
-}
 
 export class DrawingRichTextEditor {
   constructor(editor, toolbar) {
@@ -195,7 +147,11 @@ export class DrawingRichTextEditor {
       },
       true,
     );
-    editor.dialog.addEventListener('close', () => this.cancel(false));
+    editor.dialog.addEventListener('close', () => {
+      this.cancel(false);
+      this.graphicsRoot = null;
+      this.backPaper?.replaceChildren();
+    });
   }
   point(event) {
     const rect = this.paper.getBoundingClientRect(),
@@ -211,6 +167,50 @@ export class DrawingRichTextEditor {
   }
   layout(item) {
     return layoutDrawingText(item, (text, run) => this.measure(item, text, run));
+  }
+  beginGrip(event, node) {
+    const item = this.e.items.find(
+      (item) => item.id === node.closest('[data-rich-text]').dataset.richText,
+    );
+    if (!item) return null;
+    const before = structuredClone(item),
+      history = structuredClone(this.e.items);
+    const resize = node.hasAttribute('data-rich-width');
+    const angle = ((before.rotation || 0) * Math.PI) / 180,
+      along = [Math.cos(angle), Math.sin(angle)];
+    this.e.selected = item.id;
+    this.e.selectedIds = new Set([item.id]);
+    this.e.ui();
+    const session = {
+      label: resize ? 'Ändra textbredden' : 'Flytta texten',
+      base: before.points[0],
+      locate: (event) => this.e.location(event, 'paper', true, item.id),
+      apply: (hit) => {
+        if (resize)
+          item.width = Math.max(
+            10,
+            hit.point.reduce((sum, v, i) => sum + (v - before.points[0][i]) * along[i], 0),
+          );
+        else item.points = [[...hit.point]];
+      },
+      preview: () => this.paint(this.graphicsRoot),
+      commit: () => {
+        if (JSON.stringify(item) !== JSON.stringify(before)) {
+          this.e.history.push(history);
+          this.e.future = [];
+        }
+      },
+      cancel: () => Object.assign(item, before),
+    };
+    if (resize)
+      session.numeric = {
+        label: 'Textbredd · mm',
+        hit: (value) => {
+          if (value < 10) throw Error('Textbredden måste vara minst 10 mm.');
+          return { point: before.points[0].map((v, i) => v + along[i] * value) };
+        },
+      };
+    return session;
   }
   down(event) {
     if (event.button !== 0) return;
@@ -287,7 +287,9 @@ export class DrawingRichTextEditor {
     } else if (gesture.resize) gesture.item.width = Math.max(10, gesture.before.width + dx);
     else
       gesture.item.points[0] = [gesture.before.points[0][0] + dx, gesture.before.points[0][1] + dy];
-    this.e.adapter.redraw();
+    if (!this.graphicsRoot?.isConnected) this.e.adapter.redraw();
+    else if (gesture.create) this.paintFeedback();
+    else this.paint(this.graphicsRoot);
   }
   up(event) {
     const gesture = this.gesture;
@@ -414,157 +416,42 @@ export class DrawingRichTextEditor {
     }
   }
   ui() {
-    const item = this.draft || this.e.item(),
-      panel = this.e.panel;
-    panel.replaceChildren();
-    panel.parentElement.classList.add('annotation-focused');
-    const title = document.createElement('h3');
-    title.textContent = 'Text';
-    panel.append(title);
-    if (!item || item.type !== 'richtext') {
-      this.e.hint.textContent = 'Dra ut textens bredd på bladet.';
-      return;
-    }
-    const change = (key, value) => {
-      if (!this.draft) this.e.checkpoint();
-      item[key] = value;
-      this.e.adapter.redraw();
-      this.position();
-    };
-    for (const [labelText, key, min, max] of [
-      ['Texthöjd · mm', 'textSize', 0.5, 20],
-      ['Bredd · mm', 'width', 10, 2000],
-      ['Radavstånd', 'lineSpacing', 1, 4],
-    ]) {
-      const label = document.createElement('label');
-      label.textContent = labelText;
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.min = min;
-      input.max = max;
-      input.step = 'any';
-      input.value = Math.round(item[key] * 1000) / 1000;
-      input.onchange = () => {
-        const value = Number(input.value);
-        if (input.value && Number.isFinite(value) && value >= min && value <= max)
-          change(key, value);
-        else input.value = Math.round(item[key] * 1000) / 1000;
-      };
-      label.append(input);
-      panel.append(label);
-    }
-    const fontLabel = document.createElement('label');
-    fontLabel.textContent = 'Typsnitt';
-    const font = document.createElement('select');
-    for (const family of ['Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'])
-      font.append(new Option(family, family));
-    font.value = item.font;
-    font.onchange = () => change('font', font.value);
-    fontLabel.append(font);
-    panel.append(fontLabel);
-    const alignmentLabel = document.createElement('label');
-    alignmentLabel.textContent = 'Justering';
-    const alignment = document.createElement('select');
-    for (const [value, text] of [
-      ['mixed', 'Blandad'],
-      ['left', 'Vänster'],
-      ['center', 'Centrerad'],
-      ['right', 'Höger'],
-    ])
-      alignment.append(new Option(text, value));
-    alignment.value = item.paragraphs.every((p) => p.align === item.paragraphs[0].align)
-      ? item.paragraphs[0].align
-      : 'mixed';
-    alignment.onchange = () => {
-      if (alignment.value === 'mixed') return;
-      if (this.draft)
-        for (const p of this.content.querySelectorAll('div,p,li'))
-          p.style.textAlign = alignment.value;
-      change(
-        'paragraphs',
-        item.paragraphs.map((p) => ({ ...p, align: alignment.value })),
-      );
-    };
-    alignmentLabel.append(alignment);
-    panel.append(alignmentLabel);
-    for (const [key, text] of [
-      ['frame', 'Ram'],
-      ['background', 'Bakgrund'],
-    ]) {
-      const label = document.createElement('label'),
-        input = document.createElement('input');
-      label.className = 'drawing-rich-check';
-      input.type = 'checkbox';
-      input.checked = item[key];
-      input.onchange = () => change(key, input.checked);
-      label.append(input, text);
-      panel.append(label);
-    }
-    for (const [axis, text] of [
-      [0, 'X · mm'],
-      [1, 'Y · mm'],
-    ]) {
-      const label = document.createElement('label');
-      label.textContent = text;
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.step = 'any';
-      input.value = Math.round(item.points[0][axis] * 1000) / 1000;
-      input.onchange = () => {
-        if (input.value && Number.isFinite(+input.value))
-          change('points', [[...item.points[0].map((n, i) => (i === axis ? +input.value : n))]]);
-      };
-      label.append(input);
-      panel.append(label);
-    }
-    const action = (text, fn, disabled = false) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = text;
-      b.disabled = disabled;
-      b.onclick = fn;
-      panel.append(b);
-    };
-    installDrawingOrder(this.e, item);
-    if (!this.draft) {
-      action('Redigera text', () => this.edit(item));
-      action('Ta bort text', () => {
+    return renderRichTextInspector({
+      item: this.draft || this.e.item(),
+      panel: this.e.panel,
+      hint: this.e.hint,
+      dialog: this.e.dialog,
+      draft: this.draft,
+      content: this.content,
+      history: this.e.history,
+      future: this.e.future,
+      change: (key, value) => {
+        if (!this.draft) this.e.checkpoint();
+        const item = this.draft || this.e.item();
+        item[key] = value;
+        this.e.adapter.redraw();
+        this.position();
+      },
+      edit: (item) => this.edit(item),
+      remove: () => {
+        const item = this.e.item();
         this.e.checkpoint();
         this.e.items.splice(this.e.items.indexOf(item), 1);
         this.e.selected = null;
         this.e.ui();
         this.e.adapter.redraw();
-      });
-      action('Ångra', () => this.e.undo(), !this.e.history.length);
-      action('Gör om', () => this.e.undo(true), !this.e.future.length);
-    }
-    this.e.hint.textContent = this.draft
-      ? 'Redigera text · Ctrl/⌘+Enter bekräftar · Esc avbryter'
-      : 'Dubbelklicka för att redigera · dra för att flytta';
-    for (const b of this.e.dialog.querySelectorAll('[data-drawing-history]'))
-      b.disabled = !(b.dataset.drawingHistory === 'redo' ? this.e.future : this.e.history).length;
+      },
+      undo: (redo) => this.e.undo(redo),
+      installOrder: (item) => installDrawingOrder(this.e, item),
+    });
   }
   paint(root) {
+    const matrix = root.getScreenCTM?.();
+    const zoom = matrix ? Math.max(1e-9, Math.hypot(matrix.a, matrix.b)) : 1;
+    this.graphicsRoot = root;
     root.querySelectorAll(':scope > .drawing-rich-layer').forEach((node) => node.remove());
     const layer = svg('g', { class: 'drawing-rich-layer' });
     root.append(layer);
-    if (this.gesture?.create) {
-      const item = this.gesture.item,
-        [x, y] = item.points[0];
-      layer.append(
-        svg('rect', {
-          x,
-          y,
-          width: item.width,
-          height: item.textSize * item.lineSpacing,
-          fill: 'none',
-          stroke: '#287c65',
-          'stroke-width': 1,
-          'vector-effect': 'non-scaling-stroke',
-          'data-annotation-helper': '',
-        }),
-      );
-    }
     const back = svg('g', { class: 'drawing-rich-layer drawing-rich-back' });
     if (this.backPaper) {
       this.backPaper.setAttribute('viewBox', root.getAttribute('viewBox'));
@@ -583,6 +470,35 @@ export class DrawingRichTextEditor {
           this.e.selectedIds?.has(item.id) ||
           (this.e.transform?.active() && this.e.transform.ids.includes(item.id)),
         layer,
+        zoom,
+      );
+    }
+    this.paintFeedback();
+  }
+  paintFeedback() {
+    const root = this.graphicsRoot;
+    if (!root?.isConnected) return;
+    root.querySelector(':scope > .drawing-rich-feedback')?.remove();
+    const layer = svg('g', {
+      class: 'drawing-rich-feedback',
+      'data-annotation-helper': 'rich-feedback',
+    });
+    root.append(layer);
+    if (this.gesture?.create) {
+      const item = this.gesture.item,
+        [x, y] = item.points[0];
+      layer.append(
+        svg('rect', {
+          x,
+          y,
+          width: item.width,
+          height: item.textSize * item.lineSpacing,
+          fill: 'none',
+          stroke: '#287c65',
+          'stroke-width': 1,
+          'vector-effect': 'non-scaling-stroke',
+          'data-annotation-helper': '',
+        }),
       );
     }
     if (this.e.transform?.active())

@@ -1,6 +1,3 @@
-.ui-length-statusbar {
-  --command-width: 240px;
-}
 body > footer.ui-length-statusbar,
 .drawing-editor footer.ui-length-statusbar,
 #frame-editor .ui-length-statusbar {
@@ -11,11 +8,21 @@ body > footer.ui-length-statusbar,
 body > footer .ui-command-hint,
 .drawing-editor .ui-length-statusbar > .cad-hint,
 #frame-editor .ui-length-statusbar > .cad-hint {
-  flex: 0 0 var(--command-width);
-  width: var(--command-width);
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+body > footer.ui-length-statusbar,
+.drawing-editor footer.ui-length-statusbar,
+#frame-editor .ui-length-statusbar {
+  justify-content: flex-end;
+}
+.ui-length-statusbar > .cad-status-controls,
+body > footer.ui-length-statusbar > .pwa-status {
+  margin-left: 0;
 }
 .drawing-editor .ui-length-statusbar > .cad-hint:not(.cad-warning):empty,
 #frame-editor .ui-length-statusbar > .cad-hint:not(.cad-warning):empty {
@@ -122,9 +129,4 @@ form.ui-exact-length input {
   bottom: 75px;
   white-space: normal;
   width: 240px;
-}
-@media (max-width: 900px) {
-  .ui-length-statusbar {
-    --command-width: 120px;
-  }
 }

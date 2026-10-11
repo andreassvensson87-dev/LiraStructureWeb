@@ -1,3 +1,4 @@
+import { insulationDefaults } from './drawing-insulation.js';
 import { installDrawingHatch } from './drawing-object-inspector.js';
 import { createEditorSection } from './ui/editor-surface.js';
 export const shapeLineTypes = {
@@ -6,10 +7,20 @@ export const shapeLineTypes = {
   dotted: 'Prickad',
   center: 'Centrumlinje',
 };
-const styleKeys = ['strokeColor', 'strokeWidth', 'lineType', 'fillColor', 'hatch', 'drawOrder'];
+const styleKeys = [
+  'strokeColor',
+  'strokeWidth',
+  'lineType',
+  'fillColor',
+  'hatch',
+  'drawOrder',
+  'insulationType',
+  'thickness',
+  'side',
+];
 export function shapeToolSettings(record, shape) {
   const settings = (record.shapeToolSettings ??= {});
-  return (settings[shape] ??= { shape });
+  return (settings[shape] ??= { shape, ...(shape === 'insulation' ? insulationDefaults : {}) });
 }
 export function applyShapeToolSettings(draft, settings) {
   for (const key of styleKeys) {

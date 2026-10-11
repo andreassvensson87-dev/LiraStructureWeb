@@ -1,9 +1,12 @@
+import { renderFrameProperties, renderFrameInstances } from './frame-editor-inspector.js';
+import { paintFrameEditor } from './frame-editor-renderer.js';
+
 import { installFrameWorkspace } from './ui/editor-workspace.js';
 import { createCadStatusbar, placeCadInput } from './cad-statusbar.js';
 import { CadTracking } from './cad-tracking.js';
 import { showStandardLayouts } from './frame-layout-wizard.js';
 import { installLineWeights } from './drawing-line-weights.js';
-import { frameText } from './frame-text.js';
+
 import { frameEditorHeader, installFrameHeader } from './frame-editor-header.js';
 import { installReportLayoutControls, paintReportViewport } from './report-frame-editor.js';
 import {
@@ -16,7 +19,7 @@ import { reportAreaFromPoints, validateReportViewport } from './report-layout.js
 import { revisionBlockBottom } from './frame-revision-table.js';
 import { showRevisionBlockPreview } from './frame-revision-preview.js';
 import { inputWheelGesture } from './input-device.js';
-import { drawingAttributes, attributeDrawingValue } from './drawing-attributes.js';
+import { drawingAttributes } from './drawing-attributes.js';
 import { openDrawingAttributeLibrary } from './drawing-attribute-library.js';
 import { copyLibraryItem, libraryUsage } from './frame-library.js';
 import { rectangleSelection, frameSelectionShapes } from './frame-selection.js';
@@ -32,14 +35,7 @@ import {
   paletteControl,
   FrameFileDialog,
 } from './frame-editor-controls.js';
-import {
-  propertyFields,
-  propertyNames,
-  propertyDefaults,
-  commonFields,
-  propertyValue,
-  patchFrameProperties,
-} from './frame-properties.js';
+import { propertyFields, patchFrameProperties } from './frame-properties.js';
 import {
   LAYOUT_KEY,
   blankLayout,
@@ -58,13 +54,6 @@ import {
 } from './frame-model.js';
 import { standardPapers, paperSize } from './paper-formats.js';
 import './frame-editor.css';
-const NS = 'http://www.w3.org/2000/svg';
-function svg(tag, attrs = {}, text) {
-  const e = document.createElementNS(NS, tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 function read(key) {
   try {
     return JSON.parse(localStorage.getItem(key) || '[]');
@@ -627,6 +616,7 @@ export class FrameEditor {
     this.tracking.reset();
     this.dynamicInput.hidden = true;
     this.vertexGrip = null;
+    this.activeGrip = null;
     this.reportGrip = null;
     this.pending = [];
     this.base = null;
@@ -738,6 +728,7 @@ export class FrameEditor {
       if (!point) return;
       this.selected = new Set([id]);
       this.setTool('move');
+      this.activeGrip = { id, index, role: index === -1 ? 'move' : 'point' };
       this.reportGrip = index;
       this.base = [...point];
       this.cursor = [...point];
@@ -760,6 +751,7 @@ export class FrameEditor {
         ? coincidentFrameVertices(this.frame.entities, this.selected, point)
         : null;
     this.setTool('move');
+    this.activeGrip = { id, index, role: matches ? 'point' : 'move' };
     this.vertexGrip = matches;
     this.base = [...point];
     this.cursor = [...point];
@@ -960,60 +952,21 @@ export class FrameEditor {
     this.sync();
   }
   properties() {
-    const selected = this.frame.entities.filter((e) => this.selected.has(e.id));
-    const reportSelected = this.mode === 'layout' && this.selected.has(REPORT_VIEWPORT_ID);
-    const creating = ['line', 'polyline', 'text', 'attribute', 'image', 'insert'].includes(
-      this.tool,
-    );
-    const type = this.tool === 'polyline' ? 'line' : this.tool === 'insert' ? 'block' : this.tool;
-    const fields = creating ? propertyFields[type] || [] : commonFields(selected),
-      active = creating || selected.length > 0;
-    this.visibleProperties = fields;
-    this.changedProperties.clear();
-    this.dialog.querySelector('.fe-paper').hidden =
-      !!active || reportSelected || this.tool === 'report-area';
-    this.reportControls.selection(reportSelected || this.tool === 'report-area');
-    this.dialog.querySelector('.fe-entity-properties').hidden = !active || this.mode === 'layout';
-    this.dialog.querySelector('.fe-block-placement').hidden = !active || this.mode !== 'layout';
-    this.$('selection').textContent = creating
-      ? { line: 'Ny linje', text: 'Ny text', attribute: 'Ny attributtext', image: 'Ny bild' }[
-          type
-        ] || 'Nytt objekt'
-      : selected.length === 1
-        ? { line: 'Linje / polylinje', text: 'Text', attribute: 'Attributtext', image: 'Bild' }[
-            selected[0].type
-          ] || 'Ramblock'
-        : `${selected.length} markerade · gemensamma egenskaper`;
-    for (const key of new Set(Object.values(propertyFields).flat())) {
-      const input = this.$(key);
-      input.closest('label').hidden = !fields.includes(key);
-      if (input.tagName === 'SELECT') input.querySelector('option[data-mixed]')?.remove();
-      if (!creating && fields.includes(key)) {
-        const values = selected.map((e) => propertyValue(e, key)),
-          mixed = values.some((v) => v !== values[0]);
-        if (mixed && input.tagName === 'SELECT') {
-          const option = new Option('Blandat', '');
-          option.dataset.mixed = 'true';
-          input.prepend(option);
-        }
-        input.value = mixed ? '' : values[0];
-        input.placeholder = mixed ? 'Blandat' : '';
-      }
-    }
-    for (const row of this.dialog.querySelectorAll('.fe-entity-properties .fe-pair'))
-      row.hidden = [...row.children].every((e) => e.hidden);
-    this.lineWeightControl.update();
-    this.$('ratio').parentElement.hidden = !fields.includes('imageWidth');
-    this.dialog.querySelector('[data-action="properties"]').hidden = creating || !fields.length;
-    this.dialog.querySelector('[data-action="instanceApply"]').hidden = creating;
-    this.$('instances').hidden = active;
-    this.updatePalette();
-    this.dialog.querySelector('.fe-origin-fields').hidden = this.mode !== 'block';
-    this.$('originX').value = this.frame.origin?.[0] || 0;
-    this.$('originY').value = this.frame.origin?.[1] || 0;
-    for (const key of ['originX', 'originY'])
-      this.$(key).parentElement.hidden = this.mode !== 'block';
-    this.dialog.querySelector('[data-action="originApply"]').hidden = this.mode !== 'block';
+    return renderFrameProperties({
+      frame: this.frame,
+      selected: this.selected,
+      mode: this.mode,
+      tool: this.tool,
+      changedProperties: this.changedProperties,
+      dialog: this.dialog,
+      reportControls: this.reportControls,
+      $: this.$.bind(this),
+      lineWeightControl: this.lineWeightControl,
+      updatePalette: this.updatePalette,
+      setVisibleProperties: (fields) => {
+        this.visibleProperties = fields;
+      },
+    });
   }
 
   async loadImage() {
@@ -1044,18 +997,17 @@ export class FrameEditor {
     }
   }
   instanceList() {
-    if (this.mode !== 'layout') return;
-    this.$('instances').replaceChildren();
-    for (const e of this.frame.entities) {
-      const b = document.createElement('button');
-      b.textContent = this.blocks.find((b) => b.id === e.blockId)?.name || 'Block saknas';
-      b.onclick = () => {
-        this.selected = new Set([e.id]);
-        this.properties();
-        this.render();
-      };
-      this.$('instances').append(b);
-    }
+    return renderFrameInstances({
+      mode: this.mode,
+      $: this.$.bind(this),
+      frame: this.frame,
+      blocks: this.blocks,
+      properties: this.properties.bind(this),
+      render: this.render.bind(this),
+      selectInstance: (id) => {
+        this.selected = new Set([id]);
+      },
+    });
   }
   action(name) {
     if (name === 'preview') {
@@ -1365,256 +1317,30 @@ export class FrameEditor {
     }
   }
   render() {
-    if (!this.view) return;
-    this.dynamicInput.hidden = !(
-      (this.base || this.pending.length) &&
-      this.tool !== 'select' &&
-      this.tool !== 'report-area' &&
-      !this.gripDrag
-    );
-    this.svg.setAttribute('viewBox', this.view.join(' '));
-    this.svg.setAttribute('preserveAspectRatio', 'none');
-    this.svg.replaceChildren(
-      svg('rect', {
-        x: 0,
-        y: 0,
-        width: this.frame.width,
-        height: this.frame.height,
-        fill: 'white',
-        stroke: '#a4b5bc',
-        'stroke-width': 0.3,
-      }),
-    );
-    const g = svg('g', { transform: `translate(0 ${this.frame.height}) scale(1 -1)` });
-    this.svg.append(g);
-    const context = this.getContext(),
-      drawing = context.drawings.find((d) => d.id === this.$('preview').value),
-      ctx = {
-        project: context.project,
-        drawing: drawing || {},
-        custom: drawing?.attributes || this.frame.previewValues || {},
-      };
-    const paint = (e, ghost = false) => {
-      const group = svg('g', { 'data-entity': e.id, opacity: ghost ? 0.45 : 1 });
-      g.append(group);
-      const color = this.selected.has(e.id) ? '#178268' : e.color || '#233940';
-      if (e.type === 'line') {
-        const points = e.points.map((p) => p.join(',')).join(' ');
-        group.append(
-          svg('polyline', {
-            points,
-            fill: 'none',
-            stroke: 'transparent',
-            'stroke-width': Math.max(e.stroke, (this.view[2] / this.svg.clientWidth) * 10),
-            'pointer-events': 'stroke',
-          }),
-          svg('polyline', {
-            points,
-            fill: 'none',
-            stroke: color,
-            'stroke-width': this.cad.get().lineweight
-              ? e.stroke
-              : this.view[2] / this.svg.clientWidth,
-            'pointer-events': 'none',
-          }),
-        );
-      } else {
-        group.setAttribute(
-          'transform',
-          `translate(${e.point.join(' ')}) rotate(${e.angle || 0}) scale(1 -1)`,
-        );
-        if (e.type === 'image') {
-          group.append(
-            svg('image', { href: e.src, x: 0, y: -e.height, width: e.width, height: e.height }),
-          );
-          if (this.selected.has(e.id))
-            group.append(
-              svg('rect', {
-                x: 0,
-                y: -e.height,
-                width: e.width,
-                height: e.height,
-                fill: 'none',
-                stroke: color,
-                'stroke-width': 0.4,
-              }),
-            );
-        } else {
-          const rendered = frameText(
-            e,
-            {
-              ...ctx,
-              drawing: {
-                ...ctx.drawing,
-                ...(this.mode === 'layout' ? { paperFormat: this.frame.paperFormat } : {}),
-              },
-            },
-            attributeDrawingValue,
-          );
-          const name = this.attrs().find((a) => a.key === e.key)?.name || e.key,
-            value = e.type === 'attribute' ? (drawing ? rendered.value : `〈${name}〉`) : e.text;
-          group.append(
-            svg(
-              'text',
-              {
-                'font-size': drawing ? rendered.size : e.size,
-                'font-family': e.font || 'Arial, sans-serif',
-                'text-anchor': e.align,
-                fill: e.type === 'attribute' && !drawing ? '#397dc5' : color,
-              },
-              value || ' ',
-            ),
-          );
-        }
-      }
-      if (ghost) group.setAttribute('pointer-events', 'none');
-    };
-    this.displayEntities().forEach((e) => paint(e));
-    paintReportViewport(this);
-    if (this.mode === 'block') {
-      const p = this.frame.origin || [0, 0];
-      g.append(
-        svg('path', {
-          d: `M${p[0] - 4},${p[1]}h8 M${p[0]},${p[1] - 4}v8`,
-          stroke: '#d25650',
-          'stroke-width': 0.4,
-          'pointer-events': 'none',
-        }),
-      );
-    }
-    if (this.pending.length)
-      paint(
-        {
-          id: '',
-          type: 'line',
-          points: [...this.pending, ...(this.cursor ? [this.cursor] : [])],
-          stroke: +this.$('stroke').value || 0.25,
-        },
-        true,
-      );
-    if (this.base && this.cursor && ['move', 'copy'].includes(this.tool))
-      this.displayEntities()
-        .filter((e) => this.selected.has(e.id))
-        .forEach((e) =>
-          paint(
-            this.vertexGrip
-              ? moveFrameVertices(e, this.vertexGrip, this.cursor)
-              : transformFrameEntity(e, this.base, this.cursor),
-            true,
-          ),
-        );
-    if (this.tool === 'select') {
-      const r = (this.view[2] / Math.max(this.svg.clientWidth, 1)) * 4;
-      for (const entity of this.frame.entities.filter((e) => this.selected.has(e.id)))
-        frameEditGrips(entity, this.frame).forEach(({ point: p, index }) => {
-          const grip = svg('g', {
-            'data-grip': entity.id,
-            'data-index': index,
-            role: 'button',
-            tabindex: 0,
-            'aria-label':
-              index === -1
-                ? 'Flytta hela linjeobjektet'
-                : `Flytta ${entity.type === 'line' ? 'linje' : entity.type === 'text' ? 'text' : entity.type === 'attribute' ? 'attributtext' : entity.type === 'block' ? 'ramblock' : 'bild'} från punkt ${index + 1}`,
-            class: 'fe-object-grip',
-          });
-          grip.append(
-            svg('circle', { cx: p[0], cy: p[1], r: r * 2.2, fill: 'transparent' }),
-            svg('rect', {
-              x: p[0] - r,
-              y: p[1] - r,
-              width: r * 2,
-              height: r * 2,
-              fill: index === -1 ? '#d4eeff' : 'white',
-              stroke: '#178268',
-              'stroke-width': r * 0.35,
-            }),
-            svg(
-              'title',
-              {},
-              index === -1
-                ? 'Dra för att flytta hela objektet.'
-                : entity.type === 'line'
-                  ? 'Dra för att flytta sammanfallande punkter i markerade linjer.'
-                  : 'Dra för att flytta hela objektet.',
-            ),
-          );
-          grip.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              e.stopPropagation();
-              this.startGrip(entity.id, index);
-            }
-          });
-          g.append(grip);
-        });
-    }
-    if (this.selectionPress?.dragging) {
-      const p = this.selectionPress,
-        r = this.svg.getBoundingClientRect(),
-        a = p.start,
-        b = p.end,
-        crossing = b[0] < a[0];
-      this.svg.append(
-        svg('rect', {
-          'data-selection-window': crossing ? 'crossing' : 'window',
-          x: this.view[0] + ((Math.min(a[0], b[0]) - r.left) / r.width) * this.view[2],
-          y: this.view[1] + ((Math.min(a[1], b[1]) - r.top) / r.height) * this.view[3],
-          width: (Math.abs(a[0] - b[0]) / r.width) * this.view[2],
-          height: (Math.abs(a[1] - b[1]) / r.height) * this.view[3],
-          fill: crossing ? '#20a56e' : '#397dc5',
-          'fill-opacity': 0.12,
-          stroke: crossing ? '#16845a' : '#397dc5',
-          'stroke-width': 1,
-          'stroke-dasharray': crossing ? '5 3' : 'none',
-          'vector-effect': 'non-scaling-stroke',
-          'pointer-events': 'none',
-        }),
-      );
-    }
-    if (this.cursor && this.trackHit?.guides.length) {
-      for (const { anchor } of this.trackHit.guides)
-        g.append(
-          svg('line', {
-            x1: anchor[0],
-            y1: anchor[1],
-            x2: this.cursor[0],
-            y2: this.cursor[1],
-            stroke: '#bc873b',
-            'stroke-width': 1,
-            'stroke-dasharray': '5 4',
-            'vector-effect': 'non-scaling-stroke',
-            'pointer-events': 'none',
-          }),
-        );
-    }
-    if (this.cursor && this.tool !== 'select') {
-      const s = (this.view[2] / Math.max(this.svg.clientWidth, 1)) * 5;
-      g.append(
-        svg(
-          this.snap?.kind === 'Mittpunkt' ? 'circle' : 'rect',
-          this.snap?.kind === 'Mittpunkt'
-            ? {
-                cx: this.cursor[0],
-                cy: this.cursor[1],
-                r: s,
-                fill: 'none',
-                stroke: '#15946d',
-                'stroke-width': s * 0.25,
-                'pointer-events': 'none',
-              }
-            : {
-                x: this.cursor[0] - s,
-                y: this.cursor[1] - s,
-                width: s * 2,
-                height: s * 2,
-                fill: 'none',
-                stroke: '#15946d',
-                'stroke-width': s * 0.25,
-                'pointer-events': 'none',
-              },
-        ),
-      );
-    }
+    return paintFrameEditor({
+      view: this.view,
+      dynamicInput: this.dynamicInput,
+      base: this.base,
+      pending: this.pending,
+      tool: this.tool,
+      gripDrag: this.gripDrag,
+      svg: this.svg,
+      frame: this.frame,
+      getContext: this.getContext,
+      $: this.$.bind(this),
+      selected: this.selected,
+      cad: this.cad,
+      mode: this.mode,
+      attrs: this.attrs.bind(this),
+      displayEntities: this.displayEntities.bind(this),
+      cursor: this.cursor,
+      vertexGrip: this.vertexGrip,
+      startGrip: this.startGrip.bind(this),
+      activeGrip: this.activeGrip,
+      selectionPress: this.selectionPress,
+      trackHit: this.trackHit,
+      snap: this.snap,
+      paintReport: () => paintReportViewport(this),
+    });
   }
 }

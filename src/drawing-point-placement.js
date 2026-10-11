@@ -1,8 +1,7 @@
 import { nearbySnapEntities } from './drawing-snap-geometry.js';
 import { defaultCadSettings } from './cad-statusbar.js';
-import { constrainCadPoint } from './cad-tracking.js';
+import { constrainCadPoint, polarTrackingIntersection } from './cad-tracking.js';
 import { snapFrame } from './frame-model.js';
-import { shapeGrips } from './drawing-shape-grips.js';
 import { shapeSnapPoints, arcGeometry } from './drawing-shapes.js';
 
 export function locateDrawingPoint(editor, e, view, snap = true, excludeId = null) {
@@ -13,7 +12,7 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
   const base =
     (editor.transform?.active() && editor.transform.base) ||
     editor.draft?.points.at(-1) ||
-    editor.drag?.grip?.point;
+    editor.grips?.session?.base;
   const rawPoint = [...hit.point];
   const originPixel = editor.adapter.project(hit.point, hit.view),
     unitPixel = editor.adapter.project([hit.point[0] + 1, hit.point[1]], hit.view);
@@ -26,25 +25,15 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
     );
   if (snap && settings.snap) {
     const p = editor.adapter.project(hit.point, hit.view);
-    const magnetic = excludeId && editor.drag?.shapeBefore;
-    if (magnetic && editor.drag.magnetPoint) {
-      const q = editor.adapter.project(editor.drag.magnetPoint, hit.view);
-      if (Math.hypot(q[0] - p[0], q[1] - p[1]) * editor.adapter.pixelScale() < 18) {
-        return { ...hit, point: [...editor.drag.magnetPoint], snapped: true, kind: 'Ändpunkt' };
-      }
-      editor.drag.magnetPoint = null;
-    }
-    let best = magnetic ? 14 : 10;
+    let best = 10;
     const drawn = editor.items
       .filter((item) => item.type === 'shape' && item.view === hit.view && item.id !== excludeId)
       .flatMap((item) =>
-        magnetic
-          ? shapeGrips(item).map((grip) => grip.point)
-          : item.shape === 'circle'
-            ? []
-            : item.shape === 'arc'
-              ? [item.points[0], item.points[2]]
-              : shapeSnapPoints(item),
+        item.shape === 'circle'
+          ? []
+          : item.shape === 'arc'
+            ? [item.points[0], item.points[2]]
+            : shapeSnapPoints(item),
       );
     const lines = editor.items
       .filter(
@@ -52,21 +41,21 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
           item.type === 'shape' &&
           item.view === hit.view &&
           item.id !== excludeId &&
-          ['line', 'polyline', 'polygon', 'rectangle'].includes(item.shape),
+          ['line', 'polyline', 'polygon', 'rectangle', 'insulation'].includes(item.shape),
       )
       .map((item) => {
         const points = shapeSnapPoints(item);
         return {
           type: 'line',
           points:
-            item.closed || ['polygon', 'rectangle'].includes(item.shape)
+            item.closed || ['polygon', 'rectangle', 'insulation'].includes(item.shape)
               ? [...points, points[0]]
               : points,
         };
       });
     const additional = snapFrame(rawPoint, {
       entities: nearbySnapEntities(
-        [...lines, ...(editor.adapter.snapEntities?.(hit.view) || [])],
+        [...lines, ...(editor.adapter.snapEntities?.(hit.view, rawPoint, pixelSize * best) || [])],
         rawPoint,
         pixelSize * best,
       ),
@@ -78,7 +67,7 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
       perpendicular: settings.perpendicular,
     });
     const candidates = editor.adapter
-      .candidates(hit.view)
+      .candidates(hit.view, rawPoint, pixelSize * best)
       .filter(
         (p) =>
           p.reference?.kind !== 'bore' &&
@@ -177,7 +166,6 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
         hit.kind = 'Stomlinje';
       }
     }
-    if (magnetic && hit.snapped) editor.drag.magnetPoint = [...hit.point];
   }
   editor.trackHit =
     snap && settings.snap && settings.otrack
@@ -189,9 +177,18 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
         })
       : null;
   if (editor.trackHit?.guides.length) {
-    hit.point = editor.trackHit.point;
+    const intersection = polarTrackingIntersection(rawPoint, base, editor.trackHit, {
+      polar: settings.ortho ? 90 : settings.polar,
+      tolerance: pixelSize * 8,
+    });
+    hit.point = intersection || editor.trackHit.point;
     hit.reference = null;
-    hit.kind = 'Otrack';
+    hit.kind = intersection ? 'Skärning' : 'Otrack';
+    if (intersection) {
+      hit.snapped = true;
+      hit.guideBase = base;
+      editor.trackHit.point = intersection;
+    }
   } else if (!hit.snapped && snap)
     hit.point = constrainCadPoint(hit.point, base, {
       ortho: settings.ortho || (e.shiftKey && editor.workflow === 'shape'),
@@ -215,7 +212,7 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
     editor.dynamicInput.hidden = !(
       editor.workflow === 'shape' &&
       editor.draft?.points.length &&
-      ['line', 'polyline', 'polygon', 'circle'].includes(editor.mode) &&
+      ['line', 'polyline', 'polygon', 'circle', 'insulation'].includes(editor.mode) &&
       !editor.drag
     );
   if (editor.dynamicInput && !editor.dynamicInput.hidden && !editor.transform?.active()) {

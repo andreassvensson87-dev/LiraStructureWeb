@@ -51,13 +51,13 @@ test('reports round-trip with metadata, formatting and embedded layout blocks', 
   p.reports[0].assets.blocks[0].entities[0].color = '#ff0000';
   assert.notEqual(loaded.reports[0].assets.blocks[0].entities[0].color, '#ff0000');
 });
-test('older project files without reports load with an empty report collection', () => {
+test('projects missing the required report collection are rejected', () => {
   const p = project();
   delete p.reports;
-  const loaded = parseProjectFile(
-    JSON.stringify({ format: 'LiraStructure', fileVersion: 1, project: p }),
+  assert.throws(
+    () => parseProjectFile(JSON.stringify({ format: 'LiraStructure', fileVersion: 1, project: p })),
+    /rapportlista/,
   );
-  assert.deepEqual(loaded.reports, []);
 });
 test('report properties fill existing drawing blocks and native report attributes with full choice labels', () => {
   const context = reportPageContext({ name: 'Projekt A' }, report(), 2, 5, 80);

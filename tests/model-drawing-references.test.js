@@ -9,8 +9,6 @@ import {
 } from '../src/model-drawing-references.js';
 import { createSectionView, frameMatrix } from '../src/drawing-sections.js';
 import { createDetailView } from '../src/drawing-details.js';
-import { migratePartSection } from '../src/part-section-migration.js';
-import { ensurePartViews, syncPartViews } from '../src/drawing-views.js';
 import * as THREE from 'three';
 const levels = [
   { id: 'l1', elevation: 0 },
@@ -166,41 +164,6 @@ test('vertical cut in a front view remains upright, changing side reverses horiz
     assert.equal(p.clone().applyMatrix4(frameMatrix(b)).x, -30);
     assert.equal(parent.id, 'front');
   });
-});
-test('legacy Single Part section migrates once and preserves annotations and viewport placement', () => {
-  const record = {
-    sourceId: 'part',
-    sheet: { section: 1500, scale: 10, layout: { sectionX: 250, y: 100 } },
-    annotations: [
-      {
-        view: 'section',
-        points: [
-          [20, 30],
-          [50, 60],
-        ],
-        line: [10, 80],
-      },
-    ],
-  };
-  ensurePartViews(record);
-  const bounds = { min: { x: 0, y: -100, z: -150 }, max: { x: 3000, y: 100, z: 150 } };
-  migratePartSection(record, bounds);
-  const section = record.sheet.views.find((v) => v.id === 'section');
-  assert.equal(section.section.label, 'A');
-  assert.equal(section.source.parentViewId, 'front');
-  assert.deepEqual(record.annotations[0].points, [
-    [20, 220],
-    [50, 250],
-  ]);
-  const snapshot = structuredClone(record);
-  migratePartSection(record, bounds);
-  assert.deepEqual(record, snapshot);
-  const position = [...section.position];
-  syncPartViews(record, record.sheet, [
-    [0, 0, 100, 10],
-    [0, 20, 100, 30],
-  ]);
-  assert.deepEqual(record.sheet.views.find((v) => v.id === 'section').position, position);
 });
 test('cyclic source graph fails explicitly', () => {
   const a = { id: 'a', detail: {}, source: { parentViewId: 'a' } };

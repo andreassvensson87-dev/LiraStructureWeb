@@ -20,7 +20,6 @@ function referenceFixture() {
       this.selectedId = id;
     },
     parts: [],
-    pending: [],
     group: new THREE.Group(),
     status: () => {},
     fit: () => {},
@@ -140,11 +139,11 @@ test('removing during import terminates the worker and disposes current and pend
     references.selectedId = 'existing';
     references.group.add(group);
     await references.load({ name: 'replacement.ifc', arrayBuffer: async () => new ArrayBuffer(8) });
-    references.pending.push(pending);
+    references.importer().pending.push(pending);
     references.remove();
     assert.equal(workers[0].terminated, 1);
-    assert.equal(references.worker, null);
-    assert.deepEqual(references.pending, []);
+    assert.equal(references.importer().worker, null);
+    assert.deepEqual(references.importer().pending, []);
     assert.deepEqual(references.parts, []);
     assert.equal(references.group.children.length, 0);
     assert.equal(references.$('[data-model]').hidden, true);
@@ -160,16 +159,16 @@ test('late errors and meshes from a superseded worker cannot cancel the current 
     await references.load({ name: 'old.ifc', arrayBuffer: async () => new ArrayBuffer(8) });
     const old = workers[0],
       pending = part();
-    references.pending.push(pending);
+    references.importer().pending.push(pending);
     await references.load({ name: 'new.ifc', arrayBuffer: async () => new ArrayBuffer(8) });
     const active = workers[1];
     old.onerror();
     old.onmessage({ data: { type: 'error', message: 'late old error' } });
     old.onmessage({ data: { type: 'mesh' } });
-    assert.equal(references.worker, active);
+    assert.equal(references.importer().worker, active);
     assert.equal(active.terminated, 0);
     assert.deepEqual(pending.disposed, { geometry: 1, material: 1 });
-    assert.deepEqual(references.pending, []);
+    assert.deepEqual(references.importer().pending, []);
     references.cancel();
   });
 });
@@ -225,7 +224,7 @@ test('multiple reference imports coexist and removing one preserves the other re
     const references = referenceFixture();
     for (const name of ['first.ifc', 'second.ifc']) {
       await references.load({ name, arrayBuffer: async () => new ArrayBuffer(8) });
-      references.pending.push(part());
+      references.importer().pending.push(part());
       workers.at(-1).onmessage({ data: { type: 'done', count: 1, schema: 'IFC4' } });
     }
     assert.equal(references.models.length, 2);
@@ -244,7 +243,7 @@ test('replacement disposes only its target after successful import and preserves
   await fakeWorkers(async (workers) => {
     const references = referenceFixture();
     await references.load({ name: 'old.ifc', arrayBuffer: async () => new ArrayBuffer(8) });
-    references.pending.push(part());
+    references.importer().pending.push(part());
     workers[0].onmessage({ data: { type: 'done', schema: 'IFC4' } });
     const previous = references.models[0];
     previous.folder = 'Building A';
@@ -257,7 +256,7 @@ test('replacement disposes only its target after successful import and preserves
       { replaceId: previous.id },
     );
     assert.equal(references.models[0], previous);
-    references.pending.push(part());
+    references.importer().pending.push(part());
     workers[1].onmessage({ data: { type: 'done', schema: 'IFC4' } });
     const model = references.models[0];
     assert.equal(references.models.length, 1);

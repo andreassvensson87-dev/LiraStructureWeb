@@ -1,28 +1,22 @@
 import { gridSegments } from '../grid-geometry.js';
 
-/** Convert legacy grid geometry once; model objects then own geometry and labels. */
+/** Initialize grid objects for a new project; saved projects already contain them. */
+export function createGridObjects(grid) {
+  return gridSegments(grid).map((line, index) => ({
+    id: `grid-${line.id}`,
+    type: 'gridline',
+    name: line.label,
+    prefix: 'GL',
+    number: index + 1,
+    gridAxis: line.axis,
+    gridIdentity: line.id,
+    bubbleEnds: line.bubbleEnds,
+    start: [...line.start, 0],
+    end: [...line.end, 0],
+  }));
+}
+/** Rebuild the derived grid cache from the owning model objects. */
 export function syncGridObjects(project) {
-  if (!project.grid.objectBased) {
-    const ids = new Set(project.objects.map((s) => s.id));
-    const lines = gridSegments(project.grid).map((line, index) => {
-      let id = `grid-${line.id}`;
-      while (ids.has(id)) id += '-grid';
-      ids.add(id);
-      return {
-        id,
-        type: 'gridline',
-        name: line.label,
-        prefix: 'GL',
-        number: index + 1,
-        gridAxis: line.axis,
-        gridIdentity: line.id,
-        bubbleEnds: line.bubbleEnds,
-        start: [...line.start, 0],
-        end: [...line.end, 0],
-      };
-    });
-    project.objects = [...project.objects, ...lines];
-  }
   const next = {
     ...project.grid,
     objectBased: true,
@@ -33,23 +27,17 @@ export function syncGridObjects(project) {
   };
   for (const object of project.objects.filter((s) => s.type === 'gridline')) {
     const axis = object.gridAxis;
-    const index = next[axis].length;
-    const pickId = `${axis}:${index}`;
     // Pick IDs are derived UI addresses; stable references use the object identity.
     next[axis].push(object.start[axis === 'x' ? 0 : 1]);
     next.labels[axis].push(object.name);
     next.lines[axis].push({
       id: object.gridIdentity || object.id,
+      objectId: object.id,
       start: object.start.slice(0, 2),
       end: object.end.slice(0, 2),
       z: object.start[2],
       bubbleEnds: object.bubbleEnds,
     });
-    if (object.gridPickId !== pickId) {
-      project.objects = project.objects.map((s) =>
-        s === object ? { ...s, gridPickId: pickId } : s,
-      );
-    }
   }
   if (JSON.stringify(next) !== JSON.stringify(project.grid)) project.grid = next;
   return project.grid;
@@ -69,4 +57,17 @@ export function applyGridSettingsToObjects(project, previousGrid = project.grid)
         }
       : s;
   });
+}
+
+/** UI addresses belong to the derived cache, never to the saved objects. */
+export function gridPickIds(grid, objectIds) {
+  return ['x', 'y'].flatMap((axis) =>
+    (grid.lines?.[axis] || []).flatMap((line, index) =>
+      objectIds.has(line.objectId) ? [`${axis}:${index}`] : [],
+    ),
+  );
+}
+export function gridObjectId(grid, pickId) {
+  const [axis, index] = pickId.split(':');
+  return grid.lines?.[axis]?.[Number(index)]?.objectId;
 }

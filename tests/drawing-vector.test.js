@@ -108,3 +108,38 @@ test('overlay lines are not hidden and indexed box geometry is supported', () =>
   surface.dispose();
   edge.dispose();
 });
+
+test('many separated covers preserve gaps and discard surfaces behind the edge', () => {
+  const surfaces = [];
+  for (let i = 0; i < 40; i++) {
+    const x = i * 3,
+      z = i % 2 ? -2 : 2;
+    surfaces.push({
+      geometry: geometry([
+        [x, -1, z],
+        [x + 1, -1, z],
+        [x + 1, 1, z],
+        [x, -1, z],
+        [x + 1, 1, z],
+        [x, 1, z],
+      ]),
+    });
+  }
+  const edge = geometry([
+    [-1, 0, 0],
+    [120, 0, 0],
+  ]);
+  const [result] = vectorDrawing(surfaces, [
+    { geometry: edge, referenceId: 'ifc', showHidden: true },
+  ]);
+  assert.equal(result.hidden.length, 20);
+  assert.equal(result.visible.length, 21);
+  for (let i = 0; i < 20; i++) {
+    assert.ok(Math.abs(result.hidden[i][0][0] - i * 6) < 1e-10);
+    assert.ok(Math.abs(result.hidden[i][1][0] - (i * 6 + 1)) < 1e-10);
+  }
+  assert.equal(result.referenceId, 'ifc');
+  assert.equal(result.showHidden, true);
+  for (const s of surfaces) s.geometry.dispose();
+  edge.dispose();
+});

@@ -2,22 +2,22 @@
 
 ## Ägarskap
 
-| Lager | Äger | Ska inte äga |
-| --- | --- | --- |
-| Projekt (`src/project/`) | Sparbara data, filvalidering, assemblies, ritningsändringar och historik | DOM, storage, aktiva verktyg |
-| Objekttyper (`src/model/object-types/`) | Geometri, validering, ankare, snappsegment och transformregler | UI, projektmutationer |
-| Verktygsregler (`src/model/tools/`) | Föreslagna objekt och beroende ändringar | Checkpoints, UI-händelser |
-| Modell-editor (`src/app/model-editor.js`) | Förbereda, validera och bekräfta objektändringar med en checkpoint | DOM, markering, kamera, rendering |
-| Editorstatus (`editor-state.js`, `tool-session.js`) | Markering, utkast, pågående kommando och punktval | Sparbara projektdata |
-| Punktplacering (`src/model/ui/placement-controller.js`) | Punktflöde, exakt avstånd, flytt/kopiering och adapter till specialverktyg | Egen snapmotor, direkt objektmutation |
-| Modellträffar (`src/model/ui/model-picking.js`) | Raycast, modellträffar och anrop till gemensam `resolveSnap` | Geometriredigering, nya snapinställningar |
-| Förhandsvisning (`src/model/ui/model-preview.js`) | Tillfällig geometri, beroende objekt, validering och återställning av visning | Commit eller historik |
-| Snapvisning (`src/model/ui/snap-overlay.js`) | Markör, riktningslinje och status för befintligt snapresultat | Snapbeslut eller nya kontroller |
-| Modell-UI (`src/model/ui/`, `src/inspector/`) | Kontroller, avsikter och presentation av förhandsvisningar | Direkt skrivning till objektlistan |
-| Visning (`viewport.js`, `object-mesh.js`, `navigation.js`) | Kamera, WebGL, visuell återkoppling och inpassning | Domänbeslut och historik |
-| Uppstart (`main.js`, `app/workspace-startup.js`) | Stilar, mallinstallation, återställning och start av appen | UI-händelser och modellregler |
-| App-koppling (`app/model-application.js`) | Skapa editor/visning och ansluta controllerer i rätt ordning | Händelsehantering, geometri och användarkommandon |
-| App-controllerer (`src/app/`) | Koppling mellan projekt, editorer, filer och storage | Egna geometriregler |
+| Lager                                                      | Äger                                                                          | Ska inte äga                                      |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| Projekt (`src/project/`)                                   | Sparbara data, filvalidering, assemblies, ritningsändringar och historik      | DOM, storage, aktiva verktyg                      |
+| Objekttyper (`src/model/object-types/`)                    | Geometri, validering, ankare, snappsegment och transformregler                | UI, projektmutationer                             |
+| Verktygsregler (`src/model/tools/`)                        | Föreslagna objekt och beroende ändringar                                      | Checkpoints, UI-händelser                         |
+| Modell-editor (`src/app/model-editor.js`)                  | Förbereda, validera och bekräfta objektändringar med en checkpoint            | DOM, markering, kamera, rendering                 |
+| Editorstatus (`editor-state.js`, `tool-session.js`)        | Markering, utkast, pågående kommando och punktval                             | Sparbara projektdata                              |
+| Punktplacering (`src/model/ui/placement-controller.js`)    | Punktflöde, exakt avstånd, flytt/kopiering och adapter till specialverktyg    | Egen snapmotor, direkt objektmutation             |
+| Modellträffar (`src/model/ui/model-picking.js`)            | Raycast, modellträffar och anrop till gemensam `resolveSnap`                  | Geometriredigering, nya snapinställningar         |
+| Förhandsvisning (`src/model/ui/model-preview.js`)          | Tillfällig geometri, beroende objekt, validering och återställning av visning | Commit eller historik                             |
+| Snapvisning (`src/model/ui/snap-overlay.js`)               | Markör, riktningslinje och status för befintligt snapresultat                 | Snapbeslut eller nya kontroller                   |
+| Modell-UI (`src/model/ui/`, `src/inspector/`)              | Kontroller, avsikter och presentation av förhandsvisningar                    | Direkt skrivning till objektlistan                |
+| Visning (`viewport.js`, `object-mesh.js`, `navigation.js`) | Kamera, WebGL, visuell återkoppling och inpassning                            | Domänbeslut och historik                          |
+| Uppstart (`main.js`, `app/workspace-startup.js`)           | Stilar, mallinstallation, återställning och start av appen                    | UI-händelser och modellregler                     |
+| App-koppling (`app/model-application.js`)                  | Skapa editor/visning och ansluta controllerer i rätt ordning                  | Händelsehantering, geometri och användarkommandon |
+| App-controllerer (`src/app/`)                              | Koppling mellan projekt, editorer, filer och storage                          | Egna geometriregler                               |
 
 ## Modelländringarnas gemensamma väg
 
@@ -35,7 +35,7 @@ UI / mus / tangentbord
 
 Sweep, Plate, stomlinjer, inspektorändringar, flytt/kopiering/rotation, material, objektidentitet, skruvar, komponentegenskaper, Item och referenskonvertering använder denna commitgräns. UI visar fel och uppdaterar markering efteråt. Specialiserad geometrivalidering och förhandsvisning finns fortfarande i deras befintliga adaptrar.
 
-Import av hela projekt, återställning, migrering och ändringar av andra projektdata (ritningar, numrering, inställningar och assemblies) har egna projekttransaktioner. Modell-editorn ersätter inte dessa med en objekttransaktion. Stomlinjernas äldre koordinatdata migreras av `grid-objects.js`; projektets grid-cache härleds sedan från objekten för ritningar och äldre konsumenter.
+Import av hela projekt, återställning, migrering och ändringar av andra projektdata (ritningar, numrering, inställningar och assemblies) har egna projekttransaktioner. Modell-editorn ersätter inte dessa med en objekttransaktion. Stomlinjer lagras som modellobjekt; `grid-objects.js` härleder projektets grid-cache från objekten för ritningar och övriga konsumenter.
 
 ## Gemensamma modelleringsfunktioner
 
@@ -61,36 +61,103 @@ Reglerna kontrollerar konkreta beroenden och mutationer; de kan inte garantera b
 
 Stabila beroenden skapas före controllerinstallation. Controllerer deklarerar vilka argument de behöver. `actions` innehåller namngivna callbacks med en ägare; fördröjda anrop löser kopplingen mellan exempelvis session, rendering och inspektor utan cirkulära importer. `controllers` innehåller handtag till UI som skapas senare. Båda tillhör en appinstans och får inte användas som globala tjänster eller importeras av domänmoduler. Gemensamma caches och den väntande pekarhändelsen har uttryckliga tillståndsobjekt. Renderloopen startar sist.
 
-| Ansvar | Ägare |
-| --- | --- |
-| Meshcache, återanvändning, snapindex och synkronisering av modellens UI | `model/ui/model-renderer.js` |
-| Markering, skapa/uppdatera/radera, historikåterställning, verktygsavbrott och standardvärden | `model/ui/model-session.js` |
-| Pointer- och tangentbordsrouting | `model/ui/model-input.js` |
-| Invalidation, väntande pointer och animation | `model/ui/model-frame-loop.js` |
-| Koppling till befintliga selection-, rotation-, plate- och helper-controllerer | `model/ui/model-tool-controllers.js` |
-| Verktygsmeny och cut-kommandon | `model/ui/model-toolbox-controller.js` |
-| Sweep-formulärets koppling till sessionen | `model/ui/model-sweep-form-controller.js` |
-| Synlighet, modellträd, filter, hover och kontextmeny | `model/ui/model-visibility.js`, `model-browser-controller.js`, `model-hover.js`, `model-context-menu.js` |
-| Inspektorns transaktioner, bibliotek, identitet och egenskapskopiering | `inspector/model-attributes-controller.js`, `model-library-controller.js`, `model-identity-controller.js`, `model-property-copy.js` |
-| Skruvar, komponenter och Item | `app/model-fasteners.js`, `model-components.js`, `model-items.js` |
-| Inställningar/import, nivåer, ritningar/numrering, rapporter, referenser och assemblies | Motsvarande `app/workspace-*.js` |
-| Autosparning, återställningsstatus och PWA | `app/workspace-recovery.js` |
-| Valfria utvecklarmätningar | `app/workspace-diagnostics.js` |
+| Ansvar                                                                                       | Ägare                                                                                                                               |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Meshcache, återanvändning, snapindex och synkronisering av modellens UI                      | `model/ui/model-renderer.js`                                                                                                        |
+| Markering, skapa/uppdatera/radera, historikåterställning, verktygsavbrott och standardvärden | `model/ui/model-session.js`                                                                                                         |
+| Pointer- och tangentbordsrouting                                                             | `model/ui/model-input.js`                                                                                                           |
+| Invalidation, väntande pointer och animation                                                 | `model/ui/model-frame-loop.js`                                                                                                      |
+| Koppling till befintliga selection-, rotation-, plate- och helper-controllerer               | `model/ui/model-tool-controllers.js`                                                                                                |
+| Verktygsmeny och cut-kommandon                                                               | `model/ui/model-toolbox-controller.js`                                                                                              |
+| Sweep-formulärets koppling till sessionen                                                    | `model/ui/model-sweep-form-controller.js`                                                                                           |
+| Synlighet, modellträd, filter, hover och kontextmeny                                         | `model/ui/model-visibility.js`, `model-browser-controller.js`, `model-hover.js`, `model-context-menu.js`                            |
+| Inspektorns transaktioner, bibliotek, identitet och egenskapskopiering                       | `inspector/model-attributes-controller.js`, `model-library-controller.js`, `model-identity-controller.js`, `model-property-copy.js` |
+| Skruvar, komponenter och Item                                                                | `app/model-fasteners.js`, `model-components.js`, `model-items.js`                                                                   |
+| Inställningar/import, nivåer, ritningar/numrering, rapporter, referenser och assemblies      | Motsvarande `app/workspace-*.js`                                                                                                    |
+| Autosparning, återställningsstatus och PWA                                                   | `app/workspace-recovery.js`                                                                                                         |
+| Valfria utvecklarmätningar                                                                   | `app/workspace-diagnostics.js`                                                                                                      |
 
 `tests/model-session.test.js` kör session, modell-editor, historik, riktiga meshobjekt, synlighet och snapindex tillsammans med en ersatt UI-gräns. Det kontrollerar commit, ogiltiga ändringar, radering/ångra/gör om samt meshåteranvändning och frigöring. `tests/model-placement.test.js` verifierar punktplaceringens preview och flytt/kopiering med samma editor/historik. Webbläsarkontroll behövs fortfarande för den kompletta uppstarten och användarflödena.
 
-## Fortsatt strukturarbete utanför main
+## Editorernas separerade ansvar
 
-Ram-, profil- och ritningscontrollererna blandar fortfarande en del presentation och arbetsflöde. Många äldre domänmoduler ligger direkt i `src/`. Dessa områden har inte byggts om i denna uppdelning. Flytta sammanhängande ansvar när det berörs, med tydliga argument/callbacks; undvik kosmetiska filflyttar och generella ramverk enbart för att minska radantalet.
+| Område                 | Ägare för utbrutet ansvar                                                                                                                             | Controllern behåller                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| GA                     | `plan-view-geometry.js` bygger modellens plan-/snittresurser utan DOM; `plan-view-renderer.js` målar vy, stomlinjer och nivåer                        | Vyval, inställningar, projektionscache, IFC-koppling och resursfrigöring      |
+| Single Part / Assembly | `part-sheet-geometry.js` väljer och cachar profilgeometri; `part-sheet-composer.js` komponerar blad, förteckningar och vyinspektorns synkronisering   | Öppning, sparning, vyverktyg, urval och geometrins livscykel                  |
+| Ram                    | `frame-editor-renderer.js` målar ram och återkoppling; `frame-editor-inspector.js` visar egenskaper och blockinstanser                                | Verktyg, egenskapscommit, lokal historik och biblioteksoperationer            |
+| Profil                 | `section-editor-renderer.js` målar canvas och lämnar måttens träffområden; `section-editor-inspector.js` visar parametrar och punktkopplingar         | Profildefinition, utvärdering, parameterändringar, verktyg och historik       |
+| Skruv                  | `fasteners/library-inspector.js` visar bibliotek och produktfält; `fasteners/placement-inspector.js` visar tillbehör och hålfält                      | Produktversioner, placeringsförslag, validering och modell-editorcommit       |
+| Referens               | `references/reference-import.js` äger worker, väntande geometri och importavbrott; `references/reference-inspector.js` visar lista och placeringsfält | Återställningstransaktion, bekräftade modeller, placering och modellmarkering |
+| Item                   | `items/editor.js` äger editorutkast, tillfälliga hjälplinjer och 3D-visarens livscykel                                                                | `items/library-ui.js` äger bibliotek, import/export och versionslagring       |
+| Ritningstext           | `drawing-rich-text-content.js` läser tillåten text/formatering; `drawing-rich-text-inspector.js` visar egenskaper                                     | Redigeringssession, placering, grepp och anteckningshistorik                  |
+
+Presentationsmodulerna tar uttryckliga data, DOM-element och callbacks. De skapar inga egna UI-ramverk eller alternativa kommandoägare. Profilparametrar, hålkopplingar, urval och textändringar rapporteras till sina befintliga controllerer. Item-editorn sparar en validerad version genom bibliotekets callback och meddelar biblioteket vilken version som ska väljas. Referensimporten bekräftar en färdig modell genom referenscontrollern; ersättning och projektåterställning behåller sina transaktioner.
+
+Geometribyggarna ändrar inte modellobjekten. GA:s grupp, gränser, snapreferenser och hatch är renderresurser som den anropande controllern äger och frigör. Single Part-cachen tillhör den öppna ritningen och frigörs vid stängning. ESLint förbjuder DOM/storage och UI-importer i dessa geometrimoduler samt kontrollerar oanvända beroenden i de berörda filerna.
+
+Controllererna kan fortfarande vara omfattande eftersom de samordnar en hel arbetsyta. Fortsatt uppdelning ska följa sammanhängande ansvar med tydliga argument/callbacks; undvik kosmetiska filflyttar och generella ramverk enbart för att minska radantalet.
+
+## Livscykel och skyddade gränser
+
+Presentationens renderer-/inspektormoduler får inte importera app-kopplingar, controllerer eller lagringsmoduler och får inte använda browser storage. De tar data och callbacks från sin ägare. Modell-UI:s mutationsskydd omfattar även `this.project.objects` och andra kvalificerade objektlistor, inte bara en lokal variabel med namnet `project`. Import/återställning behåller sina uttryckliga projekttransaktioner.
+
+`syncGridObjects` ändrar endast den härledda grid-cachen. Kopplingen mellan bubblans tillfälliga adress och ett stabilt objekt-ID ligger i cachens linjer; renderingen byter inte modellobjektens identitet och skriver inte klick-ID:n till dem. Markering, synlighet och highlight använder samma cache.
+
+Dialoger, deras fasta händelsehanterare och UI-observers återanvänds under appinstansens livslängd. Stängning ska släppa sessionsresurser, inte avinstallera återanvändbara kontroller. Item-editorn frigör sin viewport, rensar utkast/hjälplinjer och tar bort utkastets fält med deras closures. Pågående versionslagring får slutföras, men ett sent resultat får inte välja, stänga eller visa fel i en annan session. Samtidiga versionsskrivningar från editorn blockeras.
+
+GA avbryter väntande fördröjd ombyggnad och släpper snapdata vid stängning. IFC-vycontrollern avslutar worker, löser väntande jobb och tömmer cache. Single Part/Assembly frigör bas-/assembly-/profilgeometri, tömmer snittcache och snapdata samt släpper modellreferenser och bladets SVG. Ny öppning återskapar visningsresurserna från ritningsdata.
 
 ## Ritobjektens arbetsflöde
 
-`drawing-annotations.js` äger urval, anteckningshistorik, routing och bekräftelse. `drawing-object-transform.js` beräknar kopior och transformationer utan DOM eller projektmutationer. Verktygssessionen i `drawing-shape-transform.js` äger urval → baspunkt → tillpunkt/vinkel och använder samma resultat för preview och commit. Förvalda objekt går direkt till baspunkt; Shift-klick ger flerval. En transaktion omfattar hela urvalet. Objekt från olika vyer blandas inte i samma transformation; bladtext använder papperskoordinater. Positiva numeriska vinklar är moturs både på bladet och i vyer.
+`drawing-annotations.js` äger urval, anteckningshistorik, routing och bekräftelse. `drawing-annotation-inspector.js` äger presentation och egenskapskontroller med uttryckliga tillståndsdata, DOM-element och callbacks. `drawing-shape-creation.js` och `drawing-dimension-creation.js` samlar punkter och validerar föreslagna utkast utan DOM eller historikmutation. Controllern bestämmer snap, verktygsbyte, checkpoint och commit. Dubblettpunkter ändrar varken objekt, historik eller redo. `drawing-object-transform.js` beräknar kopior och transformationer utan DOM eller projektmutationer. Verktygssessionen i `drawing-shape-transform.js` äger urval → baspunkt → tillpunkt/vinkel och använder samma resultat för preview och commit. Förvalda objekt går direkt till baspunkt; Shift-klick ger flerval. En transaktion omfattar hela urvalet. Objekt från olika vyer blandas inte i samma transformation; bladtext använder papperskoordinater. Positiva numeriska vinklar är moturs både på bladet och i vyer.
 
-`drawing-point-placement.js` samordnar befintliga CAD-inställningar, snappunkter, `snapFrame`, riktningslås och `CadTracking`. Resultatet behåller snappunktens typ, modellreferens och eventuella spårningsguider. `drawing-snap-geometry.js` begränsar segmentens parvisa skärningssökning till pekarens träffområde. Exakta objektträffar prioriteras före spårning och polar. Snapinställningarna och längdfältet ligger kvar i sina befintliga kontroller.
+`drawing-point-placement.js` samordnar befintliga CAD-inställningar, snappunkter, `snapFrame`, riktningslås och `CadTracking`. Resultatet behåller snappunktens typ, modellreferens och eventuella spårningsguider. `drawing-snap-geometry.js` begränsar segmentens parvisa skärningssökning till pekarens träffområde. `frame-snap-intersections.js` gallrar exakta dubbletter, begränsar sökgränser till pekarens tolerans och prövar bara överlappande lokala gränser. Närmaste giltiga korsning skickas tillbaka till samma `snapFrame`; ändpunkts-/mittpunktsprioritet, Ortho och finita segment behålls. Exakta objektträffar prioriteras före spårning och polar. Snapinställningarna och längdfältet ligger kvar i sina befintliga kontroller.
 
 `drawing-object-renderer.js` och `drawing-rich-text-renderer.js` ritar sparade objekt för skärm och PDF. `drawing-overlay.js` äger enbart tillfälliga markeringar, grepp, snappunktssymboler, gummiband, spårningsguider och grön preview. Hjälpgrafiken märks `data-annotation-helper` och tas bort vid export. Ritobjekt renderas före eller efter modellens geometri; modellens projicerade ytor ger korrekt täckning för bakomliggande ritobjekt. Bladtext har motsvarande bakre lager för GA-export och visning.
+
+`DrawingAnnotations.paintOverlay()` uppdaterar ritobjektens dynamiska hjälplager vid pekarrörelser. Greppdrag ritar om ritobjektslagren, inte modellprojektionen. `DrawingRichTextEditor.paintFeedback()` uppdaterar bladtextens utkast och transformpreview separat; textdrag uppdaterar textlagren. `paintDrawingTool` ger snitt- och detaljverktygen egna grafikgrupper per vy som deras befintliga feedback-controller uppdaterar. Geometri, vy/skala, inställningar och bekräftade ändringar använder fortfarande editorns fullständiga redraw. Frånkopplade lager faller tillbaka till redraw.
 
 Slutna polygoner valideras före sparning och efter greppändringar. Hatch använder samma `material-hatch.js`-geometri och pappersmått som sektionshatchning, och samma `ui/hatch-control.js` i inspektor och materialbibliotek. `hatch-control.js` är den domänmedvetna adaptern; UI-fabriken tar alternativ och validering som argument. Linjeutseende, geometri och ritordning använder `createEditorSection`.
 
 Transformation av en modellkopplad måttpunkt eller leader gör fästpunkten fristående; inspektorn beskriver detta före bekräftelse. En ångring återställer referenserna. Kopierade måttkedjor får nya länkidentiteter så att original och kopia inte påverkar varandra.
+
+`drawing-marquee.js` äger rektangelmarkeringens pointergest och återanvänder ritningens urval. Renderade konturer projiceras till skärmkoordinater och prövas av den DOM-fria `drawing-selection-geometry.js`. En vänster–höger-ruta kräver full inneslutning; höger–vänster väljer även korsade konturer. Shift lägger till, Esc avbryter utan modellmutation. Verktyget ligger i befintliga Markera-menyn. Ritningskommandona använder samma Ctrl/⌘ M, C och R som modellen och lämnar tangenttryckningar i textfält till textredigeringen.
+
+`polarTrackingIntersection` i `cad-tracking.js` prövar skärningen mellan polarstrålen från baspunkten och en förvärvad Otrack-axel inom pekarens snaptolerans. Parallella guider och avlägsna skärningar ger ingen ny snap; exakta objektträffar har fortsatt företräde.
+
+## IFC-underlag i GA
+
+`drawing-ifc-references.js` äger GA-vyns referensval och projektionscache. Appens ritningscontroller får importerade referensmodeller via en uttrycklig callback; import, placering och modellens synlighet ägs fortsatt av referenscontrollern. `settings.ifcReferences` sparar synlighet, skymda kanter och snap per referens-ID och vy. IFC-data kopieras inte in i varje ritning. Objektfiltret är en informationsrad tills filterreglerna har bestämts.
+
+`references/drawing-reference-geometry.js` kopierar de importerade delarnas geometri med deras världstransform och GA-vyns vanliga snittkoordinater. Höjd och vyområde gallrar delar före projektion. Den DOM-fria `drawing-occlusion-index.js` bygger en hierarki över projicerade ytors gränser och största djup. Varje yta förekommer en gång; kanter söker bara överlappande grenar som kan täcka dem, utan en ny kandidat-Set per kant. Exakt klippning och täckningsintervall beräknas fortsatt i `projectedDrawing`. Indexet är lokalt för beräkningen, ändrar inte geometrin och behålls inte i projektionscachen.
+
+Egna objekt och referenser går tillsammans genom `projectedDrawing`, vilket ger gemensam täckning och samma vektorlinjer på skärm och i PDF. Referensens flagga för skymda kanter har företräde framför ritningens generella flagga. Referensobjekt blir inte egna modellobjekt och deltar inte i part mark-markering.
+
+Synliga referenslinjer indexeras i vykoordinater. Indexet matar befintlig punktplacering och `snapFrame`; det är ingen separat snapmotor. Referensmått är i den här versionen fristående och följer inte automatiskt ändringar i IFC-filen. `drawing-projection.worker.js` använder den DOM-fria transportadaptern `drawing-projection-data.js` och samma projektionsfunktion som övriga ritningar. Geometrikopior överförs; importerad geometri behåller sina buffertar. PDF-export väntar på färdiga vyer. Cachen behåller senaste resultatet per vy, återanvänder oförändrade vyer och frigörs tillsammans med worker när editorn stängs. Stora IFC-filer behöver fortfarande mätas innan prestandagarantier ges.
+
+Vid stängning av GA sparas vyinställningarna innan `GAViews.reset()` tar bort vybilderna och ramgrafiken töms. Annoterings-, text- och snitt-/detaljcontrollererna släpper sina grafikreferenser, så att frånkopplade SVG-träd inte behålls via feedbacklagren. IFC-controllern avslutar worker, löser väntande jobb och tömmer projektionscache. Importerade referenser behåller modellcontrollerns livscykel.
+
+`drawing-projection-result.js` packar IFC-vyresultat för workertransport och cache i Float64-buffertar utan koordinatavrundning. Buffertarna överförs med ägarbyte från worker; den importerade modellens buffertar överförs aldrig. Controllercachen sparar packade resultat per vy och håller högst ett uppackat resultat för aktiv visning, snap och export. Borttagna vyer och väntande jobb rensas; vid stängning töms också aktivt resultat och `PlanView.modelFaces`. Ritningskopior av IFC-geometri innehåller endast positioner och index, eftersom de använder MeshBasicMaterial och vektorprojektion.
+
+## Isolering som ritobjekt
+
+Isolering lagras som `type: shape`, `shape: insulation` med två baspunkter, `insulationType` (soft/hard), `thickness` i vykoordinaternas millimeter och `side` (left/right från start till slut). `drawing-insulation.js` beräknar normal, ytterkontur och mönster utan DOM. Samma kontur/mönster projiceras för skärm, preview och vektor-PDF; vyändringar skalar hela objektet. Högst 2 048 mönsterrepetitioner begränsar mycket långa/tunna band.
+
+Rita-menyn, punktplacering, exakt längd, urval, rektangelmarkering, transformverktyg och anteckningshistorik återanvänds. Snap använder fyra ytterhörn och fyra ytterkanter, inte mönstrets repetitioner. Två ändpunktsgrepp ändrar baslinjen; det tredje greppet ändrar vinkelrät tjocklek och kan byta sida genom att passera baslinjen. Ett separat flyttgrepp undviks eftersom det skulle överlappa tjockleksgreppet på tunna band; det befintliga Flytta-kommandot används. `drawing-insulation-inspector.js` använder `createEditorSection` för typ, tjocklek och sida och delar utseende/ritordning med övriga ritobjekt.
+
+## Gemensamma ritningsgrepp
+
+`ui/grip.js`/`grip.css` äger SVG- och HTML-presentation: fyrkant för punkt/hörn/beskärning, fylld diamant för flytt och cirkel för radie/tjocklek/textbredd. Markören är 8 skärmpixlar med 18 pixels träffyta; `updateScreenGrips` använder SVG:s aktuella skärmtransform efter zoom. Hover är orange och aktivt grepp får mörk ram. Träffar i överlappande ytor väljer närmaste greppcentrum. Flyttgrepp utelämnas nära andra grepp; vygrepp visas inte samtidigt som ett ritobjekt redigeras.
+
+`drawing-grip-interaction.js` äger den gemensamma pointerlivscykeln: drag eller klick–placera, numerisk parameter via befintligt måttfält, preview, bekräftelse och avbrott. Alla adaptrar lämnar locate/apply/preview/commit/cancel. `drawing-object-grip-editor.js` validerar former och modellkopplade måttpunkter med befintlig snap; textcontrollern äger textgeometrin. `drawing-view-grip-editor.js` använder papperskoordinater och befintlig beskärning med oförändrad skala. GA- och Single Part-controllererna lämnar sina vyer och redraw/synkronisering, utan att UI-komponenten äger projektdata.
+
+Anteckningshistoriken kan också innehålla en uttrycklig lokal operation med före/efter och återställningscallback, så att ett avslutat vygrepp får ett ångrasteg i samma ordning som ritobjektsändringar. Dessa callbacks sparas inte i projektet och historiken töms vid öppning av ritning. Esc, pointercancel, fönsterblur och stängning återställer pågående preview utan checkpoint; återställning sker före sparning/frigöring vid stängning. PDF-export tar bort `.cad-grip` och övriga hjälplager.
+
+## Aktuellt projektformat under utveckling
+
+Appen har inget löfte om bakåtkompatibilitet under utvecklingen. Projektimport kräver den aktuella strukturen för stomlinjer, referenser, rapporter, assemblies och assemblynumrering. Exempelprojekten använder samma struktur. `createProject` skapar stomlinjeobjekten; `syncGridObjects` bygger enbart den härledda stomlinjecachen från objekten och konverterar inte gamla koordinatlistor.
+
+Single Part och Assembly utan ritningsmall får kompletta standardvyer genom `createPartViews` vid första öppningen. Sparade vyer återanvänds och borttagna vyer återskapas inte. Äldre fasta sektionsvyer, orienteringar och skal-/synlighetskartor konverteras inte. Den gamla parallella greppdragningen i annoteringscontrollern är borttagen; de gemensamma greppadaptrarna äger punkt- och formredigering. Dimensionens linjedrag och måttpunkternas kontextmeny är fortfarande aktiva funktioner.
+
+Weland-mappträdet finns direkt i den medföljande item-katalogen. Kataloginstallation och initiering av nya projekt/bibliotek behövs fortfarande; de ska inte behandlas som övergiven kompatibilitetskod.

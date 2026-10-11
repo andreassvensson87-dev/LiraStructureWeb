@@ -118,7 +118,7 @@ test('assembly drawings track members and numbering; unrelated geometry leaves r
   assert.equal(assemblyValid(state.assemblies[0], state.objects), false);
   assert.throws(() => assemblyGeometry(state.assemblies[0], state.objects), /saknar/);
 });
-test('project file roundtrip retains assemblies, missing-member status, and supports earlier files', () => {
+test('project file roundtrip retains assemblies, missing-member status, and rejects missing assembly collections', () => {
   const state = fixture(),
     loaded = parseProjectFile(serializeProject(state));
   assert.deepEqual(loaded.assemblies, state.assemblies);
@@ -126,7 +126,7 @@ test('project file roundtrip retains assemblies, missing-member status, and supp
   const old = JSON.parse(serializeProject(state));
   old.project.drawings = [];
   delete old.project.assemblies;
-  assert.deepEqual(parseProjectFile(JSON.stringify(old)).assemblies, []);
+  assert.throws(() => parseProjectFile(JSON.stringify(old)), /assemblylista/);
   state.objects = state.objects.filter((o) => o.id !== 'a');
   const missing = parseProjectFile(serializeProject(state));
   assert.equal(drawingStamp(missing.drawings[0], missing), null);

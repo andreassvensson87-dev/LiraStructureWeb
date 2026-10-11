@@ -1,3 +1,4 @@
+import { createSvgGrip } from './ui/grip.js';
 import {
   REPORT_VIEWPORT_ID,
   reportViewportGrips,
@@ -125,40 +126,19 @@ export function paintReportViewport(editor) {
   group.append(rect, label);
   editor.svg.append(group);
   if (selected && editor.tool === 'select') {
-    const radius = (editor.view[2] / Math.max(editor.svg.clientWidth, 1)) * 4;
     for (const { point, index } of reportViewportGrips(editor.frame)) {
-      const grip = document.createElementNS(NS, 'g');
-      for (const [key, value] of Object.entries({
-        'data-grip': REPORT_VIEWPORT_ID,
-        'data-index': index,
-        role: 'button',
-        tabindex: 0,
-        'aria-label': index === -1 ? 'Flytta rapportyta' : `Ändra rapportyta · grepp ${index + 1}`,
-        class: 'fe-object-grip',
-      }))
-        grip.setAttribute(key, value);
-      const x = point[0],
-        y = editor.frame.height - point[1];
-      const hit = document.createElementNS(NS, 'circle');
-      for (const [key, value] of Object.entries({
-        cx: x,
-        cy: y,
-        r: radius * 2.2,
-        fill: 'transparent',
-      }))
-        hit.setAttribute(key, value);
-      const handle = document.createElementNS(NS, 'rect');
-      for (const [key, value] of Object.entries({
-        x: x - radius,
-        y: y - radius,
-        width: radius * 2,
-        height: radius * 2,
-        fill: index === -1 ? '#d4eeff' : 'white',
-        stroke: '#178268',
-        'stroke-width': radius * 0.35,
-      }))
-        handle.setAttribute(key, value);
-      grip.append(hit, handle);
+      const grip = createSvgGrip({
+        point: [point[0], editor.frame.height - point[1]],
+        role: index === -1 ? 'move' : 'point',
+        key: `${REPORT_VIEWPORT_ID}:${index}`,
+        label: index === -1 ? 'Flytta rapportyta' : `Ändra rapportyta · grepp ${index + 1}`,
+        attrs: {
+          'data-grip': REPORT_VIEWPORT_ID,
+          'data-index': index,
+          role: 'button',
+          tabindex: 0,
+        },
+      });
       grip.onkeydown = (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();

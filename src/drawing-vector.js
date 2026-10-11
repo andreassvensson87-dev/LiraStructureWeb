@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { drawingOcclusionIndex } from './drawing-occlusion-index.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { clipSectionSegment } from './section-extents.js';
 
@@ -65,31 +66,7 @@ export function projectedDrawing(surfaces, edgeSets) {
       }
     }
   }
-  // A projected spatial grid avoids comparing each edge with every model face.
-  const bounds = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const t of triangles)
-    for (let i = 0; i < 4; i++)
-      bounds[i] = i < 2 ? Math.min(bounds[i], t.box[i]) : Math.max(bounds[i], t.box[i]);
-  const n = Math.max(1, Math.min(64, Math.ceil(Math.sqrt(triangles.length / 8))));
-  const cell = (v, axis) =>
-    Math.max(
-      0,
-      Math.min(
-        n - 1,
-        Math.floor(((v - bounds[axis]) / (bounds[axis + 2] - bounds[axis] || 1)) * n),
-      ),
-    );
-  const bins = new Map();
-  const visit = (box, action) => {
-    for (let x = cell(box[0], 0); x <= cell(box[2], 0); x++)
-      for (let y = cell(box[1], 1); y <= cell(box[3], 1); y++) action(x + y * n);
-  };
-  triangles.forEach((t, i) =>
-    visit(t.box, (k) => {
-      if (!bins.has(k)) bins.set(k, []);
-      bins.get(k).push(i);
-    }),
-  );
+  const queryOccluders = drawingOcclusionIndex(triangles);
   const result = [];
   for (const {
     geometry,
@@ -98,6 +75,9 @@ export function projectedDrawing(surfaces, edgeSets) {
     overlay = false,
     color = '#53666d',
     sourceId,
+    referenceId,
+    referenceSnap,
+    showHidden,
   } of edgeSets) {
     const visible = [],
       hidden = [],
@@ -118,15 +98,7 @@ export function projectedDrawing(surfaces, edgeSets) {
           Math.max(a[0], b[0]),
           Math.max(a[1], b[1]),
         ];
-      const candidates = new Set();
-      if (!overlay)
-        visit(box, (k) => {
-          for (const t of bins.get(k) || []) candidates.add(t);
-        });
-      for (const k of candidates) {
-        const t = triangles[k];
-        if (box[0] > t.box[2] || box[2] < t.box[0] || box[1] > t.box[3] || box[3] < t.box[1])
-          continue;
+      const occlude = (t) => {
         let lo = 0,
           hi = 1;
         const constrain = (u, v) => {
@@ -145,7 +117,8 @@ export function projectedDrawing(surfaces, edgeSets) {
         const above = (p) => t.zx * p[0] + t.zy * p[1] + t.z0 - p[2] - 0.001;
         constrain(above(a), above(b));
         if (hi > lo + 1e-9) intervals.push([lo, hi]);
-      }
+      };
+      if (!overlay) queryOccluders(box, Math.min(a[2], b[2]), occlude);
       intervals.sort((a, b) => a[0] - b[0]);
       const merged = [];
       for (const range of intervals) {
@@ -161,7 +134,16 @@ export function projectedDrawing(surfaces, edgeSets) {
       }
       if (start < 1 - 1e-9) visible.push([mix(a, b, start), b]);
     }
-    result.push({ visible, hidden, dashed, color, sourceId });
+    result.push({
+      visible,
+      hidden,
+      dashed,
+      color,
+      sourceId,
+      referenceId,
+      referenceSnap,
+      showHidden,
+    });
   }
   return { edges: result, faces: triangles.map((t) => t.points.map((p) => p.slice(0, 2))) };
 }
@@ -192,7 +174,8 @@ export function appendVectorDrawing(
     if (dashed) path.setAttribute('stroke-dasharray', `${dash} ${gap}`);
     parent.append(path);
   };
-  if (hidden) for (const set of data) append(set.hidden, '#849399', true);
+  for (const set of data)
+    if ((hidden || set.showHidden) && set.showHidden !== false) append(set.hidden, '#849399', true);
   for (const set of data) append(set.visible, set.color, set.dashed);
 }
 

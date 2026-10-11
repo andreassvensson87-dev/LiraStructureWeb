@@ -86,11 +86,18 @@
   margin-left: 8px;
   padding-left: 10px;
   border-left: 1px solid #dce5e3;
-  min-width: 115px;
+  flex: 0 0 135px;
+  width: 135px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 10px;
   color: #70858c;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.drawing-editor .selection-box {
+  z-index: 30;
 }
 #frame-editor .cad-hint,
 .drawing-editor .cad-hint {

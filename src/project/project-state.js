@@ -1,9 +1,10 @@
+import { createGridObjects, syncGridObjects } from '../model/grid-objects.js';
 /** Serializable project data only. Cameras, selections and active tools belong to the UI. */
 export const PROJECT_SCHEMA_VERSION = 1;
 export function createProject({ grid, levels }) {
-  return structuredClone({
+  const project = structuredClone({
     schemaVersion: PROJECT_SCHEMA_VERSION,
-    objects: [],
+    objects: createGridObjects(grid),
     grid,
     levels,
     info: { name: '', number: '', client: '' },
@@ -28,6 +29,8 @@ export function createProject({ grid, levels }) {
       rotation: '15',
     },
   });
+  syncGridObjects(project);
+  return project;
 }
 export function projectData(project) {
   const {
@@ -38,11 +41,11 @@ export function projectData(project) {
     info,
     parts,
     drawings,
-    reports = [],
-    references = { folders: ['Standard'], models: [] },
+    reports,
+    references,
     snap,
-    assemblies = [],
-    assemblyNumbering = { registry: [] },
+    assemblies,
+    assemblyNumbering,
   } = project;
   return {
     schemaVersion,

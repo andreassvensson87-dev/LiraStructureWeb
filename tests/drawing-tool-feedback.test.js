@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { polarPoint } from '../src/drawing-tool-feedback.js';
+import { DrawingToolFeedback, polarPoint } from '../src/drawing-tool-feedback.js';
 import { snapDrawingLines } from '../src/drawing-grid-snap.js';
 test('polar constrains near a chosen direction, including negative directions', () => {
   assert.deepEqual(polarPoint([100, 3], [0, 0], 45, 5), [100, 0]);
@@ -30,4 +30,32 @@ test('reference snap prefers crossing and respects segment extents', () => {
   assert.deepEqual(snapDrawingLines([20, 3], lines, 5), [20, 0]);
   assert.equal(snapDrawingLines([120, 3], lines, 5), null);
   assert.equal(snapDrawingLines([20, 20], lines, 5), null);
+});
+
+test('section/detail pointer preview updates its view layer without rebuilding the scene', () => {
+  const feedback = Object.create(DrawingToolFeedback.prototype);
+  const calls = [];
+  const root = { isConnected: true, replaceChildren: () => calls.push('clear preview') };
+  const project = (point) => point;
+  feedback.tool = {
+    draft: { parentId: 'plan' },
+    paint: (layer, view, projection, unit) => {
+      assert.equal(layer, root);
+      assert.equal(view, 'plan');
+      assert.equal(projection, project);
+      assert.equal(unit, 2);
+      calls.push('preview');
+    },
+    adapter: { redraw: () => calls.push('scene') },
+  };
+  feedback.cursor = () => {};
+  feedback.placing = () => false;
+  feedback.locate = () => ({ point: [25, 50], view: 'plan' });
+  feedback.graphics = new Map([['plan', { root, project, unit: 2 }]]);
+  feedback.move({});
+  assert.deepEqual(feedback.tool.hover, [25, 50]);
+  assert.deepEqual(calls, ['clear preview', 'preview']);
+  root.isConnected = false;
+  feedback.move({});
+  assert.equal(calls.at(-1), 'scene');
 });

@@ -46,6 +46,8 @@ UI-flytten har kontrollerats i webbläsaren: modelleringsverktyg, disabled/aktiv
 
 ## Ram- och ritningseditorer
 
+Ritningarnas inspektor använder `ui/inspector-rail.js` för en diskret vertikal ikonlist med Egenskaper, Blad och vyer samt Referenser. `drawing/ui/inspector-panels.js` placerar befintliga kontroller i panelerna utan att ersätta deras controllerer. Ritobjekt och ritverktyg visar sina egenskaper när de väljs; panelbyte i sig ändrar inte urval eller aktivt verktyg. Referenspanelen för GA visar importerade IFC:er med synlighet per vy, skymda kanter, snap och en placeholder för objektfilter. Referenser visas enbart på GA; Single Part och Assembly har bara Egenskaper samt Blad och vyer i ikonlisten.
+
 Rameditorn och GA/Single Part använder också `installEditorSurface`. Deras befintliga CAD-statusrad behålls med samma inställningar, menyer och återkopplingscontroller. Ramens befintliga sektioner och ritningarnas dynamiska egenskapspaneler använder samma fält- och rubrikstil. Koordinatgrupper i ritningsvyer har etiketter ovanför respektive kontroll.
 
 För dynamiska paneler kan adaptern aktivera en lokal MutationObserver för barnändringar. Den adopterar nytillkomna etiketter och sektioner idempotent; den bevakar inte attribut eller domändata. Befintliga kontroller flyttas inte när deras caption redan finns. Dialogerna har samma livslängd som appinstansen. Kontroller för validering, ångra och sparning ägs fortfarande av editorerna.
@@ -61,6 +63,10 @@ Rapportläget använder samma editorarbetsyta, högerpanel, egenskapsrader och n
 Attributbiblioteket använder `installLibraryWorkspace` och `renderLibraryTree`, med grupper för projekt, ritning, rapport och egna attribut. Datatyp kan visas som en diskret badge på trädraden; namn, nyckel, tillämpning, källa och redigerbarhet finns kvar i egenskaper eller tooltip. Spara-knappen kopplas till det befintliga formuläret även när den ligger i fönstrets nederkant. Låsta standardattribut och konfigurerbara vallistor styrs fortfarande av attributdefinitionerna.
 
 ## Ritobjekt, punktval och hatch
+
+`ui/cad-feedback.js` äger presentationen av snapresultat: gemensamma SVG-symboler för ändpunkt, mittpunkt, centrum, korsning, vinkelrät och kvadrant, samt färger och skärmmått för snap, Polar, Otrack och preview. Modellens HTML-overlay innehåller samma SVG-symboler som ritning och rameditor. Profileditorns Canvas-punktmarkör delar samma färg och mått. Befintliga snapmotorer, toleranser, prioritering och kontrollplacering ändras inte. Ritningens feedback ligger fortsatt i exportundantagna hjälplager; ramens preview och modellens tillfälliga meshmaterial använder den gemensamma previewfärgen. Modellens axelguider behåller X/Y/Z-färger och anpassar strecklängden till skärmprojektionen.
+
+Rameditorns objekt och rapportyta använder också `ui/grip.js` och dess gemensamma stil. Linjehörn och rapportytans kant-/hörngrepp är fyrkantiga; objektflytt och rapportytans mittgrepp är diamanter. Det aktiva greppet följer preview med orange markering. Greppens skärmstorlek uppdateras efter render/zoom, och tangentbordsfokus använder samma återkoppling som hover. Rameditorns befintliga punktval, magnetsnap, transform, validering och historik äger fortsatt ändringarna.
 
 Polygon ligger i befintliga Rita-menyn. Flytta/Kopiera/Rotera behåller samma kommandon och knappar, använder förvalda ritobjekt direkt och tillåter flerval inom samma vy eller bland bladtexter. Inspektorn använder gemensamma sektioner för geometri, utseende och framför/bakom modellen. Den kompakta hatchväljaren och dess fält delas med materialbiblioteket. Centrum och kvadranter finns i befintliga Snappunkter-menyn. Exakt längd och vinkel använder samma reserverade fält i nederkanten.
 

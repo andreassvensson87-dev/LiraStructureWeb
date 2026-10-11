@@ -1,3 +1,4 @@
+import { installInsulationInspector } from './drawing-insulation-inspector.js';
 import { createEditorSection } from './ui/editor-surface.js';
 import { createHatchControl } from './hatch-control.js';
 import { validateShape } from './drawing-shapes.js';
@@ -19,6 +20,7 @@ export function installDrawingOrder(editor, item) {
 }
 
 export function installDrawingGeometry(editor, item) {
+  installInsulationInspector(editor, item);
   if (!['polyline', 'polygon'].includes(item.shape)) return;
   const label = document.createElement('label'),
     check = document.createElement('input');

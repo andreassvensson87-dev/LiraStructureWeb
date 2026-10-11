@@ -19,13 +19,83 @@ export default [
       'src/model/ui/**/*.js',
       'src/inspector/model-*.js',
       'src/drawing-object-*.js',
+      'src/drawing-annotations.js',
+      'src/drawing-annotation-inspector.js',
+      'src/drawing-shape-creation.js',
+      'src/drawing-dimension-creation.js',
       'src/drawing-point-placement.js',
       'src/drawing-overlay.js',
       'src/drawing-rich-text-*.js',
       'src/hatch-control.js',
       'src/ui/hatch-control.js',
+      'src/frame-editor*.js',
+      'src/section-editor*.js',
+      'src/plan-view*.js',
+      'src/single-part-sheet.js',
+      'src/part-sheet-*.js',
+      'src/fasteners/ui.js',
+      'src/fasteners/*inspector.js',
+      'src/items/library-ui.js',
+      'src/items/editor.js',
+      'src/items/fields.js',
+      'src/references/reference-models.js',
+      'src/references/reference-inspector.js',
+      'src/references/reference-import.js',
     ],
     rules: { 'no-unused-vars': ['error', { args: 'none' }] },
+  },
+  {
+    files: [
+      'src/plan-view-geometry.js',
+      'src/part-sheet-geometry.js',
+      'src/*editor-renderer.js',
+      'src/*editor-inspector.js',
+      'src/plan-view-renderer.js',
+      'src/part-sheet-composer.js',
+      'src/fasteners/*inspector.js',
+      'src/references/reference-inspector.js',
+      'src/drawing-rich-text-inspector.js',
+    ],
+    rules: { 'no-shadow': 'error' },
+  },
+  {
+    files: [
+      'src/*editor-renderer.js',
+      'src/*editor-inspector.js',
+      'src/plan-view-renderer.js',
+      'src/part-sheet-composer.js',
+      'src/fasteners/*inspector.js',
+      'src/references/reference-inspector.js',
+      'src/drawing-rich-text-inspector.js',
+    ],
+    rules: {
+      'no-restricted-globals': ['error', 'localStorage', 'sessionStorage'],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/app/**',
+                '**/main.js',
+                '**/*controller.js',
+                '**/*editor.js',
+                '**/plan-view.js',
+                '**/single-part-sheet.js',
+                '**/reference-models.js',
+                '**/reference-import.js',
+                '**/library-ui.js',
+                '**/store.js',
+                '**/*-store.js',
+                '**/storage.js',
+              ],
+              message:
+                'Presentation receives data and callbacks from its owner; it must not import controllers or storage.',
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     files: ['src/main.js'],
@@ -66,11 +136,19 @@ export default [
       'src/model/tools/**/*.js',
       'src/model/navigation.js',
       'src/drawing-object-transform.js',
+      'src/drawing-selection-geometry.js',
+      'src/cad-tracking.js',
       'src/drawing-snap-geometry.js',
+      'src/references/drawing-reference-geometry.js',
+      'src/drawing-projection-data.js',
       'src/drawing-shapes.js',
+      'src/drawing-shape-creation.js',
+      'src/drawing-dimension-creation.js',
       'src/material-hatch.js',
       'src/drawing-rich-text.js',
       'src/app/model-editor.js',
+      'src/plan-view-geometry.js',
+      'src/part-sheet-geometry.js',
     ],
     rules: {
       'no-restricted-globals': ['error', 'document', 'window', 'localStorage', 'sessionStorage'],
@@ -125,18 +203,23 @@ export default [
       'src/app/workspace-*.js',
       'src/model/ui/**/*.js',
       'src/inspector/**/*.js',
+      'src/inspector.js',
+      'src/fasteners/ui.js',
+      'src/fasteners/*inspector.js',
+      'src/items/editor.js',
+      'src/items/library-ui.js',
+      'src/references/reference-inspector.js',
     ],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
-          selector:
-            "AssignmentExpression[left.object.name='project'][left.property.name='objects']",
+          selector: "AssignmentExpression[left.property.name='objects']",
           message: 'Use modelEditor to commit model changes and history.',
         },
         {
           selector:
-            "CallExpression[callee.object.object.name='project'][callee.object.property.name='objects'][callee.property.name=/^(push|splice|pop|shift|unshift|sort|reverse)$/]",
+            "CallExpression[callee.object.property.name='objects'][callee.property.name=/^(push|splice|pop|shift|unshift|sort|reverse)$/]",
           message: 'UI must submit model changes to modelEditor.',
         },
       ],
@@ -148,13 +231,12 @@ export default [
       'no-restricted-syntax': [
         'error',
         {
-          selector:
-            "AssignmentExpression[left.object.name='project'][left.property.name='objects']",
+          selector: "AssignmentExpression[left.property.name='objects']",
           message: 'Use modelEditor to commit model changes and history.',
         },
         {
           selector:
-            "CallExpression[callee.object.object.name='project'][callee.object.property.name='objects'][callee.property.name=/^(push|splice|pop|shift|unshift|sort|reverse)$/]",
+            "CallExpression[callee.object.property.name='objects'][callee.property.name=/^(push|splice|pop|shift|unshift|sort|reverse)$/]",
           message: 'UI must submit model changes to modelEditor.',
         },
         {

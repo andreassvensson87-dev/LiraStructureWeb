@@ -30,6 +30,7 @@ export function installWorkspaceDrawings({
     },
     onChange: render,
     onIdentityChange: syncIdentity,
+    getReferenceModels: () => controllers.referenceModels?.models || [],
   });
   controllers.planView = drawingController.planView;
   controllers.drawingManager = drawingController.manager;

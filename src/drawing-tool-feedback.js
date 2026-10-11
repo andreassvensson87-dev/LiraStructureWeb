@@ -11,9 +11,23 @@ export function polarPoint(point, base, step, tolerance) {
   if (length <= tolerance || Math.abs(dx * s - dy * c) > tolerance) return null;
   return [base[0] + length * c, base[1] + length * s];
 }
+// Keep each view's marker/preview graphics separate from the model projection.
+export function paintDrawingTool(tool, root, parentId, project, unit = 1) {
+  if (!tool) return;
+  const feedback = tool.feedback;
+  feedback.graphics ||= new Map();
+  for (const [id, entry] of feedback.graphics)
+    if (!entry.root.isConnected) feedback.graphics.delete(id);
+  feedback.graphics.get(parentId)?.root.remove();
+  const layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  root.append(layer);
+  feedback.graphics.set(parentId, { root: layer, project, unit });
+  tool.paint(layer, parentId, project, unit);
+}
 export class DrawingToolFeedback {
   constructor(tool, workspace, type) {
     Object.assign(this, { tool, workspace, type });
+    tool.dialog.addEventListener('close', () => this.graphics?.clear());
     this.ghost = document.createElement('div');
     this.ghost.className = 'drawing-placement-preview';
     this.ghost.hidden = true;
@@ -126,7 +140,11 @@ export class DrawingToolFeedback {
     }
     this.hit = this.locate(e);
     t.hover = this.hit?.point;
-    t.adapter.redraw();
+    const graphics = this.graphics?.get(t.draft.parentId);
+    if (graphics?.root.isConnected) {
+      graphics.root.replaceChildren();
+      t.paint(graphics.root, t.draft.parentId, graphics.project, graphics.unit);
+    } else t.adapter.redraw();
   }
   paint(root, parentId, project) {
     const hit = this.hit;

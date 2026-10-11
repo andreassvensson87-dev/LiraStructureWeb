@@ -1,15 +1,22 @@
+import { resolvePartDrawingGeometry } from './part-sheet-geometry.js';
+import {
+  composePartSheet,
+  paintPartAssemblySchedule,
+  syncPartViewInspector,
+} from './part-sheet-composer.js';
+import { beginDrawingViewGrip } from './drawing-view-grip-editor.js';
+
 import { createSinglePartShell } from './drawing/ui/single-part-shell.js';
-import { appendDrawingViewGrips, updateDrawingViewGripSizes } from './drawing-view-grips.js';
+import { updateDrawingViewGripSizes } from './drawing-view-grips.js';
 import { createDrawingViewInspector } from './drawing-view-inspector.js';
 import { resizeDrawingView } from './drawing-views.js';
-import { drawingProfileDetail } from './profile-detail.js';
+
 import { installDrawingProfileDetail } from './drawing-profile-detail.js';
 import { instantiateDrawingTemplate } from './drawing-templates.js';
 import { installTemplateSave } from './drawing-template-ui.js';
-import { drawingAttributeContext } from './drawing-attributes.js';
-import { applyDrawingFont, drawingFont } from './drawing-preferences.js';
-import { migrateIndependentPartViews, arrangePartViews } from './part-view-migration.js';
-import { migratePartSection } from './part-section-migration.js';
+
+import { drawingFont } from './drawing-preferences.js';
+import { arrangePartViews, createPartViews } from './part-view-layout.js';
 import {
   DrawingViewActions,
   installDrawingViewDeselection,
@@ -19,10 +26,9 @@ import { duplicateDrawingView } from './drawing-views.js';
 import { nextSectionName } from './drawing-sections.js';
 import { nextDetailLabel } from './drawing-details.js';
 import { PartViewTool } from './part-view-tool.js';
-import { migratePartOrientation } from './part-section-orientation.js';
 import { partDrawingReflection } from './part-view-frame.js';
 import { DrawingDetailTool } from './drawing-detail-tool.js';
-import { appendViewTitle } from './drawing-view-title.js';
+
 import { DrawingSectionTool } from './drawing-section-tool.js';
 import { PartSections } from './part-sections.js';
 import {
@@ -34,13 +40,8 @@ import {
   drawingViewAtPoint,
 } from './drawing-views.js';
 import { DrawingWorkspace, drawingEditorShell } from './drawing-workspace.js';
-import { pasteboardBounds } from './drawing-pasteboard.js';
-import {
-  findDrawingLayout,
-  layoutPicker,
-  fillLayoutPicker,
-  appendDrawingLayout,
-} from './drawing-layout.js';
+
+import { findDrawingLayout, layoutPicker, fillLayoutPicker } from './drawing-layout.js';
 import { DrawingAnnotations } from './drawing-annotations.js';
 import { actionButton, actionMenu } from './drawing-toolbar.js';
 import { objectGeometry, displayGeometry } from './model-object.js';
@@ -52,22 +53,15 @@ import {
   assemblyScheduleTable,
   newMaterialSchedule,
 } from './assembly-schedule.js';
-import {
-  appendMaterialSchedule,
-  materialScheduleHeight,
-  materialSchedulePosition,
-} from './assembly-material-schedule.js';
+import { materialSchedulePosition } from './assembly-material-schedule.js';
 import { editAssemblySchedule } from './assembly-schedule-editor.js';
 import {
   normalizeSinglePartMaterialSchedule,
-  singlePartMaterialPosition,
-  singlePartMaterialData,
-  appendSinglePartMaterialSchedule,
   singlePartMaterialSize,
 } from './single-part-material-schedule.js';
 import { assemblySchedule } from './project/assemblies.js';
 import { assemblyDrawingMatrix } from './assembly-frames.js';
-import { drawingAssemblies } from './assembly-numbering.js';
+
 import { updatePartHolePanel, partHoleSchedule } from './fasteners/drawing.js';
 import {
   PAPER_KEY,
@@ -114,13 +108,9 @@ export class SinglePartSheet {
       stage: shell.stage,
     });
     this.dialog.addEventListener('close', () => {
+      this.annotations?.grips?.cancel();
       this.save?.(this.record);
-      this.geometry?.dispose();
-      this.geometry = null;
-      this.snapGeometry?.dispose();
-      this.snapGeometry = null;
-      this.disposeAssembly();
-      this.disposeProfileVariants();
+      this.releaseDrawingGeometry();
     });
     this.$('selected-view').onchange = () => this.selectView(this.$('selected-view').value);
     this.svg.addEventListener('keydown', (e) => {
@@ -278,6 +268,22 @@ export class SinglePartSheet {
       adapter: {
         paper: this.svg,
         paperSize: () => this.paper,
+        beginViewGrip: (event, node) =>
+          beginDrawingViewGrip({
+            event,
+            node,
+            paper: this.svg,
+            paperSize: () => this.paper,
+            views: () => this.config.views,
+            selected: () => this.selectedViews(),
+            annotations: this.annotations,
+            render: () => {
+              this.extraSections.build();
+              this.compose();
+              this.extraSections.sync();
+              this.viewPlacement?.sync();
+            },
+          }),
         cancelTools: () => this.cancelInteraction(),
         redraw: () => this.compose(),
         pixelScale: () => this.svg.getBoundingClientRect().width / this.paper[0],
@@ -352,7 +358,7 @@ export class SinglePartSheet {
       paper: this.svg,
       getPaper: () => this.paper,
       getBounds: () => this.contentBounds,
-      blocked: () => !!(this.drag || this.annotations.drag),
+      blocked: () => !!(this.drag || this.annotations.drag || this.annotations.grips?.session),
       onScale: (scale) => updateDrawingViewGripSizes(this.svg, scale),
     });
     this.svg.onpointerdown = (e) => {
@@ -598,6 +604,7 @@ export class SinglePartSheet {
     });
   }
   cancelInteraction() {
+    this.annotations?.grips?.cancel();
     this.viewMarquee?.cancel();
     this.viewActions?.cancel();
     this.viewTool?.cancel();
@@ -723,8 +730,12 @@ export class SinglePartSheet {
     };
     this.record.sheet = this.config;
     if (this.assembly) this.config.assemblyModelMatrix = assemblyDrawingMatrix(source).toArray();
+    if (newSheet) {
+      this.config.views = createPartViews(this.record, this.bounds, this.config.scale);
+      delete this.config.scale;
+    }
     ensurePartViews(this.record);
-    if (this.assembly && !this.config.assemblyViews) {
+    if (this.assembly && newSheet) {
       const side = structuredClone(this.config.views.find((v) => v.id === 'front'));
       Object.assign(side, {
         id: 'right',
@@ -741,7 +752,6 @@ export class SinglePartSheet {
       ];
       side.position = [10, 10];
       this.config.views.push(side);
-      this.config.assemblyViews = true;
       this.config.assemblySchedule ??= newMaterialSchedule();
     }
     if (this.assembly)
@@ -795,7 +805,24 @@ export class SinglePartSheet {
       this.config.assemblyArranged = true;
       this.compose();
     }
+    this.syncInspector();
     this.fit();
+  }
+  releaseDrawingGeometry() {
+    this.geometry?.dispose();
+    this.geometry = null;
+    this.snapGeometry?.dispose();
+    this.snapGeometry = null;
+    this.disposeAssembly();
+    this.disposeProfileVariants();
+    this.extraSections?.cache.clear();
+    this.annotationCandidates = {};
+    this.profileGeometryModel = null;
+    this.profileGeometrySource = null;
+    this.profileGeometryAssembly = null;
+    this.profileLocalMatrix = null;
+    this.drawingReflection = null;
+    this.svg.replaceChildren();
   }
   disposeAssembly() {
     for (const e of this.assemblyEntries || []) {
@@ -817,40 +844,21 @@ export class SinglePartSheet {
     this.profileVariants = new Map();
   }
   drawingGeometry(view) {
-    const detail = drawingProfileDetail(view, this.record.type);
-    if (detail === 'exact')
-      return {
+    return resolvePartDrawingGeometry(
+      {
+        record: this.record,
         geometry: this.geometry,
         snapGeometry: this.snapGeometry,
-        entries: this.assemblyEntries,
-      };
-    let variant = this.profileVariants.get(detail);
-    if (!variant) {
-      variant = this.profileGeometryAssembly
-        ? assemblyGeometry(this.profileGeometryAssembly, this.profileGeometryModel, detail)
-        : {
-            geometry: objectGeometry(
-              this.profileGeometrySource,
-              this.profileGeometryModel,
-              detail,
-            ).applyMatrix4(this.profileLocalMatrix),
-            snapGeometry: displayGeometry(
-              this.profileGeometrySource,
-              this.profileGeometryModel,
-              'schematic',
-            ).applyMatrix4(this.profileLocalMatrix),
-          };
-      if (this.drawingReflection) {
-        variant.geometry.applyMatrix4(this.drawingReflection);
-        variant.snapGeometry.applyMatrix4(this.drawingReflection);
-        for (const entry of variant.entries || []) {
-          entry.geometry.applyMatrix4(this.drawingReflection);
-          entry.snapGeometry.applyMatrix4(this.drawingReflection);
-        }
-      }
-      this.profileVariants.set(detail, variant);
-    }
-    return variant;
+        assemblyEntries: this.assemblyEntries,
+        profileVariants: this.profileVariants,
+        profileGeometryAssembly: this.profileGeometryAssembly,
+        profileGeometryModel: this.profileGeometryModel,
+        profileGeometrySource: this.profileGeometrySource,
+        profileLocalMatrix: this.profileLocalMatrix,
+        drawingReflection: this.drawingReflection,
+      },
+      view,
+    );
   }
   selectedViews() {
     return this.config.views.filter((view) => this.selectedViewIds?.has(view.id));
@@ -878,22 +886,15 @@ export class SinglePartSheet {
     this.compose();
   }
   syncInspector() {
-    this.profileDetailControl?.sync();
-    if (this.viewName)
-      this.viewName.value =
-        this.config.views?.find((v) => v.id === this.selectedView)?.name ||
-        { top: 'Top', front: 'Front', section: 'Sektion A–A' }[this.selectedView] ||
-        '';
-    this.$('hidden-lines').checked = !!viewById(this.config, this.selectedView)?.settings
-      .hiddenLines;
-    this.$('selected-view').value = this.selectedView || '';
-    this.$('hidden-lines').disabled = !this.selectedView;
-    if (this.viewName) this.viewName.disabled = !this.selectedView;
-    for (const v of ['top', 'front', 'section']) this.$('scale-' + v).parentElement.hidden = true;
-    this.$('section').parentElement.hidden = true;
-    this.$('scale-section').parentElement.hidden = true;
-    this.extraSections?.sync();
-    this.viewPlacement?.sync();
+    return syncPartViewInspector({
+      profileDetailControl: this.profileDetailControl,
+      viewName: this.viewName,
+      config: this.config,
+      selectedView: this.selectedView,
+      $: this.$,
+      extraSections: this.extraSections,
+      viewPlacement: this.viewPlacement,
+    });
   }
   frame(group, id, x, y, width, height) {
     group.setAttribute('tabindex', '0');
@@ -973,11 +974,7 @@ export class SinglePartSheet {
     this.$('library').hidden = !!this.frameLayout;
     if (!this.config.layout)
       this.config.layout = sheetLayout(this.bounds, partViewScales(this.config), this.paper);
-    migratePartSection(this.record, this.bounds);
-    const frame = (view, orientation) => this.extraSections.frame(view, orientation);
-    migratePartOrientation(this.record, frame);
     if (this.drawingReflection) {
-      migratePartOrientation(this.record, frame, this.drawingReflection);
       if (!this.geometryInDrawingFrame) {
         this.geometry.applyMatrix4(this.drawingReflection);
         this.snapGeometry.applyMatrix4(this.drawingReflection);
@@ -990,188 +987,45 @@ export class SinglePartSheet {
       }
     }
     this.geometryInDrawingFrame = true;
-    migrateIndependentPartViews(this.config, this.bounds);
     this.annotationCandidates = {};
     this.extraSections?.build();
     this.compose();
     this.syncInspector();
   }
   compose() {
-    applyDrawingFont(this.svg, this.record);
-    const [w, h] = this.paper,
-      c = this.config;
-    this.svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    this.svg.replaceChildren(
-      node('rect', {
-        'data-paper-boundary': 'true',
-        width: w,
-        height: h,
-        fill: 'white',
-        stroke: '#899ba4',
-        'stroke-width': 1,
-        'vector-effect': 'non-scaling-stroke',
-        'pointer-events': 'none',
-      }),
-    );
-    const boxes = [];
-    for (const v of this.extraSections.items)
-      boxes.push([
-        v.position[0],
-        v.position[1],
-        v.position[0] + v.size[0],
-        v.position[1] + v.size[1],
-      ]);
-    this.$('message').textContent = boxes.some(
-      ([x, y, r, bot]) => x < 0 || y < 0 || r > w || bot > h,
-    )
-      ? 'En vy ligger utanför bladet. Ändra skala, format eller placering.'
-      : '';
-    this.extraSections.paint();
-    this.extraSections.options();
-    for (const view of this.config.views) {
-      this.sectionTool?.paint(this.svg, view.id, (p) => this.projectAnnotation(p, view.id), 1);
-      this.detailTool?.paint(this.svg, view.id, (p) => this.projectAnnotation(p, view.id), 1);
-      appendViewTitle(this.svg, view, view.position[0] + 1, view.position[1] + view.size[1]);
-    }
-    appendDrawingLayout(
-      this.svg,
-      this.frameLayout,
-      drawingAttributeContext(this.record, this.getAttributeState()),
-    );
-    this.annotations.render(this.svg);
-    this.annotations.richText?.paint(this.svg);
-    if (!this.assembly) {
-      const settings = this.config.partMaterialSchedule;
-      if (settings.dockToTop)
-        settings.position = singlePartMaterialPosition(this.paper, this.frameLayout);
-      const data = singlePartMaterialData(this.record, this.getAttributeState());
-      appendSinglePartMaterialSchedule(this.svg, data, settings);
-      for (const input of this.partMaterialPanel.querySelectorAll('input')) {
-        const key = input.dataset.materialField;
-        if (key === 'visible') input.checked = settings.visible;
-        else input.value = settings.position[key === 'x' ? 0 : 1];
-      }
-      if (settings.visible && data && !data.verified)
-        this.$('message').textContent =
-          'Numrera om detaljerna för att uppdatera materiallistans antal och totaler.';
-      if (
-        settings.visible &&
-        (settings.position[0] < 0 ||
-          settings.position[1] < 0 ||
-          settings.position[0] + singlePartMaterialSize[0] > w ||
-          settings.position[1] + singlePartMaterialSize[1] > h)
-      )
-        this.$('message').textContent =
-          'Materiallistan ligger utanför bladet. Ändra placering eller välj ett större format.';
-    }
-    if (this.assembly) {
-      const schedule = this.config.assemblySchedule;
-      const table = assemblyScheduleTable(
-        assemblySchedule(this.assembly, this.getAttributeState()),
-        schedule,
-      );
-      if (schedule.style === 'material' && schedule.dockToTitle)
-        schedule.position = materialSchedulePosition(table, this.paper, this.frameLayout);
-      this.paintAssemblySchedule();
-      for (const input of this.assemblyPanel.querySelectorAll('input')) {
-        const key = input.dataset.scheduleField;
-        if (key === 'visible') input.checked = schedule.visible;
-        else input.value = schedule.position[key === 'x' ? 0 : 1];
-      }
-      if (
-        schedule.visible &&
-        (schedule.position[0] < 0 ||
-          schedule.position[0] + table.width > w ||
-          schedule.position[1] - (schedule.style === 'material' ? 0 : table.rowHeight) < 0 ||
-          schedule.position[1] +
-            (schedule.style === 'material'
-              ? materialScheduleHeight(table)
-              : table.values.length * table.rowHeight) >
-            h)
-      )
-        this.$('message').textContent =
-          'Stycklistan ligger utanför bladet. Ändra placering under Stycklista eller välj ett större format.';
-    }
-    for (const selected of this.selectedViews()) {
-      const handles = node('g', {
-        'data-view': selected.id,
-        class: 'drawing-view-grips-layer',
-        transform: `translate(${selected.position})`,
-      });
-      appendDrawingViewGrips(handles, ...selected.size, this.navigation.scale);
-      this.svg.append(handles);
-    }
-    const guides = [...this.svg.querySelectorAll('.section-extent-guides')];
-    guides.forEach((n) => (n.style.display = 'none'));
-    this.contentBounds = pasteboardBounds(this.paper, this.svg.getBBox());
-    guides.forEach((n) => n.style.removeProperty('display'));
-    this.size();
+    return composePartSheet({
+      svg: this.svg,
+      record: this.record,
+      paper: this.paper,
+      config: this.config,
+      extraSections: this.extraSections,
+      $: this.$,
+      sectionTool: this.sectionTool,
+      projectAnnotation: this.projectAnnotation.bind(this),
+      detailTool: this.detailTool,
+      frameLayout: this.frameLayout,
+      getAttributeState: this.getAttributeState,
+      annotations: this.annotations,
+      assembly: this.assembly,
+      partMaterialPanel: this.partMaterialPanel,
+      paintAssemblySchedule: this.paintAssemblySchedule.bind(this),
+      assemblyPanel: this.assemblyPanel,
+      selectedViews: this.selectedViews.bind(this),
+      navigation: this.navigation,
+      size: this.size.bind(this),
+      setContentBounds: (bounds) => {
+        this.contentBounds = bounds;
+      },
+    });
   }
   paintAssemblySchedule() {
-    const settings = this.config.assemblySchedule;
-    if (!settings?.visible) return;
-    const table = assemblyScheduleTable(
-        assemblySchedule(this.assembly, this.getAttributeState()),
-        settings,
-      ),
-      [x, y] = settings.position,
-      widths = table.columns.map((c) => c.width),
-      height = table.rowHeight,
-      g = node('g', {
-        'data-assembly-schedule': this.assembly.id,
-        transform: `translate(${x},${y})`,
-        'font-size': table.settings.textSize,
-      });
-    if (table.settings.style === 'material') {
-      appendMaterialSchedule(
-        this.svg,
-        table,
-        this.assembly.id,
-        drawingAssemblies(this.record, this.getAttributeState()).length,
-      );
-      return;
-    }
-    g.append(
-      node(
-        'text',
-        { x: 0, y: -3, 'font-weight': 'bold' },
-        `${this.assembly.mark} · ${drawingAssemblies(this.record, this.getAttributeState()).length} st assemblies · Stycklista per assembly`,
-      ),
-    );
-    const values = table.values;
-    values.forEach((row, i) => {
-      let left = 0;
-      row.forEach((value, j) => {
-        g.append(
-          node('rect', {
-            x: left,
-            y: i * height,
-            width: widths[j],
-            height,
-            fill: i ? 'white' : '#eef3f2',
-            stroke: '#899ba4',
-            'stroke-width': 0.15,
-          }),
-        );
-        const clipId = `assembly-cell-${i}-${j}`;
-        const clip = node('clipPath', { id: clipId });
-        clip.append(node('rect', { x: left + 1, y: i * height, width: widths[j] - 2, height }));
-        g.append(
-          clip,
-          node(
-            'text',
-            {
-              x: left + 1.5,
-              y: i * height + height / 2 + table.settings.textSize * 0.35,
-              'clip-path': `url(#${clipId})`,
-            },
-            value,
-          ),
-        );
-        left += widths[j];
-      });
+    return paintPartAssemblySchedule({
+      config: this.config,
+      assembly: this.assembly,
+      getAttributeState: this.getAttributeState,
+      svg: this.svg,
+      record: this.record,
     });
-    this.svg.append(g);
   }
   size() {
     if (this.paper) this.navigation.size();

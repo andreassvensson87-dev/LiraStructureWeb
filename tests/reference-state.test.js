@@ -45,15 +45,12 @@ test('IFC, DXF and DWG originals and settings survive project serialization with
   restored.references.models[1].placement.offset[0] = -1;
   assert.equal(p.references.models[1].placement.offset[0], 100);
 });
-test('legacy projects without references default to an empty reference list', () => {
+test('projects missing the required reference collection are rejected', () => {
   const file = JSON.parse(
     readFileSync(new URL('../examples/assemblytest.lira.json', import.meta.url), 'utf8'),
   );
   delete file.project.references;
-  assert.deepEqual(parseProjectFile(JSON.stringify(file)).references, {
-    folders: ['Standard'],
-    models: [],
-  });
+  assert.throws(() => parseProjectFile(JSON.stringify(file)), /referenser/);
 });
 test('invalid reference identities, sources, grouping and CAD placement are rejected', () => {
   const valid = { folders: ['Underlag'], models: [entry('DXF')] };

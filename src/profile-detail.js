@@ -1,5 +1,4 @@
 import { evaluateProfileContours } from './section-contours.js';
-import { legacySchematicLoops } from './section-display-compat.js';
 
 const schematicObjects = new WeakMap();
 const schematicContours = new WeakMap();
@@ -8,7 +7,7 @@ export function schematicProfileLoops(section) {
   if (schematicContours.has(section)) return schematicContours.get(section);
   const loops = section.contourDefinition
     ? evaluateProfileContours(section.contourDefinition, section.parameters, 'schematic')
-    : legacySchematicLoops(section);
+    : null;
   schematicContours.set(section, loops);
   return loops;
 }

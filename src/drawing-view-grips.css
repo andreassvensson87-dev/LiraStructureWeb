@@ -1,25 +1,10 @@
+@import './ui/grip.css';
 #plan-view .ga-view-grip {
   position: absolute;
   width: 18px;
   height: 18px;
   transform: translate(-50%, -50%);
   z-index: 8;
-}
-.ga-view-grip::after {
-  content: '';
-  position: absolute;
-  inset: 5px;
-  background: white;
-  border: 1px solid #287c65;
-  box-sizing: border-box;
-}
-.ga-view-grip-move::after {
-  background: #78b9da;
-  border-color: #287a9b;
-}
-.ga-view-grip:hover::after {
-  background: #f5ae56;
-  border-color: #a86a20;
 }
 .ga-view-grip-nw {
   left: 0;
@@ -57,25 +42,6 @@
   left: 50%;
   top: 50%;
 }
-.view-grip-hit {
-  fill: transparent;
-  stroke: none;
-  pointer-events: all;
-}
-.view-grip-marker {
-  fill: white;
-  stroke: #287c65;
-  stroke-width: 1px;
-  pointer-events: none;
-}
-[data-view-grip='move'] .view-grip-marker {
-  fill: #78b9da;
-  stroke: #287a9b;
-}
-.drawing-view-grip:hover .view-grip-marker {
-  fill: #f5ae56;
-  stroke: #a86a20;
-}
 .drawing-editor .drawing-view-placement {
   margin-top: 14px;
 }
@@ -107,4 +73,8 @@
 
 #plan-view .ga-view-snapshot.view-selected {
   outline: 1px solid #589383;
+}
+
+#plan-view .object-grip-focused .ga-view-grip {
+  visibility: hidden;
 }

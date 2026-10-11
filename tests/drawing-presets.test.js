@@ -48,17 +48,17 @@ test('automatic visibility keeps GA hidden lines off and Single Part on', () => 
   assert.equal(applyDrawingPreset({ type: 'GA' }, {}).settings.hiddenLines, false);
   assert.equal(applyDrawingPreset({ type: 'SP' }, {}).settings.hiddenLines, true);
   const record = applyDrawingPreset({ type: 'SP', sourceId: 'p' }, { hiddenLines: false });
-  record.sheet = { section: 0 };
+  record.sheet = { views: [{ id: 'front', settings: {} }] };
   assert.ok(ensurePartViews(record).every((v) => v.settings.hiddenLines === false));
 });
-test('preset library migrates legacy font and recovers corrupt storage', () => {
+test('preset library ignores obsolete font storage and recovers corrupt storage', () => {
   const old = globalThis.localStorage;
   try {
     globalThis.localStorage = {
       getItem: (key) =>
         key.includes('drawing-presets') ? null : JSON.stringify({ font: 'Verdana, sans-serif' }),
     };
-    assert.equal(readDrawingPresets().items[0].font, 'Verdana, sans-serif');
+    assert.equal(readDrawingPresets().items[0].font, 'Arial, sans-serif');
     globalThis.localStorage = { getItem: () => '{bad' };
     assert.equal(readDrawingPresets().items[0].font, 'Arial, sans-serif');
   } finally {

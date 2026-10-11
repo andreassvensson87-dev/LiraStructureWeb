@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newDrawingText, layoutDrawingText } from '../src/drawing-rich-text.js';
-import { readRichText } from '../src/drawing-rich-text-editor.js';
+import { readRichText } from '../src/drawing-rich-text-content.js';
 const text = (value) => ({ nodeType: 3, textContent: value });
 const node = (name, children, style = {}) => ({
   nodeName: name,

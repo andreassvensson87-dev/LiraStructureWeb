@@ -20,7 +20,6 @@ import {
   validateItemLibrary,
   emptyItemLibrary,
   mergeBundledItems,
-  organizeWeland,
   folderPath,
   editItemFolder,
   findLibraryItems,
@@ -221,20 +220,20 @@ test('Sectional Railing includes all 68 shapes in the original folder hierarchy'
   );
   validateItemLibrary(catalog);
   assert.equal(catalog.items.length, 68);
-  assert.equal(catalog.folders.length, 13);
+  assert.equal(catalog.folders.length, 14);
   assert.equal(new Set(catalog.items.map((e) => e.definition.geometryId)).size, 68);
   const paths = new Map();
   const path = (f) =>
     f.parent ? path(catalog.folders.find((p) => p.id === f.parent)) + '/' + f.name : f.name;
   for (const folder of catalog.folders)
     paths.set(path(folder), catalog.items.filter((e) => e.folder === folder.id).length);
-  assert.equal(paths.get('Sectional Railing/Gate'), 6);
-  assert.equal(paths.get('Sectional Railing/Handrail'), 15);
-  assert.equal(paths.get('Sectional Railing/Kick strip'), 5);
-  assert.equal(paths.get('Sectional Railing/Round Bar Filling'), 14);
+  assert.equal(paths.get('Weland/Sectional Railing/Gate'), 6);
+  assert.equal(paths.get('Weland/Sectional Railing/Handrail'), 15);
+  assert.equal(paths.get('Weland/Sectional Railing/Kick strip'), 5);
+  assert.equal(paths.get('Weland/Sectional Railing/Round Bar Filling'), 14);
   for (const mount of ['Top Mounted', 'Side Mounted'])
     for (const kind of ['Intermediate', 'Round Bar'])
-      assert.equal(paths.get('Sectional Railing/' + mount + '/' + kind), 7);
+      assert.equal(paths.get('Weland/Sectional Railing/' + mount + '/' + kind), 7);
 });
 test('bundled catalog seeds once, reuses folders and preserves edited existing items without duplicates', () => {
   const library = emptyItemLibrary();
@@ -283,21 +282,16 @@ test('an existing vendor folder under Standard is reused instead of creating a s
   assert.equal(merged.items.length, 1);
 });
 
-test('Weland migration nests the existing catalog once and preserves edited item versions', () => {
-  const original = {
-    ...emptyItemLibrary(),
-    folders: [
-      { id: 'standard', name: 'Standard', parent: null },
-      { id: 'sectional-folder-root', name: 'Sectional Railing', parent: 'standard' },
-      { id: 'gate', name: 'Gate', parent: 'sectional-folder-root' },
-    ],
-    items: [{ definition: item, folder: 'gate', starred: true }],
-  };
-  const next = organizeWeland(original);
-  assert.equal(folderPath(next, 'gate'), 'Weland / Sectional Railing / Gate');
-  assert.equal(next.items[0], original.items[0]);
-  assert.equal(organizeWeland(next), next);
-  assert.equal(original.folders.length, 3);
+test('bundled catalog starts under Weland without upgrading a saved library', () => {
+  const catalog = JSON.parse(
+    gunzipSync(
+      readFileSync(new URL('../src/items/catalog/sectional-railing.bin', import.meta.url)),
+    ),
+  );
+  const library = mergeBundledItems(emptyItemLibrary(), catalog, 'catalog');
+  const gate = library.folders.find((folder) => folder.name === 'Gate');
+  assert.equal(folderPath(library, gate.id), 'Weland / Sectional Railing / Gate');
+  assert.equal(mergeBundledItems(library, catalog, 'catalog'), library);
 });
 test('folder moves reject cycles and duplicate siblings; search covers ancestors and latest revisions', () => {
   const library = {

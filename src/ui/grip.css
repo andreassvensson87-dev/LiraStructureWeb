@@ -1,0 +1,56 @@
+.cad-grip {
+  cursor: crosshair;
+}
+.cad-grip[data-grip-role='move'] {
+  cursor: move;
+}
+.cad-grip-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+.cad-grip-marker {
+  fill: white;
+  stroke: #287c65;
+  stroke-width: 1px;
+  pointer-events: none;
+}
+[data-grip-role='move'] > .cad-grip-marker {
+  fill: #287c65;
+}
+.cad-grip:hover > .cad-grip-marker,
+.cad-grip:focus-visible > .cad-grip-marker,
+.cad-grip.is-active > .cad-grip-marker {
+  fill: #f59e0b;
+}
+.cad-grip.is-active > .cad-grip-marker {
+  stroke: #263a42;
+  stroke-width: 2px;
+}
+div.cad-grip {
+  width: 18px;
+  height: 18px;
+}
+div.cad-grip::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 8px;
+  height: 8px;
+  background: white;
+  border: 1px solid #287c65;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+div.cad-grip[data-grip-role='move']::after {
+  transform: rotate(45deg);
+  background: #287c65;
+}
+div.cad-grip:hover::after,
+div.cad-grip.is-active::after {
+  background: #f59e0b;
+}
+div.cad-grip.is-active::after {
+  border: 2px solid #263a42;
+}

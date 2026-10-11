@@ -52,7 +52,7 @@ export function createDrawingToolbox(root, toolbar) {
       .find((g) => g.id === id)
       .categories.flatMap((c) => c.buttons)
       .map((node) => ({ node }));
-  const [select] = commands('select');
+  const [select, ...selectionTools] = commands('select');
   const modify = commands('modify');
   const draw = commands('draw');
   const measure = commands('measure');
@@ -79,7 +79,9 @@ export function createDrawingToolbox(root, toolbar) {
     {
       label: 'Ändra',
       items: [
-        { ...select, size: 'large' },
+        selectionTools.length
+          ? { label: 'Markera', primary: select.node, size: 'large', menu: selectionTools }
+          : { ...select, size: 'large' },
         ...(modify.length ? [{ ...modify[0], size: 'large' }] : []),
         ...(modify.length > 1 ? [{ stack: modify.slice(1) }] : []),
       ],

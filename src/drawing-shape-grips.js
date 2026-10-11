@@ -1,6 +1,14 @@
+import { insulationFrame } from './drawing-insulation.js';
 import { arcGeometry, shapeSnapPoints, validateShape } from './drawing-shapes.js';
 
 export function shapeGrips(item) {
+  if (item.shape === 'insulation') {
+    const frame = insulationFrame(item);
+    return [
+      ...item.points.map((point, index) => ({ kind: 'point', index, point })),
+      { kind: 'thickness', point: frame.point(frame.length / 2, frame.thickness) },
+    ];
+  }
   if (item.shape === 'circle') {
     const [c, e] = item.points,
       r = Math.hypot(e[0] - c[0], e[1] - c[1]);
@@ -34,6 +42,11 @@ export function shapeWithGrip(item, grip, target) {
   if (grip.kind === 'move') {
     const delta = target.map((v, i) => v - grip.point[i]);
     next.points = next.points.map((p) => p.map((v, i) => v + delta[i]));
+  } else if (grip.kind === 'thickness') {
+    const frame = insulationFrame(item);
+    const signed = target.reduce((sum, v, i) => sum + (v - item.points[0][i]) * frame.normal[i], 0);
+    next.thickness = Math.abs(signed);
+    if (signed < 0) next.side = item.side === 'right' ? 'left' : 'right';
   } else if (grip.kind === 'radius') next.points[1] = [...target];
   else if (grip.kind === 'corner') {
     const [a, b] = next.points;
@@ -48,5 +61,6 @@ export function shapeWithGrip(item, grip, target) {
     }
   } else next.points[grip.index] = [...target];
   validateShape(next.shape, next.points, next.closed && next.shape === 'polyline');
+  if (next.shape === 'insulation') insulationFrame(next);
   return next;
 }

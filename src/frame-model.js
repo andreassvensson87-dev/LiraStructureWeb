@@ -1,3 +1,5 @@
+import { nearestFrameIntersection } from './frame-snap-intersections.js';
+export { intersection } from './frame-snap-intersections.js';
 export const FRAME_LIBRARY_KEY = 'lirastructure.drawing-frames.v1';
 export { ATTRIBUTE_KEY, builtInAttributes, attributeValue } from './drawing-attributes.js';
 export function blankFrame() {
@@ -18,15 +20,6 @@ export function segments(entities) {
   return entities
     .filter((e) => e.type === 'line')
     .flatMap((e) => e.points.slice(1).map((p, i) => [e.points[i], p]));
-}
-export function intersection(a, b, c, d) {
-  const r = sub(b, a),
-    s = sub(d, c),
-    den = cross(r, s);
-  if (Math.abs(den) < 1e-10) return null;
-  const t = cross(sub(c, a), s) / den,
-    u = cross(sub(c, a), r) / den;
-  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [a[0] + t * r[0], a[1] + t * r[1]] : null;
 }
 export function snapFrame(
   raw,
@@ -64,12 +57,10 @@ export function snapFrame(
   if (midpoints)
     for (const [a, b] of lines)
       candidates.push({ point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], kind: 'Mittpunkt' });
-  if (intersections)
-    for (let i = 0; i < lines.length; i++)
-      for (let j = i + 1; j < lines.length; j++) {
-        const p = intersection(...lines[i], ...lines[j]);
-        if (p) candidates.push({ point: p, kind: 'Korsning' });
-      }
+  if (intersections) {
+    const crossing = nearestFrameIntersection(lines, raw, tolerance, ortho ? base : null);
+    if (crossing) candidates.push({ point: crossing, kind: 'Korsning' });
+  }
   if (perpendicular && base)
     for (const [a, b] of lines) {
       const d = sub(b, a),

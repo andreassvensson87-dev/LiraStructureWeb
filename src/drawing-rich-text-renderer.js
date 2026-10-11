@@ -1,3 +1,4 @@
+import { createSvgGrip } from './ui/grip.js';
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs, text) => {
   const node = document.createElementNS(NS, tag);
@@ -7,7 +8,14 @@ const svg = (tag, attrs, text) => {
   return node;
 };
 
-export function paintDrawingText(layer, item, layout, selected = false, helperRoot = layer) {
+export function paintDrawingText(
+  layer,
+  item,
+  layout,
+  selected = false,
+  helperRoot = layer,
+  zoom = 1,
+) {
   const [x, y] = item.points[0];
   const group = svg('g', {
     'data-annotation': item.id,
@@ -95,17 +103,21 @@ export function paintDrawingText(layer, item, layout, selected = false, helperRo
       }),
     );
     helpers.append(
-      svg('rect', {
-        x: x + item.width - 1.5,
-        y: y + layout.height / 2 - 1.5,
-        width: 3,
-        height: 3,
-        fill: 'white',
-        stroke: '#287c65',
-        'stroke-width': 0.2,
-        'data-rich-width': '',
-        'data-annotation-helper': '',
-        'pointer-events': 'all',
+      createSvgGrip({
+        point: [x + item.width, y + layout.height / 2],
+        role: 'parameter',
+        zoom,
+        key: `${item.id}:text:width`,
+        label: 'Ändra textbredden',
+        attrs: { 'data-rich-width': '' },
+      }),
+      createSvgGrip({
+        point: [x, y],
+        role: 'move',
+        zoom,
+        key: `${item.id}:text:move`,
+        label: 'Flytta texten',
+        attrs: { 'data-rich-move': '' },
       }),
     );
   }

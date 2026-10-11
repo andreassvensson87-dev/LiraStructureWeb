@@ -307,7 +307,7 @@ test('deleting screws restores material; deleting target drops the relation; und
     targetDeleted[1].holes.map((h) => h.targetId),
     ['b'],
   );
-  const project = createProject({ grid: {}, levels: {} }),
+  const project = createProject({ grid: { x: [], y: [] }, levels: {} }),
     history = new ProjectHistory();
   project.objects = structuredClone(model);
   history.checkpoint(project);
@@ -450,7 +450,7 @@ test('washer choices affect screw identity and survive history and joint copies'
     { copy: true },
   ).objects;
   assert.deepEqual(copies.at(-1).washers, assembly.washers);
-  const project = createProject({ grid: {}, levels: {} });
+  const project = createProject({ grid: { x: [], y: [] }, levels: {} });
   const history = new ProjectHistory();
   project.objects = model;
   history.checkpoint(project);
@@ -636,7 +636,7 @@ test('contact spans follow translation, rotation, reference movement, history an
   assert.notEqual(copy.holes[0].id, source.holes[0].id);
   assert.notEqual(copy.holes[0].targetId, source.holes[0].targetId);
   assert.deepEqual(copy.span, source.span);
-  const project = createProject({ grid: {}, levels: {} });
+  const project = createProject({ grid: { x: [], y: [] }, levels: {} });
   project.objects = [tube, source];
   const history = new ProjectHistory();
   history.checkpoint(project);

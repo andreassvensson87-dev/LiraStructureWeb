@@ -2,7 +2,6 @@ import { installDrawingTemplates } from '../install-drawing-templates.js';
 import {
   installReportTemplates,
   installMaterialReportTemplate,
-  installFullFrameReportTables,
 } from '../install-report-templates.js';
 import { installTeklaAttributeChoices } from '../install-tekla-attribute-choices.js';
 import { ProjectRecovery, projectSession } from './project-recovery.js';
@@ -15,7 +14,6 @@ export async function recoverWorkspace() {
     installDrawingTemplates();
     installReportTemplates();
     installMaterialReportTemplate();
-    installFullFrameReportTables();
     installTeklaAttributeChoices();
   } catch (error) {
     console.warn('Kunde inte installera ritningsmallarna.', error);

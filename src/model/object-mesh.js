@@ -1,3 +1,4 @@
+import { cadFeedback } from '../ui/cad-feedback.js';
 import { addOverviewMesh } from './display-detail.js';
 import { helperMesh } from './helper-mesh.js';
 import { isHelper } from '../model-object.js';
@@ -130,7 +131,7 @@ export function createObjectMesh(
         color: cut
           ? 0xd57c40
           : ghost
-            ? 0x359e83
+            ? cadFeedback.preview
             : selectedIds.has(s.id)
               ? 0x359e83
               : objectColor(s),
@@ -143,7 +144,7 @@ export function createObjectMesh(
             ? 0.2
             : 0
           : ghost
-            ? 0.45
+            ? cadFeedback.previewOpacity
             : transparentView
               ? 0.3
               : 1,
@@ -187,9 +188,11 @@ export function createObjectMesh(
         ? selectedIds.has(s.id)
           ? 0xe87924
           : 0xb77a48
-        : selectedIds.has(s.id)
-          ? 0x145d4d
-          : 0x3e5663,
+        : ghost
+          ? cadFeedback.preview
+          : selectedIds.has(s.id)
+            ? 0x145d4d
+            : 0x3e5663,
       depthTest: !cut,
       transparent: ghost || cut,
       opacity: cut ? (selectedIds.has(s.id) ? 1 : 0.8) : ghost ? 0.5 : 0.55,

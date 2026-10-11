@@ -4,7 +4,7 @@ import { createProject, captureProject } from '../src/project/project-state.js';
 import { ProjectHistory } from '../src/project/project-history.js';
 
 const fixture = () => {
-  const project = createProject({ grid: {}, levels: {} });
+  const project = createProject({ grid: { x: [], y: [] }, levels: {} });
   const spec = { diameter: 20, head: { height: 12 } };
   project.objects = [
     { id: 'a', start: [1, 2, 3], spec, holes: [{ id: 'h', diameter: 22 }] },

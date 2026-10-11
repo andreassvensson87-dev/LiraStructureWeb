@@ -87,13 +87,6 @@ export function numberParts(
   if (options) {
     next.options = structuredClone(options);
     next.registry = options.renumberAll ? [] : next.registry;
-    if (!options.renumberAll) {
-      for (const object of objects.filter(isPhysical)) {
-        if (object.partSeries) continue;
-        const legacy = next.registry.find((r) => r.key === partKey(object, objects));
-        if (legacy) legacy.key = partKey(object, objects, options);
-      }
-    }
     const used = new Set(options.reuseOldNumbers ? [] : next.registry.map((r) => r.mark));
     const physical = objects.filter(isPhysical);
     // Reserve numbers for unchanged active groups before recycling freed numbers.

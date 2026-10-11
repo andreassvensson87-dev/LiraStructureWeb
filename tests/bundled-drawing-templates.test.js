@@ -8,7 +8,7 @@ import { DRAWING_PRESETS_KEY } from '../src/drawing-presets.js';
 import { builtInAttributes, drawingAttributeContext } from '../src/drawing-attributes.js';
 import { frameText } from '../src/frame-text.js';
 import { ensureGAViews } from '../src/drawing-views.js';
-import { arrangePartViews } from '../src/part-view-migration.js';
+import { arrangePartViews } from '../src/part-view-layout.js';
 
 function storage(initial = []) {
   const values = new Map(initial);

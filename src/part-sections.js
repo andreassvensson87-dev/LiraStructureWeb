@@ -4,7 +4,6 @@ import { geometryEdges } from './fasteners/edges.js';
 import { referenceCandidates } from './annotation-references.js';
 import { partHoleCandidates } from './fasteners/drawing.js';
 import { partViewFrame } from './part-view-frame.js';
-import { migratePartOrientation } from './part-section-orientation.js';
 import { detailSource } from './drawing-details.js';
 import { frameMatrix } from './drawing-sections.js';
 import { resizeDrawingView, setDrawingViewScale } from './drawing-views.js';
@@ -119,7 +118,6 @@ export class PartSections {
     return { ...data, frame, section };
   }
   build() {
-    migratePartOrientation(this.e.record, (view, orientation) => this.frame(view, orientation));
     this.cache.clear();
     for (const view of this.items) {
       const source = this.e.drawingGeometry?.(view) || {

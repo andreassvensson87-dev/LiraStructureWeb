@@ -65,3 +65,19 @@ export function constrainCadPoint(point, base, { ortho = false, polar = 0, toler
   if (!ortho && Math.abs(dx * s - dy * c) > tolerance) return [...point];
   return [base[0] + length * c, base[1] + length * s];
 }
+
+// Intersect the acquired tracking axis with the polar ray, rather than
+// successively projecting onto two constraints and losing the first one.
+export function polarTrackingIntersection(raw, base, tracking, { polar = 0, tolerance = 1 } = {}) {
+  if (!base || !polar || tracking?.guides.length !== 1) return null;
+  const { anchor, axis } = tracking.guides[0];
+  const step = (polar * Math.PI) / 180;
+  const angle = Math.round(Math.atan2(raw[1] - base[1], raw[0] - base[0]) / step) * step;
+  const direction = [Math.cos(angle), Math.sin(angle)];
+  if (Math.abs(direction[axis]) < 1e-9) return null;
+  const distance = (anchor[axis] - base[axis]) / direction[axis];
+  if (distance < 0) return null;
+  const point = base.map((value, i) => value + distance * direction[i]);
+  point[axis] = anchor[axis];
+  return Math.hypot(point[0] - raw[0], point[1] - raw[1]) <= tolerance * 1.5 ? point : null;
+}

@@ -159,17 +159,6 @@ test('schematic model display has sharp roots while exact manufacturing shape an
   physical.dispose();
 });
 
-test('old Tibnor snapshots obtain sharp geometry; unrelated free contours and round tubes are preserved', () => {
-  const s = beam();
-  delete s.section.contourDefinition;
-  assert.equal(schematicProfileLoops(s.section)[0].length, 12);
-  const custom = structuredClone(s);
-  custom.section.id = 'free-drawing';
-  assert.equal(profileDisplayObject(custom), custom);
-  const chs = { ...s, profile: 'chs' };
-  assert.equal(profileDisplayObject(chs), chs);
-});
-
 test('cuts clip both display modes while drilling uses physical root material independently of display', () => {
   const s = beam();
   const cut = {
@@ -259,7 +248,7 @@ test('new sections/details default to exact even when their parent plan is schem
     duplicateDrawingView(section, [section], []).view.settings.profileDetail,
     'schematic',
   );
-  const sp = { type: 'SP', sourceId: 'beam', sheet: {} };
+  const sp = { type: 'SP', sourceId: 'beam', sheet: { views: [{ id: 'front', settings: {} }] } };
   assert.ok(ensurePartViews(sp).every((v) => v.settings.profileDetail === 'exact'));
 });
 

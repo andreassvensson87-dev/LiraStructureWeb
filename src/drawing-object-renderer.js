@@ -1,3 +1,5 @@
+import { createSvgGrip } from './ui/grip.js';
+import { insulationFrame, insulationPatternPath } from './drawing-insulation.js';
 import { shapePath, shapeContours } from './drawing-shapes.js';
 import { shapeGrips } from './drawing-shape-grips.js';
 import { shapeStyle } from './drawing-shape-style.js';
@@ -31,8 +33,10 @@ export function paintDrawingObject(editor, root, item, selected) {
       g.setAttribute('stroke', style.color);
       g.setAttribute('stroke-width', style.width);
       const path =
-        shapePath(item.shape, item.points, project) +
-        (item.closed || item.shape === 'polygon' ? 'Z' : '');
+        item.shape === 'insulation'
+          ? `M${insulationFrame(item).corners.map(project).join('L')}Z`
+          : shapePath(item.shape, item.points, project) +
+            (item.closed || item.shape === 'polygon' ? 'Z' : '');
       g.append(
         el('path', {
           d: path,
@@ -41,6 +45,8 @@ export function paintDrawingObject(editor, root, item, selected) {
           'stroke-linecap': style.lineType === 'dotted' ? 'round' : 'butt',
         }),
       );
+      if (item.shape === 'insulation')
+        g.append(el('path', { d: insulationPatternPath(item, project), fill: 'none' }));
       if (item.hatch?.pattern !== 'none' && item.hatch)
         appendMaterialHatch(
           g,
@@ -74,40 +80,41 @@ export function paintDrawingObject(editor, root, item, selected) {
           }),
         );
       if (selected && !editor.mode) {
-        const size = 6 / editor.adapter.pixelScale();
         for (const [index, grip] of shapeGrips(item).entries()) {
           const q = project(grip.point);
-          const target = el('g', {
-            'data-shape-grip': index,
-            class: 'shape-grip-target',
-            role: 'img',
-            'aria-label':
-              grip.kind === 'move' ? 'Dra för att flytta objektet' : 'Dra för att ändra geometrin',
+          const role =
+            grip.kind === 'move'
+              ? 'move'
+              : ['radius', 'thickness'].includes(grip.kind)
+                ? 'parameter'
+                : 'point';
+          if (
+            role === 'move' &&
+            shapeGrips(item).some(
+              (other) =>
+                other !== grip &&
+                other.kind !== 'move' &&
+                Math.hypot(...project(other.point).map((v, i) => v - q[i])) *
+                  editor.adapter.pixelScale() <
+                  18,
+            )
+          )
+            continue;
+          const target = createSvgGrip({
+            point: q,
+            role,
+            zoom: editor.adapter.pixelScale(),
+            key: `${item.id}:shape:${index}`,
+            label:
+              grip.kind === 'move'
+                ? 'Flytta objektet'
+                : grip.kind === 'thickness'
+                  ? 'Ändra isoleringstjockleken'
+                  : grip.kind === 'radius'
+                    ? 'Ändra radien'
+                    : 'Ändra punkten',
+            attrs: { 'data-shape-grip': index, class: 'cad-grip shape-grip-target' },
           });
-          const hitSize = 18 / editor.adapter.pixelScale();
-          target.append(
-            el('rect', {
-              x: q[0] - hitSize / 2,
-              y: q[1] - hitSize / 2,
-              width: hitSize,
-              height: hitSize,
-              fill: 'transparent',
-              stroke: 'none',
-              class: 'shape-grip-hit',
-            }),
-          );
-          target.append(
-            el('rect', {
-              x: q[0] - size / 2,
-              y: q[1] - size / 2,
-              width: size,
-              height: size,
-              fill: '#287c65',
-              stroke: 'white',
-              'stroke-width': 1 / editor.adapter.pixelScale(),
-              class: 'shape-grip',
-            }),
-          );
           helpers.append(target);
         }
       }
@@ -228,30 +235,13 @@ export function paintDrawingObject(editor, root, item, selected) {
   }
   if (selected) {
     for (const [index, p] of item.points.entries()) {
-      const q = project(p),
-        r = 5 / editor.adapter.pixelScale();
-      const handle = el('rect', {
-        'data-anchor': index,
-        class: 'annotation-anchor',
-        x: q[0] - r,
-        y: q[1] - r,
-        width: 2 * r,
-        height: 2 * r,
-        rx: r * 0.3,
-        fill: 'white',
-        stroke: '#287c65',
-        'stroke-width': 1.5,
-        'vector-effect': 'non-scaling-stroke',
+      const handle = createSvgGrip({
+        point: project(p),
+        zoom: editor.adapter.pixelScale(),
+        key: `${item.id}:anchor:${index}`,
+        label: item.type === 'leader' ? 'Flytta hänvisningens fästpunkt' : 'Flytta måttpunkten',
+        attrs: { 'data-anchor': index },
       });
-      handle.append(
-        el(
-          'title',
-          {},
-          item.type === 'leader'
-            ? 'Klicka för att flytta hänvisningens fästpunkt'
-            : 'Klicka för att flytta måttpunkt',
-        ),
-      );
       const helpers = el('g', {
         'data-annotation': item.id,
         'data-annotation-helper': 'selection',

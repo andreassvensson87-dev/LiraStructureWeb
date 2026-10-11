@@ -1,3 +1,4 @@
+import { cadFeedback } from '../../ui/cad-feedback.js';
 import * as THREE from 'three';
 import { isCut, isPlate, validateObject } from '../../model-object.js';
 import { isLineCut, lineCutFrame } from '../../line-cut.js';
@@ -40,7 +41,7 @@ export function createPlateController({
     new THREE.Vector3(0, 0, 1),
     new THREE.Vector3(),
     1,
-    0x258e79,
+    cadFeedback.preview,
   );
   plateNormalArrow.visible = false;
   plateNormalArrow.line.material.depthTest = false;
@@ -286,7 +287,7 @@ export function createPlateController({
       if (points.length > 1) {
         plateOutline = new THREE.Line(
           new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(...p))),
-          new THREE.LineBasicMaterial({ color: 0x258e79, depthTest: false }),
+          new THREE.LineBasicMaterial({ color: cadFeedback.preview, depthTest: false }),
         );
         scene.add(plateOutline);
       }
@@ -306,7 +307,7 @@ export function createPlateController({
       if (points.length > 2) points.push(points[0]);
       plateOutline = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(points),
-        new THREE.LineBasicMaterial({ color: 0x258e79, depthTest: false }),
+        new THREE.LineBasicMaterial({ color: cadFeedback.preview, depthTest: false }),
       );
       plateOutline.renderOrder = 11;
       scene.add(plateOutline);

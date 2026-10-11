@@ -207,7 +207,7 @@ test('quantities remain derived after project reload and explicit material chang
     { material: material('GL30c') },
   );
   const project = createProject({
-    grid: { x: [0, 6000], y: [0, 6000] },
+    grid: { x: [], y: [] },
     levels: { active: 'level', items: [{ id: 'level', name: 'Plan 1', elevation: 0 }] },
   });
   project.objects.push(source);

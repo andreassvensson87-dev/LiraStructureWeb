@@ -1,6 +1,13 @@
+import { renderFastenerAccessories, renderFastenerHoles } from './placement-inspector.js';
+import {
+  renderFastenerLibrary,
+  renderFastenerSpec,
+  syncFastenerHardwareFields,
+  syncFastenerHoleFields,
+} from './library-inspector.js';
 import { installFloatingWindow } from '../ui/floating-window.js';
 import { installLibraryWorkspace } from '../ui/library-workspace.js';
-import { renderLibraryTree } from '../ui/library-tree.js';
+
 import {
   FASTENER_LIBRARY_KEY,
   defaultHoleForSpec,
@@ -22,7 +29,7 @@ import { isFastener, validateFastener } from './object-type.js';
 import { axisPlacement } from './geometry.js';
 import { validateFastenerTargets, holesForPart } from './relations.js';
 import { boreFeature } from './holes.js';
-import { automaticPlacement, holeExtent, resolveFastenerHoles } from './placement.js';
+import { automaticPlacement, resolveFastenerHoles } from './placement.js';
 import { isPhysical } from '../model-object.js';
 import './style.css';
 
@@ -307,153 +314,32 @@ export class FastenerUI {
     this.window.open();
   }
   renderLibrary() {
-    const query = this.library.querySelector('[data-search]').value;
-    const normalize = (value) => value.toLocaleLowerCase('sv').replace(/\s/g, '');
-    const nodes = FASTENER_KINDS.map(([kind, label]) => {
-      const groups = new Map();
-      for (const spec of latestFasteners(this.records).filter((record) => record.kind === kind)) {
-        const series = spec.series || spec.standard || 'Egna skruvar';
-        if (
-          !normalize(
-            `${label} ${series} ${spec.name} ${spec.diameter} ${spec.length} ${spec.manufacturer || ''} ${spec.article || ''}`,
-          ).includes(normalize(query))
-        )
-          continue;
-        if (!groups.has(series)) groups.set(series, []);
-        groups.get(series).push({
-          key: `${spec.id}:${spec.revision}`,
-          label: `${spec.name} · Ø${spec.diameter} × ${spec.length}`,
-          title: `${spec.name} · Ø${spec.diameter} × ${spec.length} mm · version ${spec.revision}`,
-          value: spec,
-        });
-      }
-      return {
-        key: kind,
-        label,
-        children: [...groups].map(([series, children]) => ({
-          key: `${kind}/${series}`,
-          label: series,
-          children,
-        })),
-      };
-    }).filter((node) => node.children.length);
-    renderLibraryTree(this.library.querySelector('[data-records]'), {
-      nodes,
-      query,
-      selectedKey: `${this.editingSpec?.id}:${this.editingSpec?.revision}`,
-      onSelect: (node) => {
-        this.editSpec(node.value);
-        this.renderLibrary();
-      },
-      empty: query
-        ? 'Inga skruvar matchar sökningen.'
-        : 'Biblioteket är tomt. Skapa en skruv eller importera ett bibliotek.',
+    return renderFastenerLibrary({
+      library: this.library,
+      records: this.records,
+      editingSpec: this.editingSpec,
+      editSpec: this.editSpec.bind(this),
+      renderLibrary: this.renderLibrary.bind(this),
     });
   }
   editSpec(spec) {
     this.editingSpec = spec;
-    const values = {
-      kind: spec?.kind || 'wood',
-      standard: spec?.standard || '',
-      grade: spec?.grade || '',
-      series: spec?.series || '',
-      manufacturer: spec?.manufacturer || '',
-      article: spec?.article || '',
-      coating: spec?.coating || '',
-      threadLength: spec?.thread?.length ?? spec?.length ?? 100,
-      threadPitch: spec?.thread?.pitch ?? 0,
-      embedment: spec?.anchor?.embedment ?? 60,
-      drillDiameter: spec?.anchor?.drillDiameter ?? spec?.diameter ?? 6,
-      anchorDrillDepth: spec?.anchor?.drillDepth ?? 70,
-      name: spec?.name || '',
-      diameter: spec?.diameter || 6,
-      length: spec?.length || 100,
-      headKind: spec?.head?.kind || 'countersunk',
-      headDiameter: spec?.head?.diameter || 12,
-      headHeight: spec?.head?.height || 4,
-      nutAcrossFlats: spec?.nut?.acrossFlats || 17,
-      nutThickness: spec?.nut?.thickness || 8,
-      washerInner: spec?.washer?.innerDiameter || (spec?.diameter || 10) + 1,
-      washerOuter: spec?.washer?.outerDiameter || (spec?.diameter || 10) * 2.2,
-      washerThickness: spec?.washer?.thickness || 2,
-      defaultHoleExtent: spec?.holeDefaults?.extent === 'wall' ? 'wall' : 'profile',
-      defaultHoleKind: spec?.holeDefaults?.kind || 'none',
-      defaultHoleDiameter: spec?.holeDefaults?.diameter ?? spec?.diameter ?? 6,
-      defaultHoleDepth: spec?.holeDefaults?.depth ?? 50,
-      defaultCsDiameter: spec?.holeDefaults?.countersink?.diameter ?? spec?.head?.diameter ?? 12,
-      defaultCsDepth: spec?.holeDefaults?.countersink?.depth ?? spec?.head?.height ?? 4,
-    };
-    for (const [name, value] of Object.entries(values))
-      this.editForm.elements.namedItem(name).value = value;
-    this.editForm.elements.hasWasher.checked = !!spec?.washer;
-    this.editForm.elements.hasThread.checked = !!spec?.thread || spec?.kind === 'rod';
-    this.editForm.elements.defaultHasCountersink.checked = !!spec?.holeDefaults?.countersink;
-    this.library.querySelector('[data-library-holes]').open = false;
-    this.syncHoleDefaults();
-    this.library.querySelector('[data-edit-title]').textContent = spec ? spec.name : 'Ny skruv';
-    if (this.libraryUI) {
-      this.libraryUI.setEditing(!spec);
-      this.libraryUI.use.disabled = !spec;
-      this.library.querySelector('.ui-fastener-preview text').textContent = spec
-        ? `Ø${spec.diameter} × ${spec.length} mm`
-        : 'Ange skruvens mått';
-    }
-    this.library.querySelector('[data-version]').textContent = spec
-      ? `Version ${spec.revision}`
-      : 'Ej sparad';
-    this.libraryUI.save.textContent = spec ? 'Spara ny version' : 'Spara skruv';
-    this.library
-      .querySelectorAll('[data-spec-id]')
-      .forEach((entry) =>
-        entry.setAttribute('aria-pressed', String(entry.dataset.specId === spec?.id)),
-      );
-    this.library.querySelector('[data-error]').textContent = '';
-    this.syncNut();
+    return renderFastenerSpec(
+      {
+        editForm: this.editForm,
+        library: this.library,
+        syncHoleDefaults: this.syncHoleDefaults.bind(this),
+        libraryUI: this.libraryUI,
+        syncNut: this.syncNut.bind(this),
+      },
+      spec,
+    );
   }
   syncNut() {
-    const f = this.editForm.elements;
-    const rod = f.kind.value === 'rod';
-    f.namedItem('length').closest('label').firstChild.textContent = rod
-      ? 'Längd'
-      : 'Längd under huvud';
-    if (f.kind.value !== 'bolt') f.standard.value = '';
-    const full = rod || f.standard.value === 'ISO 4017';
-    if (full || f.standard.value) f.hasThread.checked = true;
-    f.hasThread.disabled = full || !!f.standard.value;
-    f.threadLength.readOnly = full;
-    if (full) f.threadLength.value = f.namedItem('length').value;
-    this.library.querySelector('[data-thread-dimensions]').hidden = !f.hasThread.checked;
-    for (const name of ['threadLength', 'threadPitch'])
-      f.namedItem(name).disabled = !f.hasThread.checked;
-    this.library.querySelector('[data-head]').hidden = rod;
-    for (const name of ['headKind', 'headDiameter', 'headHeight']) f.namedItem(name).disabled = rod;
-    this.library.querySelector('[data-anchor]').hidden = f.kind.value !== 'concrete';
-    for (const name of ['embedment', 'drillDiameter', 'anchorDrillDepth'])
-      f.namedItem(name).disabled = f.kind.value !== 'concrete';
-    this.library.querySelector('[data-nut]').hidden = !hasNut({ kind: f.kind.value });
-    for (const name of ['nutAcrossFlats', 'nutThickness'])
-      f.namedItem(name).disabled = !hasNut({ kind: f.kind.value });
-    const enabled = this.editForm.elements.hasWasher.checked;
-    this.library.querySelector('[data-washer-dimensions]').hidden = !enabled;
-    for (const name of ['washerInner', 'washerOuter', 'washerThickness'])
-      this.editForm.elements.namedItem(name).disabled = !enabled;
+    return syncFastenerHardwareFields({ editForm: this.editForm, library: this.library });
   }
   syncHoleDefaults() {
-    const f = this.editForm.elements;
-    const enabled = f.defaultHoleKind.value !== 'none';
-    for (const name of ['defaultHoleDiameter', 'defaultHoleDepth', 'defaultHasCountersink'])
-      f.namedItem(name).disabled = !enabled;
-    this.library.querySelector('[data-default-extent]').hidden =
-      f.defaultHoleKind.value !== 'clearance';
-    f.defaultHoleExtent.disabled = f.defaultHoleKind.value !== 'clearance';
-    f.defaultHoleDepth.closest('label').hidden = f.defaultHoleKind.value === 'clearance';
-    const countersink = enabled && f.defaultHasCountersink.checked;
-    this.library.querySelector('[data-default-countersink]').hidden = !countersink;
-    for (const name of ['defaultCsDiameter', 'defaultCsDepth'])
-      f.namedItem(name).disabled = !countersink;
-    this.library.querySelector('[data-hole-summary]').textContent = enabled
-      ? `${f.defaultHoleKind.value === 'pilot' ? 'Förborrning' : 'Frigång'} · Ø${f.defaultHoleDiameter.value}${f.defaultHoleKind.value === 'pilot' ? ` × ${f.defaultHoleDepth.value}` : ''}`
-      : 'Ingen borrning';
+    return syncFastenerHoleFields({ editForm: this.editForm, library: this.library });
   }
   saveSpec() {
     const f = this.editForm.elements,
@@ -664,56 +550,16 @@ export class FastenerUI {
     );
   }
   renderAccessories() {
-    const spec = this.currentSpec();
-    const f = this.placeForm.elements;
-    if (spec?.kind === 'rod') f.customAccessories.checked = true;
-    f.customAccessories.disabled = !spec || spec.kind === 'rod';
-    const preset = f.assemblyMode.value === 'preset';
-    this.placeForm.querySelector('[data-assembly-picker]').hidden = !preset;
-    this.placeForm.querySelector('[data-assembly-hint]').hidden = !preset;
-    this.placeForm.querySelector('[data-manual-hardware]').hidden = preset;
-    if (spec?.kind !== 'bolt') f.lengthMode.value = 'manual';
-    f.lengthMode.disabled = spec?.kind !== 'bolt';
-    const auto = f.lengthMode.value === 'auto';
-    this.placeForm.querySelector('[data-extra-length]').hidden = !auto;
-    f.extraLength.disabled = !auto;
-    for (const input of this.placeForm.querySelectorAll('[data-accessory-row] input'))
-      input.disabled = preset;
-    const custom = !preset && f.customAccessories.checked;
-    this.placeForm.querySelector('[data-accessories]').hidden = !custom;
-    this.placeForm.querySelector('[data-start-allowance]').hidden = spec?.kind !== 'rod';
-    f.startAllowance.disabled = spec?.kind !== 'rod' || preset;
-    this.placeForm.querySelector('[data-washers]').hidden = custom || !spec?.washer;
-    this.placeForm.querySelector('[data-add-nut]').disabled = !hasNut(spec);
-    this.placeForm.querySelector('[data-add-washer]').disabled = !spec?.washer;
-    const root = this.placeForm.querySelector('[data-accessory-rows]');
-    root.replaceChildren();
-    (this.accessoryRows || []).forEach((item, index) => {
-      const row = document.createElement('div');
-      row.className = 'fastener-accessory-row';
-      row.dataset.accessoryRow = item.kind;
-      const label = document.createElement('label');
-      label.className = 'field';
-      label.textContent = `${item.kind === 'nut' ? 'Mutter' : 'Bricka'} ${index + 1} · läge (mm)`;
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.required = true;
-      input.disabled = !custom;
-      input.min = '0';
-      input.step = 'any';
-      input.value = item.offset;
-      input.setAttribute('aria-label', label.textContent);
-      label.append(input);
-      row.append(
-        label,
-        button('Ta bort', () => {
-          this.readAccessories();
-          this.accessoryRows.splice(index, 1);
-          this.renderAccessories();
-          this.previewRange();
-        }),
-      );
-      root.append(row);
+    return renderFastenerAccessories({
+      currentSpec: this.currentSpec.bind(this),
+      placeForm: this.placeForm,
+      accessoryRows: this.accessoryRows,
+      removeAccessory: (index) => {
+        this.readAccessories();
+        this.accessoryRows.splice(index, 1);
+        this.renderAccessories();
+        this.previewRange();
+      },
     });
   }
   openPlacement(source = null) {
@@ -810,68 +656,21 @@ export class FastenerUI {
     this.placeForm.querySelector('[data-error]').textContent = '';
   }
   renderHoles() {
-    const root = this.placeForm.querySelector('[data-holes]');
-    root.replaceChildren();
-    this.placeForm.querySelector('[data-hole-count]').textContent = this.holeRows.length
-      ? `(${this.holeRows.length})`
-      : '';
-    this.placeForm.querySelector('[data-target-empty]').hidden = this.holeRows.length > 0;
-    this.placeForm.querySelector('[data-hole-tools]').hidden = !this.holeRows.length;
-    this.holeRows.forEach((h, i) => {
-      const row = document.createElement('details');
-      row.dataset.hole = i;
-      row.dataset.boreId = h.id;
-      const legend = document.createElement('summary');
-      legend.textContent = `${this.getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del'} · ${h.kind === 'none' ? 'Ingen borrning' : `Ø${h.diameter} · ${h.kind === 'pilot' ? 'Förborrning' : 'Genomgående'}`}${h.layers ? ` · ${h.layers.length} lager` : ''}`;
-      row.append(legend);
-      const fields = document.createElement('div');
-      fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="span">Automatiskt förband</option><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><p class="inspector-note">Automatiska lägen beräknas vid placering och sparande. Välj manuellt för egna start- och djupmått.</p><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
-      const kind = fields.querySelector('[name=holeKind]');
-      kind.value = h.kind;
-      const extent = fields.querySelector('[name=extent]');
-      extent.value = holeExtent(h);
-      const syncDimensions = () => {
-        fields.querySelector('[data-extent]').hidden = kind.value === 'none';
-        fields.querySelector('[name=offset]').readOnly = extent.value !== 'manual';
-        fields.querySelector('[name=depth]').readOnly = !['blind', 'manual'].includes(extent.value);
-        fields.querySelector('[data-hole-dimensions]').hidden = kind.value === 'none';
-        fields
-          .querySelectorAll('input')
-          .forEach((input) => (input.disabled = kind.value === 'none'));
-      };
-      kind.onchange = () => {
-        extent.value = kind.value === 'pilot' ? 'blind' : 'profile';
-        syncDimensions();
-      };
-      extent.onchange = () => {
-        if (extent.value === 'blind') kind.value = 'pilot';
-        else if (extent.value !== 'manual') kind.value = 'clearance';
-        syncDimensions();
-      };
-      syncDimensions();
-      row.append(
-        fields,
-        button('Ta bort delkoppling', () => {
-          this.readHoles();
-          this.holeRows.splice(i, 1);
-          if (this.anchor === h.targetId) this.anchor = this.holeRows[0]?.targetId || '';
-          this.renderHoles();
-        }),
-      );
-      root.append(row);
+    return renderFastenerHoles({
+      placeForm: this.placeForm,
+      holeRows: this.holeRows,
+      getObjects: this.getObjects,
+      anchor: this.anchor,
+      removeHole: (i, targetId) => {
+        this.readHoles();
+        this.holeRows.splice(i, 1);
+        if (this.anchor === targetId) this.anchor = this.holeRows[0]?.targetId || '';
+        this.renderHoles();
+      },
+      selectAnchor: (value) => {
+        this.anchor = value;
+      },
     });
-    const select = this.placeForm.elements.anchor;
-    select.replaceChildren(new Option('Fristående', ''));
-    this.holeRows.forEach((h) =>
-      select.append(
-        new Option(
-          this.getObjects().find((s) => s.id === h.targetId)?.name || h.targetId,
-          h.targetId,
-        ),
-      ),
-    );
-    select.value = this.anchor;
-    select.onchange = () => (this.anchor = select.value);
   }
   readHoles() {
     this.holeRows = [...this.placeForm.querySelectorAll('[data-hole]')].map((row, i) => {

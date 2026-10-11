@@ -1,3 +1,5 @@
+@import './ui/inspector-rail.css';
+
 :root {
   font-family:
     Inter,
@@ -446,54 +448,15 @@ dialog p {
   position: absolute;
   pointer-events: none;
   transform: translate(-50%, -50%);
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   z-index: 4;
-  color: #16815e;
   filter: drop-shadow(0 0 1px white) drop-shadow(0 0 1px white);
 }
-.snap-marker[data-symbol='square'] {
-  border: 2px solid currentColor;
-  background: #ffffff40;
-}
-.snap-marker[data-symbol='diamond'] {
-  width: 11px;
-  height: 11px;
-  border: 2px solid currentColor;
-  transform: translate(-50%, -50%) rotate(45deg);
-  background: #ffffff40;
-}
-.snap-marker[data-symbol='cross']:before,
-.snap-marker[data-symbol='cross']:after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: -1px;
-  width: 2px;
-  height: 14px;
-  background: currentColor;
-  transform: rotate(45deg);
-}
-.snap-marker[data-symbol='cross']:after {
-  transform: rotate(-45deg);
-}
-.snap-marker[data-symbol='line']:before {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 0;
-  width: 2px;
-  height: 10px;
-  background: currentColor;
-}
-.snap-marker[data-symbol='line']:after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 12px;
-  height: 2px;
-  background: currentColor;
+.snap-marker svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 #snap-status {
   margin-right: auto;
@@ -1436,26 +1399,6 @@ button.insertion-point:hover {
   .section-layout {
     grid-template-columns: minmax(0, 1fr) 190px;
   }
-}
-.snap-marker[data-symbol='midpoint'] {
-  width: 16px;
-  height: 14px;
-  background: currentColor;
-  clip-path: polygon(50% 0, 100% 100%, 0 100%, 50% 0, 50% 27%, 22% 84%, 78% 84%, 50% 27%);
-}
-.snap-marker[data-symbol='perpendicular'] {
-  border-left: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-}
-.snap-marker[data-symbol='perpendicular']:before {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 5px;
-  height: 5px;
-  border-top: 1px solid currentColor;
-  border-right: 1px solid currentColor;
 }
 .view-controls button[aria-pressed='true'] {
   background: #dcefe6;

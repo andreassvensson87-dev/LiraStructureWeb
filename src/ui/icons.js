@@ -1,4 +1,7 @@
 const paths = {
+  insulation: 'M3 6h18v12H3ZM3 18l3-12 3 12 3-12 3 12 3-12 3 12',
+  properties: 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',
+  references: 'M5 3h11v14H5ZM9 17v4h11V7h-4M8 7h5M8 11h5',
   origin: 'M12 3v18M3 12h18M8 8h8v8H8Z',
   delete: 'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7',
   library: 'M3 4h5v16H3ZM10 4h5v16h-5ZM17 4l4 1-2 15-4-1',
@@ -10,6 +13,7 @@ const paths = {
   detail: 'M3 3h12v12H3zM15 15l6 6M7 9h4M9 7v4',
   section: 'M5 3v18M19 3v18M2 7h7m-3-3 3 3-3 3M16 7h7m-3-3 3 3-3 3M5 15h14',
   select: 'm5 3 14 10-7 1-3 7Z',
+  boxSelect: 'M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5M3 11v2M11 3h2M21 11v2M11 21h2',
   dimension: 'M4 4v16M20 4v16M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3',
   text: 'M4 20 12 4l8 16M7 14h10',
   leader: 'M3 20l8-10h10M3 20l1-6M3 20l6-2',

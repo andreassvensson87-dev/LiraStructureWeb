@@ -1,6 +1,6 @@
 import { gridLabel } from './grid-labels.js';
 
-/** Legacy coordinate grids remain readable; edited lines own their endpoints and stable identity. */
+/** New-grid coordinates define initial extents; model-derived lines own edited endpoints. */
 export function gridSegments(grid) {
   return ['x', 'y'].flatMap((axis) =>
     grid[axis].map((position, index) => {
@@ -15,26 +15,16 @@ export function gridSegments(grid) {
         z: line?.z,
         bubbleEnds: line?.bubbleEnds ?? grid.bubbleEnds ?? 'both',
         start:
-          line?.start ?? (axis === 'x' ? [position, other[0] - 1500] : [other[0] - 1500, position]),
+          line?.start ??
+          (axis === 'x' ? [position, (other[0] ?? 0) - 1500] : [(other[0] ?? 0) - 1500, position]),
         end:
           line?.end ??
-          (axis === 'x' ? [position, other.at(-1) + 1500] : [other.at(-1) + 1500, position]),
+          (axis === 'x'
+            ? [position, (other.at(-1) ?? 0) + 1500]
+            : [(other.at(-1) ?? 0) + 1500, position]),
       };
     }),
   );
-}
-export function gridWithGeometry(grid) {
-  const next = structuredClone(grid);
-  if (!next.lines)
-    next.lines = Object.fromEntries(
-      ['x', 'y'].map((axis) => [
-        axis,
-        gridSegments(grid)
-          .filter((line) => line.axis === axis)
-          .map(({ id, start, end }) => ({ id, start: [...start], end: [...end] })),
-      ]),
-    );
-  return next;
 }
 export function lineIntersection(a, b, c, d, finite = true) {
   const u = [b[0] - a[0], b[1] - a[1]],

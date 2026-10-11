@@ -1,3 +1,4 @@
+import { cadFeedback } from '../ui/cad-feedback.js';
 import * as THREE from 'three';
 let pointTexture;
 function texture() {
@@ -19,8 +20,13 @@ export function helperMesh(s, { selectedIds, ghost = false }) {
   const geometry = new THREE.BufferGeometry().setFromPoints(
     [s.start, ...(s.end ? [s.end] : [])].map((p) => new THREE.Vector3(...p)),
   );
-  const color =
-    selectedIds.has(s.id) || ghost ? 0x258e79 : s.type === 'gridline' ? 0x82969f : 0x8765ad;
+  const color = ghost
+    ? cadFeedback.preview
+    : selectedIds.has(s.id)
+      ? 0x258e79
+      : s.type === 'gridline'
+        ? 0x82969f
+        : 0x8765ad;
   const object =
     s.type === 'helperpoint'
       ? new THREE.Points(
@@ -43,7 +49,7 @@ export function helperMesh(s, { selectedIds, ghost = false }) {
             gapSize: 65,
             depthTest: false,
             transparent: true,
-            opacity: ghost ? 0.5 : 0.85,
+            opacity: ghost ? cadFeedback.previewOpacity : 0.85,
           }),
         );
   if (object.isLine) object.computeLineDistances();

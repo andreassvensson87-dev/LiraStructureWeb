@@ -1,3 +1,5 @@
+import { gridObjectId } from '../grid-objects.js';
+
 export function installGridSelection({ actions, grid, project, tools }) {
   const setSelection = (...args) => actions.setSelection(...args);
   grid.overlay.classList.add('grid-model-interactive');
@@ -5,7 +7,8 @@ export function installGridSelection({ actions, grid, project, tools }) {
     if (tools.drawing || tools.operation || e.button !== 0) return;
     const bubble = grid.labels.find((label) => label.el === e.target);
     if (!bubble) return;
-    const object = project.objects.find((s) => s.type === 'gridline' && s.gridPickId === bubble.id);
+    const objectId = gridObjectId(project.grid, bubble.id);
+    const object = project.objects.find((s) => s.type === 'gridline' && s.id === objectId);
     if (object && actions.isSelectable(object.id)) {
       e.preventDefault();
       e.stopPropagation();

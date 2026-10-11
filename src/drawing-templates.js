@@ -117,9 +117,5 @@ export function instantiateDrawingTemplate(template, geometry, sourceId) {
     landscape: template.landscape,
     layoutId: template.layoutId,
     views,
-    independentViews: true,
-    sectionOrientation: 'source-up',
-    drawingHandedness: 'right',
-    viewsVersion: 2,
   };
 }

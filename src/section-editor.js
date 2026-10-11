@@ -1,6 +1,9 @@
+import { renderProfileDimensions, renderProfileBindings } from './section-editor-inspector.js';
+import { paintSectionEditor } from './section-editor-renderer.js';
+
 import { installProfileWorkspace } from './ui/profile-workspace.js';
 import { inputWheelGesture } from './input-device.js';
-import { sectionTemplate, TEMPLATE_KEYS, dimensionLabel } from './section-templates.js';
+import { sectionTemplate } from './section-templates.js';
 import { PROFILE_TYPES, profileType, renderProfileTree } from './profile-tree.js';
 import { withBuiltinCatalog, personalProfiles, isBuiltinProfile } from './profile-catalog.js';
 import {
@@ -381,111 +384,43 @@ export class SectionEditor {
     this.fit();
   }
   templateFields() {
-    const root = this.$('template-fields'),
-      keys = [
-        ...new Set([
-          ...(TEMPLATE_KEYS[this.def.template] || []),
-          ...(this.def.radiusParameters || (this.def.roundedRoots ? ['R'] : [])),
-        ]),
-      ],
-      signature = keys.join(',');
-    if (root.dataset.signature !== signature) {
-      root.replaceChildren();
-      root.dataset.signature = signature;
-      for (const key of keys) {
-        const label = document.createElement('label');
-        label.className = 'field';
-        label.textContent = dimensionLabel(key) + ' · mm';
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.step = 'any';
-        input.dataset.dimension = key;
-        input.id = 'section-dimension-' + key;
-        input.oninput = () => {
-          this.checkpoint();
-          this.def.parameters.find((p) => p.name === key).value = input.value;
-          this.clearCatalog();
-          this.$('parameters').value = this.def.parameters
-            .map((p) => `${p.name} = ${p.value}`)
-            .join('\n');
-          this.sync(false);
-        };
-        label.append(input);
-        root.append(label);
-      }
-    }
-    for (const input of root.querySelectorAll('input'))
-      if (document.activeElement !== input) {
-        const p = this.def.parameters.find((p) => p.name === input.dataset.dimension);
-        try {
-          input.value = parameterValues(this.def.parameters)[p.name];
-        } catch {
-          input.value = '';
-        }
-      }
-    this.$('template-note').textContent = keys.length
-      ? this.def.radiusParameters?.length || this.def.roundedRoots
-        ? 'Radier följer profilens parametrar, med segmenterade bågar. Ändrade mått rensar katalogvärdena.'
-        : 'Ändra måtten här eller klicka på måtten i ritningen. Typbyte ersätter grundformen; Ångra återställer. Mallarna har skarpa hörn.'
-      : 'Fri kontur och valfritt familjenamn. Parametrar kopplas via punktuttryck.';
-    if (this.def.flangeSlope !== undefined)
-      this.$('template-note').textContent += ' Flänslutning ' + this.def.flangeSlope + ' %.';
+    return renderProfileDimensions({
+      $: this.$,
+      def: this.def,
+      changeDimension: (key, value) => {
+        this.checkpoint();
+        this.def.parameters.find((p) => p.name === key).value = value;
+        this.clearCatalog();
+        this.$('parameters').value = this.def.parameters
+          .map((p) => p.name + ' = ' + p.value)
+          .join('\n');
+        this.sync(false);
+      },
+    });
   }
   bindings() {
-    const vertices = this.vertices(),
-      names = this.def.parameters.map((p) => p.name),
-      refs = (value) => String(value).match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
-    if (!names.includes(this.activeParameter)) this.activeParameter = null;
-    const uses = (v, name) => [...refs(v.x), ...refs(v.y)].includes(name);
-    const links = this.$('parameter-links');
-    links.replaceChildren();
-    for (const name of names) {
-      const count = vertices.filter((v) => uses(v, name)).length,
-        b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = `${name} · ${count ? count + ' punkter' : 'ingen punktkoppling'}`;
-      b.setAttribute('aria-pressed', String(this.activeParameter === name));
-      b.onclick = () => {
-        this.activeParameter = this.activeParameter === name ? null : name;
-        this.bindings();
-        this.draw();
-      };
-      links.append(b);
-    }
-    const root = this.$('bindings');
-    root.replaceChildren();
-    this.linkedPoints = new Set();
-    vertices.forEach((v, i) => {
-      if (this.activeParameter && !uses(v, this.activeParameter)) return;
-      if (this.activeParameter) this.linkedPoints.add(v.id);
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = this.selected.includes(v.id) ? 'selected' : '';
-      const title = document.createElement('strong');
-      title.textContent = `P${i + 1}`;
-      const expressions = document.createElement('span');
-      expressions.textContent = `X: ${v.x}  ·  Y: ${v.y}`;
-      const value = document.createElement('small');
-      try {
-        value.textContent = `→ ${this.fmt(expression(v.x, this.resolve.bind(this)))}, ${this.fmt(expression(v.y, this.resolve.bind(this)))} mm`;
-      } catch {
-        value.textContent = 'Ogiltigt uttryck';
-      }
-      b.append(title, expressions, value);
-      b.onclick = () => {
-        this.mode = 'select';
-        this.selected = [v.id];
-        this.sync(false);
-        this.$('point-panel').open = true;
-      };
-      root.append(b);
-    });
-    this.$('point-hint').textContent =
-      this.selected.length === 1
-        ? `P${vertices.findIndex((v) => v.id === this.selected[0]) + 1} · Ändra uttrycken nedan. Exempel: X = B/2.`
-        : vertices.length
-          ? 'Välj en punkt här eller på profilen för att ändra dess uttryck.'
-          : 'Rita en kontur eller välj en mall för att skapa punktkopplingar.';
+    Object.assign(
+      this,
+      renderProfileBindings({
+        vertices: this.vertices.bind(this),
+        def: this.def,
+        $: this.$,
+        selected: this.selected,
+        fmt: this.fmt.bind(this),
+        selectedParameter: this.activeParameter,
+        resolve: this.resolve.bind(this),
+        selectParameter: (name) => {
+          this.activeParameter = name;
+          this.bindings();
+          this.draw();
+        },
+        selectPoint: (id) => {
+          this.mode = 'select';
+          this.selected = [id];
+          this.sync(false);
+        },
+      }),
+    );
   }
   fmt(n) {
     return n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -980,180 +915,25 @@ export class SectionEditor {
     this.sync(false);
   }
   draw() {
-    if (!this.ctx || !this.width) return;
-    const c = this.ctx,
-      w = this.width,
-      h = this.height;
-    c.clearRect(0, 0, w, h);
-    c.fillStyle = '#f1f5f6';
-    c.fillRect(0, 0, w, h);
-    const target = 45 / this.scale,
-      base = 10 ** Math.floor(Math.log10(target)),
-      step = [1, 2, 5, 10].map((v) => v * base).find((v) => v >= target) || base * 10;
-    const low = this.world([0, h]),
-      high = this.world([w, 0]);
-    c.lineWidth = 1;
-    c.strokeStyle = '#dfe7e9';
-    c.beginPath();
-    for (let x = Math.ceil(low[0] / step) * step; x <= high[0]; x += step) {
-      const p = this.screen([x, 0]);
-      c.moveTo(p[0], 0);
-      c.lineTo(p[0], h);
-    }
-    for (let y = Math.ceil(low[1] / step) * step; y <= high[1]; y += step) {
-      const p = this.screen([0, y]);
-      c.moveTo(0, p[1]);
-      c.lineTo(w, p[1]);
-    }
-    c.stroke();
-    const zero = this.screen([0, 0]);
-    c.strokeStyle = '#a7babd';
-    c.beginPath();
-    c.moveTo(zero[0], 0);
-    c.lineTo(zero[0], h);
-    c.moveTo(0, zero[1]);
-    c.lineTo(w, zero[1]);
-    c.stroke();
-    const loops = this.evaluatedPoints(),
-      vertices = this.vertices();
-    let offset = 0;
-    c.beginPath();
-    loops.forEach((loop) => {
-      loop.forEach((p, i) => {
-        const v = vertices[offset + i],
-          q =
-            this.drag?.move && this.selected.includes(v?.id)
-              ? p.map((x, j) => x + this.drag.offset[j])
-              : p,
-          [x, y] = this.screen(q);
-        if (!i) c.moveTo(x, y);
-        else c.lineTo(x, y);
-      });
-      c.closePath();
-      offset += loop.length;
+    this.dimensionHits = paintSectionEditor({
+      ctx: this.ctx,
+      width: this.width,
+      height: this.height,
+      scale: this.scale,
+      world: this.world.bind(this),
+      screen: this.screen.bind(this),
+      evaluatedPoints: this.evaluatedPoints.bind(this),
+      vertices: this.vertices.bind(this),
+      drag: this.drag,
+      selected: this.selected,
+      linkedPoints: this.linkedPoints,
+      draft: this.draft,
+      pointer: this.pointer,
+      mode: this.mode,
+      def: this.def,
+      evaluated: this.evaluated,
+      fmt: this.fmt.bind(this),
+      snapPoint: this.snapPoint,
     });
-    c.fillStyle = '#509b8338';
-    c.fill('evenodd');
-    c.strokeStyle = '#28765f';
-    c.lineWidth = 1.7;
-    c.stroke();
-    offset = 0;
-    loops.forEach((loop) =>
-      loop.forEach((p) => {
-        const v = vertices[offset++],
-          selected = this.selected.includes(v.id),
-          linked = this.linkedPoints?.has(v.id),
-          q = this.drag?.move && selected ? p.map((x, j) => x + this.drag.offset[j]) : p,
-          [x, y] = this.screen(q);
-        c.fillStyle = selected ? '#ef9144' : linked ? '#a3d9c5' : '#fff';
-        c.strokeStyle = '#28765f';
-        c.fillRect(x - 3, y - 3, 6, 6);
-        c.strokeRect(x - 3, y - 3, 6, 6);
-        if (selected || linked) {
-          const label = 'P' + offset;
-          c.font = 'bold 11px system-ui';
-          c.lineWidth = 4;
-          c.strokeStyle = '#f1f5f6';
-          const labelX = x >= w / 2 ? x + 9 : x - 9 - c.measureText(label).width;
-          c.strokeText(label, labelX, y - 8);
-          c.fillStyle = selected ? '#a55214' : '#22664f';
-          c.fillText(label, labelX, y - 8);
-          c.lineWidth = 1.7;
-          c.strokeStyle = '#28765f';
-        }
-      }),
-    );
-    if (this.draft.length) {
-      c.beginPath();
-      let pts = [...this.draft];
-      if (this.pointer) {
-        if (this.mode === 'rect') {
-          const a = pts[0],
-            b = this.pointer;
-          pts = [a, [b[0], a[1]], b, [a[0], b[1]], a];
-        } else pts.push(this.pointer);
-      }
-      pts.forEach((p, i) => {
-        const [x, y] = this.screen(p);
-        i ? c.lineTo(x, y) : c.moveTo(x, y);
-      });
-      c.strokeStyle = '#18775d';
-      c.stroke();
-    }
-    this.dimensionHits = [];
-    if (this.def.template && this.evaluated) {
-      const b = this.evaluated.properties.bounds,
-        lo = this.screen([b.minX, b.minY]),
-        hi = this.screen([b.maxX, b.maxY]);
-      c.strokeStyle = '#728b92';
-      c.fillStyle = '#45626a';
-      c.lineWidth = 1;
-      c.font = '11px system-ui';
-      const label = (key, x, y) => {
-        const text = key + ' = ' + this.fmt(this.evaluated.parameters[key]),
-          width = c.measureText(text).width + 12;
-        x = Math.max(3, Math.min(w - width - 3, x));
-        y = Math.max(3, Math.min(h - 25, y));
-        c.fillStyle = '#ffffffed';
-        c.fillRect(x, y, width, 22);
-        c.strokeStyle = '#b8cbc8';
-        c.strokeRect(x, y, width, 22);
-        c.fillStyle = '#28634f';
-        c.fillText(text, x + 6, y + 15);
-        this.dimensionHits.push({ key, x, y, w: width });
-      };
-      const y = Math.min(h - 35, lo[1] + 27),
-        x = Math.max(18, lo[0] - 30);
-      c.beginPath();
-      c.moveTo(lo[0], lo[1] + 8);
-      c.lineTo(lo[0], y + 6);
-      c.moveTo(hi[0], lo[1] + 8);
-      c.lineTo(hi[0], y + 6);
-      c.moveTo(lo[0], y);
-      c.lineTo(hi[0], y);
-      c.moveTo(lo[0] - 8, hi[1]);
-      c.lineTo(x - 6, hi[1]);
-      c.moveTo(lo[0] - 8, lo[1]);
-      c.lineTo(x - 6, lo[1]);
-      c.moveTo(x, hi[1]);
-      c.lineTo(x, lo[1]);
-      c.stroke();
-      label(
-        this.evaluated.parameters.D !== undefined ? 'D' : 'B',
-        (lo[0] + hi[0]) / 2 - 30,
-        y - 11,
-      );
-      if (this.evaluated.parameters.H !== undefined) label('H', x - 30, (lo[1] + hi[1]) / 2 - 11);
-      (TEMPLATE_KEYS[this.def.template] || [])
-        .filter((k) => !['B', 'H', 'D'].includes(k))
-        .forEach((key, i) => label(key, hi[0] + 18, hi[1] + i * 29));
-    }
-    const anchor = this.evaluated?.anchor;
-    if (anchor) {
-      const [x, y] = this.screen(anchor);
-      c.strokeStyle = '#df883e';
-      c.beginPath();
-      c.arc(x, y, 6, 0, Math.PI * 2);
-      c.moveTo(x - 10, y);
-      c.lineTo(x + 10, y);
-      c.moveTo(x, y - 10);
-      c.lineTo(x, y + 10);
-      c.stroke();
-    }
-    if (this.snapPoint) {
-      const [x, y] = this.screen(this.snapPoint);
-      c.strokeStyle = '#15986b';
-      c.strokeRect(x - 5, y - 5, 10, 10);
-    }
-    if (this.drag?.box) {
-      const { p, end } = this.drag;
-      c.fillStyle = '#377cc11a';
-      c.strokeStyle = '#377cc1';
-      c.fillRect(p[0], p[1], end[0] - p[0], end[1] - p[1]);
-      c.strokeRect(p[0], p[1], end[0] - p[0], end[1] - p[1]);
-    }
-    c.fillStyle = '#748d94';
-    c.font = '11px system-ui';
-    c.fillText(`Rutsteg ${this.fmt(step)} mm`, 12, h - 12);
   }
 }

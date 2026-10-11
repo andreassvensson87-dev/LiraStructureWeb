@@ -15,11 +15,14 @@ test('all frame sizes have unique identities, valid objects and complete selecte
   for (const size of FRAME_EXAMPLE_SIZES) {
     const project = createFrameExample(size.id);
     const counts = frameExampleCounts(size);
-    assert.equal(project.objects.length, counts.objects);
-    assert.equal(new Set(project.objects.map((o) => o.id)).size, counts.objects);
+    assert.equal(project.objects.length, counts.objects + size.x + size.y + 2);
+    assert.equal(
+      new Set(project.objects.map((o) => o.id)).size,
+      counts.objects + size.x + size.y + 2,
+    );
     assert.equal(
       new Set(project.objects.map((o) => `${o.prefix}-${o.number}`)).size,
-      counts.objects,
+      counts.objects + size.x + size.y + 2,
     );
     assert.equal(project.objects.filter((o) => o.type === 'fastener').length, counts.screws);
     const boreIds = new Set();
@@ -97,7 +100,7 @@ test('extended frames add secondary joints, split floor panels and diagonal faca
   const project = createFrameExample('extended');
   const size = FRAME_EXAMPLE_SIZES.find((s) => s.id === 'extended');
   const counts = frameExampleCounts(size);
-  assert.equal(project.objects.length, 11844);
+  assert.equal(project.objects.length, 11844 + size.x + size.y + 2);
   assert.equal(
     project.objects.filter((o) => o.profile === 'i' && o.name.includes('Sekundärbalk')).length,
     counts.secondaryBeams,
@@ -134,9 +137,9 @@ test('frame import can be undone and repeated without sharing mutable model data
   history.checkpoint(old);
   const example = createFrameExample('small');
   assert.equal(history.undo(example).info.name, 'Min modell');
-  assert.equal(history.redo(old).objects.length, 454);
+  assert.equal(history.redo(old).objects.length, 461);
   const next = createFrameExample('small');
-  example.objects[0].frame.origin[0] = 999;
-  assert.equal(next.objects[0].frame.origin[0], -450);
-  assert.equal(JSON.parse(JSON.stringify(next)).objects.length, 454);
+  example.objects.find((o) => o.frame).frame.origin[0] = 999;
+  assert.equal(next.objects.find((o) => o.frame).frame.origin[0], -450);
+  assert.equal(JSON.parse(JSON.stringify(next)).objects.length, 461);
 });

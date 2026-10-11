@@ -1,7 +1,6 @@
 import { updateDetailArea, syncDetailCrop } from './drawing-details.js';
 import { drawingProfileDetail } from './profile-detail.js';
 // Paper coordinates are millimetres; camera coordinates are model millimetres.
-export const DRAWING_VIEWS_VERSION = 2;
 /** Unpainted space inside a view must still accept machining/dimension points. */
 export function drawingViewAtPoint(views, point, selectedId = null) {
   const contains = (v) =>
@@ -23,72 +22,30 @@ export function ensureGAViews(record, paper, center, scale, contentArea = null) 
         kind: 'view',
         projection: 'plan',
         source: { type: 'model' },
-        position: [...(sheet.viewPosition || [left, top])],
+        position: [left, top],
         size: [right - left, bottom - top],
-        scale: sheet.viewScale || scale,
+        scale,
         camera: { center: [...center] },
         settings: { ...record.settings, levelId: record.levelId },
       },
     ];
-  sheet.viewsVersion = DRAWING_VIEWS_VERSION;
   for (const view of sheet.views) {
     view.settings ??= {};
     view.settings.profileDetail = drawingProfileDetail(view, 'GA');
   }
   record.annotations ??= [];
-  for (const a of record.annotations) if (!a.view || a.view === 'plan') a.view = sheet.views[0].id;
   return sheet.views;
 }
 export const PART_VIEW_IDS = ['top', 'front', 'section'];
-const partNames = { top: 'Top', front: 'Front', section: 'Sektion A–A' };
-const legacyPartNames = { top: 'Ovanifrån', front: 'Huvudvy' };
-/** Migrate legacy scale/visibility maps once. View records are the source of truth. */
-export function ensurePartViews(record, config = record.sheet) {
-  if (record.sheet.independentViews) {
-    for (const view of record.sheet.views) {
-      view.settings ??= {};
-      view.settings.profileDetail = drawingProfileDetail(view, record.type);
-      if (legacyPartNames[view.id] && view.name === legacyPartNames[view.id])
-        view.name = partNames[view.id];
-    }
-    return record.sheet.views;
+export function ensurePartViews(record) {
+  if (!Array.isArray(record.sheet.views))
+    throw Error('Ritningen saknar vyer. Skapa den med en ritningsmall.');
+  for (const view of record.sheet.views) {
+    view.settings ??= {};
+    view.settings.profileDetail = drawingProfileDetail(view, record.type);
+    view.settings.hiddenLines ??= record.drawingPreset?.hiddenLines ?? true;
   }
-  const sheet = record.sheet,
-    existing = sheet.views || [];
-  sheet.views = PART_VIEW_IDS.map((id) => {
-    const old = existing.find((v) => v.id === id);
-    return {
-      ...old,
-      id,
-      name: !old?.name || old.name === legacyPartNames[id] ? partNames[id] : old.name,
-      kind: id === 'section' ? 'section' : 'view',
-      projection: id,
-      source: {
-        type: 'part',
-        objectId: record.sourceId,
-        ...(id === 'section' ? { parentViewId: 'front' } : {}),
-      },
-      scale: old?.scale ?? config.scales?.[id] ?? config.scale ?? 10,
-      position: old?.position || [0, 0],
-      size: old?.size || [1, 1],
-      camera: old?.camera || { center: [0, 0] },
-      settings: {
-        ...old?.settings,
-        profileDetail: drawingProfileDetail(old, record.type),
-        hiddenLines:
-          old?.settings?.hiddenLines ??
-          config.hiddenLines?.[id] ??
-          record.drawingPreset?.hiddenLines ??
-          true,
-        ...(id === 'section' ? { section: config.section } : {}),
-      },
-    };
-  }).concat(existing.filter((v) => !PART_VIEW_IDS.includes(v.id)));
-  sheet.viewsVersion = DRAWING_VIEWS_VERSION;
-  delete sheet.scales;
-  delete sheet.hiddenLines;
-  delete sheet.scale;
-  return sheet.views;
+  return record.sheet.views;
 }
 export function partViewScales(sheet) {
   return Object.fromEntries(
@@ -106,16 +63,6 @@ export function setDrawingViewScale(view, scale) {
   view.scale = scale;
   if (view.detail) updateDetailArea(view);
   view.position = center.map((value, axis) => value - view.size[axis] / 2);
-}
-export function syncPartViews(record, config, boxes) {
-  const views = ensurePartViews(record, config);
-  PART_VIEW_IDS.forEach((id, i) => {
-    const view = views.find((v) => v.id === id),
-      box = boxes[i];
-    if (!box || !view || view.section || view.detail) return;
-    view.position = [box[0], box[1]];
-    view.size = [box[2] - box[0], box[3] - box[1]];
-  });
 }
 export function resizeDrawingView(view, corner, delta) {
   const next = cropDrawingView(view, corner, delta);

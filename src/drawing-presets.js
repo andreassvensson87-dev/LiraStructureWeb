@@ -1,4 +1,4 @@
-import { drawingFont, readDrawingPreferences } from './drawing-preferences.js';
+import { drawingFont } from './drawing-preferences.js';
 export const DRAWING_PRESETS_KEY = 'lirastructure.drawing-presets.v1';
 const number = (value, fallback, max = 20) =>
   Number.isFinite(+value) && +value > 0 && +value <= max ? +value : fallback;
@@ -30,10 +30,10 @@ export function readDrawingPresets() {
       };
     }
   } catch {
-    /* Use legacy defaults when the library is absent or invalid. */
+    /* Use standard defaults when the library is absent or invalid. */
   }
   return {
-    items: [normalizePreset({ ...readDrawingPreferences(), name: 'Standard' })],
+    items: [normalizePreset({ name: 'Standard' })],
     defaultId: 'standard',
   };
 }

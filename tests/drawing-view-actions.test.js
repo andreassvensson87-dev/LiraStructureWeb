@@ -27,11 +27,11 @@ test('alignment moves only one paper axis and leaves scale, crop and reference u
   assert.deepEqual(target, before);
 });
 test('removed independent base views stay removed on reopen', () => {
-  const record = { sheet: { independentViews: true, views: [{ id: 'top', name: 'Ovanifrån' }] } };
+  const record = { sheet: { views: [{ id: 'top', name: 'Top' }] } };
   ensurePartViews(record);
   ensurePartViews(record);
   assert.deepEqual(record.sheet.views, [
-    { id: 'top', name: 'Top', settings: { profileDetail: 'exact' } },
+    { id: 'top', name: 'Top', settings: { profileDetail: 'exact', hiddenLines: true } },
   ]);
 });
 test('duplicate preserves section crop and copies annotations with independent ids', () => {

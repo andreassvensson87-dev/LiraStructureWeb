@@ -26,6 +26,9 @@ export class DrawingShapeTransform {
       button.dataset.drawingGroup = 'modify';
       button.dataset.drawingCategory = 'Placering';
       button.dataset.annotationMode = mode;
+      const key = { 'move-shapes': 'M', 'copy-shapes': 'C', 'rotate-shapes': 'R' }[mode];
+      button.title = `${name} · Ctrl/⌘ + ${key}`;
+      button.setAttribute('aria-keyshortcuts', `Control+${key} Meta+${key}`);
       button.onclick = () => this.start(mode);
       toolbar.append(button);
       editor.toolButtons.push(button);

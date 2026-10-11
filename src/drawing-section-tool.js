@@ -204,7 +204,7 @@ export class DrawingSectionTool {
     for (const section of entries) {
       const source = this.adapter.views().find((v) => v.id === section.id);
       const preview =
-        this.draft?.edit === section.id && this.draft.extent && this.hover
+        this.draft?.edit === section.id && this.draft?.extent && this.hover
           ? resizeSectionExtent(this.draft.section, this.draft.extent, this.hover)
           : { ...source?.section, ...section.section };
       this.line(

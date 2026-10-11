@@ -161,17 +161,6 @@ export function planAssemblyNumbering(state, series, options) {
       options?.renumberAll ? [] : state.assemblyNumbering?.registry || [],
     ),
     groups = new Map();
-  if (options && !options.renumberAll) {
-    for (const assembly of state.assemblies || []) {
-      const legacy = registry.find(
-        (r) =>
-          r.key === assembly.typeKey &&
-          !JSON.parse(r.key).some((token) => JSON.parse(token).mark !== undefined),
-      );
-      if (legacy && assemblyKey(assembly, state.objects) === assembly.typeKey)
-        legacy.key = assemblyKey(assembly, state.objects, state.parts);
-    }
-  }
   const used = new Set([
     ...(options?.reuseOldNumbers ? [] : registry.map((r) => r.mark)),
     ...state.drawings.filter((d) => d.type !== 'AS').map((d) => d.number),

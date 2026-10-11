@@ -23,12 +23,12 @@ import { partViewFrame } from '../src/part-view-frame.js';
 import { drawingViewAtPoint } from '../src/drawing-views.js';
 import { geometryForModel } from '../src/model-object.js';
 import { geometryVectors } from '../src/drawing-vector.js';
-import { defaultGrid } from '../src/grid-lines.js';
+import { syncGridObjects } from '../src/model/grid-objects.js';
 import { updateAutomaticJoints } from '../src/fasteners/update-joints.js';
 import { initialLevels } from '../src/levels.js';
 
 const fixture = () => {
-  const project = createProject({ grid: defaultGrid, levels: initialLevels() });
+  const project = createProject({ grid: { x: [], y: [] }, levels: initialLevels() });
   const plate = (id, z, thickness) => ({
     id,
     name: id,
@@ -249,6 +249,7 @@ test('an isolated real frame joint retains editable drawings, selected target id
   );
   makeDrawings(frame);
   assert.ok(frame.drawings.length >= 2);
+  syncGridObjects(frame);
   const opened = parseProjectFile(serializeProject(frame));
   assert.deepEqual(opened, frame);
   for (const part of opened.objects.filter((s) => s.type !== 'fastener')) {

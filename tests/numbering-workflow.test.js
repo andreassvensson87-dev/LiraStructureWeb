@@ -34,7 +34,7 @@ function beam(id, start = 100, width = 100, x = 0, y = 0) {
 }
 function project(objects) {
   const state = createProject({
-    grid: { x: [0, 6000], y: [0, 6000] },
+    grid: { x: [], y: [] },
     levels: { active: 'l', items: [{ id: 'l', name: 'Plan 1', elevation: 0 }] },
   });
   state.objects = objects;

@@ -14,6 +14,21 @@ const section = {
   side: 1,
   depth: 50,
 };
+test('external section marker renders after the section tool has been cancelled', () => {
+  const marker = { section: { ...section, label: 'A / GA-002' } };
+  const tool = Object.create(DrawingSectionTool.prototype);
+  let drawn;
+  Object.assign(tool, {
+    draft: null,
+    adapter: { views: () => [], markers: () => [marker] },
+    feedback: { paint() {} },
+    line(root, points, side, label) {
+      drawn = { points, side, label };
+    },
+  });
+  tool.paint({}, 'plan', (p) => p);
+  assert.deepEqual(drawn, { points: section.points, side: 1, label: 'A / GA-002' });
+});
 test('selected GA marker takes extent depth from its owning section view', () => {
   const view = { id: 'cut', section: structuredClone(section) };
   const marker = { id: 'cut', section: { points: section.points, side: 1, label: 'A' } };

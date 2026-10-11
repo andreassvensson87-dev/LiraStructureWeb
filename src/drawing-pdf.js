@@ -1,7 +1,7 @@
 import { appendViewTitle } from './drawing-view-title.js';
 const svgNS = 'http://www.w3.org/2000/svg';
 const controls =
-  '.viewport-grip,.viewport-frame,.drawing-view-grip,.section-extent-guides,[data-section-endpoint],[data-detail-corner],[data-section-crop],.annotation-anchor,.annotation-hit,.shape-grip-target,[data-annotation-helper]';
+  '.cad-grip,.viewport-grip,.viewport-frame,.drawing-view-grip,.section-extent-guides,[data-section-endpoint],[data-detail-corner],[data-section-crop],.annotation-anchor,.annotation-hit,.shape-grip-target,[data-annotation-helper]';
 export function pdfFileName(records) {
   const name = records.length === 1 ? records[0].number : 'Ritningar';
   return `${String(name || 'Ritning').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')}.pdf`;

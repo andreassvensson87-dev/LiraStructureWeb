@@ -1,45 +1,40 @@
+import { pickShapePoint, completeShape, shapeLengthPoint } from './drawing-shape-creation.js';
+import {
+  pickDimensionPoint,
+  prepareDimensionPlacement,
+  withDimensionPoint,
+  dimensionDirections as names,
+} from './drawing-dimension-creation.js';
+import {
+  renderAnnotationInspector,
+  renderAnnotationReferenceStatus,
+} from './drawing-annotation-inspector.js';
+import { DrawingGripInteraction } from './drawing-grip-interaction.js';
+import { beginDrawingObjectGrip } from './drawing-object-grip-editor.js';
 import { paintDrawingObject } from './drawing-object-renderer.js';
 import {
   createDrawingPreview,
   tintDrawingPreview,
   paintDrawingOverlay,
 } from './drawing-overlay.js';
-import { installDrawingOrder, installDrawingGeometry } from './drawing-object-inspector.js';
 import { locateDrawingPoint } from './drawing-point-placement.js';
+import { DrawingPointerTimings } from './drawing-pointer-timings.js';
 import { DrawingRichTextEditor } from './drawing-rich-text-editor.js';
 import { installExactLength } from './ui/exact-length.js';
 import { createCadStatusbar } from './cad-statusbar.js';
 import { CadTracking } from './cad-tracking.js';
-import { lengthPoint } from './frame-model.js';
 import { actionButton } from './drawing-toolbar.js';
 import { DrawingDimensionAssistant } from './drawing-dimension-assistant.js';
 import { DrawingShapeTransform } from './drawing-shape-transform.js';
-import { shapeGrips, shapeWithGrip } from './drawing-shape-grips.js';
-import {
-  installShapeStyle,
-  shapeToolSettings,
-  applyShapeToolSettings,
-} from './drawing-shape-style.js';
-import {
-  linkedDimensions,
-  moveLinkedDimensions,
-  unlinkDimensions,
-  linkedPaperOffsets,
-} from './dimension-links.js';
-import { shapeNames, validateShape } from './drawing-shapes.js';
+import { DrawingMarquee } from './drawing-marquee.js';
+import { shapeToolSettings, applyShapeToolSettings } from './drawing-shape-style.js';
+import { linkedDimensions, moveLinkedDimensions } from './dimension-links.js';
+import { shapeNames } from './drawing-shapes.js';
 import {
   resolveReference,
   surfaceReference,
   updateAnnotationReferences,
 } from './annotation-references.js';
-import {
-  dimensionAxis,
-  holeDimensionPoints,
-  dimensionPaperOffset,
-  chainGeometry,
-  insertDimensionPoint,
-  moveDimensionPoint,
-} from './dimension-chain.js';
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, text) => {
   const n = document.createElementNS(NS, tag);
@@ -47,10 +42,16 @@ const el = (tag, attrs = {}, text) => {
   if (text !== undefined) n.textContent = text;
   return n;
 };
-const names = { horizontal: 'Horisontell', vertical: 'Vertikal', free: 'Fri' };
 export class DrawingAnnotations {
   constructor({ dialog, surface, toolbar, adapter }) {
     Object.assign(this, { dialog, surface, adapter });
+    if (
+      import.meta.env?.DEV &&
+      new URLSearchParams(location.search).get('drawingPerformance') === '1'
+    ) {
+      this.pointerTimings = new DrawingPointerTimings();
+      dialog.addEventListener('close', () => this.pointerTimings.report());
+    }
     this.items = [];
     this.history = [];
     this.future = [];
@@ -122,7 +123,6 @@ export class DrawingAnnotations {
     this.cad = createCadStatusbar(dialog, footer || dialog, () => {
       this.tracking?.reset();
       this.trackHit = null;
-      if (this.drag) this.drag.magnetPoint = null;
       if (this.record) this.adapter.redraw();
     });
     const lengthLabel = document.createElement('label');
@@ -132,15 +132,21 @@ export class DrawingAnnotations {
     this.dynamicInput.hidden = true;
     this.dynamicInput.onsubmit = (event) => {
       event.preventDefault();
+      if (this.grips?.session) {
+        this.grips.submit(this.dynamicInput.querySelector('input').value);
+        return;
+      }
       if (this.transform?.active() && this.transform.base) {
         this.transform.submit(this.dynamicInput.querySelector('input').value);
         return;
       }
       if (!this.draft || !this.hover) return;
       try {
-        const base = this.draft.points.at(-1);
-        const direction = this.mode === 'circle' ? [base[0] + 1, base[1]] : this.hover.point;
-        const target = lengthPoint(base, direction, this.dynamicInput.querySelector('input').value);
+        const target = shapeLengthPoint(
+          this.draft,
+          this.hover.point,
+          this.dynamicInput.querySelector('input').value,
+        );
         this.draft.points.push(target);
         if (!['polyline', 'polygon'].includes(this.mode)) this.finishShape();
         this.dynamicInput.querySelector('input').value = '';
@@ -166,6 +172,7 @@ export class DrawingAnnotations {
     this.contextMenu.hidden = true;
     this.contextMenu.setAttribute('role', 'menu');
     dialog.append(this.contextMenu);
+    this.grips = new DrawingGripInteraction(this);
     surface.addEventListener('contextmenu', (e) => this.context(e), true);
     dialog.addEventListener(
       'pointerdown',
@@ -186,18 +193,34 @@ export class DrawingAnnotations {
       true,
     );
     dialog.addEventListener('keydown', (e) => this.key(e), true);
+    // Embedded browsers can route Ctrl/⌘ C through the native Copy command.
+    // Keep editable text's clipboard behavior; only a drawing selection is a tool intent.
+    dialog.addEventListener('copy', (event) => this.copySelection(event), true);
     dialog.addEventListener('close', () => {
       this.endDrag(true);
       this.mode = null;
       this.draft = null;
       this.selected = null;
       this.selectedIds = new Set();
+      this.releaseGraphics();
     });
     this.assistant = new DrawingDimensionAssistant(this, toolbar);
     this.transform = new DrawingShapeTransform(this, toolbar);
+    this.marquee = new DrawingMarquee(this, toolbar);
     this.ui();
   }
+  beginGrip(event, node) {
+    if (node.closest('[data-rich-text]')) return this.richText?.beginGrip(event, node);
+    return beginDrawingObjectGrip(this, event, node) || this.adapter.beginViewGrip?.(event, node);
+  }
+  recordOperation(before, after, apply) {
+    if (JSON.stringify(before) === JSON.stringify(after)) return;
+    this.history.push({ drawingOperation: true, before, after, apply });
+    this.future = [];
+  }
   open(record) {
+    this.grips?.cancel();
+    this.marquee?.cancel();
     this.richText?.cancel(false);
     this.record = record;
     this.items = record.annotations ??= [];
@@ -218,6 +241,16 @@ export class DrawingAnnotations {
     const from = redo ? this.future : this.history,
       to = redo ? this.history : this.future;
     if (!from.length) return;
+    this.grips?.cancel();
+    const entry = from.at(-1);
+    if (entry.drawingOperation) {
+      from.pop();
+      to.push(entry);
+      entry.apply(redo ? entry.after : entry.before);
+      this.ui();
+      this.adapter.redraw();
+      return;
+    }
     to.push(structuredClone(this.items));
     this.items = from.pop();
     this.record.annotations = this.items;
@@ -226,6 +259,8 @@ export class DrawingAnnotations {
     this.cancel();
   }
   cancel() {
+    this.grips?.cancel();
+    this.marquee?.cancel();
     this.richText?.cancel(false);
     this.assistant?.cancel();
     this.contextMenu.hidden = true;
@@ -240,6 +275,7 @@ export class DrawingAnnotations {
     this.adapter.redraw();
   }
   start(mode, workflow = 'chain') {
+    this.marquee?.cancel();
     this.adapter.cancelTools?.();
     this.workflow = workflow;
     this.tracking?.reset();
@@ -266,391 +302,67 @@ export class DrawingAnnotations {
     return this.items.find((a) => a.id === this.selected);
   }
   ui(message) {
+    const focus = this.selected || this.mode;
+    if (focus && focus !== this.inspectorFocus) this.showProperties?.();
+    this.inspectorFocus = focus;
     if (!this.selected && !this.mode) this.selectedIds?.clear();
     for (const button of this.toolButtons || [])
-      button.setAttribute('aria-pressed', String(button.dataset.annotationMode === this.mode));
+      button.setAttribute(
+        'aria-pressed',
+        String(
+          button.dataset.annotationMode === 'box-select'
+            ? !!this.marquee?.enabled
+            : button.dataset.annotationMode === this.mode,
+        ),
+      );
     this.surface.classList.toggle('annotating', !!this.mode);
-    if (this.transform?.active()) {
-      this.panel.parentElement.classList.add('annotation-focused');
-      this.transform.ui(message);
-      this.assistant?.cancel();
-      return;
-    }
-    if (!this.mode && this.selectedIds?.size > 1) {
-      this.panel.replaceChildren();
-      const title = document.createElement('h3'),
-        text = document.createElement('p');
-      title.textContent = `${this.selectedIds.size} ritobjekt markerade`;
-      text.textContent =
-        'Använd Flytta, Kopiera eller Rotera i den övre menyn. Shift-klick ändrar urvalet.';
-      this.panel.append(title, text);
-      this.panel.parentElement.classList.add('annotation-focused');
-      this.hint.textContent = 'Shift-klick för flerval · Esc avmarkerar';
-      return;
-    }
-    if (this.richText && (this.mode === 'richtext' || this.item()?.type === 'richtext')) {
-      this.richText.ui();
-      return;
-    }
-    this.panel.replaceChildren();
-    const title = document.createElement('h3');
-    title.textContent = 'Anteckningar';
-    this.panel.append(title);
-    const item = this.item();
-    const shapeTool = this.workflow === 'shape' && shapeNames[this.mode];
-    this.panel.parentElement.classList.toggle('annotation-focused', !!item || !!shapeTool);
-    if (shapeTool && this.record) {
-      title.textContent = `${shapeTool} · verktyg`;
-      const info = document.createElement('p');
-      info.textContent = 'Inställningar för nästa objekt';
-      this.panel.append(info);
-      const settings = shapeToolSettings(this.record, this.mode);
-      installShapeStyle(
-        {
-          panel: this.panel,
+    renderAnnotationInspector(
+      {
+        state: {
+          item: this.item(),
+          items: this.items,
           record: this.record,
+          mode: this.mode,
+          workflow: this.workflow,
+          draft: this.draft,
+          phase: this.phase,
+          selectedIds: this.selectedIds,
           history: this.history,
           future: this.future,
-          checkpoint() {},
-          ui: () => this.ui(),
-          adapter: {
-            redraw: () => {
-              if (this.draft?.type === 'shape') applyShapeToolSettings(this.draft, settings);
-              this.adapter.redraw();
-            },
-          },
+          drag: this.drag,
         },
-        settings,
-      );
-    }
-    const button = (text, fn, disabled = false) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = text;
-      b.disabled = disabled;
-      b.onclick = fn;
-      this.panel.append(b);
-      return b;
-    };
-    if (item) {
-      const status = document.createElement('p');
-      status.className = 'annotation-reference-status';
-      status.setAttribute('role', 'status');
-      if (item.type !== 'shape') {
-        this.panel.append(status);
-        this.referenceStatus(item);
-      }
-      title.textContent =
-        item.type === 'shape'
-          ? shapeNames[item.shape]
-          : item.type === 'dimension'
-            ? item.points.length > 2
-              ? 'Måttkedja'
-              : 'Mått'
-            : item.manual
-              ? 'Leader'
-              : 'Part mark';
-      const field = (labelText, key, type, value) => {
-        const label = document.createElement('label'),
-          input = document.createElement('input');
-        label.textContent = labelText;
-        input.type = type;
-        input.value = value;
-        if (type === 'number') {
-          input.min = 0.5;
-          input.max = 20;
-          input.step = 0.5;
-        } else {
-          input.maxLength = 120;
-          input.placeholder = 'Valfri kommentar';
-        }
-        let recorded = false;
-        input.onfocus = () => (recorded = false);
-        input.oninput = () => {
-          const value = type === 'number' ? Number(input.value) : input.value;
-          if (
-            type === 'number' &&
-            (!input.value.trim() || !Number.isFinite(value) || value < 0.5 || value > 20)
-          ) {
-            input.setCustomValidity('Ange en textstorlek mellan 0,5 och 20.');
-            return;
-          }
-          input.setCustomValidity('');
-          if (!recorded) {
-            this.checkpoint();
-            recorded = true;
-          }
-          for (const member of linkedDimensions(this.items, item)) member[key] = value;
-          for (const b of this.panel.querySelectorAll('.annotation-history button'))
-            b.disabled = b.textContent === 'Ångra' ? !this.history.length : !this.future.length;
-          this.adapter.redraw();
-        };
-        input.onblur = () => {
-          if (!input.checkValidity()) {
-            input.value = item[key] ?? value;
-            input.setCustomValidity('');
-          }
-        };
-        label.append(input);
-        this.panel.append(label);
-      };
-      if (item.type !== 'shape') {
-        field('Kommentar', 'comment', 'text', item.comment || '');
-        field(
-          'Textstorlek · mm',
-          'textSize',
-          'number',
-          item.textSize ??
-            this.record?.drawingPreset?.[item.type === 'leader' ? 'leaderSize' : 'dimensionSize'] ??
-            2.5,
-        );
-      }
-      if (item.type === 'shape') {
-        installDrawingGeometry(this, item);
-        installShapeStyle(this, item);
-      }
-      installDrawingOrder(this, item);
-      if (item.type === 'dimension') {
-        const linked = linkedDimensions(this.items, item);
-        if (linked.length > 1) {
-          const info = document.createElement('p');
-          info.textContent = `${linked.length} länkade mått · flytt och måttstil ändras tillsammans`;
-          this.panel.append(info);
-          button('Bryt länk', () => {
-            this.checkpoint();
-            unlinkDimensions(this.items, item);
-            this.ui();
-            this.adapter.redraw();
-          });
-        }
-        const choice = (title, options, value, change) => {
-          const label = document.createElement('label'),
-            select = document.createElement('select');
-          label.textContent = title;
-          select.append(...options.map(([v, name]) => new Option(name, v)));
-          select.value = String(value);
-          select.onchange = () => change(select.value);
-          label.append(select);
-          this.panel.append(label);
-          return select;
-        };
-        const direction = choice('Riktning', Object.entries(names), item.kind, (kind) => {
-          try {
-            const next = { ...item, kind, axis: dimensionAxis(kind, item.points) };
-            if (chainGeometry(next).points.length < 2)
-              throw Error('Punkterna ger inget mått i vald riktning.');
-            this.checkpoint();
-            item.kind = kind;
-            item.axis = next.axis;
-            this.ui();
-            this.adapter.redraw();
-          } catch (error) {
-            direction.value = item.kind;
-            this.hint.textContent = error.message;
-          }
-        });
-        choice(
-          'Decimaler',
-          [['auto', 'Automatiskt'], ...[0, 1, 2, 3].map((n) => [String(n), String(n)])],
-          item.precision ?? 'auto',
-          (value) => {
-            this.checkpoint();
-            for (const member of linkedDimensions(this.items, item)) {
-              if (value === 'auto') delete member.precision;
-              else member.precision = +value;
-            }
-            this.adapter.redraw();
+        panel: this.panel,
+        hint: this.hint,
+        dialog: this.dialog,
+        dynamicInput: this.dynamicInput,
+        adapter: this.adapter,
+        tools: {
+          transform: this.transform,
+          richText: this.richText,
+          assistant: this.assistant,
+          marquee: this.marquee,
+        },
+        commands: {
+          refresh: (message) => this.ui(message),
+          checkpoint: () => this.checkpoint(),
+          history: () => ({ history: this.history, future: this.future }),
+          cancel: () => this.cancel(),
+          clearSelection: () => {
+            this.selected = null;
           },
-        );
-        const label = document.createElement('label'),
-          offset = document.createElement('input');
-        label.textContent = 'Avstånd · mm';
-        offset.type = 'number';
-        offset.min = -500;
-        offset.max = 500;
-        offset.step = 1;
-        const project = (p) => this.adapter.project(p, item.view);
-        offset.value = Number(
-          dimensionPaperOffset(item, project, this.adapter.unit()).value.toFixed(2),
-        );
-        offset.onchange = () => {
-          try {
-            if (!offset.value.trim()) throw Error('Ange ett avstånd.');
-            const changes = linkedPaperOffsets(
-              this.items,
-              item,
-              +offset.value,
-              project,
-              this.adapter.unit(),
-            );
-            this.checkpoint();
-            for (const { member, line } of changes) member.line = line;
-            this.adapter.redraw();
-          } catch (error) {
-            this.hint.textContent = error.message;
-            offset.value = Number(
-              dimensionPaperOffset(item, project, this.adapter.unit()).value.toFixed(2),
-            );
-          }
-        };
-        label.append(offset);
-        this.panel.append(label);
-        button('Lägg till måttpunkt', () => this.startAdding());
-        const details = document.createElement('details');
-        details.className = 'annotation-point-details';
-        const summary = document.createElement('summary');
-        summary.textContent = `Måttpunkter (${item.points.length})`;
-        details.append(summary);
-        const list = document.createElement('div');
-        list.className = 'annotation-points';
-        for (const p of chainGeometry(item).points) {
-          const row = document.createElement('div'),
-            text = document.createElement('span'),
-            remove = document.createElement('button');
-          text.textContent = `${Math.round(p.point[0])}, ${Math.round(p.point[1])}`;
-          remove.textContent = '×';
-          remove.title = 'Ta bort måttpunkt';
-          remove.setAttribute('aria-label', `Ta bort måttpunkt ${p.index + 1}`);
-          remove.disabled = item.points.length <= 2;
-          remove.onclick = () => {
-            this.checkpoint();
-            item.points.splice(p.index, 1);
-            item.references?.splice(p.index, 1);
-            this.ui();
-            this.panel.querySelector('details').open = true;
-            this.adapter.redraw();
-          };
-          row.append(text, remove);
-          list.append(row);
-        }
-        details.append(list);
-        this.panel.append(details);
-      }
-      const remove = button('Ta bort', () => {
-        this.checkpoint();
-        this.items.splice(this.items.indexOf(item), 1);
-        this.selected = null;
-        this.cancel();
-      });
-      remove.className = 'annotation-delete';
-    }
-
-    if (this.mode) {
-      if (this.mode === 'circle' && this.draft) {
-        const label = document.createElement('label'),
-          radius = document.createElement('input');
-        label.textContent = 'Radie · mm i vyn';
-        radius.type = 'number';
-        radius.min = '0.001';
-        radius.step = 'any';
-        radius.onkeydown = (e) => {
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          e.stopPropagation();
-          const value = Number(radius.value);
-          if (!(value > 0) || !Number.isFinite(value)) {
-            radius.setCustomValidity('Ange en positiv radie.');
-            radius.reportValidity();
-            return;
-          }
-          const p = this.draft.points[0];
-          this.draft.points.push([p[0] + value, p[1]]);
-          this.finishShape();
-        };
-        radius.oninput = () => radius.setCustomValidity('');
-        label.append(radius);
-        this.panel.append(label);
-      }
-      if (this.draft?.type === 'shape' && ['polyline', 'polygon'].includes(this.draft.shape)) {
-        button(
-          this.mode === 'polygon' ? 'Stäng polygon ↵' : 'Avsluta polylinje ↵',
-          () => this.finishShape(),
-          this.draft.points.length < (this.mode === 'polygon' ? 3 : 2),
-        );
-        if (this.mode === 'polyline')
-          button('Stäng polylinje · C', () => this.finishShape(true), this.draft.points.length < 3);
-      }
-      if (this.draft?.type === 'dimension' && this.phase === 'points')
-        button('Placera måttlinje ↵', () => this.finishPoints(), this.draft.points.length < 2);
-      button('Avbryt · Esc', () => this.cancel());
-    }
-    const undo = document.createElement('div');
-    undo.className = 'annotation-history';
-    for (const [text, redo, disabled] of [
-      ['Ångra', false, !this.history.length],
-      ['Gör om', true, !this.future.length],
-    ]) {
-      const b = document.createElement('button');
-      b.textContent = text;
-      b.disabled = disabled;
-      b.onclick = () => this.undo(redo);
-      undo.append(b);
-    }
-    this.panel.append(undo);
-    for (const b of this.dialog.querySelectorAll('[data-drawing-history]'))
-      b.disabled = !(b.dataset.drawingHistory === 'redo' ? this.future : this.history).length;
-    const instructions =
-      this.workflow === 'shape' && this.mode
-        ? this.mode === 'circle'
-          ? this.draft
-            ? 'Välj radiepunkt eller ange radie vid pekaren · Esc avbryter.'
-            : 'Välj cirkelns centrum.'
-          : this.mode === 'arc'
-            ? ['Välj bågens startpunkt.', 'Välj en punkt på bågen.', 'Välj bågens slutpunkt.'][
-                this.draft?.points.length || 0
-              ]
-            : this.mode === 'rectangle'
-              ? this.draft
-                ? 'Välj motsatt hörn.'
-                : 'Välj rektangelns första hörn.'
-              : ['polyline', 'polygon'].includes(this.mode)
-                ? 'Välj hörnpunkter · klicka första punkten eller C för att stänga · Enter avslutar · Esc avbryter.'
-                : this.draft
-                  ? 'Välj linjens slutpunkt.'
-                  : 'Välj linjens startpunkt.'
-        : this.mode === 'leader'
-          ? this.draft
-            ? 'Klicka för att placera texten.'
-            : this.adapter.manualLeaders
-              ? 'Klicka för att placera hänvisningens fästpunkt.'
-              : 'Klicka på en numrerad detalj.'
-          : this.mode === 'add'
-            ? 'Klicka på en ny måttpunkt. Esc avslutar.'
-            : this.mode === 'move-anchor'
-              ? 'Välj ny fästpunkt · klicka för att placera · Esc avbryter.'
-              : this.mode === 'place-existing'
-                ? 'Klicka för att placera om.'
-                : this.mode
-                  ? this.phase === 'place'
-                    ? 'Klicka för att placera måttlinjen.'
-                    : this.workflow === 'holes'
-                      ? 'Klicka på ett hålcentrum.'
-                      : this.workflow === 'point'
-                        ? this.draft
-                          ? 'Välj andra måttpunkten.'
-                          : 'Välj första måttpunkten.'
-                        : `Välj måttpunkter · Enter placerar kedjan · Esc avbryter`
-                  : '';
-    this.hint.textContent = message || instructions || '';
-    this.hint.title = this.hint.textContent;
-    if (this.dynamicInput) {
-      this.dynamicInput.querySelector('.ui-exact-length-label span').textContent =
-        this.mode === 'circle' ? 'Radie · mm' : 'Längd · mm';
-      this.dynamicInput.hidden = !(
-        this.workflow === 'shape' &&
-        this.draft?.points.length &&
-        ['line', 'polyline', 'polygon', 'circle'].includes(this.mode) &&
-        !this.drag
-      );
-    }
-    this.assistant?.ui();
+          finishShape: (close) => this.finishShape(close),
+          finishPoints: () => this.finishPoints(),
+          addDimensionPoint: () => this.startAdding(),
+          undo: (redo) => this.undo(redo),
+        },
+      },
+      message,
+    );
   }
   finishPoints() {
     if (!this.draft || this.draft.points.length < 2) return;
     try {
-      this.draft.axis = dimensionAxis(this.draft.kind, this.draft.points);
-      if (chainGeometry({ ...this.draft, line: this.draft.points[0] }).points.length < 2)
-        throw Error('Punkterna måste ge ett mått i vald riktning.');
+      this.draft = prepareDimensionPlacement(this.draft);
       this.phase = 'place';
       this.ui();
     } catch (e) {
@@ -660,12 +372,16 @@ export class DrawingAnnotations {
   finishShape(close = false) {
     if (!this.draft) return;
     try {
-      close ||= this.draft.shape === 'polygon';
-      validateShape(this.draft.shape, this.draft.points, close);
+      const shape = completeShape(this.draft, close);
       this.checkpoint();
-      this.draft.closed = close;
-      this.items.push(this.draft);
+      this.items.push(shape);
       const mode = this.mode;
+      if (mode === 'insulation') {
+        this.selected = this.draft.id;
+        this.selectedIds = new Set([this.selected]);
+        this.cancel();
+        return;
+      }
       const last = this.draft.points.at(-1),
         view = this.draft.view;
       this.start(mode, 'shape');
@@ -758,6 +474,13 @@ export class DrawingAnnotations {
       )
         return;
     }
+    if (e.key === 'Escape' && this.marquee?.enabled) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.selected = null;
+      this.cancel();
+      return;
+    }
     if (this.cad?.key(e)) {
       e.stopImmediatePropagation();
       return;
@@ -782,7 +505,7 @@ export class DrawingAnnotations {
       this.draft &&
       this.hover &&
       this.workflow === 'shape' &&
-      ['line', 'polyline', 'polygon', 'circle'].includes(this.mode)
+      ['line', 'polyline', 'polygon', 'circle', 'insulation'].includes(this.mode)
     ) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -814,6 +537,15 @@ export class DrawingAnnotations {
       return;
     }
     if (e.target.closest('input,select,textarea,[contenteditable="true"]')) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && this.selected) {
+      const mode = { m: 'move-shapes', c: 'copy-shapes', r: 'rotate-shapes' }[e.key.toLowerCase()];
+      if (mode) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!e.repeat) this.transform.start(mode);
+        return;
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -847,7 +579,22 @@ export class DrawingAnnotations {
       this.cancel();
     }
   }
+  copySelection(event) {
+    if (
+      !this.selected ||
+      this.mode ||
+      event.target.closest('input,select,textarea,[contenteditable="true"]')
+    )
+      return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.transform.start('copy-shapes');
+  }
   location(...args) {
+    if (this.pointerTimings)
+      return this.pointerTimings.measure('snap', this.cad.get(), () =>
+        locateDrawingPoint(this, ...args),
+      );
     return locateDrawingPoint(this, ...args);
   }
   down(e) {
@@ -858,6 +605,7 @@ export class DrawingAnnotations {
         e.preventDefault();
         e.stopImmediatePropagation();
         const id = target.dataset.annotation;
+        this.showProperties?.();
         this.selectedIds ??= new Set();
         if (e.shiftKey) {
           if (this.selected && !this.selectedIds.size) this.selectedIds.add(this.selected);
@@ -871,32 +619,6 @@ export class DrawingAnnotations {
         this.selected = id;
         this.selectedIds = new Set([id]);
         if (this.item()?.type === 'shape') {
-          const handle = e.target.closest('[data-shape-grip]');
-          if (handle) {
-            const item = this.item();
-            this.drag = {
-              pointerId: e.pointerId,
-              item,
-              shapeBefore: structuredClone(item),
-              grip: shapeGrips(item)[Number(handle.dataset.shapeGrip)],
-              points: structuredClone(item.points),
-              pointIndex: 0,
-              x: e.clientX,
-              y: e.clientY,
-              moved: false,
-            };
-            this.surface.setPointerCapture(e.pointerId);
-          }
-          this.ui();
-          this.adapter.redraw();
-          return;
-        }
-        const anchor = e.target.closest('[data-anchor]');
-        if (anchor) {
-          this.anchorIndex = Number(anchor.dataset.anchor);
-          this.mode = 'move-anchor';
-          this.phase = 'points';
-          this.hover = null;
           this.ui();
           this.adapter.redraw();
           return;
@@ -913,9 +635,6 @@ export class DrawingAnnotations {
               line: [...member.line],
             })),
             points: structuredClone(item.points),
-            pointIndex: e.target.closest('[data-anchor]')
-              ? Number(e.target.closest('[data-anchor]').dataset.anchor)
-              : null,
             item,
             x: e.clientX,
             y: e.clientY,
@@ -948,69 +667,34 @@ export class DrawingAnnotations {
       hit = this.location(e, view, this.phase !== 'place' && this.mode !== 'place-existing');
     if (!hit) return;
     if (this.workflow === 'shape' && shapeNames[this.mode]) {
-      if (!this.draft)
-        this.draft = {
-          id: crypto.randomUUID(),
-          type: 'shape',
-          shape: this.mode,
-          view: hit.view,
-          points: [],
-        };
+      const picked = pickShapePoint(this.draft, this.mode, hit);
+      if (picked.duplicate) return;
+      this.draft = picked.draft;
       if (this.record)
         applyShapeToolSettings(this.draft, shapeToolSettings(this.record, this.mode));
-      if (
-        this.draft.points.length >= 3 &&
-        ['polyline', 'polygon'].includes(this.mode) &&
-        Math.hypot(this.draft.points[0][0] - hit.point[0], this.draft.points[0][1] - hit.point[1]) <
-          1e-7
-      ) {
+      if (picked.finish === 'closed') {
         this.finishShape(true);
         return;
       }
-      if (
-        this.draft.points.some((p) => Math.hypot(p[0] - hit.point[0], p[1] - hit.point[1]) < 1e-7)
-      )
-        return;
-      this.draft.points.push([...hit.point]);
-      const required =
-        this.mode === 'arc' ? 3 : ['polyline', 'polygon'].includes(this.mode) ? Infinity : 2;
-      if (this.draft.points.length === required) {
+      if (picked.finish) {
+        const draft = this.draft;
         this.finishShape();
-        if (this.draft?.points.length === required) this.draft.points.pop();
+        if (this.draft === draft && picked.finish === 'open') this.draft.points.pop();
       }
       this.ui();
       this.adapter.redraw();
       return;
     }
     if (this.mode === 'add') {
-      this.checkpoint();
-      if (!insertDimensionPoint(item, hit.point)) {
-        this.history.pop();
+      const next = withDimensionPoint(item, hit);
+      if (!next) {
         this.ui('Den måttpunkten finns redan i kedjan.');
         return;
       }
-      item.references ??= Array(item.points.length - 1).fill(null);
-      item.references.push(hit.reference || null);
+      this.checkpoint();
+      Object.assign(item, next);
       this.ui();
       this.adapter.redraw();
-      return;
-    }
-    if (this.mode === 'move-anchor') {
-      if (!this.validAnchor(item, hit.point)) {
-        this.ui('Fästpunkten måste ligga på samma objekt som part mark tillhör.');
-        return;
-      }
-      const next = structuredClone(item);
-      if (next.type === 'dimension' && !moveDimensionPoint(next, this.anchorIndex, hit.point)) {
-        this.ui('Punkten sammanfaller med ett annat delmått. Välj en annan punkt.');
-        return;
-      }
-      this.checkpoint();
-      if (item.type === 'dimension') item.points = next.points;
-      else item.points[this.anchorIndex] = [...hit.point];
-      item.references ??= Array(item.points.length).fill(null);
-      item.references[this.anchorIndex] = this.referenceFor(hit, item.sourceId);
-      this.cancel();
       return;
     }
     if (this.mode === 'place-existing') {
@@ -1027,90 +711,30 @@ export class DrawingAnnotations {
       this.cancel();
       return;
     }
-    if (
-      this.workflow === 'holes' &&
-      !this.draft &&
-      ['horizontal', 'vertical'].includes(this.mode)
-    ) {
-      const points = holeDimensionPoints(
-        this.adapter.candidates(hit.view),
-        hit.reference,
-        this.mode,
-      );
-      if (points.length < 2) {
-        this.ui('Välj en hålbild med minst två hålcentrum i måttriktningen.');
-        return;
-      }
-      this.draft = {
-        id: crypto.randomUUID(),
-        type: 'dimension',
-        kind: this.mode,
-        view: hit.view,
-        points: points.map((p) => [...p]),
-        references: points.map((p) => p.reference),
-      };
-      this.finishPoints();
-      this.adapter.redraw();
+    const source = this.mode === 'leader' ? this.adapter.pick(e, hit) : undefined;
+    const picked = pickDimensionPoint(
+      { draft: this.draft, mode: this.mode, workflow: this.workflow },
+      hit,
+      {
+        candidates: this.workflow === 'holes' ? this.adapter.candidates(hit.view) : [],
+        source,
+        sourceMark:
+          source && this.mode === 'leader' && !this.adapter.manualLeaders
+            ? this.adapter.mark(source)
+            : null,
+        reference: this.mode === 'leader' ? this.referenceFor(hit, source) : null,
+        manualLeaders: this.adapter.manualLeaders,
+      },
+    );
+    if (picked.message) {
+      this.ui(picked.message);
       return;
     }
-    if (this.mode === 'leader' && this.adapter.manualLeaders) {
-      this.draft = {
-        id: crypto.randomUUID(),
-        type: 'leader',
-        manual: true,
-        comment: '',
-        view: hit.view,
-        points: [hit.point],
-        sourceId: this.adapter.pick(e, hit) || undefined,
-        references: [this.referenceFor(hit, this.adapter.pick(e, hit))],
-      };
-    } else if (this.mode === 'leader') {
-      const source = this.adapter.pick(e, hit);
-      if (!source || !this.adapter.mark(source)) {
-        this.ui('Välj en numrerad detalj. Numrering finns i ritningshanterarens Mer-meny.');
-        return;
-      }
-      this.draft = {
-        id: crypto.randomUUID(),
-        type: 'leader',
-        view: hit.view,
-        sourceId: source,
-        points: [hit.point],
-        references: [this.referenceFor(hit, source)],
-      };
-    } else if (!this.draft)
-      this.draft = {
-        id: crypto.randomUUID(),
-        type: 'dimension',
-        kind: this.mode,
-        view: hit.view,
-        points: [hit.point],
-        references: [hit.reference || null],
-      };
-    else {
-      if (
-        this.draft.points.length >= 3 &&
-        ['polyline', 'polygon'].includes(this.mode) &&
-        Math.hypot(this.draft.points[0][0] - hit.point[0], this.draft.points[0][1] - hit.point[1]) <
-          1e-7
-      ) {
-        this.finishShape(true);
-        return;
-      }
-      if (
-        this.draft.points.some((p) => Math.hypot(p[0] - hit.point[0], p[1] - hit.point[1]) < 1e-5)
-      )
-        return;
-      this.draft.points.push(hit.point);
-      this.draft.references.push(hit.reference || null);
-    }
-    if (
-      this.workflow === 'point' &&
-      this.draft?.type === 'dimension' &&
-      this.draft.points.length === 2
-    ) {
+    if (picked.duplicate) return;
+    this.draft = picked.draft;
+    if (picked.place) {
       this.finishPoints();
-      if (this.phase !== 'place') {
+      if (this.phase !== 'place' && this.workflow === 'point') {
         this.draft.points.pop();
         this.draft.references.pop();
       }
@@ -1125,8 +749,7 @@ export class DrawingAnnotations {
     if (!d) return;
     this.drag = null;
     if (cancel && d.moved) {
-      if (d.shapeBefore) Object.assign(d.item, d.shapeBefore);
-      else d.item.line = d.line;
+      d.item.line = d.line;
       d.item.points = d.points;
       for (const { member, line } of d.linkedLines || []) member.line = [...line];
     } else if (d.moved) {
@@ -1166,47 +789,30 @@ export class DrawingAnnotations {
     );
   }
   move(e) {
+    if (this.pointerTimings && (this.mode || this.drag))
+      return this.pointerTimings.measure('pointer', this.cad.get(), () => this.movePoint(e));
+    return this.movePoint(e);
+  }
+  movePoint(e) {
     if (this.drag) {
       e.preventDefault();
       e.stopImmediatePropagation();
       const d = this.drag;
       if (e.pointerId !== d.pointerId) return;
       if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 3) return;
-      const hit = this.location(
-        e,
-        d.item.view,
-        d.pointIndex !== null,
-        d.shapeBefore ? d.item.id : null,
-      );
+      const hit = this.location(e, d.item.view, false);
       if (!hit) return;
-      let changedShape;
-      if (d.shapeBefore) {
-        try {
-          changedShape = shapeWithGrip(d.shapeBefore, d.grip, hit.point);
-        } catch {
-          return;
-        }
-      }
       if (!d.moved) {
         d.before = structuredClone(this.items);
         d.moved = true;
         this.surface.classList.add('annotation-dragging');
       }
-      if (changedShape) {
-        Object.assign(d.item, changedShape);
-        this.hover = hit;
-      } else if (d.pointIndex !== null) {
-        if (d.item.type === 'dimension') moveDimensionPoint(d.item, d.pointIndex, hit.point);
-        else d.item.points[d.pointIndex] = [...hit.point];
-        this.hover = hit;
-      } else {
-        for (const { member, line } of d.linkedLines || []) member.line = [...line];
-        moveLinkedDimensions(this.items, d.item, [
-          d.line[0] + hit.point[0] - d.start[0],
-          d.line[1] + hit.point[1] - d.start[1],
-        ]);
-      }
-      this.adapter.redraw();
+      for (const { member, line } of d.linkedLines || []) member.line = [...line];
+      moveLinkedDimensions(this.items, d.item, [
+        d.line[0] + hit.point[0] - d.start[0],
+        d.line[1] + hit.point[1] - d.start[1],
+      ]);
+      this.redrawFeedback(true);
       return;
     }
     if (!this.mode) {
@@ -1217,7 +823,7 @@ export class DrawingAnnotations {
     if (this.transform?.active()) {
       this.hover =
         this.transform.phase !== 'select' ? this.location(e, this.transform.view, true) : null;
-      this.adapter.redraw();
+      this.redrawFeedback();
       return;
     }
     this.hover = this.location(
@@ -1225,15 +831,28 @@ export class DrawingAnnotations {
       this.draft?.view || this.item()?.view,
       this.phase !== 'place' && this.mode !== 'place-existing',
     );
-    if (
-      this.mode === 'move-anchor' &&
-      this.hover &&
-      !this.validAnchor(this.item(), this.hover.point)
-    )
-      this.hover = null;
-    this.adapter.redraw();
+    this.redrawFeedback();
+  }
+  releaseGraphics() {
+    this.overlay?.remove();
+    this.overlay = null;
+    this.graphicsRoot = null;
+  }
+  redrawFeedback(objects = false) {
+    if (!this.graphicsRoot?.isConnected) return this.adapter.redraw();
+    if (objects) {
+      this.render(this.graphicsRoot);
+      if (this.richText?.graphicsRoot) this.richText.paint(this.richText.graphicsRoot);
+    } else {
+      this.paintOverlay();
+      this.richText?.paintFeedback();
+    }
   }
   render(root) {
+    this.graphicsRoot = root;
+    root
+      .querySelectorAll(':scope > .drawing-annotations,:scope > .drawing-overlay')
+      .forEach((node) => node.remove());
     if (!this.selected && !this.mode) this.selectedIds?.clear();
     const back = el('g', { class: 'drawing-annotations drawing-annotations-back' }),
       front = el('g', { class: 'drawing-annotations drawing-annotations-front' });
@@ -1253,16 +872,9 @@ export class DrawingAnnotations {
         (point) => this.validAnchor(item, point),
       );
       if (item.id === this.selected) this.referenceStatus(item, broken);
-      let display = item;
-      if (item.id === this.selected && this.mode === 'move-anchor' && this.hover) {
-        display = structuredClone(item);
-        if (display.type === 'dimension')
-          moveDimensionPoint(display, this.anchorIndex, this.hover.point);
-        else display.points[this.anchorIndex] = [...this.hover.point];
-      }
       this.paint(
         layer,
-        display,
+        item,
         item.id === this.selected ||
           this.selectedIds?.has(item.id) ||
           (this.transform?.active() && this.transform.ids.includes(item.id)),
@@ -1287,7 +899,13 @@ export class DrawingAnnotations {
         this.overlay.append(warning);
       }
     }
-    layer = this.overlay;
+    this.paintOverlay();
+  }
+  paintOverlay() {
+    if (!this.overlay) return;
+    this.overlay.querySelector(':scope > .drawing-dynamic-overlay')?.remove();
+    const layer = el('g', { class: 'drawing-dynamic-overlay' });
+    this.overlay.append(layer);
     if (this.draft) {
       if (this.draft.type === 'shape' && this.hover) {
         const preview = { ...this.draft, points: [...this.draft.points, this.hover.point] };
@@ -1307,13 +925,7 @@ export class DrawingAnnotations {
     return source ? surfaceReference(hit.point, id, this.adapter.candidates(hit.view)) : null;
   }
   referenceStatus(item, broken = []) {
-    const status = this.panel.querySelector('.annotation-reference-status');
-    if (!status) return;
-    const linked = item.references?.filter(Boolean).length || 0;
-    status.textContent = broken.length
-      ? `${broken.length} bruten koppling – flytta fästpunkten till en ny snappunkt.`
-      : `${linked} av ${item.points.length} punkter kopplade till modellen`;
-    status.classList.toggle('broken', broken.length > 0);
+    renderAnnotationReferenceStatus(this.panel, item, broken);
   }
   dot(root, p, view) {
     const q = this.adapter.project(p, view);

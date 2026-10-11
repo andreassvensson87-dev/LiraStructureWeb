@@ -34,6 +34,7 @@ export function installReferenceMemoryBenchmark({
   };
   button.onclick = async () => {
     button.disabled = true;
+    const importSession = references.importer();
     const report = {
       startedAt: new Date().toISOString(),
       userAgent: navigator.userAgent,
@@ -49,8 +50,8 @@ export function installReferenceMemoryBenchmark({
         label,
         at: new Date().toISOString(),
         parts: references.parts.length,
-        pending: references.pending?.length || 0,
-        workerActive: !!references.worker,
+        pending: importSession.pending?.length || 0,
+        workerActive: !!importSession.worker,
         visible: references.group.visible,
         heapUsed: memory?.usedJSHeapSize ?? null,
         heapTotal: memory?.totalJSHeapSize ?? null,
@@ -66,12 +67,12 @@ export function installReferenceMemoryBenchmark({
     };
     const waitForFinish = async () => {
       const started = performance.now();
-      while (references.worker) {
+      while (importSession.worker) {
         require(performance.now() - started < 60000, 'IFC import timed out');
         await pause(16);
       }
       await frame();
-      require(!references.pending?.length, 'Finished import retained pending meshes');
+      require(!importSession.pending?.length, 'Finished import retained pending meshes');
     };
     const load = async (file, count) => {
       await references.load(file, { replaceId: references.selectedId });
@@ -82,7 +83,7 @@ export function installReferenceMemoryBenchmark({
     };
     const startPending = async (file) => {
       await references.load(file, { replaceId: references.selectedId });
-      const worker = references.worker;
+      const worker = importSession.worker;
       require(worker, 'Worker was not created');
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('No partial mesh received')), 60000);
@@ -98,8 +99,8 @@ export function installReferenceMemoryBenchmark({
           }
         };
       });
-      require(references.pending.length > 0 &&
-        references.worker === worker, 'Partial import not available');
+      require(importSession.pending.length > 0 &&
+        importSession.worker === worker, 'Partial import not available');
     };
     const click = async (selector) => {
       references.$(selector).click();
@@ -139,8 +140,8 @@ export function installReferenceMemoryBenchmark({
       await startPending(large);
       sample('cancel-with-pending');
       await click('[data-cancel]');
-      require(!references.worker &&
-        !references.pending.length &&
+      require(!importSession.worker &&
+        !importSession.pending.length &&
         references.parts[0] === original, 'Cancellation lost old model or retained pending import');
       report.checks.push('Partial import cancellation preserves the existing reference');
       sample('cancelled');
@@ -151,8 +152,8 @@ export function installReferenceMemoryBenchmark({
       sample('invalid-file');
       await startPending(large);
       await click('[data-remove]');
-      require(!references.worker &&
-        !references.pending.length &&
+      require(!importSession.worker &&
+        !importSession.pending.length &&
         !references.parts.length, 'Removing a reference left a running import or pending meshes');
       report.checks.push('Removing during import also cancels the pending reference');
       sample('removed-during-import');
@@ -183,8 +184,8 @@ export function installReferenceMemoryBenchmark({
         sample(`visible-solid-${cycle}`);
         await click('[data-remove]');
         require(!references.parts.length &&
-          !references.worker &&
-          !references.pending.length, 'Removal retained reference resources');
+          !importSession.worker &&
+          !importSession.pending.length, 'Removal retained reference resources');
         sample(`removed-${cycle}`);
         unloadedGeometries ??= renderer.info.memory.geometries;
         require(renderer.info.memory.geometries ===

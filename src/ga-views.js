@@ -1,3 +1,4 @@
+import { createHtmlGrip } from './ui/grip.js';
 import { detailSource, nextDetailLabel } from './drawing-details.js';
 import { nextSectionName } from './drawing-sections.js';
 import {
@@ -95,8 +96,12 @@ export class GAViews {
       },
     });
     for (const corner of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'move']) {
-      const grip = document.createElement('div');
-      grip.className = 'ga-view-grip ga-view-grip-' + corner;
+      const grip = createHtmlGrip({
+        role: corner === 'move' ? 'move' : 'point',
+        key: `ga-view:${corner}`,
+        label: corner === 'move' ? 'Flytta vyn' : 'Beskär vyn · skalan behålls',
+      });
+      grip.classList.add('ga-view-grip', 'ga-view-grip-' + corner);
       if (corner === 'move') grip.dataset.viewportGrip = 'true';
       else grip.dataset.cropCorner = corner;
       grip.style.cursor = viewGripCursor(corner);

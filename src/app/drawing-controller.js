@@ -14,6 +14,7 @@ export function createDrawingController({
   highlight,
   onChange,
   onIdentityChange,
+  getReferenceModels = () => [],
 }) {
   const getSnapSettings = () => project.snap;
   const planView = new PlanView({
@@ -24,8 +25,10 @@ export function createDrawingController({
       parts: project.parts,
       project: project.info,
       drawings: project.drawings,
+      references: project.references,
     }),
     getSnapSettings,
+    getReferenceModels,
   });
   const singleSheet = new SinglePartSheet({
     getAttributeState: () => project,
@@ -80,6 +83,7 @@ export function createDrawingController({
         editor.dialog.classList.add('drawing-pdf-render');
         try {
           editor.openRecord(record, { save: () => {}, review: () => {} });
+          await editor.ifcReferences?.ready();
           await document.fonts.ready;
           await new Promise((resolve) =>
             requestAnimationFrame(() => requestAnimationFrame(resolve)),

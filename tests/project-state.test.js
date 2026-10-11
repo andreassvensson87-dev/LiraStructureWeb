@@ -5,7 +5,7 @@ import { ProjectHistory } from '../src/project/project-history.js';
 import { mergeDrawingEdit } from '../src/project/drawing-edits.js';
 const create = () =>
   createProject({
-    grid: { x: [0, 1000], y: [0, 1000] },
+    grid: { x: [], y: [] },
     levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
   });
 test('project owns its input and snapshots exclude transient editor state', () => {

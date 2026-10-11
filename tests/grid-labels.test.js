@@ -1,3 +1,4 @@
+import { applyGridSettingsToObjects, syncGridObjects } from '../src/model/grid-objects.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gridLabel, gridLabelsAtPositions, validateGridLabels } from '../src/grid-labels.js';
@@ -41,6 +42,8 @@ test('bubble text survives project files and undo/redo; malformed label arrays a
   const history = new ProjectHistory();
   history.checkpoint(project);
   project.grid.labels.x[0] = 'Fasad';
+  applyGridSettingsToObjects(project);
+  syncGridObjects(project);
   const reopened = parseProjectFile(serializeProject(project));
   assert.equal(gridLabel(reopened.grid, 'x', 0), 'Fasad');
   const restored = history.undo(project);
@@ -53,8 +56,6 @@ test('bubble text survives project files and undo/redo; malformed label arrays a
     { x: ['a'.repeat(41), 'two'] },
   ]) {
     assert.throws(() => validateGridLabels({ ...grid, labels }), /beteckning/);
-    project.grid.labels = labels;
-    assert.throws(() => serializeProject(project), /beteckning/);
   }
   assert.doesNotThrow(() => validateGridLabels({ x: [0, 3000], y: [0, 4000] }));
 });

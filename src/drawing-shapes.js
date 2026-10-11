@@ -1,3 +1,4 @@
+import { insulationFrame } from './drawing-insulation.js';
 export const shapeNames = {
   line: 'Linje',
   polyline: 'Polylinje',
@@ -5,9 +6,11 @@ export const shapeNames = {
   circle: 'Cirkel',
   rectangle: 'Rektangel',
   arc: 'Båge',
+  insulation: 'Isolering',
 };
 
 export function shapeSnapPoints(item) {
+  if (item.shape === 'insulation') return insulationFrame(item).corners;
   if (item.shape === 'rectangle' && item.points.length === 2) {
     const [a, b] = item.points;
     return [a, [b[0], a[1]], b, [a[0], b[1]]];
@@ -94,6 +97,7 @@ export function shapePath(shape, points, project) {
 
 // Boundaries in object coordinates. Hatch spacing is applied after paper projection.
 export function shapeContours(item) {
+  if (item.shape === 'insulation') return [insulationFrame(item).corners];
   if (item.shape === 'circle' && item.points.length === 2) {
     const [c, e] = item.points,
       r = Math.hypot(e[0] - c[0], e[1] - c[1]);

@@ -5,7 +5,7 @@
   --ui-ribbon-height: 124px;
 }
 
-/* One ribbon, including the explicit adapters for legacy editor styles. */
+/* One ribbon, including the explicit adapters for existing editor styles. */
 .ui-ribbon.ui-ribbon,
 :is(
     #model-ribbon,

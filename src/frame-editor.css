@@ -456,15 +456,6 @@
   border-color: transparent;
   font-weight: 600;
 }
-.fe-object-grip {
-  cursor: move;
-  pointer-events: all;
-}
-.fe-object-grip:hover rect,
-.fe-object-grip:focus rect {
-  fill: #ffdb99;
-  stroke: #b76a13;
-}
 #frame-editor .fe-file-dialog {
   width: 650px;
 }
