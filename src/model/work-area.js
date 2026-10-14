@@ -38,6 +38,20 @@ export function workAreaBounds(area) {
     new THREE.Vector3(x1, y1, area.upper),
   );
 }
+/** Fit a fresh box to complete geometry, independent of the previous crop. */
+export function workAreaFromBounds(bounds, padding = 100) {
+  if (!bounds || bounds.isEmpty()) return null;
+  return validateWorkArea({
+    rectangle: [
+      bounds.min.x - padding,
+      bounds.min.y - padding,
+      bounds.max.x + padding,
+      bounds.max.y + padding,
+    ],
+    lower: bounds.min.z - padding,
+    upper: bounds.max.z + padding,
+  });
+}
 export function withinWorkArea(bounds, point) {
   return (
     !bounds ||

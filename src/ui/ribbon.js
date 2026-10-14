@@ -164,7 +164,9 @@ export function createRibbon(root, groups) {
       if (item.primary) {
         wrapper.classList.add('ui-command-split');
         wrapper.classList.toggle('ui-command-split-small', item.size !== 'large');
-        wrapper.append(ribbonCommand(item.primary, { size: item.size, label: item.label }));
+        wrapper.append(
+          ribbonCommand(item.primary, { size: item.size, label: item.label, icon: item.icon }),
+        );
         trigger.classList.add('ui-command-split-arrow');
         trigger.replaceChildren(arrow);
         trigger.setAttribute('aria-label', 'Fler alternativ för ' + item.label.toLowerCase());

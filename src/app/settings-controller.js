@@ -203,11 +203,13 @@ export function createSettingsController({
   }
   $('snap-gridStepEnabled').onchange = () =>
     ($('snap-gridStep').disabled = !$('snap-gridStepEnabled').checked);
-  $('settings-open').onclick = () => {
+  function open(category) {
     fillSettings();
     $('settings-error').textContent = '';
+    if (category) settingsCategory(category);
     $('settings-dialog').showModal();
-  };
+  }
+  $('settings-open').onclick = () => open();
   $('settings-close').onclick = $('settings-cancel').onclick = () => $('settings-dialog').close();
   $('settings-dialog').addEventListener('close', () => {
     fillSettings();
@@ -285,5 +287,5 @@ export function createSettingsController({
     $('status').textContent = 'Inställningar uppdaterade';
   };
   installDialogPresentation($('settings-dialog'));
-  return { fill: fillSettings };
+  return { fill: fillSettings, open };
 }

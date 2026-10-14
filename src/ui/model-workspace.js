@@ -15,11 +15,27 @@ export function installModelWorkspace({ root, controllers }) {
   });
   const header = document.body.querySelector(':scope > header');
   header.after(root);
-  const button = (id, size = 'small', label) => ({
+  const button = (id, size = 'small', label, icon) => ({
     node: document.getElementById(id),
     size,
     label,
+    icon,
   });
+  const areaCommand = (id, label, icon, run, title = label) => {
+    const node = document.createElement('button');
+    node.id = id;
+    node.textContent = label;
+    node.title = title;
+    node.onclick = run;
+    return { node, label, icon, size: 'large' };
+  };
+  const areaCorners = areaCommand(
+    'work-area',
+    'Två hörn',
+    'workArea',
+    () => controllers.workAreaUI.open(),
+    'Arbetsområde från två motstående hörn i XY',
+  );
   const polysweep = document.createElement('button');
   polysweep.textContent = 'Polysweep';
   polysweep.onclick = () => controllers.polysweepUI.start();
@@ -123,6 +139,51 @@ export function installModelWorkspace({ root, controllers }) {
           ],
         },
         button('box-select'),
+      ],
+    },
+    {
+      label: 'Arbetsplan',
+      items: [
+        button('work-plane', 'large', 'Tre punkter'),
+        {
+          stack: [
+            button('work-plane-view', 'small', 'Mot planet'),
+            button('work-plane-reset', 'small', 'Återställ', 'undo'),
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Arbetsområde',
+      items: [
+        {
+          primary: areaCorners.node,
+          label: areaCorners.label,
+          icon: areaCorners.icon,
+          size: 'large',
+          menu: [
+            areaCommand('work-area-selection', 'Runt markering', 'workArea', () =>
+              controllers.workAreaUI.aroundSelection(),
+            ),
+            areaCommand('work-area-reset', 'Visa utan arbetsområde', 'fit', () =>
+              controllers.workAreaUI.reset(),
+            ),
+          ].map((command) => ({ ...command, size: 'small' })),
+        },
+        areaCommand(
+          'work-area-fit',
+          'Anpassa till allt',
+          'workAreaFit',
+          () => controllers.workAreaUI.fitAll(),
+          'Anpassa arbetsområdets box till hela modellen och synliga referenser',
+        ),
+        areaCommand(
+          'work-area-heights',
+          'Plushöjder',
+          'elevations',
+          () => controllers.settingsController.open('workArea'),
+          'Ändra arbetsområdets övre och nedre plushöjd',
+        ),
       ],
     },
     {

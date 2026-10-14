@@ -18,7 +18,6 @@ export function installModelChrome({
   setGridSelectionLocked,
   front,
   side,
-  workArea,
 }) {
   const $ = (id) => document.getElementById(id);
   const aside = document.querySelector('main > aside');
@@ -146,11 +145,8 @@ export function installModelChrome({
   action('Framifrån', 'M4 4h16v16H4ZM4 15h16M9 15v5', front);
   action('Från sidan', 'M4 4h16v16H4ZM15 4v16M4 9h11', side);
   action('Visa allt', 'M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4', () => $('fit').click());
-  action('Arbetsområde…', icons.model, () => workArea.open());
-  action('Arbetsområde runt markering', icons.model, () => workArea.aroundSelection());
-  action('Hela modellen', icons.model, () => workArea.reset());
   const quick = document.querySelector('.view-controls');
-  for (const id of ['work-plane', 'work-plane-reset', 'work-plane-view', 'helpers-visible']) {
+  for (const id of ['helpers-visible']) {
     const button = $(id);
     if (!button) continue;
     button.setAttribute('role', 'menuitem');

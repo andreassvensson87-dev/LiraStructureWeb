@@ -6,6 +6,7 @@ import {
   defaultWorkArea,
   workAreaFromCorners,
   workAreaBounds,
+  workAreaFromBounds,
   withinWorkArea,
   expandWorkArea,
   parseElevation,
@@ -42,6 +43,12 @@ test('opposite XY corners use absolute signed elevations, persist in files and e
     [-500, -800, -999],
   );
   const box = workAreaBounds(area);
+  assert.equal(workAreaFromBounds(new THREE.Box3()), null);
+  assert.deepEqual(workAreaFromBounds(box), {
+    rectangle: [-600, -900, 600, 900],
+    lower: -600,
+    upper: 3100,
+  });
   assert.deepEqual(box.min.toArray(), [-500, -800, -500]);
   assert.deepEqual(box.max.toArray(), [500, 800, 3000]);
   assert.equal(formatElevation(-500), '−0,500');
@@ -296,4 +303,49 @@ test('clipping retains complete assembly and block selections while hiding their
     m.geometry.dispose();
     m.material.dispose();
   }
+});
+
+test('fit all includes cropped model objects and complete visible reference bounds in one undoable change', () => {
+  const p = project(),
+    history = new ProjectHistory();
+  p.workArea = { rectangle: [0, 0, 10, 10], lower: 0, upper: 10 };
+  const before = structuredClone(p.workArea),
+    child = new THREE.Mesh(new THREE.BoxGeometry(200, 400, 600));
+  child.position.set(1000, 2000, 3000);
+  child.visible = false;
+  p.objects = [{ id: 'outside' }];
+  const reference = new THREE.Box3(
+    new THREE.Vector3(-4000, -5000, -6000),
+    new THREE.Vector3(-3000, -4000, -5000),
+  );
+  let fits = 0;
+  const ctl = createWorkAreaController({
+    project: p,
+    tools: {},
+    ui: { selectedIds: new Set() },
+    renderState: { renderedById: new Map([['outside', { child }]]) },
+    setDrawing() {},
+    createHUD() {},
+    display: { set() {} },
+    render() {},
+    fit: () => fits++,
+    status() {},
+    focus() {},
+    referenceBounds: () => reference,
+    commit(next) {
+      history.checkpoint(p);
+      p.workArea = next;
+    },
+  });
+  ctl.fitAll();
+  assert.deepEqual(p.workArea, {
+    rectangle: [-4100, -5100, 1200, 2300],
+    lower: -6100,
+    upper: 3400,
+  });
+  assert.equal(fits, 1);
+  assert.equal(history.past.length, 1);
+  assert.deepEqual(history.undo(p).workArea, before);
+  child.geometry.dispose();
+  child.material.dispose();
 });

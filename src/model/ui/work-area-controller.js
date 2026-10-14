@@ -6,6 +6,7 @@ import {
   workAreaFromCorners,
   workAreaBounds,
   withinWorkArea,
+  workAreaFromBounds,
 } from '../work-area.js';
 
 /** Corner picking and visibility share the existing model input, HUD and renderer. */
@@ -23,6 +24,7 @@ export function createWorkAreaController({
   status,
   focus,
   referenceVisibility,
+  referenceBounds = () => null,
 }) {
   let hud = null,
     active = false,
@@ -183,7 +185,27 @@ export function createWorkAreaController({
       status(error.message);
     }
   }
+  function fitAll() {
+    setDrawing(false);
+    const box = new THREE.Box3();
+    for (const object of project.objects) {
+      const extent = objectBounds(object.id);
+      if (extent) box.union(extent);
+    }
+    const references = referenceBounds();
+    if (references) box.union(references);
+    const next = workAreaFromBounds(box);
+    if (!next) {
+      status('Modellen är tom.');
+      return;
+    }
+    commit(next);
+    fit();
+    status('Arbetsområde anpassat till hela modellen');
+    focus();
+  }
   return {
+    fitAll,
     open,
     suspend,
     sync,

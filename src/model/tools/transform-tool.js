@@ -4,6 +4,12 @@ import { nextIdentity, designation } from '../../object-identity.js';
 import { followFasteners, remapFastenerCopy } from '../../fasteners/relations.js';
 import { updateAutomaticJoints } from '../../fasteners/update-joints.js';
 import { blockSelection } from '../../blocks/placement.js';
+/** Detached placement state; immutable library geometry remains shared. */
+export function cloneTransformSource(source) {
+  if (source.type !== 'item') return structuredClone(source);
+  const { item, ...placement } = source;
+  return { ...structuredClone(placement), item };
+}
 export function transformCandidates(operation, first, target, draft) {
   return operation
     ? operation.sources.map((s) => transformObject(s, operation.mode, first, target))
@@ -56,11 +62,10 @@ export function applyObjectBatch(
   for (const s of batch) if (s.group && !ids.has(s.group.id)) ids.set(s.group.id, newId());
   for (const s of batch) {
     const object = {
-      ...structuredClone(s),
+      ...cloneTransformSource(s),
       ...nextIdentity(s, [...objects, ...copies]),
       id: ids.get(s.id),
     };
-    if (s.type === 'item') object.item = s.item;
     if (s.parametricBlock) {
       const id = s.parametricBlock.instanceId;
       if (!blockIds.has(id)) blockIds.set(id, newId());

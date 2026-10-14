@@ -12,7 +12,7 @@ import { alignFastenerGroup, fastenerGroupBatch } from '../../fasteners/groups.j
 import { axisPlacement } from '../../fasteners/geometry.js';
 import { resolveFastenerHoles } from '../../fasteners/placement.js';
 import { moveReferencePlacement } from '../../references/reference-placement.js';
-import { transformCandidates } from '../tools/transform-tool.js';
+import { transformCandidates, cloneTransformSource } from '../tools/transform-tool.js';
 
 // Model-space point placement, typed distance and transform interaction.
 // Specialised tools supply adapters; selection, snap and history stay shared.
@@ -186,7 +186,11 @@ export function createPlacementController({
     const source = sources[0];
     if (!source || ((mode === 'start' || mode === 'end') && sources.length !== 1)) return;
     setDrawing(true);
-    tools.operation = { mode, source: structuredClone(source), sources: structuredClone(sources) };
+    tools.operation = {
+      mode,
+      source: cloneTransformSource(source),
+      sources: sources.map(cloneTransformSource),
+    };
     syncOperationUI();
     if (mode === 'start' || mode === 'end') {
       tools.first = [...source[mode]];
@@ -211,7 +215,7 @@ export function createPlacementController({
         grip.refs.map((r) => r.id),
       ),
     );
-    const sources = structuredClone(componentTransformSources(project.objects, ids));
+    const sources = componentTransformSources(project.objects, ids).map(cloneTransformSource);
     setDrawing(true);
     tools.operation = sources.some(
       (s) =>

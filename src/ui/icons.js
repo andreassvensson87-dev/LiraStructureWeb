@@ -1,4 +1,7 @@
 const paths = {
+  workArea: 'M5 5h14v14H5ZM3 3h4v4H3ZM17 17h4v4h-4Z',
+  workAreaFit: 'M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5M7 9l5-3 5 3v6l-5 3-5-3ZM7 9l5 3 5-3M12 12v6',
+  elevations: 'M3 4h12M3 20h12M18 4v16M15 7l3-3 3 3M15 17l3 3 3-3M6 8h6v8H6Z',
   lock: 'M7 10V7a5 5 0 0 1 10 0v3M4 10h16v12H4ZM12 14v4',
   insulation: 'M3 6h18v12H3ZM3 18l3-12 3 12 3-12 3 12 3-12 3 12',
   properties: 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',

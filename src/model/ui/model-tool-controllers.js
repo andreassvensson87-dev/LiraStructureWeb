@@ -205,6 +205,7 @@ export function installModelTools({
     createHUD: (callbacks) => createCornerHUD(hudStack, callbacks),
     display: createWorkAreaDisplay(scene, renderer),
     referenceVisibility: (bounds) => controllers.referenceModels?.setWorkArea(bounds),
+    referenceBounds: () => controllers.referenceModels?.bounds(),
     commit: (next) => actions.setWorkArea(next),
     render,
     fit: () => actions.fit(),

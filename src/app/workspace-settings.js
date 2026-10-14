@@ -139,6 +139,7 @@ export function installWorkspaceSettings({
     },
     onChange: render,
   });
+  controllers.settingsController = settingsController;
   function fillSettings() {
     settingsController.fill();
   }

@@ -5,6 +5,7 @@ import { objectType } from './object-types/index.js';
 import { selectedBlock } from '../blocks/placement.js';
 import { blockGripValues } from '../blocks/grip.js';
 import { updateModelBlock } from '../blocks/model-adapter.js';
+import { cloneTransformSource } from './tools/transform-tool.js';
 /** Group only selected, coincident world points; never merge by screen position. */
 export function selectionGrips(objects, selectedIds, drawing = false) {
   if (drawing || !selectedIds.size || selectedIds.size >= 5) return [];
@@ -42,7 +43,7 @@ export function moveGripPoints(sources, refs, target, base) {
     );
   }
   return sources.map((source) => {
-    let result = structuredClone(source);
+    let result = cloneTransformSource(source);
     for (const ref of refs.filter((r) => r.id === source.id)) {
       if (typeof ref.kind === 'number') {
         const destination = base

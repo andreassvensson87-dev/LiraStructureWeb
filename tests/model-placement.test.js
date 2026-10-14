@@ -12,6 +12,7 @@ import { createToolSession, resetToolInteraction } from '../src/model/tool-sessi
 import { ProjectHistory } from '../src/project/project-history.js';
 import { createProject } from '../src/project/project-state.js';
 import { modelBlockDefinition, modelBlockMembers } from '../src/blocks/model-adapter.js';
+import { placeItem, itemTemplate } from '../src/items/geometry.js';
 
 function fixture(t) {
   const previous = globalThis.document;
@@ -148,6 +149,60 @@ test('native endpoint commands route a parametric part through parameter grips w
   assert.deepEqual(f.project.objects[0].end, [2000, 0, 0]);
   assert.equal(f.history.past.length, 1);
   assert.deepEqual(f.history.undo(f.project).objects, before);
+});
+
+test('item endpoint previews share library buffers without changing the source and commit once', (t) => {
+  const f = fixture(t),
+    box = new THREE.BoxGeometry(100, 100, 100);
+  const item = {
+    id: 'shape',
+    revision: 1,
+    name: 'Item',
+    article: '',
+    supplier: '',
+    sourceName: 'test.step',
+    geometryId: 'mesh',
+    start: [0, 0, 0],
+    end: [100, 0, 0],
+    snap: 'box',
+    mesh: {
+      positions: Array.from(box.attributes.position.array),
+      indices: Array.from(box.index.array),
+    },
+  };
+  box.dispose();
+  const source = { ...placeItem(item, [0, 0, 0], [100, 0, 0]), id: 'line', name: 'Item' };
+  f.project.objects = [source];
+  const before = structuredClone(source),
+    template = itemTemplate(item);
+  f.controller.startGrip({ point: source.end, refs: [{ id: source.id, kind: 'end' }] });
+  assert.equal(f.tools.operation.sources[0].item, item);
+  assert.notEqual(f.tools.operation.sources[0].start, source.start);
+  for (const target of [
+    [100, 20, 0],
+    [0, 200, 0],
+    [0, 0, 200],
+  ]) {
+    f.tools.activeSnap = { kind: 'endpoint', label: '', point: target };
+    assert.equal(f.controller.previewLinear(target), true);
+    assert.equal(f.ui.previewSweep.item, item);
+    const mesh = f.ui.preview.children[0];
+    assert.equal(
+      mesh.geometry.attributes.position.array,
+      template.geometry.attributes.position.array,
+    );
+    assert.equal(
+      mesh.children[0].geometry.attributes.position.array,
+      template.edges.attributes.position.array,
+    );
+    assert.deepEqual(source, before);
+    assert.equal(f.history.canUndo, false);
+  }
+  assert.equal(f.controller.commitPoint([0, 200, 0]), true);
+  assert.equal(f.history.past.length, 1);
+  assert.equal(f.project.objects[0].item, item);
+  assert.ok(Math.abs(f.project.objects[0].end[1] - 100) < 1e-6);
+  assert.deepEqual(f.history.undo(f.project).objects, [before]);
 });
 
 function linearFixture(t) {
