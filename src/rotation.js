@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { objectType } from './model/object-types/index.js';
+import { transformBlockMetadata } from './blocks/placement.js';
 export const rotationAxes = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
 // Rotate the entire local frame, including eccentric profile placement.
 export function rotateObject(source, pivot, axis, degrees) {
@@ -18,7 +19,10 @@ export function rotateObject(source, pivot, axis, degrees) {
       .add(origin)
       .toArray()
       .map((v) => Math.round(v * 1e9) / 1e9);
-  return objectType(source).rotate(source, { turn, quaternion: q });
+  return {
+    ...objectType(source).rotate(source, { turn, quaternion: q }),
+    ...transformBlockMetadata(source, turn),
+  };
 }
 export const rotateSweep = rotateObject;
 export function parseAngle(text) {

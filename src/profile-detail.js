@@ -13,7 +13,7 @@ export function schematicProfileLoops(section) {
 }
 
 export const hasExactProfile = (object) =>
-  (object.type || 'sweep') === 'sweep' &&
+  ['sweep', 'polysweep'].includes(object.type || 'sweep') &&
   object.profile === 'custom' &&
   !!schematicProfileLoops(object.section);
 

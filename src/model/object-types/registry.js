@@ -1,3 +1,4 @@
+import { boundsMeasures } from '../../geometry/measurements.js';
 /** Definitions contain domain behavior only; editors and DOM belong in UI adapters. */
 export function createObjectRegistry(definitions) {
   const types = new Map();
@@ -23,7 +24,16 @@ export function createObjectRegistry(definitions) {
       throw new Error(`Objekttyp ${definition.id} saknar ritnings- eller numreringsstöd.`);
     if (definition.cut && typeof definition.cutGeometry !== 'function')
       throw new Error(`Skärobjekt ${definition.id} saknar cutGeometry.`);
-    types.set(definition.id, Object.freeze({ ...definition }));
+    types.set(
+      definition.id,
+      Object.freeze({
+        measurements: (object) =>
+          definition.cut || definition.physical === false
+            ? []
+            : boundsMeasures(definition.corners(object)),
+        ...definition,
+      }),
+    );
   }
   function find(object) {
     // Sweeps created before explicit object types were introduced have no type field.

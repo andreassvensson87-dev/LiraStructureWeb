@@ -39,13 +39,24 @@ export class InsertionPoints {
     this.markers = new Map();
     this.projected = new THREE.Vector3();
   }
-  update(camera, width, height, sweeps, selected, drawing, start, end, placed = []) {
+  update(
+    camera,
+    width,
+    height,
+    sweeps,
+    selected,
+    drawing,
+    start,
+    end,
+    placed = [],
+    selectedPoints = [],
+  ) {
     if (drawing || this.selection !== selected) this.menu.hidden = true;
     this.selection = selected;
     const selectedIds = selected instanceof Set ? selected : new Set(selected ? [selected] : []);
     const visible = new Set();
     const show = (key, point, kind, emphasis = false, grip = null) => {
-      if (!point) return;
+      if (!point || this.allowsPoint?.(point) === false) return;
       visible.add(key);
       let marker = this.markers.get(key);
       const interactive = emphasis && !drawing;
@@ -77,13 +88,14 @@ export class InsertionPoints {
                 : 'Flytta slutpunkt';
           marker.onclick = (e) => {
             e.stopPropagation();
-            this.onActivate(marker.grip ?? kind);
+            this.onActivate(marker.grip ?? kind, e);
           };
           marker.oncontextmenu = (e) => {
             if (
               (this.selection instanceof Set ? this.selection.size : 1) !== 1 ||
               typeof kind !== 'number' ||
-              !this.canRemove
+              !this.canRemove ||
+              sweeps.some((s) => selectedIds.has(s.id) && s.parametricBlock)
             )
               return;
             e.preventDefault();
@@ -93,7 +105,7 @@ export class InsertionPoints {
             this.menuIndex = kind;
             this.menu.hidden = false;
             this.removeButton.disabled = !allowed;
-            this.removeButton.title = allowed ? '' : 'Minst tre hörn krävs';
+            this.removeButton.title = allowed ? '' : 'Objektet behöver fler insättningspunkter';
             this.menu.style.left = `${Math.min(width - 150, Math.max(0, parseFloat(marker.style.left)))}px`;
             this.menu.style.top = `${Math.min(height - 42, Math.max(0, parseFloat(marker.style.top)))}px`;
             this.removeButton.focus({ preventScroll: true });
@@ -108,35 +120,39 @@ export class InsertionPoints {
         marker.setAttribute('aria-label', marker.title);
       }
       const edge = String(kind).startsWith('edge:');
-      marker.className = `insertion-point ${edge ? 'edge-add' : kind}${emphasis ? ' emphasized' : ''}`;
+      marker.className = `insertion-point ${edge ? 'edge-add' : kind}${emphasis ? ' emphasized' : ''}${grip?.refs.some((r) => selectedPoints.some((p) => p.id === r.id && p.kind === r.kind)) ? ' point-selected' : ''}`;
       if (marker.textContent !== (edge ? '+' : '')) marker.textContent = edge ? '+' : '';
       const p = this.projected.fromArray(point).project(camera);
       marker.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
       marker.style.left = `${((p.x + 1) * width) / 2}px`;
       marker.style.top = `${((1 - p.y) * height) / 2}px`;
     };
-    for (const grip of selectionGrips(sweeps, selectedIds, drawing)) {
+    const grips = selectionGrips(sweeps, selectedIds, drawing);
+    const screenGrips = grips.map(({ point }) => {
+      const p = new THREE.Vector3(...point).project(camera);
+      return [((p.x + 1) * width) / 2, ((1 - p.y) * height) / 2];
+    });
+    for (const grip of grips) {
       const ref = grip.refs[0];
-      show(
-        grip.refs.map((r) => `${r.id}:${r.kind}`).join('|'),
-        grip.point,
-        ref.kind,
-        true,
-        selectedIds.size > 1 ? grip : null,
-      );
+      show(grip.refs.map((r) => `${r.id}:${r.kind}`).join('|'), grip.point, ref.kind, true, grip);
     }
     if (!drawing && selectedIds.size === 1) {
       const sweep = sweeps.find((s) => selectedIds.has(s.id));
-      if (sweep?.type === 'plate' && !sweep.generatedBy) {
-        const vertices = plateVertices(sweep);
-        vertices.forEach((p, i) =>
-          show(
-            `${sweep.id}:edge:${i}`,
-            p.map((v, j) => (v + vertices[(i + 1) % vertices.length][j]) / 2),
-            `edge:${i}`,
-            true,
-          ),
-        );
+      if (
+        ['plate', 'polysweep'].includes(sweep?.type) &&
+        !sweep.generatedBy &&
+        !sweep.parametricBlock
+      ) {
+        const vertices = sweep.type === 'polysweep' ? sweep.points : plateVertices(sweep);
+        vertices.slice(0, sweep.type === 'polysweep' ? -1 : undefined).forEach((p, i) => {
+          const midpoint = p.map((v, j) => (v + vertices[(i + 1) % vertices.length][j]) / 2);
+          const screen = new THREE.Vector3(...midpoint).project(camera);
+          const x = ((screen.x + 1) * width) / 2,
+            y = ((1 - screen.y) * height) / 2;
+          // Corner hit areas take priority; a projected short/vertical edge cannot cover them.
+          if (screenGrips.some(([gx, gy]) => Math.hypot(x - gx, y - gy) < 28)) return;
+          show(`${sweep.id}:edge:${i}`, midpoint, `edge:${i}`, true);
+        });
       }
     }
     if (drawing) {

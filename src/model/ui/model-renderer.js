@@ -103,6 +103,9 @@ export function installModelRenderer({
         host.dataset.createdMeshes = children.length - reused;
       }
     }
+    controllers.workAreaUI?.sync();
+    controllers.referenceModels?.setWorkArea(controllers.workAreaUI?.bounds() || null);
+    for (const child of objects.children) if (!isVisible(child.userData.id)) child.visible = false;
     renderedSelection = new Set(selectedIds);
     $('count').textContent = project.objects.length;
     interactionTimings.measure('modelTreeMs', () => {
@@ -133,6 +136,9 @@ export function installModelRenderer({
     controllers.sweepPropertyUI?.sync();
     controllers.platePropertyUI?.sync();
     controllers.itemUI?.sync();
+    controllers.blockUI?.sync();
+    controllers.polysweepUI?.sync();
+    controllers.pointUI?.sync();
     objectFeedback.setSelection(ui.selectedIds);
     objectFeedback.setModel(project.objects);
     connectionMarkers.sync(

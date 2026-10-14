@@ -1,3 +1,4 @@
+import { installWorkspaceWorkArea } from './workspace-work-area.js';
 import '../ui/workspace.css';
 import '../ui/editor.css';
 import '../ui/dialog.css';
@@ -6,6 +7,9 @@ import '../ui/library.css';
 import { installModelSweepForm } from '../model/ui/model-sweep-form-controller.js';
 import { installModelTools } from '../model/ui/model-tool-controllers.js';
 import { installModelItems } from './model-items.js';
+import { installPolysweepTools } from '../model/ui/polysweep-controller.js';
+import { installInsertionPointEditor } from '../model/ui/insertion-point-controller.js';
+import { installModelBlocks } from './model-blocks.js';
 import { installModelToolbox } from '../model/ui/model-toolbox-controller.js';
 import { createModelVisibility } from '../model/ui/model-visibility.js';
 import { createModelPicking } from '../model/ui/model-picking.js';
@@ -76,8 +80,6 @@ export async function createModelApplication({
   const previewPlatePoint = (...args) => actions.previewPlatePoint(...args);
   const pickPlatePoint = (...args) => actions.pickPlatePoint(...args);
   const showRotationLine = (...args) => actions.showRotationLine(...args);
-  const changePlateVertex = (...args) => actions.changePlateVertex(...args);
-  const startPlateVertex = (...args) => actions.startPlateVertex(...args);
   const checkpoint = (...args) => actions.checkpoint(...args);
   const fit = (...args) => actions.fit(...args);
   const render = (...args) => actions.render(...args);
@@ -123,20 +125,10 @@ export async function createModelApplication({
   const instanceBatches = new InstanceBatches(scene);
   const insertionPoints = new InsertionPoints(
     host,
-    (kind) =>
-      typeof kind === 'object'
-        ? startGrip(kind)
-        : String(kind).startsWith('edge:')
-          ? changePlateVertex(Number(kind.split(':')[1]), false)
-          : typeof kind === 'number'
-            ? startPlateVertex(kind)
-            : startTransform(kind),
+    (...args) => actions.activateInsertion(...args),
     {
-      onRemove: (index) => changePlateVertex(index, true),
-      canRemove: () => {
-        const s = project.objects.find((s) => s.id === ui.selected);
-        return s?.type === 'plate' ? s.polygon.length > 3 : null;
-      },
+      onRemove: (index) => actions.changeInsertionVertex(index, true),
+      canRemove: () => actions.canRemoveInsertion(),
     },
   );
   const { workPlaneGuide, planeViewButton, syncWorkPlane, workPlanePrompt, pickWorkPlane } =
@@ -182,6 +174,7 @@ export async function createModelApplication({
     getSnapIndex: () => renderState.snapIndex,
     getReferences: () => controllers.referenceModels,
     workPlanePrompt,
+    getWorkArea: () => controllers.workAreaUI,
     updateSnapOverlay,
   });
   Object.assign(actions, { ray, selectionHit, point, orbitAroundHit });
@@ -207,6 +200,9 @@ export async function createModelApplication({
     startGrip,
     commitPoint,
     updatePointer,
+    previewLinear,
+    previewPlane,
+    clearTransformPreview,
   } = createPlacementController({
     project,
     ui,
@@ -234,8 +230,13 @@ export async function createModelApplication({
     getInspector: () => controllers.inspector,
     getReferences: () => controllers.referenceModels,
     getItem: () => controllers.itemUI,
+    getBlock: () => controllers.blockUI,
+    getPolysweep: () => controllers.polysweepUI,
     getFasteners: () => controllers.fastenerUI,
     getGridDraft: () => controllers.helperController.gridDraft(),
+    getLinear: () => controllers.linearUI,
+    getPlaneTransform: () => controllers.planeTransformUI,
+    getWorkArea: () => controllers.workAreaUI,
   });
   Object.assign(actions, {
     resetLength,
@@ -247,6 +248,9 @@ export async function createModelApplication({
     startGrip,
     commitPoint,
     updatePointer,
+    previewLinear,
+    previewPlane,
+    clearTransformPreview,
   });
 
   // Stable dependencies are constructed before feature installation. Actions and
@@ -289,6 +293,7 @@ export async function createModelApplication({
   installModelSession(context);
   installModelViewControls(context);
   installModelTools(context);
+  installWorkspaceWorkArea(context);
   installModelFasteners(context);
   installModelContextMenu(context);
   installModelInput(context);
@@ -304,6 +309,9 @@ export async function createModelApplication({
   installModelPropertyCopy(context);
   restoreSweepDefaults();
   installModelItems(context);
+  installModelBlocks(context);
+  installPolysweepTools(context);
+  installInsertionPointEditor(context);
   updateForm();
   render();
   navigation.controls.update();

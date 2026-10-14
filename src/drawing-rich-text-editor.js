@@ -474,6 +474,7 @@ export class DrawingRichTextEditor {
       );
     }
     this.paintFeedback();
+    this.e.blocks?.paintPaper(root, this.backPaper || root);
   }
   paintFeedback() {
     const root = this.graphicsRoot;

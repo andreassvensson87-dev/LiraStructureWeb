@@ -1,3 +1,5 @@
+import { componentPlacementPrompt } from '../components/placement-session.js';
+import { componentDefinition } from '../components/definitions.js';
 import { createComponentUI } from '../components/ui.js';
 import { applyObjectBatch } from '../model/tools/transform-tool.js';
 import { isPhysical, displayGeometry } from '../model-object.js';
@@ -23,6 +25,9 @@ export function installModelComponents({
   const setSelection = (...args) => actions.setSelection(...args);
   const syncOperationUI = (...args) => actions.syncOperationUI(...args);
   controllers.componentUI = createComponentUI({
+    promptChanged: (text) => {
+      $('status').textContent = text;
+    },
     beginCopy: (kind) => {
       controllers.inspector.finish();
       setDrawing(false);
@@ -60,38 +65,17 @@ export function installModelComponents({
       syncOperationUI();
       renderer.domElement.focus({ preventScroll: true });
       render({ selectionOnly: true });
-      $('status').textContent =
-        kind === 'beamSplice'
-          ? picking
-            ? 'Balkskarv · Välj första och sedan andra balkänden · Escape avbryter'
-            : 'Balkskarv · Kontrollera förhandsvisningen och klicka på Skapa'
-          : kind === 'boltedEndplate'
-            ? picking
-              ? 'Ändplåtskoppling · Välj pelare, sedan balkände · Escape avbryter'
-              : 'Ändplåtskoppling · Kontrollera förhandsvisningen och klicka på Skapa'
-            : kind === 'endplate'
-              ? picking
-                ? 'Ändplåt · Klicka nära objektets ände · Escape avbryter'
-                : 'Ändplåt · Kontrollera valen och klicka på Skapa ändplåt'
-              : kind === 'stiffener'
-                ? picking
-                  ? 'Avstyvning · Välj profil, sedan plats längs profilen · Escape avbryter'
-                  : 'Avstyvning · Kontrollera valen och klicka på Skapa avstyvning'
-                : kind === 'baseplate'
-                  ? picking
-                    ? 'Fotplåt · Klicka på pelaren · Escape avbryter'
-                    : 'Fotplåt · Kontrollera valen och klicka på Skapa fotplåt'
-                  : 'Fit · Klicka första sweepen, sedan andra · Escape avbryter';
+      $('status').textContent = componentPlacementPrompt(kind, 0, !picking);
     },
     showInspector: () => controllers.inspector.show('properties'),
     highlight: highlightFitReferences,
     hoverReference: hoverInspectorReference,
     finish: () => {
-      const fitActive = tools.operation?.mode === 'fit';
+      const fitKind = tools.operation?.mode === 'fit' ? tools.operation.kind : null;
       const copyActive = tools.operation?.mode === 'componentProperties';
       controllers.inspector?.finish();
       setDrawing(false);
-      if (fitActive) $('status').textContent = 'Fit avbruten';
+      if (fitKind) $('status').textContent = `${componentDefinition(fitKind).label} avbruten`;
       if (copyActive) $('status').textContent = 'Egenskapskopiering avbruten';
     },
     commit: (draft, mode) => {
@@ -122,7 +106,7 @@ export function installModelComponents({
       modelEditor.replace(next);
       setSelection([draft.id]);
       $('status').textContent =
-        `${draft.kind === 'beamSplice' ? 'Balkskarv' : draft.kind === 'boltedEndplate' ? 'Ändplåtskoppling' : draft.kind === 'endplate' ? 'Ändplåt' : draft.kind === 'stiffener' ? 'Avstyvning' : draft.kind === 'baseplate' ? 'Fotplåt' : 'Fit'} sparad · klicka på kopplingssymbolen för att modifiera`;
+        `${componentDefinition(draft.kind).label} sparad · klicka på kopplingssymbolen för att modifiera`;
     },
   });
 }

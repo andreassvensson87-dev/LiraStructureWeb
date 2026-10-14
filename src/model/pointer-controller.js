@@ -1,5 +1,16 @@
 /** Routes completed clicks to the active tool. Pointer capture/box selection stays in its adapter. */
-export function pointerCommand({ mode, picking, drawing, hasStart, plateLength, hasLength }) {
+export function pointerCommand({
+  mode,
+  picking,
+  drawing,
+  hasStart,
+  plateLength,
+  hasLength,
+  linear,
+  planeTransform,
+}) {
+  if (planeTransform) return 'plane-transform';
+  if (linear) return 'linear';
   if (mode === 'componentProperties') return 'component-property-target';
   if (mode === 'plateProperties') return 'plate-property-target';
   if (mode === 'sweepProperties') return 'sweep-property-target';
@@ -8,6 +19,7 @@ export function pointerCommand({ mode, picking, drawing, hasStart, plateLength, 
   if (mode === 'fastenerTargets') return 'fastener-target';
   if (mode === 'assemblyMain') return 'assembly-main';
   if (mode === 'helperpoint') return 'helperpoint';
+  if (mode === 'workArea') return 'work-area';
   if (mode === 'workPlane') return 'workplane';
   if (mode === 'plateCreate' || mode === 'plateVertex')
     return plateLength && hasLength ? 'plate-length' : 'plate';

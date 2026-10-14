@@ -51,6 +51,7 @@ export class PartSections {
         for (const view of views) setDrawingViewScale(view, scale);
         this.build();
         editor.compose();
+        editor.syncInspector();
       }
     };
   }

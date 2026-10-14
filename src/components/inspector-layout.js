@@ -5,7 +5,7 @@ const group = (id, label, keys, collapsed = false) => ({ id, label, keys, collap
 const layouts = {
   fit: [
     group('fit', 'Anslutning', ['mode', 'gap']),
-    group('placement', 'Anslutna ändar', ['endA', 'endB'], true),
+    group('placement', 'Placering', ['endA', 'endB'], true),
   ],
   endplate: [
     group('plate', 'Plåt', ['sizeMode', 'thickness', 'outstandX', 'outstandY', 'width', 'length']),
@@ -14,7 +14,7 @@ const layouts = {
   stiffener: [
     group('plate', 'Plåt', ['sides', 'thickness']),
     group('placement', 'Placering', ['referenceEnd', 'distance']),
-    group('fit', 'Passning', ['gap', 'cornerRelief'], true),
+    group('advanced', 'Avancerat', ['gap', 'cornerRelief'], true),
   ],
   baseplate: [
     group('plate', 'Plåt', ['sizeMode', 'thickness', 'outstandX', 'outstandY', 'width', 'length']),
@@ -32,22 +32,24 @@ const layouts = {
       ['endA', 'elevationOffset', 'plateRotation', 'anchorRotation'],
       true,
     ),
-    group(
-      'anchor-details',
-      'Hål och tillbehör',
-      ['holeDiameter', 'embedment', 'useWasher', 'doubleNut'],
-      true,
-    ),
+    group('advanced', 'Avancerat', ['holeDiameter', 'embedment', 'useWasher', 'doubleNut'], true),
   ],
   boltedEndplate: [
     group('plate', 'Plåt', ['sizeMode', 'thickness', 'outstandX', 'outstandY', 'width', 'length']),
     group('bolts', 'Skruvar', ['boltSpec', 'rows', 'columns', 'spacingX', 'spacingY']),
     group('placement', 'Placering', ['endB', 'gap', 'offsetX', 'offsetY'], true),
-    group('length', 'Skruvlängd', ['lengthMode', 'extraLength'], true),
     group(
-      'holes',
-      'Hål och tillbehör',
-      ['holeDiameter', 'edgeDistance', 'clearance', 'nearWasher', 'farWasher'],
+      'advanced',
+      'Avancerat',
+      [
+        'lengthMode',
+        'extraLength',
+        'holeDiameter',
+        'edgeDistance',
+        'clearance',
+        'nearWasher',
+        'farWasher',
+      ],
       true,
     ),
   ],

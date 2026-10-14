@@ -5,6 +5,7 @@ import { editableSweep } from '../sweep-properties.js';
 export function installModelHover({
   actions,
   camera,
+  controllers,
   objectFeedback,
   objects,
   project,
@@ -41,15 +42,17 @@ export function installModelHover({
     ray(e);
     const previewHit =
       ui.componentPreview && ui.preview
-        ? raycaster.intersectObjects(
-            [...objects.children, ...ui.preview.children].filter(
-              (o) =>
-                o.visible &&
-                !o.userData.cut &&
-                (camera.layers.test(o.layers) || o.userData.instanced),
-            ),
-            false,
-          )[0]
+        ? raycaster
+            .intersectObjects(
+              [...objects.children, ...ui.preview.children].filter(
+                (o) =>
+                  o.visible &&
+                  !o.userData.cut &&
+                  (camera.layers.test(o.layers) || o.userData.instanced),
+              ),
+              false,
+            )
+            .find((hit) => controllers.workAreaUI?.allowsPoint(hit.point.toArray()) ?? true)
         : null;
     const id = previewHit?.object.userData.id ?? selectionHit();
     const source = objectFeedback.sources.get(id) || renderState.renderedById.get(id)?.source;

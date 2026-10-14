@@ -1,0 +1,648 @@
+{
+  "schema": 1,
+  "definitions": [
+    {
+      "schema": 1,
+      "id": "example-steel-frame",
+      "revision": 2,
+      "name": "Stålram med bottenplåt",
+      "dimension": 3,
+      "parameters": [
+        {
+          "name": "B",
+          "value": 3000,
+          "unit": "mm",
+          "min": 1,
+          "description": "Rambredd"
+        },
+        {
+          "name": "D",
+          "value": 400,
+          "unit": "mm",
+          "min": 1,
+          "description": "Plåtdjup"
+        },
+        {
+          "name": "H",
+          "value": 2400,
+          "unit": "mm",
+          "min": 1,
+          "description": "Ramhöjd"
+        },
+        {
+          "name": "T",
+          "value": 10,
+          "unit": "mm",
+          "min": 1,
+          "max": 50,
+          "description": "Plåttjocklek"
+        }
+      ],
+      "references": [
+        {
+          "id": "base-0",
+          "name": "Vänster",
+          "axis": 0,
+          "value": "0"
+        },
+        {
+          "id": "end-0",
+          "name": "Höger",
+          "axis": 0,
+          "value": "B"
+        },
+        {
+          "id": "base-1",
+          "name": "Fram",
+          "axis": 1,
+          "value": "0"
+        },
+        {
+          "id": "end-1",
+          "name": "Bak",
+          "axis": 1,
+          "value": "D"
+        },
+        {
+          "id": "base-2",
+          "name": "Bas",
+          "axis": 2,
+          "value": "0"
+        },
+        {
+          "id": "end-2",
+          "name": "Överkant",
+          "axis": 2,
+          "value": "H"
+        }
+      ],
+      "anchors": [
+        {
+          "id": "P1",
+          "name": "Insättning",
+          "point": [0, 0, 0]
+        }
+      ],
+      "members": [
+        {
+          "id": "Vänster stolpe",
+          "name": "Vänster stolpe",
+          "points": [
+            [0, 0, 0],
+            [0, 0, 2400]
+          ],
+          "source": {
+            "id": "Vänster stolpe",
+            "type": "sweep",
+            "name": "Vänster stolpe",
+            "prefix": "P",
+            "number": 1,
+            "profile": "rect",
+            "width": 80,
+            "height": 120,
+            "thickness": 0,
+            "rotation": 0,
+            "start": [0, 0, 0],
+            "end": [0, 0, 2400],
+            "material": {
+              "id": "example-block-steel",
+              "revision": 1,
+              "name": "S355 · exempel",
+              "density": 7850,
+              "color": "#647987"
+            },
+            "partSeries": {
+              "prefix": "P",
+              "start": 100
+            },
+            "assemblySeries": {
+              "prefix": "A",
+              "start": 1000
+            }
+          }
+        },
+        {
+          "id": "Höger stolpe",
+          "name": "Höger stolpe",
+          "points": [
+            [3000, 0, 0],
+            [3000, 0, 2400]
+          ],
+          "source": {
+            "id": "Höger stolpe",
+            "type": "sweep",
+            "name": "Höger stolpe",
+            "prefix": "P",
+            "number": 1,
+            "profile": "rect",
+            "width": 80,
+            "height": 120,
+            "thickness": 0,
+            "rotation": 0,
+            "start": [3000, 0, 0],
+            "end": [3000, 0, 2400],
+            "material": {
+              "id": "example-block-steel",
+              "revision": 1,
+              "name": "S355 · exempel",
+              "density": 7850,
+              "color": "#647987"
+            },
+            "partSeries": {
+              "prefix": "P",
+              "start": 100
+            },
+            "assemblySeries": {
+              "prefix": "A",
+              "start": 1000
+            }
+          }
+        },
+        {
+          "id": "Överliggare",
+          "name": "Överliggare",
+          "points": [
+            [0, 0, 2400],
+            [3000, 0, 2400]
+          ],
+          "source": {
+            "id": "Överliggare",
+            "type": "sweep",
+            "name": "Överliggare",
+            "prefix": "P",
+            "number": 1,
+            "profile": "rect",
+            "width": 80,
+            "height": 120,
+            "thickness": 0,
+            "rotation": 0,
+            "start": [0, 0, 2400],
+            "end": [3000, 0, 2400],
+            "material": {
+              "id": "example-block-steel",
+              "revision": 1,
+              "name": "S355 · exempel",
+              "density": 7850,
+              "color": "#647987"
+            },
+            "partSeries": {
+              "prefix": "P",
+              "start": 100
+            },
+            "assemblySeries": {
+              "prefix": "A",
+              "start": 1000
+            }
+          }
+        },
+        {
+          "id": "Bottenplåt",
+          "name": "Bottenplåt",
+          "points": [
+            [0, 0, 0],
+            [3000, 0, 0],
+            [3000, 400, 0],
+            [0, 400, 0]
+          ],
+          "source": {
+            "id": "Bottenplåt",
+            "type": "plate",
+            "name": "Bottenplåt",
+            "prefix": "PL",
+            "number": 1,
+            "frame": {
+              "origin": [0, 0, 0],
+              "u": [1, 0, 0],
+              "v": [0, 1, 0]
+            },
+            "polygon": [
+              [0, 0],
+              [3000, 0],
+              [3000, 400],
+              [0, 400]
+            ],
+            "thickness": 10,
+            "side": "negative",
+            "material": {
+              "id": "example-block-steel",
+              "revision": 1,
+              "name": "S355 · exempel",
+              "density": 7850,
+              "color": "#647987"
+            },
+            "partSeries": {
+              "prefix": "PL",
+              "start": 200
+            },
+            "assemblySeries": {
+              "prefix": "A",
+              "start": 1000
+            }
+          }
+        }
+      ],
+      "bindings": [
+        {
+          "memberId": "Vänster stolpe",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Vänster stolpe",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Vänster stolpe",
+          "pointIndex": 0,
+          "referenceId": "base-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Vänster stolpe",
+          "pointIndex": 1,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Vänster stolpe",
+          "pointIndex": 1,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Vänster stolpe",
+          "pointIndex": 1,
+          "referenceId": "end-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Höger stolpe",
+          "pointIndex": 0,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Höger stolpe",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Höger stolpe",
+          "pointIndex": 0,
+          "referenceId": "base-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Höger stolpe",
+          "pointIndex": 1,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Höger stolpe",
+          "pointIndex": 1,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Höger stolpe",
+          "pointIndex": 1,
+          "referenceId": "end-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Överliggare",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Överliggare",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Överliggare",
+          "pointIndex": 0,
+          "referenceId": "end-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Överliggare",
+          "pointIndex": 1,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Överliggare",
+          "pointIndex": 1,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Överliggare",
+          "pointIndex": 1,
+          "referenceId": "end-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 0,
+          "referenceId": "base-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 1,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 1,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 1,
+          "referenceId": "base-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 2,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 2,
+          "referenceId": "end-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 2,
+          "referenceId": "base-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 3,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 3,
+          "referenceId": "end-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenplåt",
+          "pointIndex": 3,
+          "referenceId": "base-2",
+          "offset": "0"
+        },
+        {
+          "memberId": "P1",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "P1",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "P1",
+          "pointIndex": 0,
+          "referenceId": "base-2",
+          "offset": "0"
+        }
+      ],
+      "properties": [
+        {
+          "memberId": "Bottenplåt",
+          "key": "thickness",
+          "value": "T"
+        }
+      ],
+      "units": "model"
+    },
+    {
+      "schema": 1,
+      "id": "example-frame-detail",
+      "revision": 1,
+      "name": "Ramdetalj",
+      "dimension": 2,
+      "parameters": [
+        {
+          "name": "B",
+          "value": 3000,
+          "unit": "mm",
+          "min": 1
+        },
+        {
+          "name": "H",
+          "value": 2400,
+          "unit": "mm",
+          "min": 1
+        },
+        {
+          "name": "T",
+          "value": 10,
+          "unit": "mm",
+          "min": 1,
+          "max": 50,
+          "description": "Bottenplåt"
+        }
+      ],
+      "references": [
+        {
+          "id": "base-0",
+          "name": "Vänster",
+          "axis": 0,
+          "value": "0"
+        },
+        {
+          "id": "end-0",
+          "name": "Höger",
+          "axis": 0,
+          "value": "B"
+        },
+        {
+          "id": "base-1",
+          "name": "Bas",
+          "axis": 1,
+          "value": "0"
+        },
+        {
+          "id": "end-1",
+          "name": "Överkant",
+          "axis": 1,
+          "value": "H"
+        }
+      ],
+      "anchors": [
+        {
+          "id": "P1",
+          "name": "Insättning",
+          "point": [0, 0]
+        }
+      ],
+      "members": [
+        {
+          "id": "Ramkontur",
+          "name": "Rektangel",
+          "points": [
+            [0, 0],
+            [3000, 0],
+            [3000, 2400],
+            [0, 2400]
+          ],
+          "source": {
+            "id": "Ramkontur",
+            "type": "shape",
+            "shape": "polyline",
+            "points": [
+              [0, 0],
+              [3000, 0],
+              [3000, 2400],
+              [0, 2400]
+            ],
+            "hatch": {
+              "pattern": "none"
+            },
+            "closed": true
+          }
+        },
+        {
+          "id": "Bottenlinje",
+          "name": "Linje",
+          "points": [
+            [0, 10],
+            [3000, 10]
+          ],
+          "source": {
+            "id": "Bottenlinje",
+            "type": "shape",
+            "shape": "line",
+            "points": [
+              [0, 10],
+              [3000, 10]
+            ]
+          }
+        }
+      ],
+      "bindings": [
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 1,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 1,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 2,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 2,
+          "referenceId": "end-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 3,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Ramkontur",
+          "pointIndex": 3,
+          "referenceId": "end-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenlinje",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenlinje",
+          "pointIndex": 1,
+          "referenceId": "end-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "P1",
+          "pointIndex": 0,
+          "referenceId": "base-0",
+          "offset": "0"
+        },
+        {
+          "memberId": "P1",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "0"
+        },
+        {
+          "memberId": "Bottenlinje",
+          "pointIndex": 0,
+          "referenceId": "base-1",
+          "offset": "T"
+        },
+        {
+          "memberId": "Bottenlinje",
+          "pointIndex": 1,
+          "referenceId": "base-1",
+          "offset": "T"
+        }
+      ],
+      "properties": [],
+      "units": "model"
+    }
+  ]
+}

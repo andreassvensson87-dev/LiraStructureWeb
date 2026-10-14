@@ -1,3 +1,9 @@
+import {
+  defaultWorkArea,
+  validateWorkArea,
+  parseElevation,
+  formatElevation,
+} from '../model/work-area.js';
 import { installDialogPresentation } from '../ui/dialog-presentation.js';
 import {
   inputDevice,
@@ -140,6 +146,18 @@ export function createSettingsController({
     }
     $('settings-error').before(panel);
   }
+  const areaButton = document.createElement('button');
+  areaButton.type = 'button';
+  areaButton.dataset.settings = 'workArea';
+  areaButton.textContent = 'Arbetsområde';
+  areaButton.setAttribute('aria-pressed', 'false');
+  document.querySelector('.settings-nav').append(areaButton);
+  const areaPanel = document.createElement('section');
+  areaPanel.dataset.settingsPanel = 'workArea';
+  areaPanel.hidden = true;
+  areaPanel.innerHTML =
+    '<label class="field">Övre plushöjd · m<input id="work-area-upper" type="text" inputmode="decimal" aria-label="Övre plushöjd · m"></label><label class="field">Nedre plushöjd · m<input id="work-area-lower" type="text" inputmode="decimal" aria-label="Nedre plushöjd · m"></label>';
+  $('settings-error').before(areaPanel);
   function settingsCategory(name) {
     document
       .querySelectorAll('[data-settings]')
@@ -153,6 +171,9 @@ export function createSettingsController({
     .querySelectorAll('[data-settings]')
     .forEach((b) => (b.onclick = () => settingsCategory(b.dataset.settings)));
   function fillSettings() {
+    const area = project.workArea || defaultWorkArea();
+    $('work-area-upper').value = formatElevation(area.upper);
+    $('work-area-lower').value = formatElevation(area.lower);
     $('orbit-damping').checked = orbitDamping();
     $('zoom-inverted').checked = zoomInverted();
     $('zoom-speed').value = zoomSpeed() * 100;
@@ -212,6 +233,18 @@ export function createSettingsController({
       $('settings-error').textContent = 'Rutsteget måste vara 0,001–100 000 mm.';
       return;
     }
+    let workArea;
+    try {
+      workArea = validateWorkArea({
+        ...(project.workArea || defaultWorkArea()),
+        upper: parseElevation($('work-area-upper').value),
+        lower: parseElevation($('work-area-lower').value),
+      });
+    } catch (error) {
+      settingsCategory('workArea');
+      $('settings-error').textContent = error.message;
+      return;
+    }
     setInputDevice($('input-device').value);
     setZoomSpeed(Number($('zoom-speed').value) / 100);
     setZoomInverted($('zoom-inverted').checked);
@@ -221,6 +254,7 @@ export function createSettingsController({
     const gridChanged = JSON.stringify(next) !== JSON.stringify(project.grid);
     checkpoint();
     project.grid = next;
+    project.workArea = workArea;
     project.info = Object.fromEntries(
       ['name', 'number', 'client'].map((key) => [key, $('project-' + key).value.trim()]),
     );

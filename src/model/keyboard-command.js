@@ -2,6 +2,8 @@
 export function modelKeyboardCommand(
   e,
   {
+    linear,
+    planeTransform,
     editing,
     settingsOpen,
     modalOpen,
@@ -36,7 +38,12 @@ export function modelKeyboardCommand(
   }
   if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return e.key === 'Enter' ? 'confirm-fastener-targets' : null;
+  if (mode === 'workArea') return e.key === 'Enter' ? 'confirm-work-area' : null;
   if (mode === 'workPlane') return e.key === 'Backspace' ? 'remove-workplane-point' : null;
+  if (mode === 'polysweepCreate' && !modifier) {
+    if (e.key === 'Enter') return 'finish-polysweep';
+    if (e.key === 'Backspace') return 'remove-polysweep-point';
+  }
   if (['plateCreate', 'plateVertex'].includes(mode) && !modifier) {
     if (plateLength && /^\d$/.test(e.key)) return 'length';
     if (e.key === 'Enter') return mode === 'plateCreate' ? 'finish-plate' : 'consume';
@@ -52,6 +59,11 @@ export function modelKeyboardCommand(
     }
     if (!modifier && !['Delete', 'Backspace'].includes(e.key)) return null;
   }
+  if (planeTransform && !modifier) {
+    if (e.key === 'Enter') return 'confirm-plane-transform';
+    return e.key === 'Backspace' ? 'remove-plane-transform-point' : null;
+  }
+  if (linear && !modifier) return e.key === 'Enter' && !picking ? 'confirm-linear' : null;
   if (drawing && hasStart && !modifier) {
     if (!e.altKey && /^\d$/.test(e.key)) return 'length';
     if (axis) return 'axis';

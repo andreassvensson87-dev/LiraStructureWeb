@@ -1,0 +1,105 @@
+.block-editor {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.block-editor[open] {
+  display: flex;
+  flex-direction: column;
+}
+.block-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  color: white;
+  background: #20343b;
+  height: 46px;
+  flex-shrink: 0;
+}
+.block-editor > header button {
+  color: white;
+  background: transparent;
+  border: 1px solid #ffffff40;
+}
+.block-editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  flex: 1;
+  min-height: 0;
+}
+.block-editor-preview {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: #eaf0f2;
+  overflow: hidden;
+}
+.block-editor-preview > svg {
+  width: 100%;
+  height: 100%;
+}
+.block-editor .ui-inspector-content > section {
+  padding: 0;
+}
+.block-editor .ui-editor-inspector.ui-inspector-with-rail {
+  padding: 0;
+  overflow: hidden;
+}
+.block-editor .ui-editor-section {
+  margin-bottom: 10px;
+}
+.block-library .block-library-preview {
+  height: 180px;
+}
+.block-instance-inspector {
+  padding: 8px 0;
+}
+@media (max-width: 750px) {
+  .block-editor-body {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+.block-reference-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.block-reference-labels :is(button, span) {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  max-width: 180px;
+  padding: 3px 6px;
+  border: 1px solid #c7d8d1;
+  border-radius: 4px;
+  background: #f8fbfaed;
+  color: #42675a;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.block-reference-labels button.active {
+  border-color: #e89a30;
+  background: #fff5e4;
+  color: #805215;
+}
+
+.block-reference-labels span {
+  pointer-events: none;
+  max-width: 260px;
+}
+.block-selected-points {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.block-selected-points button {
+  text-align: left;
+  padding: 6px 8px;
+}

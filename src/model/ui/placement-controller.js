@@ -6,7 +6,8 @@ import { plateNormal } from '../../plate.js';
 import { isHelper } from '../../model-object.js';
 import { componentTransformSources } from '../../components/ownership.js';
 import { groupSelection } from '../../fasteners/group-data.js';
-import { moveGripPoints } from '../grips.js';
+import { blockSelection } from '../../blocks/placement.js';
+import { moveGripPoints, gripWorkPlane } from '../grips.js';
 import { alignFastenerGroup, fastenerGroupBatch } from '../../fasteners/groups.js';
 import { axisPlacement } from '../../fasteners/geometry.js';
 import { resolveFastenerHoles } from '../../fasteners/placement.js';
@@ -42,8 +43,13 @@ export function createPlacementController({
   getInspector,
   getReferences,
   getItem,
+  getBlock,
+  getPolysweep,
   getFasteners,
   getGridDraft,
+  getLinear = () => null,
+  getPlaneTransform = () => null,
+  getWorkArea = () => null,
 }) {
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -154,6 +160,15 @@ export function createPlacementController({
     .forEach((b) => (b.onclick = () => toggleLock(b.dataset.axis)));
 
   function startTransform(mode) {
+    if (
+      ['start', 'end'].includes(mode) &&
+      project.objects.some((o) => ui.selectedIds.has(o.id) && o.parametricBlock)
+    ) {
+      const source = project.objects.find((o) => ui.selectedIds.has(o.id) && o.parametricBlock);
+      if (source?.[mode]) startGrip({ point: source[mode], refs: [{ id: source.id, kind: mode }] });
+      else $('status').textContent = 'Ändra blockets parametrar i inspektorn eller frigör delarna.';
+      return;
+    }
     const reference = mode === 'move' && getReferences()?.transformSelection();
     if (reference) {
       setDrawing(true);
@@ -189,9 +204,12 @@ export function createPlacementController({
     renderer.domElement.focus({ preventScroll: true });
   }
   function startGrip(grip) {
-    const ids = groupSelection(
+    const ids = blockSelection(
       project.objects,
-      grip.refs.map((r) => r.id),
+      groupSelection(
+        project.objects,
+        grip.refs.map((r) => r.id),
+      ),
     );
     const sources = structuredClone(componentTransformSources(project.objects, ids));
     setDrawing(true);
@@ -201,7 +219,12 @@ export function createPlacementController({
         ['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind),
     )
       ? { mode: 'move', sources }
-      : { mode: 'grip', sources, refs: grip.refs };
+      : {
+          mode: 'grip',
+          sources,
+          refs: grip.refs,
+          frame: gripWorkPlane(sources, grip.refs, grip.point),
+        };
     $('status').textContent = 'Flytta insättningspunkter · Välj målpunkt eller ange avstånd';
     tools.first = [...grip.point];
     syncOperationUI();
@@ -210,6 +233,12 @@ export function createPlacementController({
     renderer.domElement.focus({ preventScroll: true });
   }
   function candidates(target) {
+    if (tools.operation?.planeId) {
+      if (!tools.operation.planeBatch) throw Error('Välj startplan och målplan först.');
+      return tools.operation.planeBatch;
+    }
+    if (tools.operation?.mode === 'polysweepCreate') return [getPolysweep().candidate(target)];
+    if (tools.operation?.mode === 'blockCreate') return getBlock().candidate(tools.first, target);
     if (tools.operation?.mode === 'itemCreate') return [getItem().candidate(tools.first, target)];
     if (tools.operation?.mode === 'fastenerCreate') {
       const draft = tools.operation.draft;
@@ -234,7 +263,7 @@ export function createPlacementController({
       ];
     }
     if (tools.operation?.mode === 'grip')
-      return moveGripPoints(tools.operation.sources, tools.operation.refs, target);
+      return moveGripPoints(tools.operation.sources, tools.operation.refs, target, tools.first);
     if (['helperline', 'gridline'].includes(tools.operation?.mode))
       return [
         {
@@ -252,6 +281,7 @@ export function createPlacementController({
     );
   }
   function commitPoint(target) {
+    if (tools.operation?.mode === 'polysweepCreate') return getPolysweep().pick(target);
     if (tools.operation?.referenceId) {
       const { referenceId, placement } = tools.operation;
       const next = moveReferencePlacement(placement, tools.first, target);
@@ -297,6 +327,15 @@ export function createPlacementController({
       return false;
     }
     const mode = tools.operation?.mode;
+    if (mode === 'blockCreate') {
+      try {
+        getBlock().commitPlacement(batch);
+        return true;
+      } catch (error) {
+        $('status').textContent = error.message;
+        return false;
+      }
+    }
     if (
       !mode ||
       ['helperline', 'gridline'].includes(mode) ||
@@ -335,7 +374,7 @@ export function createPlacementController({
                   : 'Sweep skapad';
     return true;
   }
-  function showPreview(p) {
+  function showPreview(p, showForm = true) {
     clearPreview();
     guide.visible = false;
     if (tools.operation?.referenceId) {
@@ -344,7 +383,7 @@ export function createPlacementController({
         moveReferencePlacement(tools.operation.placement, tools.first, p),
       );
       frameGate.invalidate();
-      return;
+      return true;
     }
     let batch;
     try {
@@ -355,10 +394,14 @@ export function createPlacementController({
     }
     const s = batch[0];
     getItem()?.preview(s);
-    if (tools.operation) fillForm(s);
-    else {
-      ['ex', 'ey', 'ez'].forEach((k, i) => ($(k).value = p[i]));
-      updateForm();
+    if (showForm) {
+      if (tools.operation && !['blockCreate', 'polysweepCreate'].includes(tools.operation.mode))
+        fillForm(s);
+      else {
+        ['ex', 'ey', 'ez'].forEach((k, i) => ($(k).value = p[i]));
+        updateForm();
+        if (tools.operation?.mode === 'polysweepCreate') getPolysweep().sync(s);
+      }
     }
     if (!batch.some((s) => validateSweep(s))) {
       $('draw-length-error').textContent = '';
@@ -376,11 +419,23 @@ export function createPlacementController({
         s.type === 'item'
           ? `${tools.activeSnap.label} · Fast referenslängd ${fmt(Math.hypot(...s.end.map((v, i) => v - s.start[i])))} mm`
           : `${tools.activeSnap.label} · Längd ${fmt(Math.hypot(...p.map((v, i) => v - tools.first[i])))} mm`;
+      frameGate.invalidate();
+      return true;
     }
+    return false;
   }
   function updatePointer(e) {
     tools.lastPointer = { clientX: e.clientX, clientY: e.clientY };
     if (!tools.drawing) return;
+    if (tools.operation?.mode === 'workArea') {
+      getWorkArea()?.pointerPreview(point(e));
+      return;
+    }
+    if (tools.operation?.planeId) {
+      getPlaneTransform()?.pointerPreview(point(e));
+      return;
+    }
+    if (tools.operation?.linearId && !tools.operation.linearPicking) return;
     if (['fastenerTargets', 'fastenerDepth', 'fit'].includes(tools.operation?.mode)) return;
     if (tools.operation?.mode === 'workPlane') {
       const p = point(e),
@@ -413,6 +468,10 @@ export function createPlacementController({
     }
     if (tools.first && $('draw-length').value.trim()) return;
     const p = point(e);
+    if (tools.operation?.linearId) {
+      getLinear()?.pointerPreview(p);
+      return;
+    }
     clearPreview();
     guide.visible = false;
     if (!p || !tools.first) {
@@ -425,6 +484,29 @@ export function createPlacementController({
   }
 
   return {
+    previewLinear: (target) => showPreview(target, false),
+    previewPlane: (batch) => {
+      clearPreview();
+      guide.visible = false;
+      try {
+        modelEditor.prepare(batch, { copy: tools.operation?.mode === 'copy' });
+        ui.previewSweep = batch.length === 1 ? batch[0] : null;
+        ui.preview = previewModelBatch(batch);
+        scene.add(ui.preview);
+        frameGate.invalidate();
+        return true;
+      } catch (error) {
+        $('status').textContent = error.message;
+        return false;
+      }
+    },
+    clearTransformPreview: () => {
+      clearPreview();
+      guide.visible = false;
+      tools.activeSnap = null;
+      updateSnapOverlay();
+      frameGate.invalidate();
+    },
     resetLength,
     plateLengthActive,
     updateTypedLength,

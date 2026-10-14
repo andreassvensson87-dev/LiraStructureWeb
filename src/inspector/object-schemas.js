@@ -35,7 +35,8 @@ export const objectInspectorSchemas = {
     editable: editableSweep,
     copyGroups: sweepPropertyGroups,
     unchecked: ['name'],
-    isCreating: ({ drawing, operation }) => drawing && !operation,
+    isCreating: ({ drawing, operation }) =>
+      drawing && (!operation || operation.mode === 'polysweepCreate'),
     labels: '#form label, #inspector-identity, #identity-fields label',
     lockContainers: '#form, #material-panel',
     sections: [

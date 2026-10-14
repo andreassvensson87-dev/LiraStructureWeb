@@ -1,3 +1,5 @@
+import { plateParameters, fastenerPatternParameters } from './parameter-fields.js';
+import { componentPlacements } from './placement-rules.js';
 import { beamSpliceDefaults, resolveBeamSplice } from './beam-splice.js';
 import { boltedEndplateDefaults, resolveBoltedEndplate } from './bolted-endplate.js';
 import { endplateDefaults, resolveEndplate } from './endplate.js';
@@ -63,39 +65,11 @@ const definitions = new Map([
           : [],
       resolve: resolveBaseplate,
       parameters: [
-        {
-          key: 'sizeMode',
-          label: 'Plåtmått',
-          options: [
-            ['outstand', 'Utstick från pelare'],
-            ['manual', 'Fasta mått'],
-          ],
-        },
-        ...['X', 'Y'].map((axis) => ({
-          key: `outstand${axis}`,
-          label: `Utstick ${axis} (mm)`,
-          type: 'number',
-          min: 0,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'outstand',
-        })),
-        {
-          key: 'width',
-          label: 'Bredd (mm)',
-          type: 'number',
-          min: 1,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'manual',
-        },
-        {
-          key: 'length',
-          label: 'Längd (mm)',
-          type: 'number',
-          min: 1,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'manual',
-        },
-        { key: 'thickness', label: 'Plåttjocklek (mm)', type: 'number', min: 1, max: 10000 },
+        ...plateParameters({
+          outstand: 'Utstick från pelare',
+          length: 'Längd',
+          thicknessMax: 10000,
+        }),
         {
           key: 'elevationOffset',
           label: 'Nivåjustering (mm)',
@@ -119,26 +93,7 @@ const definitions = new Map([
           type: 'fastener',
           hidden: (s) => s.anchorKind === 'none',
         },
-        ...[
-          ['rows', 'Rader'],
-          ['columns', 'Kolumner'],
-        ].map(([key, label]) => ({
-          key,
-          label,
-          type: 'number',
-          min: 1,
-          max: 100,
-          step: 1,
-          hidden: (s) => s.anchorKind === 'none',
-        })),
-        ...['X', 'Y'].map((axis) => ({
-          key: `spacing${axis}`,
-          label: `Skruvavstånd ${axis} (mm)`,
-          type: 'number',
-          min: 0,
-          max: 10000,
-          hidden: (s) => s.anchorKind === 'none',
-        })),
+        ...fastenerPatternParameters({ hidden: (s) => s.anchorKind === 'none' }),
         {
           key: 'anchorRotation',
           label: 'Skruvmönstrets rotation (°)',
@@ -283,50 +238,7 @@ const definitions = new Map([
           wide: true,
           section: 'Placering',
         },
-        {
-          key: 'sizeMode',
-          label: 'Plåtmått',
-          options: [
-            ['outstand', 'Utstick från profil'],
-            ['manual', 'Fasta mått'],
-          ],
-          section: 'Plåt',
-        },
-        ...['X', 'Y'].map((axis) => ({
-          key: `outstand${axis}`,
-          label: `Utstick ${axis} (mm)`,
-          type: 'number',
-          min: 0,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'outstand',
-          section: 'Plåt',
-        })),
-        {
-          key: 'width',
-          label: 'Bredd (mm)',
-          type: 'number',
-          min: 1,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'manual',
-          section: 'Plåt',
-        },
-        {
-          key: 'length',
-          label: 'Höjd (mm)',
-          type: 'number',
-          min: 1,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'manual',
-          section: 'Plåt',
-        },
-        {
-          key: 'thickness',
-          label: 'Plåttjocklek (mm)',
-          type: 'number',
-          min: 1,
-          max: 1000,
-          section: 'Plåt',
-        },
+        ...plateParameters({ outstand: 'Utstick från profil' }),
         { key: 'plateRotation', label: 'Plåtrotation (°)', type: 'number', section: 'Plåt' },
       ],
     },
@@ -363,44 +275,7 @@ const definitions = new Map([
           wide: true,
           section: 'Placering',
         },
-        {
-          key: 'sizeMode',
-          label: 'Plåtmått',
-          options: [
-            ['outstand', 'Utstick från balk'],
-            ['manual', 'Fasta mått'],
-          ],
-          section: 'Plåt',
-        },
-        ...['X', 'Y'].map((axis) => ({
-          key: `outstand${axis}`,
-          label: `Utstick ${axis} (mm)`,
-          type: 'number',
-          min: 0,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'outstand',
-          section: 'Plåt',
-        })),
-        ...[
-          ['width', 'Bredd'],
-          ['length', 'Höjd'],
-        ].map(([key, label]) => ({
-          key,
-          label: `${label} (mm)`,
-          type: 'number',
-          min: 1,
-          max: 10000,
-          hidden: (s) => s.sizeMode !== 'manual',
-          section: 'Plåt',
-        })),
-        {
-          key: 'thickness',
-          label: 'Plåttjocklek (mm)',
-          type: 'number',
-          min: 1,
-          max: 1000,
-          section: 'Plåt',
-        },
+        ...plateParameters({ outstand: 'Utstick från balk' }),
         {
           key: 'boltSpec',
           label: 'Skruv ur biblioteket',
@@ -425,26 +300,7 @@ const definitions = new Map([
           max: 1000,
           section: 'Skruvar',
         },
-        ...[
-          ['rows', 'Rader'],
-          ['columns', 'Kolumner'],
-        ].map(([key, label]) => ({
-          key,
-          label,
-          type: 'number',
-          min: 1,
-          max: 100,
-          step: 1,
-          section: 'Skruvmönster',
-        })),
-        ...['X', 'Y'].map((axis) => ({
-          key: `spacing${axis}`,
-          label: `Skruvavstånd ${axis} (mm)`,
-          type: 'number',
-          min: 0,
-          max: 10000,
-          section: 'Skruvmönster',
-        })),
+        ...fastenerPatternParameters(),
         ...['X', 'Y'].map((axis) => ({
           key: `offset${axis}`,
           label: `Förskjutning ${axis} (mm)`,
@@ -508,6 +364,11 @@ definitions.set('beamSplice', {
     ...spliceParameters,
   ],
 });
+for (const definition of definitions.values())
+  definition.placement = componentPlacements[definition.kind];
+
+export const componentKinds = () => [...definitions.keys()];
+
 export function componentDefinition(kind) {
   const definition = definitions.get(kind);
   if (!definition) throw new Error(`Okänd koppling: ${kind}`);

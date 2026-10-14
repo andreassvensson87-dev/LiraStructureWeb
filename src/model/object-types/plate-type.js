@@ -6,8 +6,12 @@ import {
   plateCorners,
   plateVertices,
   plateContour,
+  platePoint,
+  plateControlContour,
 } from '../../plate.js';
 import { translateFrame, rotateFrame } from './frame-transform.js';
+import { cornerPath } from '../geometry/corner-path.js';
+import { cornerMeasures } from '../../geometry/measurements.js';
 export const plateType = {
   id: 'plate',
   label: 'Plate',
@@ -19,6 +23,15 @@ export const plateType = {
   validate: validatePlate,
   corners: plateCorners,
   anchors: plateVertices,
+  measurements: (s) =>
+    cornerMeasures(
+      cornerPath(
+        plateControlContour(s).map((p) => platePoint(s, p)),
+        s.radii,
+        true,
+      ),
+      true,
+    ),
   partFrame: (s) => ({
     origin: new THREE.Vector3(...s.frame.origin),
     x: new THREE.Vector3(...s.frame.u),
@@ -32,7 +45,7 @@ export const plateType = {
     side: s.side,
   }),
   snapSegments(s) {
-    const vertices = plateVertices(s);
+    const vertices = plateContour(s).map((p) => platePoint(s, p));
     return {
       segments: vertices.map((p, i) => [p, vertices[(i + 1) % vertices.length]]),
       includeEdges: true,

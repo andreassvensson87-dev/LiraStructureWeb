@@ -1,4 +1,5 @@
 const paths = {
+  lock: 'M7 10V7a5 5 0 0 1 10 0v3M4 10h16v12H4ZM12 14v4',
   insulation: 'M3 6h18v12H3ZM3 18l3-12 3 12 3-12 3 12 3-12 3 12',
   properties: 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',
   references: 'M5 3h11v14H5ZM9 17v4h11V7h-4M8 7h5M8 11h5',

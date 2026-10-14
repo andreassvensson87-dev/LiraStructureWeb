@@ -206,3 +206,16 @@
   flex: 1;
   text-align: right;
 }
+#inspector-properties.point-context > :not(#insertion-point-inspector) {
+  display: none !important;
+}
+#inspector-properties.point-context #insertion-point-inspector {
+  display: block;
+}
+.insertion-point.point-selected {
+  background: #e89a30;
+  border-color: #805215;
+}
+body:has(#inspector-properties.point-context) .selection-type-dock {
+  display: none;
+}

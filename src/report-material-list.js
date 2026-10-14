@@ -1,3 +1,4 @@
+import { polysweepPath } from './model/polysweep.js';
 import { isPhysical } from './model-object.js';
 import { objectQuantities } from './model/object-quantities.js';
 import { partKey, partStatus } from './part-marks.js';
@@ -42,6 +43,7 @@ export function materialProfile(object) {
   return `${names[object.profile] || object.profile || 'Profil'} ${number(object.width, 1)} × ${number(object.height, 1)}${object.thickness > 0 ? ' × ' + number(object.thickness, 1) : ''}`;
 }
 export function materialLength(object) {
+  if (object.type === 'polysweep') return polysweepPath(object).length;
   if (object.start && object.end)
     return Math.hypot(...object.end.map((v, i) => v - object.start[i]));
   if (object.polygon?.length) {

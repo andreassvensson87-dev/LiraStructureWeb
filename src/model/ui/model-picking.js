@@ -1,3 +1,4 @@
+import { clipSegmentToBox } from '../work-area.js';
 import * as THREE from 'three';
 import { isCut, isPhysical } from '../../model-object.js';
 import { levelElevation } from '../../levels.js';
@@ -19,6 +20,7 @@ export function createModelPicking({
   getSnapIndex,
   getReferences,
   workPlanePrompt,
+  getWorkArea = () => null,
   updateSnapOverlay,
 }) {
   const $ = (id) => document.getElementById(id);
@@ -60,8 +62,15 @@ export function createModelPicking({
         attributes.push(object.children[2].geometry.attributes.position);
       for (const p of attributes)
         for (let i = 0; i < p.count; i += 2) {
-          const a = projectToScreen(p, i),
-            b = projectToScreen(p, i + 1);
+          const segment = clipSegmentToBox(
+            new THREE.Vector3().fromBufferAttribute(p, i).toArray(),
+            new THREE.Vector3().fromBufferAttribute(p, i + 1).toArray(),
+            getWorkArea()?.bounds(),
+          );
+          if (!segment) continue;
+          const attr = new THREE.Float32BufferAttribute(segment.flat(), 3);
+          const a = projectToScreen(attr, 0),
+            b = projectToScreen(attr, 1);
           if (Math.abs(a.z) > 1 && Math.abs(b.z) > 1) continue;
           const delta = b.point.clone().sub(a.point),
             t = delta.lengthSq()
@@ -80,19 +89,22 @@ export function createModelPicking({
     }
     return (
       best ??
-      raycaster.intersectObjects(
-        objects.children.filter(
-          (o) =>
-            o.visible &&
-            canSelectModelObject(getRenderedById().get(o.userData.id)?.source, ui) &&
-            (camera.layers.test(o.layers) || o.userData.instanced) &&
-            !o.userData.cut &&
-            (tools.operation?.mode !== 'fastenerTargets' ||
-              (isPhysical(getRenderedById().get(o.userData.id)?.source) &&
-                getRenderedById().get(o.userData.id)?.source.type !== 'fastener')),
-        ),
-        false,
-      )[0]?.object.userData.id ??
+      raycaster
+        .intersectObjects(
+          objects.children.filter(
+            (o) =>
+              o.visible &&
+              canSelectModelObject(getRenderedById().get(o.userData.id)?.source, ui) &&
+              (camera.layers.test(o.layers) || o.userData.instanced) &&
+              !o.userData.cut &&
+              (tools.operation?.mode !== 'fastenerTargets' ||
+                (isPhysical(getRenderedById().get(o.userData.id)?.source) &&
+                  getRenderedById().get(o.userData.id)?.source.type !== 'fastener')),
+          ),
+          false,
+        )
+        .find((hit) => getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true)?.object.userData
+        .id ??
       null
     );
   }
@@ -112,6 +124,7 @@ export function createModelPicking({
       height: r.height,
       ray: raycaster.ray,
       start: tools.first,
+      workArea: getWorkArea()?.bounds() || null,
       z: tools.first
         ? tools.first[2]
         : tools.operation?.mode === 'rotate'
@@ -150,17 +163,24 @@ export function createModelPicking({
       polar: +project.snap.polar,
       lock: tools.axisLock,
       workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
-      constrainToPlane: ['plateCreate', 'plateVertex'].includes(tools.operation?.mode),
+      constrainToPlane:
+        ['plateCreate', 'plateVertex'].includes(tools.operation?.mode) ||
+        (tools.operation?.mode === 'grip' && !!tools.operation.frame),
     });
     if (import.meta.env.DEV) {
       host.dataset.snapObjects = snapObjects.length;
       host.dataset.snapMs = (performance.now() - snapStarted).toFixed(1);
     }
-    if (tools.operation?.mode === 'workPlane' && tools.activeSnap.kind === 'free') {
-      const hit = raycaster.intersectObjects(
-        objects.children.filter((o) => o.visible && !o.userData.cut),
-        false,
-      )[0];
+    if (
+      (tools.operation?.mode === 'workPlane' || tools.operation?.planeId) &&
+      tools.activeSnap.kind === 'free'
+    ) {
+      const hit = raycaster
+        .intersectObjects(
+          objects.children.filter((o) => o.visible && !o.userData.cut),
+          false,
+        )
+        .find((hit) => getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true);
       if (hit)
         tools.activeSnap = {
           point: hit.point.toArray(),
@@ -171,6 +191,8 @@ export function createModelPicking({
     }
     $('status').textContent =
       tools.operation?.mode === 'workPlane' ? workPlanePrompt() : tools.activeSnap.label;
+    if (tools.operation?.mode === 'workArea' && tools.activeSnap.point)
+      tools.activeSnap.point[2] = tools.operation.elevation;
     updateSnapOverlay();
     return tools.activeSnap.point;
   }
@@ -187,10 +209,12 @@ export function createModelPicking({
         : (!modified && action === THREE.MOUSE.ROTATE) || (modified && action === THREE.MOUSE.PAN);
     if (!rotates) return;
     ray(e);
-    const hit = raycaster.intersectObjects(
-      objects.children.filter((o) => o.visible && !o.userData.cut),
-      false,
-    )[0];
+    const hit = raycaster
+      .intersectObjects(
+        objects.children.filter((o) => o.visible && !o.userData.cut),
+        false,
+      )
+      .find((hit) => getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true);
     if (!hit) return;
     navigation.movePivot(hit.point);
   }

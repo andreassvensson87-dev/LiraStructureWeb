@@ -73,3 +73,15 @@ test('sweep shortcuts require editable sweeps and leave fields and active tools 
     );
   }
 });
+
+test('linear HUD owns confirmation and does not route canvas typing into the old length field', () => {
+  const state = { mode: 'move', linear: true, drawing: true, hasStart: true, hasSelection: true };
+  assert.equal(command({ key: '2' }, state), null);
+  assert.equal(command({ key: 'x' }, state), null);
+  assert.equal(command({ key: 'Enter' }, state), 'confirm-linear');
+  assert.equal(command({ key: 'Enter' }, { ...state, picking: true }), null);
+  assert.equal(command({ key: 'Enter' }, { ...state, editing: true }), null);
+  assert.equal(command({ key: 'Escape' }, state), 'cancel');
+  assert.equal(command({ key: 'z', ctrlKey: true }, state), 'undo');
+  assert.equal(command({ key: 'c', ctrlKey: true }, state), 'copy');
+});

@@ -7,10 +7,12 @@ export function editPlateVertex(source, index, remove = false) {
   if (remove) {
     if (result.polygon.length <= 3) throw Error('En Plate måste ha minst tre hörn.');
     result.polygon.splice(index, 1);
+    result.radii?.splice(index, 1);
   } else {
     const a = result.polygon[index],
       b = result.polygon[(index + 1) % result.polygon.length];
     result.polygon.splice(index + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    result.radii?.splice(index + 1, 0, 0);
   }
   const error = validatePlate(result);
   if (error) throw Error(error);

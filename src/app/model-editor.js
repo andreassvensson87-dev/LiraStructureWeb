@@ -1,5 +1,7 @@
 import { validateObject } from '../model-object.js';
 import { applyObjectBatch } from '../model/tools/transform-tool.js';
+import { validateBlockInstances } from '../blocks/validation.js';
+import { updateModelBlock } from '../blocks/model-adapter.js';
 
 /** Owns model commits. UI and tools propose changes; they never own history. */
 export function createModelEditor({ project, checkpoint }) {
@@ -11,6 +13,7 @@ export function createModelEditor({ project, checkpoint }) {
       const error = validateObject(object);
       if (error) throw new Error(error);
     }
+    validateBlockInstances(objects, 3, updateModelBlock);
     return objects;
   }
   function replace(objects) {

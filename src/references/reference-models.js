@@ -1,3 +1,4 @@
+import { withinWorkArea } from '../model/work-area.js';
 import { ReferenceImport } from './reference-import.js';
 import { renderReferenceList, renderReferencePlacement } from './reference-inspector.js';
 import * as THREE from 'three';
@@ -20,8 +21,17 @@ export class ReferenceModels {
     onChange,
     onSelect,
     beforePlacementChange,
+    onExtentChange,
   }) {
-    Object.assign(this, { scene, fit, status, onChange, onSelect, beforePlacementChange });
+    Object.assign(this, {
+      scene,
+      fit,
+      status,
+      onChange,
+      onSelect,
+      beforePlacementChange,
+      onExtentChange,
+    });
     this.models = [];
     this.folders = ['Standard'];
     this.collapsed = new Set();
@@ -144,8 +154,10 @@ export class ReferenceModels {
         } else if (field === 'offset') model.placement.offset[axis] = value;
         else model.placement[field] = value;
         applyCADPlacement(model);
+        this.setWorkArea(this.workAreaBounds || null, true);
         if (field === 'unit') this.showModel(model.id);
         this.changed();
+        this.onExtentChange?.(model);
       };
     if (getObjects && convert) {
       this.conversionEnabled = true;
@@ -282,6 +294,7 @@ export class ReferenceModels {
     };
   }
   changed() {
+    this.setWorkArea(this.workAreaBounds || null);
     if (!this.restoring) this.onChange?.(this.snapshot());
   }
   transformSelection() {
@@ -303,6 +316,7 @@ export class ReferenceModels {
     model.placement = structuredClone(placement);
     applyCADPlacement(model);
     this.updatePlacementFields(model);
+    this.setWorkArea(this.workAreaBounds || null, true);
   }
   clearPlacementPreview() {
     if (!this.placementPreview) return;
@@ -311,6 +325,7 @@ export class ReferenceModels {
     model.placement = placement;
     applyCADPlacement(model);
     this.updatePlacementFields(model);
+    this.setWorkArea(this.workAreaBounds || null, true);
   }
   setPlacement(id, placement) {
     this.clearPlacementPreview();
@@ -319,7 +334,9 @@ export class ReferenceModels {
     model.placement = structuredClone(placement);
     applyCADPlacement(model);
     this.updatePlacementFields(model);
+    this.setWorkArea(this.workAreaBounds || null, true);
     this.changed();
+    this.onExtentChange?.(model);
   }
   setLocked(model, locked) {
     if (!model) return;
@@ -348,6 +365,7 @@ export class ReferenceModels {
       ...Object.fromEntries(names.map((name) => [name, visible])),
     };
     applyLayerVisibility(model);
+    this.setWorkArea(this.workAreaBounds || null, true);
     renderLayerControls(this, model);
     this.changed();
   }
@@ -413,6 +431,7 @@ export class ReferenceModels {
       }
     }
     this.restoring = false;
+    this.setWorkArea(this.workAreaBounds || null, true);
     this.panel && (this.panel.inert = false);
     this.showList();
     this.message(
@@ -430,8 +449,14 @@ export class ReferenceModels {
       (model) =>
         this.group.visible && model.group.visible && !['DXF', 'DWG'].includes(model.format),
     );
-    const meshes = visible.flatMap((model) => model.parts.map((part) => part.mesh));
-    const hit = raycaster.intersectObjects(meshes, false)[0];
+    const meshes = visible.flatMap((model) =>
+      model.parts.filter((part) => part.mesh.visible).map((part) => part.mesh),
+    );
+    const hit = raycaster
+      .intersectObjects(meshes, false)
+      .find(
+        (hit) => !this.workAreaBounds || withinWorkArea(this.workAreaBounds, hit.point.toArray()),
+      );
     if (!hit) return null;
     const model = visible.find((model) => model.parts.some((part) => part.mesh === hit.object));
     return { modelId: model.id, ifcId: hit.object.userData.ifcId };
@@ -439,10 +464,14 @@ export class ReferenceModels {
   pickReference(raycaster) {
     if (!this.group.visible) return null;
     const models = this.models.filter((m) => m.group.visible);
-    const hit = raycaster.intersectObjects(
-      models.flatMap((m) => m.parts.filter((p) => p.mesh.visible).map((p) => p.mesh)),
-      false,
-    )[0];
+    const hit = raycaster
+      .intersectObjects(
+        models.flatMap((m) => m.parts.filter((p) => p.mesh.visible).map((p) => p.mesh)),
+        false,
+      )
+      .find(
+        (hit) => !this.workAreaBounds || withinWorkArea(this.workAreaBounds, hit.point.toArray()),
+      );
     if (!hit) return null;
     const model = models.find((m) => m.parts.some((p) => p.mesh === hit.object));
     return { modelId: model.id, ifcId: hit.object.userData.ifcId };
@@ -546,6 +575,7 @@ export class ReferenceModels {
     for (const model of models) model.group.visible = visible;
     this.renderList();
     this.changed();
+    if (visible) models.forEach((model) => this.onExtentChange?.(model));
   }
   renderList() {
     return renderReferenceList({
@@ -575,7 +605,8 @@ export class ReferenceModels {
     const bounds = new THREE.Box3();
     model.group.updateWorldMatrix(true, true);
     for (const part of model.parts)
-      if (part.mesh.visible) bounds.union(new THREE.Box3().setFromObject(part.mesh));
+      if (!part.layer || model.layerVisibility?.[part.layer] !== false)
+        bounds.union(new THREE.Box3().setFromObject(part.mesh));
     return bounds;
   }
   dispose(parts) {
@@ -585,8 +616,34 @@ export class ReferenceModels {
       p.mesh.material.dispose();
     }
   }
+  setWorkArea(bounds, force = false) {
+    const signature = JSON.stringify([bounds?.min.toArray(), bounds?.max.toArray()]);
+    if (!force && signature === this.workAreaSignature) return;
+    this.workAreaSignature = signature;
+    this.workAreaBounds = bounds;
+    for (const model of this.models) {
+      model.group.updateWorldMatrix(true, true);
+      for (const part of model.parts) {
+        const layerVisible = !part.layer || model.layerVisibility?.[part.layer] !== false;
+        if (!part.mesh.geometry.boundingBox) part.mesh.geometry.computeBoundingBox();
+        const box = part.mesh.geometry.boundingBox.clone().applyMatrix4(part.mesh.matrixWorld);
+        part.mesh.visible = layerVisible && (!bounds || bounds.intersectsBox(box));
+      }
+    }
+    if (this.selectedObject) {
+      const model = this.models.find((m) => m.id === this.selectedObject.modelId);
+      if (
+        !model?.group.visible ||
+        !model.parts.some(
+          (p) => p.mesh.visible && p.mesh.userData.ifcId === this.selectedObject.ifcId,
+        )
+      )
+        this.clearObjectSelection();
+    }
+  }
   syncParts() {
     this.parts = this.models.flatMap((model) => model.parts);
+    this.setWorkArea(this.workAreaBounds || null, true);
   }
   clear() {
     this.clearPlacementPreview();
@@ -664,6 +721,7 @@ export class ReferenceModels {
         this.group.visible = true;
         this.syncParts();
         this.showModel(model.id);
+        if (!saved) this.onExtentChange?.(model);
       },
       dispose: (parts) => this.dispose(parts),
       busy: (value) => this.busy(value),
@@ -686,6 +744,7 @@ export class ReferenceModels {
       model.group.visible && (model.corners || model.edges)
         ? referenceCandidates(model.parts, {
             ...options,
+            workArea: this.workAreaBounds,
             corners: model.corners,
             edges: model.edges,
             labelPrefix: model.format || 'IFC',

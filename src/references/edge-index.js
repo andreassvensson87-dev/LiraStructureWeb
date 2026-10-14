@@ -1,3 +1,4 @@
+import { withinWorkArea, clipSegmentToBox } from '../model/work-area.js';
 import * as THREE from 'three';
 /** Bounding-volume tree over geometric feature edges, never triangle diagonals. */
 export function edgeIndex(array) {
@@ -41,7 +42,17 @@ export function edgeIndex(array) {
 }
 export function referenceCandidates(
   parts,
-  { ray, camera, pointer, width, height, corners = true, edges = true, labelPrefix = 'IFC' },
+  {
+    ray,
+    camera,
+    pointer,
+    width,
+    height,
+    corners = true,
+    edges = true,
+    labelPrefix = 'IFC',
+    workArea = null,
+  },
 ) {
   const result = [],
     cursor = new THREE.Vector2(...pointer);
@@ -68,9 +79,13 @@ export function referenceCandidates(
         b = new THREE.Vector3().fromArray(part.edges, i * 6 + 3).applyMatrix4(matrix);
       if (corners)
         for (const p of [a, b])
-          if (screen(p).distanceTo(cursor) < 14)
+          if (withinWorkArea(workArea, p.toArray()) && screen(p).distanceTo(cursor) < 14)
             result.push({ coords: p.toArray(), label: `${labelPrefix}-hörn`, symbol: 'square' });
       if (edges) {
+        const clipped = clipSegmentToBox(a.toArray(), b.toArray(), workArea);
+        if (!clipped) continue;
+        a.fromArray(clipped[0]);
+        b.fromArray(clipped[1]);
         const sa = screen(a),
           delta = screen(b).sub(sa),
           length = delta.lengthSq();

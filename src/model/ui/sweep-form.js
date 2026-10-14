@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { isRound, hasWall, normalizeForm } from '../../profile-forms.js';
 import { isPlate, isHelper } from '../../model-object.js';
 import { contours, profileAnchor } from '../../sweep.js';
+import { polysweepPath } from '../polysweep.js';
 import { isFastener } from '../../fasteners/object-type.js';
 export function createSweepForm({
   project,
@@ -32,7 +33,7 @@ export function createSweepForm({
             .normalize()
             .toArray()
         : null);
-    return normalizeForm({
+    const result = normalizeForm({
       ...(profileUp ? { profileUp: [...profileUp] } : {}),
       ...($('profile').value === 'custom' && ui.formSection
         ? { section: structuredClone(ui.formSection) }
@@ -46,6 +47,12 @@ export function createSweepForm({
       start: ['sx', 'sy', 'sz'].map((k) => +$(k).value),
       end: ['ex', 'ey', 'ez'].map((k) => +$(k).value),
     });
+    if (source?.type === 'polysweep') {
+      delete result.start;
+      delete result.end;
+      Object.assign(result, { type: 'polysweep', points: source.points, radii: source.radii });
+    }
+    return result;
   }
   function fillForm(s) {
     if (s.type === 'component' || s.type === 'item' || isHelper(s) || isFastener(s)) return;
@@ -57,8 +64,8 @@ export function createSweepForm({
     ui.formSection = s.section ? structuredClone(s.section) : null;
     ui.placement = { horizontalAlignment: 'center', verticalAlignment: 'center', ...s.placement };
     for (const k of ['profile', 'width', 'height', 'thickness', 'rotation']) $(k).value = s[k];
-    ['sx', 'sy', 'sz'].forEach((k, i) => ($(k).value = s.start[i]));
-    ['ex', 'ey', 'ez'].forEach((k, i) => ($(k).value = s.end[i]));
+    ['sx', 'sy', 'sz'].forEach((k, i) => ($(k).value = (s.points?.[0] || s.start)[i]));
+    ['ex', 'ey', 'ez'].forEach((k, i) => ($(k).value = (s.points?.at(-1) || s.end)[i]));
     updateForm();
   }
   function updateForm() {
@@ -95,7 +102,12 @@ export function createSweepForm({
       : (round ? 'Ø ' + fmt(s.width) : fmt(s.width) + ' × ' + fmt(s.height)) +
         (hasWall(s.profile) ? ' × ' + fmt(s.thickness) : '') +
         ' mm';
-    $('length').textContent = fmt(Math.hypot(...s.end.map((v, i) => v - s.start[i]))) + ' mm';
+    $('length').textContent =
+      fmt(
+        s.type === 'polysweep'
+          ? polysweepPath(s).length
+          : Math.hypot(...s.end.map((v, i) => v - s.start[i])),
+      ) + ' mm';
     $('error').textContent = '';
     const paths = contours(s),
       bounds = custom ? ui.formSection.properties.bounds : null;

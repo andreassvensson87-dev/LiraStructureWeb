@@ -3,8 +3,13 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const core = [
+  'blocks',
+  'work-area',
+  'polysweep',
+  'measurements',
   'model-editor',
   'model-placement',
+  'component-inspector',
   'model-session',
   'model-tools',
   'object-types',

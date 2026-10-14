@@ -240,3 +240,12 @@ dialog.ui-standard-dialog [role='alert']:not(:empty) {
   height: 16px;
   margin: 0;
 }
+/* Categories retain their captions when Settings gains another standard panel. */
+#settings-form > .settings-nav {
+  min-width: 0;
+  overflow-x: auto;
+}
+#settings-form > .settings-nav button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

@@ -10,7 +10,10 @@ export function createModelVisibility({ project, ui, renderState, controllers })
       !isHelper(
         renderState.renderedById.get(id)?.source ?? project.objects.find((s) => s.id === id),
       ));
-  const isVisible = (id) => baseVisible(id) && (controllers.modelFilter?.allows(id) ?? true);
+  const isVisible = (id) =>
+    baseVisible(id) &&
+    (controllers.modelFilter?.allows(id) ?? true) &&
+    (controllers.workAreaUI?.allowsObject(id) ?? true);
 
   return { hiddenObjects, baseVisible, isVisible };
 }

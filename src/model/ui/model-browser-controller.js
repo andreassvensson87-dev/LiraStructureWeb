@@ -52,7 +52,12 @@ export function installModelBrowser({
       if (isHelper(project.objects.find((s) => s.id === id))) ui.showHelpers = true;
       select(id, add, true);
     },
-    selectable: (id) => actions.isSelectable(id),
+    selectable: (id) =>
+      actions.isSelectable(id) && (controllers.workAreaUI?.allowsObject(id) ?? true),
+    selectionDisabledReason: (id) =>
+      controllers.workAreaUI?.allowsObject(id) === false
+        ? 'Utanför arbetsområdet'
+        : 'Stomlinjen är låst för markering',
     visible: isVisible,
     toggle: (id) =>
       changeVisibility(() => {

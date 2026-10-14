@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { distanceMeasure } from '../../geometry/measurements.js';
 const anchors = (s) => (s.type === 'helperpoint' ? [s.start] : [s.start, s.end]);
 export const helperLineType = {
   id: 'helperline',
@@ -11,6 +12,7 @@ export const helperLineType = {
   geometry: (s) =>
     new THREE.BufferGeometry().setFromPoints(anchors(s).map((p) => new THREE.Vector3(...p))),
   anchors,
+  measurements: (s) => (s.type === 'helperpoint' ? [] : distanceMeasure(s.start, s.end)),
   corners: anchors,
   validate(s) {
     const points = anchors(s);

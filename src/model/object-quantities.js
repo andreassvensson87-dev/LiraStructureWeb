@@ -1,3 +1,4 @@
+import { polysweepPath } from './polysweep.js';
 import { fitEnvelope } from '../components/fit.js';
 import { contours } from '../sweep.js';
 import { roundProfile } from '../round-profile.js';
@@ -60,14 +61,21 @@ export function objectQuantities(object, model = []) {
   if (density != null && (!Number.isFinite(density) || density < 0 || density > 100000))
     throw new Error('Ogiltig densitet för mängdberäkning.');
   const lengthMm =
-    object.start && object.end
-      ? Math.hypot(...object.end.map((v, i) => v - object.start[i]))
-      : null;
-  const sweep = (object.type || 'sweep') === 'sweep';
+    object.type === 'polysweep'
+      ? polysweepPath(object).length
+      : object.start && object.end
+        ? Math.hypot(...object.end.map((v, i) => v - object.start[i]))
+        : null;
+  const sweep = ['sweep', 'polysweep'].includes(object.type || 'sweep');
   const areaMm2 = sweep ? sweepArea(object) : isPlate(object) ? plateArea(object) : null;
   const cutCount = cutsForModel(object, model).length;
   const stock = fitEnvelope(object, cutsForModel(object, model));
-  const stockLength = sweep ? Math.hypot(...stock.end.map((v, i) => v - stock.start[i])) : null;
+  const stockLength =
+    stock.type === 'polysweep'
+      ? polysweepPath(stock).length
+      : sweep
+        ? Math.hypot(...stock.end.map((v, i) => v - stock.start[i]))
+        : null;
   const grossMm3 = areaMm2 == null ? null : areaMm2 * (sweep ? stockLength : object.thickness);
   let netMm3 = grossMm3;
   if (cutCount || grossMm3 == null) {

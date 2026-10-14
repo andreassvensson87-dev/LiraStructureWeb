@@ -3,6 +3,7 @@ import { rotateObject } from '../../rotation.js';
 import { nextIdentity, designation } from '../../object-identity.js';
 import { followFasteners, remapFastenerCopy } from '../../fasteners/relations.js';
 import { updateAutomaticJoints } from '../../fasteners/update-joints.js';
+import { blockSelection } from '../../blocks/placement.js';
 export function transformCandidates(operation, first, target, draft) {
   return operation
     ? operation.sources.map((s) => transformObject(s, operation.mode, first, target))
@@ -40,6 +41,14 @@ export function applyObjectBatch(
     )
       batch.push(s);
   const copies = [];
+  if (
+    blockSelection(
+      objects,
+      batch.map((s) => s.id),
+    ).size !== batch.length
+  )
+    throw Error('Kopiera hela blocket.');
+  const blockIds = new Map();
   const ids = new Map(batch.map((s) => [s.id, newId()]));
   for (const s of objects)
     if (s.generatedBy && ids.has(s.generatedBy))
@@ -52,6 +61,11 @@ export function applyObjectBatch(
       id: ids.get(s.id),
     };
     if (s.type === 'item') object.item = s.item;
+    if (s.parametricBlock) {
+      const id = s.parametricBlock.instanceId;
+      if (!blockIds.has(id)) blockIds.set(id, newId());
+      object.parametricBlock.instanceId = blockIds.get(id);
+    }
     object.name = designation(object);
     if (object.type === 'gridline') {
       object.gridIdentity = object.id;

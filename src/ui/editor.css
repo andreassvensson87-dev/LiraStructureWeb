@@ -5,7 +5,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   > .ui-editor-body {
   display: grid;
@@ -20,7 +21,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector {
   min-width: 0;
@@ -36,7 +38,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   :is(.item-editor-nav, .item-editor-properties) {
@@ -51,7 +54,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-section {
   padding: 0 0 10px;
@@ -65,7 +69,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-section
   > summary {
@@ -81,7 +86,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   label.attribute-row {
@@ -98,7 +104,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   :is(input:not([type='checkbox']), select, textarea) {
@@ -116,7 +123,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   :is(fieldset, .coordinates) {
@@ -128,7 +136,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   .coordinates {
@@ -142,7 +151,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   .coordinates
@@ -156,7 +166,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   small {
@@ -172,7 +183,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-inspector
   button {
@@ -185,7 +197,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   > .ui-editor-footer {
   display: block;
@@ -211,7 +224,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-quick-controls
   :is(.section-tracking, .item-editor-tracking, #section-command) {
@@ -231,7 +245,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-quick-controls
   label {
@@ -247,7 +262,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-quick-controls
   :is(input:not([type='checkbox']), select, button) {
@@ -263,7 +279,8 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-instruction {
   min-height: 16px;
@@ -279,7 +296,8 @@
       #frame-editor,
       #plan-view,
       #single-sheet,
-      #report-module
+      #report-module,
+      .block-editor
     ).ui-standard-editor
     > .ui-editor-body {
     grid-template-columns: minmax(0, 1fr) 270px;
@@ -290,7 +308,8 @@
       #frame-editor,
       #plan-view,
       #single-sheet,
-      #report-module
+      #report-module,
+      .block-editor
     ).ui-standard-editor
     .ui-editor-inspector
     label.attribute-row {
@@ -306,21 +325,22 @@
     #frame-editor,
     #plan-view,
     #single-sheet,
-    #report-module
+    #report-module,
+    .block-editor
   ).ui-standard-editor
   .ui-editor-instruction {
   background: transparent;
 }
 
 /* Existing CAD status bars retain their settings, menus and feedback controller. */
-:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+:is(#frame-editor, #plan-view, #single-sheet, #report-module, .block-editor).ui-standard-editor
   > .ui-editor-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 12px;
 }
-:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+:is(#frame-editor, #plan-view, #single-sheet, #report-module, .block-editor).ui-standard-editor
   .ui-editor-inspector
   label:has(input[type='checkbox']) {
   display: flex;
@@ -329,7 +349,7 @@
   margin: 8px 0;
   font-size: 11px;
 }
-:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+:is(#frame-editor, #plan-view, #single-sheet, #report-module, .block-editor).ui-standard-editor
   .ui-editor-inspector
   h3 {
   margin: 0 0 12px;
@@ -347,12 +367,12 @@
 #frame-editor.ui-standard-editor .ui-editor-inspector .fe-pair {
   display: block;
 }
-:is(#frame-editor, #plan-view, #single-sheet, #report-module).ui-standard-editor
+:is(#frame-editor, #plan-view, #single-sheet, #report-module, .block-editor).ui-standard-editor
   .ui-editor-inspector
   [hidden] {
   display: none !important;
 }
-:is(#plan-view, #single-sheet, #report-module).ui-standard-editor
+:is(#plan-view, #single-sheet, #report-module, .block-editor).ui-standard-editor
   .ui-editor-inspector
   .drawing-view-fields
   label.attribute-row {

@@ -29,6 +29,7 @@ export function installWorkspaceReferences({
       $('redo').disabled = !projectHistory.canRedo;
     },
     beforePlacementChange: checkpoint,
+    onExtentChange: (model) => actions.referenceExtentChanged(model),
     onSelect: (model) => {
       if (model?.locked && tools.operation?.referenceId === model.id) setDrawing(false);
       if (model && !tools.operation) {

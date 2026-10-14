@@ -26,7 +26,11 @@ import { CadTracking } from './cad-tracking.js';
 import { actionButton } from './drawing-toolbar.js';
 import { DrawingDimensionAssistant } from './drawing-dimension-assistant.js';
 import { DrawingShapeTransform } from './drawing-shape-transform.js';
+import { drawingFeedbackMeasures } from './drawing-measurements.js';
+import { paintMeasurements as paintMeasurementOverlay } from './ui/measurement-overlay.js';
 import { DrawingMarquee } from './drawing-marquee.js';
+import { DrawingBlocks } from './blocks/drawing-controller.js';
+import { blockSelection } from './blocks/placement.js';
 import { shapeToolSettings, applyShapeToolSettings } from './drawing-shape-style.js';
 import { linkedDimensions, moveLinkedDimensions } from './dimension-links.js';
 import { shapeNames } from './drawing-shapes.js';
@@ -207,6 +211,7 @@ export class DrawingAnnotations {
     this.assistant = new DrawingDimensionAssistant(this, toolbar);
     this.transform = new DrawingShapeTransform(this, toolbar);
     this.marquee = new DrawingMarquee(this, toolbar);
+    this.blocks = new DrawingBlocks(this, toolbar);
     this.ui();
   }
   beginGrip(event, node) {
@@ -259,6 +264,7 @@ export class DrawingAnnotations {
     this.cancel();
   }
   cancel() {
+    if (this.blocks) this.blocks.preview = null;
     this.grips?.cancel();
     this.marquee?.cancel();
     this.richText?.cancel(false);
@@ -302,6 +308,7 @@ export class DrawingAnnotations {
     return this.items.find((a) => a.id === this.selected);
   }
   ui(message) {
+    if (this.selectedIds?.size) this.selectedIds = blockSelection(this.items, this.selectedIds);
     const focus = this.selected || this.mode;
     if (focus && focus !== this.inspectorFocus) this.showProperties?.();
     this.inspectorFocus = focus;
@@ -316,6 +323,7 @@ export class DrawingAnnotations {
         ),
       );
     this.surface.classList.toggle('annotating', !!this.mode);
+    if (this.blocks?.ui(message)) return;
     renderAnnotationInspector(
       {
         state: {
@@ -609,8 +617,9 @@ export class DrawingAnnotations {
         this.selectedIds ??= new Set();
         if (e.shiftKey) {
           if (this.selected && !this.selectedIds.size) this.selectedIds.add(this.selected);
-          if (this.selectedIds.has(id)) this.selectedIds.delete(id);
-          else this.selectedIds.add(id);
+          const group = blockSelection(this.items, [id]);
+          if (this.selectedIds.has(id)) for (const member of group) this.selectedIds.delete(member);
+          else for (const member of group) this.selectedIds.add(member);
           this.selected = [...this.selectedIds].at(-1) || null;
           this.ui();
           this.adapter.redraw();
@@ -654,6 +663,10 @@ export class DrawingAnnotations {
     }
     e.preventDefault();
     e.stopImmediatePropagation();
+    if (this.mode === 'block-place') {
+      this.blocks.down(e);
+      return;
+    }
     if (this.transform?.active()) {
       this.transform.down(e);
       return;
@@ -794,6 +807,10 @@ export class DrawingAnnotations {
     return this.movePoint(e);
   }
   movePoint(e) {
+    if (this.mode === 'block-place') {
+      this.blocks.move(e);
+      return;
+    }
     if (this.drag) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -864,6 +881,7 @@ export class DrawingAnnotations {
     let layer = front;
     for (const item of this.items) {
       if (item.type === 'richtext') continue;
+      if (item.parametricBlock && item.view === 'paper') continue;
       layer = item.drawOrder === 'back' ? back : front;
       if (this.adapter.visible && !this.adapter.visible(item)) continue;
       const broken = updateAnnotationReferences(
@@ -916,8 +934,20 @@ export class DrawingAnnotations {
       else for (const p of this.draft.points) this.dot(layer, p, this.draft.view);
     }
     this.assistant?.render(layer);
+    this.blocks?.render(layer);
     if (this.transform?.active()) this.transform.render(layer);
     if (this.hover?.view !== 'paper' || !this.richText) paintDrawingOverlay(layer, this);
+    this.paintMeasurements();
+  }
+  paintMeasurements() {
+    if (!this.overlay?.isConnected) return;
+    this.overlay.querySelector(':scope > [data-annotation-helper="measurements"]')?.remove();
+    paintMeasurementOverlay(
+      this.overlay,
+      drawingFeedbackMeasures(this),
+      (p, measure) => this.adapter.project(p, measure.view),
+      this.adapter.pixelScale(),
+    );
   }
   referenceFor(hit, source) {
     const id = this.adapter.referenceSource?.(source) || source;

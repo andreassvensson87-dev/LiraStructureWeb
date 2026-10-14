@@ -1,11 +1,13 @@
 import { shapeSnapPoints } from './drawing-shapes.js';
 import { dimensionAxis } from './dimension-chain.js';
+import { blockSelection, transformBlockMetadata } from './blocks/placement.js';
 
 export function transformableDrawingObject(item) {
   return ['shape', 'dimension', 'leader', 'richtext'].includes(item?.type);
 }
 
 function selection(items, ids) {
+  ids = [...blockSelection(items, ids)];
   const chosen = items.filter((item) => ids.includes(item.id));
   if (
     !chosen.length ||
@@ -17,12 +19,19 @@ function selection(items, ids) {
 
 function transformed(items, ids, point, angle = 0, copy = false) {
   const chosen = selection(items, ids),
-    links = new Map();
+    links = new Map(),
+    blockIds = new Map();
   return chosen.map((item) => {
     const next = structuredClone(item);
     if (copy) next.id = crypto.randomUUID();
     const points = angle && item.shape === 'rectangle' ? shapeSnapPoints(item) : item.points;
     next.points = points.map(point);
+    Object.assign(next, transformBlockMetadata(item, point));
+    if (copy && next.parametricBlock) {
+      const id = next.parametricBlock.instanceId;
+      if (!blockIds.has(id)) blockIds.set(id, crypto.randomUUID());
+      next.parametricBlock.instanceId = blockIds.get(id);
+    }
     if (angle && item.shape === 'rectangle')
       Object.assign(next, { shape: 'polyline', closed: true });
     if (item.line) next.line = point(item.line);

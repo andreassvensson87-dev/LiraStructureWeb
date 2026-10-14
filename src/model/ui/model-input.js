@@ -58,6 +58,8 @@ export function installModelInput({
   const workPlanePrompt = (...args) => actions.workPlanePrompt(...args);
   installModelPointer(renderer.domElement, {
     getState: () => ({
+      linear: !!tools.operation?.linearId,
+      planeTransform: !!tools.operation?.planeId,
       mode: tools.operation?.mode,
       picking: tools.operation?.picking,
       drawing: tools.drawing,
@@ -77,6 +79,9 @@ export function installModelInput({
       pointerQueue.pending = null;
       objectFeedback.setHover([], 'canvas');
       if (
+        tools.operation?.linearId ||
+        tools.operation?.planeId ||
+        tools.operation?.mode === 'workArea' ||
         ['rotate', 'plateCreate', 'plateVertex', 'fit'].includes(tools.operation?.mode) ||
         ui.componentPreview ||
         $('draw-length').value.trim()
@@ -89,6 +94,8 @@ export function installModelInput({
       clearPreview();
     },
     actions: {
+      linear: (p) => controllers.linearUI.pickPoint(p),
+      'plane-transform': (p) => controllers.planeTransformUI.pickPoint(p),
       'component-property-target': (e) => {
         ray(e);
         controllers.componentUI.pickCopy(project.objects.find((s) => s.id === selectionHit()));
@@ -96,14 +103,16 @@ export function installModelInput({
       'fit-reference': (e) => {
         objectFeedback.setHover([], 'canvas');
         ray(e);
-        const hit = raycaster.intersectObjects(
-          objects.children.filter(
-            (o) =>
-              o.visible &&
-              (renderState.renderedById.get(o.userData.id)?.source?.type ?? 'sweep') === 'sweep',
-          ),
-          false,
-        )[0];
+        const hit = raycaster
+          .intersectObjects(
+            objects.children.filter(
+              (o) =>
+                o.visible &&
+                (renderState.renderedById.get(o.userData.id)?.source?.type ?? 'sweep') === 'sweep',
+            ),
+            false,
+          )
+          .find((hit) => controllers.workAreaUI?.allowsPoint(hit.point.toArray()) ?? true);
         const source = hit && project.objects.find((s) => s.id === hit.object.userData.id);
         controllers.componentUI.pick(source, hit?.point.toArray());
       },
@@ -150,6 +159,7 @@ export function installModelInput({
       },
       helperpoint: (p) => save({ type: 'helperpoint', start: p }),
       workplane: pickWorkPlane,
+      'work-area': (p) => controllers.workAreaUI.pickPoint(p),
       plate: (p) => pickPlatePoint(p),
       rotation: pickRotationAxis,
       'plate-length': () => {
@@ -166,6 +176,10 @@ export function installModelInput({
       },
       finish: commitPoint,
       start: (p) => {
+        if (tools.operation?.mode === 'polysweepCreate') {
+          controllers.polysweepUI.pick(p);
+          return;
+        }
         tools.first = p;
         if (!tools.operation) {
           ['sx', 'sy', 'sz'].forEach((k, i) => ($(k).value = p[i]));
@@ -182,6 +196,8 @@ export function installModelInput({
   });
   window.addEventListener('keydown', (e) => {
     const command = modelKeyboardCommand(e, {
+      linear: !!tools.operation?.linearId,
+      planeTransform: !!tools.operation?.planeId,
       editing:
         ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName) ||
         document.activeElement.isContentEditable,
@@ -191,7 +207,7 @@ export function installModelInput({
       hasEditableSweeps:
         inspectorSelection().length > 0 && inspectorSelection().every(editableSweep),
       mode: tools.operation?.mode,
-      picking: tools.operation?.picking,
+      picking: tools.operation?.linearPicking || tools.operation?.picking,
       hasStart: !!tools.first,
       drawing: tools.drawing,
       plateLength: plateLengthActive(),
@@ -210,6 +226,18 @@ export function installModelInput({
           if (!controllers.inspector.multiEditing && inspectorSelection().length === 1)
             fillForm(inspectorSelection()[0]);
         }
+        break;
+      case 'confirm-work-area':
+        controllers.workAreaUI.confirm();
+        break;
+      case 'confirm-plane-transform':
+        controllers.planeTransformUI.confirmActive();
+        break;
+      case 'remove-plane-transform-point':
+        controllers.planeTransformUI.removePoint();
+        break;
+      case 'confirm-linear':
+        controllers.linearUI.confirmActive();
         break;
       case 'confirm-component-properties':
         controllers.componentUI.confirmCopy();
@@ -232,6 +260,23 @@ export function installModelInput({
         controllers.fastenerUI.confirmTargets();
         break;
       case 'cancel':
+        if (tools.operation?.mode === 'workArea') {
+          controllers.workAreaUI.cancel();
+          break;
+        }
+        if (tools.operation?.planeId) {
+          controllers.planeTransformUI.cancel();
+          break;
+        }
+        if (tools.operation?.linearId) {
+          controllers.linearUI.cancel();
+          break;
+        }
+        if (controllers.pointUI?.selected().length && !tools.operation) {
+          controllers.pointUI.clear();
+          render();
+          break;
+        }
         cancelBox();
         if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
         if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
@@ -253,6 +298,12 @@ export function installModelInput({
         $('draw-length').value = e.key;
         $('draw-length').focus({ preventScroll: true });
         updateTypedLength();
+        break;
+      case 'finish-polysweep':
+        controllers.polysweepUI.finish();
+        break;
+      case 'remove-polysweep-point':
+        controllers.polysweepUI.removePoint();
         break;
       case 'finish-plate':
         finishPlate();

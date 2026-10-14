@@ -19,6 +19,7 @@ export function installModelViewControls({
   Object.assign(actions, { fit });
   function fit(direction, referenceBounds = null) {
     const bounds =
+      controllers.workAreaUI?.bounds() ||
       referenceBounds ||
       new THREE.Box3()
         .setFromObject(objects)

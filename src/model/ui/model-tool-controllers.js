@@ -1,3 +1,14 @@
+import { createWorkAreaController } from './work-area-controller.js';
+import { createWorkAreaDisplay } from '../work-area-display.js';
+import { createLinearTransformController } from './linear-transform-controller.js';
+import { createPlaneTransformController } from './plane-transform-controller.js';
+import { WorkPlaneGuide, workPlaneFromPoints } from '../../work-plane.js';
+import {
+  createToolHUDStack,
+  createLinearHUD,
+  createPlaneHUD,
+  createCornerHUD,
+} from '../../ui/tool-hud.js';
 import { createSelectionController } from './selection-controller.js';
 import { createRotationController } from './rotation-controller.js';
 import { createPlateController } from './plate-controller.js';
@@ -18,6 +29,7 @@ export function installModelTools({
   objects,
   controllers,
   frameGate,
+  renderState,
 }) {
   const setDrawing = (...args) => actions.setDrawing(...args);
   const ray = (...args) => actions.ray(...args);
@@ -54,6 +66,7 @@ export function installModelTools({
     setDrawing,
     ray,
     select: selectModelOrReference,
+    getWorkArea: () => controllers.workAreaUI?.bounds() || null,
     selectionHit,
     setSelection: (ids) => setSelection(userSelection(ids)),
     isVisible,
@@ -136,6 +149,27 @@ export function installModelTools({
       controllers.platePropertyUI?.sync();
     },
   });
+  actions.changeInsertionVertex = (index, remove) => {
+    const source = project.objects.find((o) => o.id === ui.selected);
+    if (source?.type === 'polysweep') controllers.polysweepUI.editPoint(index, remove);
+    else changePlateVertex(index, remove);
+  };
+  actions.canRemoveInsertion = () => {
+    const source = project.objects.find((o) => o.id === ui.selected);
+    return source?.type === 'polysweep'
+      ? source.points.length > 2
+      : source?.type === 'plate'
+        ? source.polygon.length > 3
+        : null;
+  };
+  actions.activateInsertion = (kind, event) => {
+    if (controllers.pointUI?.activate(kind, event)) return;
+    if (typeof kind === 'object') actions.startGrip(kind);
+    else if (String(kind).startsWith('edge:'))
+      actions.changeInsertionVertex(Number(kind.split(':')[1]), false);
+    else if (typeof kind === 'number') startPlateVertex(kind);
+    else actions.startTransform(kind);
+  };
   Object.assign(actions, {
     updatePlateNormal,
     clearPlateOutline,
@@ -161,4 +195,71 @@ export function installModelTools({
     renderer,
   });
   controllers.helperController = helperController;
+  const hudStack = createToolHUDStack(host);
+  controllers.workAreaUI = createWorkAreaController({
+    project,
+    tools,
+    ui,
+    renderState,
+    setDrawing,
+    createHUD: (callbacks) => createCornerHUD(hudStack, callbacks),
+    display: createWorkAreaDisplay(scene, renderer),
+    referenceVisibility: (bounds) => controllers.referenceModels?.setWorkArea(bounds),
+    commit: (next) => actions.setWorkArea(next),
+    render,
+    fit: () => actions.fit(),
+    status: (text) => {
+      document.getElementById('status').textContent = text;
+    },
+    focus: () => renderer.domElement.focus({ preventScroll: true }),
+  });
+  controllers.linearUI = createLinearTransformController({
+    tools,
+    placement: {
+      startTransform: (...args) => actions.startTransform(...args),
+      commitPoint: (...args) => actions.commitPoint(...args),
+      previewLinear: (...args) => actions.previewLinear(...args),
+      clearTransformPreview: () => actions.clearTransformPreview(),
+    },
+    setDrawing,
+    createHUD: (draft, callbacks) => createLinearHUD(hudStack, draft, callbacks),
+    status: (text) => {
+      document.getElementById('status').textContent = text;
+    },
+    focus: () => renderer.domElement.focus({ preventScroll: true }),
+  });
+  const planeGuides = [new WorkPlaneGuide(scene), new WorkPlaneGuide(scene)];
+  controllers.planeTransformUI = createPlaneTransformController({
+    tools,
+    placement: {
+      startTransform: (...args) => actions.startTransform(...args),
+      commitPoint: (...args) => actions.commitPoint(...args),
+      previewPlane: (...args) => actions.previewPlane(...args),
+      clearTransformPreview: () => actions.clearTransformPreview(),
+    },
+    setDrawing,
+    createHUD: (draft, callbacks) => createPlaneHUD(hudStack, draft, callbacks),
+    guides: {
+      clear: () => {
+        planeGuides.forEach((guide) => guide.clear());
+        frameGate.invalidate();
+      },
+      show: (start, target) => {
+        [start, target].forEach((points, i) => {
+          let frame = null;
+          if (points.length === 3) {
+            try {
+              frame = workPlaneFromPoints(points);
+            } catch {}
+          }
+          planeGuides[i].show(points, frame);
+        });
+        frameGate.invalidate();
+      },
+    },
+    status: (text) => {
+      document.getElementById('status').textContent = text;
+    },
+    focus: () => renderer.domElement.focus({ preventScroll: true }),
+  });
 }

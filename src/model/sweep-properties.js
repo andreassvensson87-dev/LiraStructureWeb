@@ -11,7 +11,8 @@ export const sweepPropertyGroups = [
   ['placement', 'Insättningspunkt'],
   ['name', 'Namn'],
 ];
-export const editableSweep = (s) => s && (s.type ?? 'sweep') === 'sweep' && !s.generatedBy;
+export const editableSweep = (s) =>
+  s && ['sweep', 'polysweep'].includes(s.type ?? 'sweep') && !s.generatedBy;
 
 /** Copy only chosen properties; geometry, identity and relations belong to the target. */
 export function copySweepProperties(source, target, groups) {

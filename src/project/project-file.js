@@ -1,3 +1,4 @@
+import { defaultWorkArea, validateWorkArea } from '../model/work-area.js';
 import { syncGridObjects } from '../model/grid-objects.js';
 import { validateGridGeometry } from '../grid-geometry.js';
 import { validateSeries } from '../numbering/rules.js';
@@ -7,6 +8,9 @@ import { validateObject, isCut, isPhysical } from '../model-object.js';
 import { isFastener } from '../fasteners/object-type.js';
 import { validateFastenerTargets } from '../fasteners/relations.js';
 import { validateFastenerGroups } from '../fasteners/group-data.js';
+import { validateBlockInstances } from '../blocks/validation.js';
+import { updateModelBlock } from '../blocks/model-adapter.js';
+import { updateDrawingBlock } from '../blocks/drawing-adapter.js';
 import { validateLevels } from '../levels.js';
 import { validateGridLabels } from '../grid-labels.js';
 import { syncAssemblyDrawingIdentity } from './assemblies.js';
@@ -30,6 +34,9 @@ export function validateProjectFile(project) {
   if (!record(project) || project.schemaVersion !== PROJECT_SCHEMA_VERSION)
     fail('Projektversionen stöds inte av det här programmet.');
   finiteData(project);
+  project.workArea = validateWorkArea(
+    project.workArea === undefined ? defaultWorkArea() : project.workArea,
+  );
   if (!Array.isArray(project.reports)) fail('Ogiltig rapportlista.');
   project.reports = validateProjectReports(project.reports);
   if (!record(project.references)) fail('Ogiltiga referenser i projektfilen.');
@@ -63,6 +70,7 @@ export function validateProjectFile(project) {
     objects.set(object.id, object);
   }
   validateFastenerGroups(project.objects);
+  validateBlockInstances(project.objects, 3, updateModelBlock);
   for (const object of project.objects) {
     if (isFastener(object)) {
       const targets = object.holes.map((h) => objects.get(h.targetId));
@@ -168,6 +176,7 @@ export function validateProjectFile(project) {
   const drawingIds = new Set();
   const drawnAssemblies = new Set();
   for (const drawing of project.drawings) {
+    if (drawing.annotations) validateBlockInstances(drawing.annotations, 2, updateDrawingBlock);
     if (
       !record(drawing) ||
       !identity(drawing.id) ||

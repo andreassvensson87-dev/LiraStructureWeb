@@ -27,7 +27,11 @@ export function installModelLibraries({
   function applyLibrarySection(section) {
     if (controllers.inspector?.multiEditing) {
       const sources = inspectorSelection();
-      if (!sources.length || !sources.every((s) => (s.type || 'sweep') === 'sweep')) return;
+      if (
+        !sources.length ||
+        !sources.every((s) => ['sweep', 'polysweep'].includes(s.type || 'sweep'))
+      )
+        return;
       controllers.inspector.stage((s) => ({
         ...s,
         profile: 'custom',
@@ -45,7 +49,9 @@ export function installModelLibraries({
     }
     controllers.inspector?.finish();
     ui.libraryMode = true;
-    const sources = inspectorSelection().filter((s) => (s.type || 'sweep') === 'sweep');
+    const sources = inspectorSelection().filter((s) =>
+      ['sweep', 'polysweep'].includes(s.type || 'sweep'),
+    );
     const apply = (s) => ({
       ...s,
       profile: 'custom',

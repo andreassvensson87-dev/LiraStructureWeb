@@ -1,0 +1,132 @@
+.ui-tool-hud-stack {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: calc(100% - 30px);
+  max-width: calc(100% - 16px);
+  overflow: auto;
+  pointer-events: none;
+}
+.ui-tool-hud {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+  height: 38px;
+  padding: 3px 5px;
+  margin: 0;
+  border: 1px solid var(--ui-border, #d3dcdf);
+  border-radius: 7px;
+  background: #f3f5f6;
+  color: var(--ui-ink, #253e48);
+  box-shadow: 0 3px 12px #253e4818;
+  pointer-events: auto;
+  animation: ui-hud-enter 180ms ease-out;
+}
+.ui-tool-hud.is-active {
+  border-color: var(--ui-accent, #287c65);
+}
+.ui-tool-hud.has-error {
+  border-color: #b34d43;
+}
+.ui-tool-hud button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+.ui-tool-hud button:hover,
+.ui-tool-hud button[aria-pressed='true'] {
+  background: #e0eae6;
+}
+.ui-tool-hud button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ui-tool-hud svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.ui-tool-hud .ui-tool-hud-confirm {
+  color: var(--ui-accent, #287c65);
+}
+.ui-linear-hud-fields {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.ui-linear-hud-axis {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  font-size: 11px;
+}
+.ui-linear-hud-axis input[type='checkbox'] {
+  width: 11px;
+  height: 11px;
+  margin: 0;
+  accent-color: var(--ui-accent, #287c65);
+}
+.ui-linear-hud-axis input[type='text'] {
+  width: 46px;
+  min-width: 0;
+  height: 25px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border, #d3dcdf);
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: white;
+  color: inherit;
+  font: 12px system-ui;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ui-linear-hud-axis input:disabled {
+  background: #e9edef;
+  color: #849398;
+}
+@keyframes ui-hud-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-tool-hud {
+    animation: none;
+  }
+}
+.ui-plane-hud-fields {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.ui-tool-hud .ui-plane-hud-picker {
+  width: 94px;
+  flex: 0 0 94px;
+  padding: 3px 5px;
+  border: 1px solid var(--ui-border, #d3dcdf);
+  font: 12px system-ui;
+  font-variant-numeric: tabular-nums;
+}

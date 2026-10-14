@@ -3,6 +3,37 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { PlanView } from '../src/plan-view.js';
 import { SinglePartSheet } from '../src/single-part-sheet.js';
+import { GAViews } from '../src/ga-views.js';
+
+test('GA view inspection is safe before the first view exists and releases selection between drawings', () => {
+  let removed = 0;
+  const views = Object.assign(Object.create(GAViews.prototype), {
+    e: { record: { sheet: {} } },
+    snapshots: new Map([['old', { remove: () => removed++ }]]),
+    active: null,
+    selectedIds: new Set(['old']),
+    selected: true,
+    ready: true,
+  });
+  assert.deepEqual(views.selectedViews(), [], 'Initial paper layout precedes ensureGAViews');
+  const first = { id: 'first' };
+  views.e.record.sheet.views = [first];
+  views.active = first;
+  views.selectedIds = new Set(['first']);
+  assert.deepEqual(views.selectedViews(), [first]);
+  views.reset();
+  assert.equal(removed, 1);
+  assert.equal(views.snapshots.size, 0);
+  assert.equal(views.selectedIds.size, 0);
+  assert.equal(views.selected, false);
+  assert.equal(views.ready, false);
+  views.e.record = { sheet: {} };
+  assert.deepEqual(
+    views.selectedViews(),
+    [],
+    'Reopening a new drawing has no stale view selection',
+  );
+});
 
 test('clearing a drawing releases projected faces, snap, geometry and temporary section data', () => {
   const group = new THREE.Group(),

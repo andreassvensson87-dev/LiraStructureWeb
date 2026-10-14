@@ -1,4 +1,4 @@
-.drawing-editor .ui-inspector-with-rail {
+:is(.drawing-editor, .block-editor) .ui-inspector-with-rail {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 40px;
   padding: 0;

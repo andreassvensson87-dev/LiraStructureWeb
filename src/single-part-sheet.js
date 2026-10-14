@@ -359,7 +359,10 @@ export class SinglePartSheet {
       getPaper: () => this.paper,
       getBounds: () => this.contentBounds,
       blocked: () => !!(this.drag || this.annotations.drag || this.annotations.grips?.session),
-      onScale: (scale) => updateDrawingViewGripSizes(this.svg, scale),
+      onScale: (scale) => {
+        updateDrawingViewGripSizes(this.svg, scale);
+        this.annotations?.paintMeasurements();
+      },
     });
     this.svg.onpointerdown = (e) => {
       const group = e.target.closest('[data-view]');

@@ -1,3 +1,4 @@
+import { cornerPath } from './model/geometry/corner-path.js';
 import { offsetPlate } from './plate-offset.js';
 import * as THREE from 'three';
 const vec = (p) => new THREE.Vector3(...p);
@@ -53,24 +54,39 @@ export function plateOffsets(s) {
       ? [-s.thickness, 0]
       : [-s.thickness / 2, s.thickness / 2];
 }
-export function plateContour(s) {
+export function plateControlContour(s) {
   return s.contourOffset
     ? offsetPlate({ ...s, contourOffset: 0 }, s.contourOffset).polygon
     : s.polygon;
+}
+export function plateContour(s) {
+  const polygon = plateControlContour(s);
+  return s.radii?.some((r) => r > 0)
+    ? cornerPath(polygon, s.radii, true, { minEdgeLength: 1e-6 }).samples.map((sample) =>
+        sample.point.toArray().slice(0, 2),
+      )
+    : polygon;
 }
 export function plateCorners(s) {
   return plateOffsets(s).flatMap((z) => plateContour(s).map((p) => platePoint(s, p, z)));
 }
 export function plateArea(s) {
-  const polygon = plateContour(s);
-  return (
-    Math.abs(
-      polygon.reduce((sum, a, i) => {
-        const b = polygon[(i + 1) % polygon.length];
-        return sum + a[0] * b[1] - b[0] * a[1];
-      }, 0),
-    ) / 2
-  );
+  const polygon = plateControlContour(s);
+  const signed =
+    polygon.reduce((sum, a, i) => {
+      const b = polygon[(i + 1) % polygon.length];
+      return sum + a[0] * b[1] - b[0] * a[1];
+    }, 0) / 2;
+  if (!s.radii?.some((r) => r > 0)) return Math.abs(signed);
+  const { corners } = cornerPath(polygon, s.radii, true, { minEdgeLength: 1e-6 });
+  const correction = corners.reduce((sum, c) => {
+    if (!c.radius) return sum;
+    const removed =
+      (c.trim * c.trim * Math.sin(c.angle) - c.radius * c.radius * (c.angle - Math.sin(c.angle))) /
+      2;
+    return sum + removed * Math.sign(c.normal.z) * Math.sign(signed);
+  }, 0);
+  return Math.abs(signed) - correction;
 }
 function cross(a, b, c) {
   return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -141,6 +157,11 @@ export function validatePlate(s, { minEdgeLength = 1 } = {}) {
       if (intersects(a, b, p[j], p[(j + 1) % n]))
         return 'Polygonens kanter får inte korsa eller beröra varandra.';
     }
+  }
+  try {
+    if (s.radii) cornerPath(s.polygon, s.radii, true, { minEdgeLength });
+  } catch (error) {
+    return error.message;
   }
   if (plateArea(s) < 1) return 'Polygonen behöver en yta större än 1 mm².';
   if (

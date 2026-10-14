@@ -6,6 +6,7 @@ export function beginDrawingObjectGrip(editor, event, node) {
   const id = node.closest('[data-annotation]')?.dataset.annotation;
   const item = editor.items.find((item) => item.id === id);
   if (!item || item.type === 'richtext') return null;
+  if (item.parametricBlock) return editor.blocks?.beginGrip(event, node, item);
   const before = structuredClone(item),
     history = structuredClone(editor.items);
   const index = Number(node.dataset.shapeGrip ?? node.dataset.anchor);

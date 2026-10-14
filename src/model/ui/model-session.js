@@ -1,6 +1,7 @@
 import { loadPlateDefaults, editablePlate, storePlateDefaults } from '../plate-properties.js';
 import { loadSweepDefaults, editableSweep, storeSweepDefaults } from '../sweep-properties.js';
 import { groupSelection } from '../../fasteners/group-data.js';
+import { blockSelection } from '../../blocks/placement.js';
 import { modelSelection, canSelectModelObject } from '../selection-mode.js';
 import { isHelper, isCut, isPlate, isPhysical } from '../../model-object.js';
 import { nextIdentity, typeName } from '../../object-identity.js';
@@ -91,10 +92,16 @@ export function installModelSession({
     setSelection(ui.selectedIds, true);
   }
   function setSelection(ids, keepTab = false) {
+    controllers.pointUI?.clear();
     controllers.referenceModels?.clearObjectSelection();
     controllers.inspector?.rollback();
     setDrawing(false);
-    ui.selectedIds = new Set(selectableIds(groupSelection(project.objects, selectableIds(ids))));
+    ui.selectedIds = new Set(
+      blockSelection(
+        project.objects,
+        selectableIds(groupSelection(project.objects, selectableIds(ids))),
+      ),
+    );
     ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
     if (ui.selected) fillForm(project.objects.find((s) => s.id === ui.selected));
     render({ selectionOnly: true });
@@ -111,12 +118,22 @@ export function installModelSession({
   }
   function userSelection(ids) {
     return new Set(
-      selectableIds(
-        modelSelection(project.objects, project.assemblies, selectableIds(ids), ui.selectionMode),
+      blockSelection(
+        project.objects,
+        selectableIds(
+          modelSelection(project.objects, project.assemblies, selectableIds(ids), ui.selectionMode),
+        ),
       ),
     );
   }
   function selectModelOrReference(id, additive = false) {
+    if (controllers.pointUI?.selected().length) {
+      controllers.pointUI.clear();
+      if (!id) {
+        render();
+        return;
+      }
+    }
     const reference = !id && controllers.referenceModels?.pickReference(raycaster);
     if (reference) {
       setSelection([], true);
@@ -131,6 +148,7 @@ export function installModelSession({
     projectHistory.checkpoint(project);
   }
   function save(s) {
+    const updating = !!ui.selected;
     if (ui.selected) s = { ...project.objects.find((o) => o.id === ui.selected), ...s };
     const error = validateSweep(s);
     if (error) {
@@ -171,11 +189,15 @@ export function installModelSession({
     setDrawing(false);
     render();
     rememberSweep(project.objects.find((o) => o.id === ui.selected));
-    $('status').textContent = `${typeName(s)} skapad`;
+    $('status').textContent = `${typeName(s)} ${updating ? 'uppdaterad' : 'skapad'}`;
     return true;
   }
   $('form').onsubmit = (e) => {
     e.preventDefault();
+    if (tools.operation?.mode === 'polysweepCreate') {
+      controllers.polysweepUI.finish();
+      return;
+    }
     const updating = ui.selected !== null;
     if (save(readForm()) && !updating) fit();
   };
@@ -217,6 +239,10 @@ export function installModelSession({
   $('undo').onclick = () => restore('undo');
   $('redo').onclick = () => restore('redo');
   function setDrawing(value) {
+    controllers.linearUI?.suspend();
+    controllers.planeTransformUI?.suspend();
+    controllers.workAreaUI?.suspend();
+    controllers.pointUI?.clear();
     objectFeedback.clearHover();
     controllers.componentUI?.cancel();
     controllers.inspector?.rollback();
@@ -367,7 +393,14 @@ export function installModelSession({
     $('draw-length-form').querySelector('[type=submit]').textContent =
       tools.operation &&
       !tools.operation.mode.startsWith('helper') &&
-      !['gridline', 'itemCreate', 'fastenerCreate', 'plateCreate'].includes(tools.operation.mode)
+      ![
+        'gridline',
+        'itemCreate',
+        'blockCreate',
+        'fastenerCreate',
+        'plateCreate',
+        'polysweepCreate',
+      ].includes(tools.operation.mode)
         ? tools.operation.mode === 'copy'
           ? 'Kopiera ↵'
           : 'Flytta ↵'

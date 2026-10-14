@@ -14,6 +14,7 @@ import { createModelPicking } from '../src/model/ui/model-picking.js';
 import { installModelRenderer } from '../src/model/ui/model-renderer.js';
 import { InstanceBatches } from '../src/model/instance-batches.js';
 import { InteractionTimings } from '../src/model/interaction-timings.js';
+import { modelBlockDefinition, modelBlockMembers } from '../src/blocks/model-adapter.js';
 
 const noop = () => {};
 function fixture(t) {
@@ -164,6 +165,36 @@ test('model session commits edits once, rejects invalid edits and restores delet
   assert.equal(f.project.objects.length, 0);
   assert.equal(f.objects.children.length, 0);
   assert.equal(f.ui.selectedIds.size, 0);
+});
+test('selecting a visible block member includes hidden members so delete and undo preserve complete instances', (t) => {
+  const f = fixture(t),
+    source = [0, 1].map((i) => ({
+      id: `beam-${i}`,
+      type: 'sweep',
+      name: 'Balk',
+      prefix: 'B',
+      number: i + 1,
+      profile: 'rect',
+      width: 100,
+      height: 200,
+      thickness: 0,
+      rotation: 0,
+      start: [0, i * 500, 0],
+      end: [3000, i * 500, 0],
+    })),
+    { definition, placement } = modelBlockDefinition(source);
+  f.project.objects = modelBlockMembers(definition, {}, placement, 'block');
+  const original = structuredClone(f.project.objects),
+    [visible, hidden] = original;
+  f.hiddenObjects.add(hidden.id);
+  f.actions.render();
+  f.actions.select(visible.id);
+  assert.deepEqual(f.ui.selectedIds, new Set([visible.id, hidden.id]));
+  f.actions.remove();
+  assert.equal(f.project.objects.length, 0);
+  assert.equal(f.projectHistory.past.length, 1);
+  f.actions.restore('undo');
+  assert.deepEqual(f.project.objects, original);
 });
 
 test('selection reuses rendered geometry; edits refresh geometry and snapping and release replaced meshes', (t) => {

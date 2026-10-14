@@ -187,3 +187,28 @@ test('neutral left press starts click-or-rectangle selection, while Ctrl-middle 
   assert.equal(boxes.length, 2);
   dispose();
 });
+
+test('HUD pickers receive native snap points and never commit through ordinary finish routing', () => {
+  assert.equal(
+    pointerCommand({ mode: 'move', drawing: true, hasStart: true, linear: true }),
+    'linear',
+  );
+  assert.equal(
+    pointerCommand({ mode: 'copy', drawing: true, hasStart: false, linear: true }),
+    'linear',
+  );
+  assert.equal(
+    pointerCommand({ mode: 'move', drawing: true, hasStart: true, planeTransform: true }),
+    'plane-transform',
+  );
+  assert.equal(
+    pointerCommand({
+      mode: 'copy',
+      drawing: true,
+      hasStart: true,
+      hasLength: true,
+      planeTransform: true,
+    }),
+    'plane-transform',
+  );
+});

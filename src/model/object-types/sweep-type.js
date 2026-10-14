@@ -2,6 +2,7 @@ import { clean, loopKey } from './shape-key.js';
 import * as THREE from 'three';
 import { sweepGeometry, validateSweep, sweepCorners, sweepFrame, contours } from '../../sweep.js';
 import { roundProfile } from '../../round-profile.js';
+import { distanceMeasure } from '../../geometry/measurements.js';
 export const sweepType = {
   id: 'sweep',
   label: 'Sweep',
@@ -22,6 +23,7 @@ export const sweepType = {
     length: clean(Math.hypot(...s.end.map((v, i) => v - s.start[i]))),
   }),
   anchors: (s) => [s.start, s.end],
+  measurements: (s) => distanceMeasure(s.start, s.end),
   snapSegments: (s) => ({ segments: [[s.start, s.end]], includeEdges: !roundProfile(s) }),
   translate: (source, delta) => ({
     ...source,

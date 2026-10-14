@@ -1,3 +1,4 @@
+import { withinWorkArea } from './model/work-area.js';
 import { gridSegments, gridCrossings, gridProjection, lineIntersection } from './grid-geometry.js';
 import { roundProfile } from './round-profile.js';
 import { gridLabel } from './grid-labels.js';
@@ -31,6 +32,7 @@ export function resolveSnap({
   lock = null,
   workPlane = null,
   constrainToPlane = true,
+  workArea = null,
 }) {
   geometryContext ??= createSnapGeometryContext(model);
   const gridZ = grid.z ?? 0;
@@ -147,7 +149,8 @@ export function resolveSnap({
       const p = new THREE.Vector3(...coords),
         hitPoint = p,
         clip = hitPoint.clone().project(camera);
-      if (Math.abs(clip.z) > 1 || !onLock(p) || !onPlane(p)) continue;
+      if (Math.abs(clip.z) > 1 || !onLock(p) || !onPlane(p) || !withinWorkArea(workArea, coords))
+        continue;
       const d = screen(hitPoint).distanceTo(cursor);
       if (
         d < tolerance &&
@@ -246,6 +249,7 @@ export function resolveSnap({
           candidate = a.clone().lerp(b, t);
         }
         if (
+          !withinWorkArea(workArea, candidate.toArray()) ||
           !onLock(candidate) ||
           !onPlane(candidate) ||
           Math.abs(candidate.clone().project(camera).z) > 1
@@ -316,7 +320,12 @@ export function resolveSnap({
           if (t < 0 || t > 1) continue;
           candidate = a.clone().lerp(b, t);
         }
-        if (!onLock(candidate) || !onPlane(candidate)) continue;
+        if (
+          !withinWorkArea(workArea, candidate.toArray()) ||
+          !onLock(candidate) ||
+          !onPlane(candidate)
+        )
+          continue;
         const pickPoint = candidate;
         const clip = pickPoint.clone().project(camera);
         if (Math.abs(clip.z) > 1) continue;

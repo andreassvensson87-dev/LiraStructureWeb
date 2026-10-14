@@ -163,7 +163,7 @@ export class GAViews {
     });
   }
   selectedViews() {
-    return this.items.filter((view) => this.selectedIds.has(view.id));
+    return this.active ? this.items.filter((view) => this.selectedIds.has(view.id)) : [];
   }
   setSelected(selected) {
     if (!selected) this.selectedIds.clear();
@@ -184,6 +184,9 @@ export class GAViews {
     for (const snapshot of this.snapshots.values()) snapshot.remove();
     this.snapshots.clear();
     this.active = null;
+    this.selectedIds.clear();
+    this.selected = false;
+    this.ready = false;
   }
   open() {
     this.selected = true;

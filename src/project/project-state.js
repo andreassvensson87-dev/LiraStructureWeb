@@ -1,3 +1,4 @@
+import { defaultWorkArea } from '../model/work-area.js';
 import { createGridObjects, syncGridObjects } from '../model/grid-objects.js';
 /** Serializable project data only. Cameras, selections and active tools belong to the UI. */
 export const PROJECT_SCHEMA_VERSION = 1;
@@ -7,6 +8,7 @@ export function createProject({ grid, levels }) {
     objects: createGridObjects(grid),
     grid,
     levels,
+    workArea: defaultWorkArea(),
     info: { name: '', number: '', client: '' },
     parts: { registry: [], assignments: {} },
     drawings: [],
@@ -46,6 +48,7 @@ export function projectData(project) {
     snap,
     assemblies,
     assemblyNumbering,
+    workArea,
   } = project;
   return {
     schemaVersion,
@@ -60,6 +63,7 @@ export function projectData(project) {
     snap,
     assemblies,
     assemblyNumbering,
+    workArea,
   };
 }
 export function captureProject(project) {

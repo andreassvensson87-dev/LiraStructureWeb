@@ -8,6 +8,7 @@ const displayed = (object) =>
   object.userData.detailVisible !== false;
 const emptyMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 const lineVertex = `
+#include <clipping_planes_pars_vertex>
 attribute vec4 instanceRow0;
 attribute vec4 instanceRow1;
 attribute vec4 instanceRow2;
@@ -17,12 +18,16 @@ varying vec3 tint;
 void main() {
   tint = instanceTint;
   mat4 placement = mat4(instanceRow0, instanceRow1, instanceRow2, instanceRow3);
-  gl_Position = projectionMatrix * modelViewMatrix * placement * vec4(position, 1.0);
+  vec4 mvPosition = modelViewMatrix * placement * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  #include <clipping_planes_vertex>
 }`;
 const lineFragment = `
+#include <clipping_planes_pars_fragment>
 uniform float opacity;
 varying vec3 tint;
 void main() {
+  #include <clipping_planes_fragment>
   gl_FragColor = vec4(tint, opacity);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -103,6 +108,7 @@ export class InstanceBatches {
       const lines = new THREE.LineSegments(
         lineGeometry,
         new THREE.ShaderMaterial({
+          clipping: true,
           vertexShader: lineVertex,
           fragmentShader: lineFragment,
           uniforms: { opacity: { value: first.object.material.transparent ? 0.35 : 1 } },

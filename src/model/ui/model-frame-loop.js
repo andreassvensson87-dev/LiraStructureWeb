@@ -2,6 +2,7 @@ import { gridPickIds } from '../grid-objects.js';
 import { updateFastenerDetail } from '../fastener-detail.js';
 import { updateDisplayDetail } from '../display-detail.js';
 import { platePoint } from '../../plate.js';
+import { createModelMeasurementOverlay } from './measurement-overlay.js';
 
 export function installModelFrameLoop({
   actions,
@@ -31,6 +32,17 @@ export function installModelFrameLoop({
   const updatePlateNormal = (...args) => actions.updatePlateNormal(...args);
   const updatePointer = (...args) => actions.updatePointer(...args);
   const updateSnapOverlay = (...args) => actions.updateSnapOverlay(...args);
+  const measurements = createModelMeasurementOverlay({
+    host,
+    camera,
+    project,
+    ui,
+    tools,
+    visible: isVisible,
+    allowsPoint: (p) => controllers.workAreaUI?.allowsPoint(p) ?? true,
+    getBatch: () =>
+      controllers.inspector?.session?.error ? null : controllers.inspector?.session?.batch,
+  });
   for (const event of ['click', 'input', 'change', 'keydown', 'pointerup', 'pointercancel'])
     document.addEventListener(event, () => frameGate.invalidate(), { capture: true });
   host.addEventListener(
@@ -79,7 +91,13 @@ export function installModelFrameLoop({
         ),
       ),
     );
-    for (const label of grid.labels) if (!visibleGridIds.has(label.id)) label.el.hidden = true;
+    for (const label of grid.labels)
+      if (
+        !visibleGridIds.has(label.id) ||
+        !(controllers.workAreaUI?.allowsPoint(label.position.toArray()) ?? true)
+      )
+        label.el.hidden = true;
+    insertionPoints.allowsPoint = (p) => controllers.workAreaUI?.allowsPoint(p) ?? true;
     insertionPoints.update(
       camera,
       host.clientWidth,
@@ -100,9 +118,13 @@ export function installModelFrameLoop({
         ? tools.operation.polygon.map((p) => platePoint(tools.operation, p))
         : tools.operation?.mode === 'workPlane'
           ? tools.operation.points
-          : [],
+          : tools.operation?.mode === 'polysweepCreate'
+            ? tools.operation.points
+            : [],
+      controllers.pointUI?.selected() || [],
     );
     updateSnapOverlay();
+    measurements.update();
     controllers.rotationHandle.update();
     updatePlateNormal();
     interactionTimings.record('framePreparationMs', frameStarted);

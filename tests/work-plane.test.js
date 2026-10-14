@@ -1,3 +1,4 @@
+import { gripWorkPlane, moveGripPoints } from '../src/model/grips.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -99,4 +100,65 @@ test('copy and move use the active inclined plane for target snapping', () => {
   }
   assert.equal(drawingWorkPlane({ mode: 'copy' }, null), null);
   assert.equal(drawingWorkPlane({ mode: 'workPlane' }, frame), null);
+});
+
+test('plate grip placement resolves a diagonal pointer in the plate plane and filters off-plane snap targets', () => {
+  const plate = {
+    id: 'p',
+    type: 'plate',
+    frame: { origin: [100, 200, 300], u: [1, 0, 0], v: [0, 0, 1] },
+    polygon: [
+      [0, 0],
+      [1000, 0],
+      [1000, 1000],
+      [0, 1000],
+    ],
+  };
+  const refs = [{ id: 'p', kind: 2 }],
+    base = [1100, 200, 1300];
+  const frame = gripWorkPlane([plate], refs, base);
+  assert.deepEqual(frame.origin, base);
+  assert.equal(drawingWorkPlane({ mode: 'grip', frame }, null), frame);
+  const target = [1400, 200, 1600],
+    camera = new THREE.OrthographicCamera(-2500, 2500, 2500, -2500, 1, 100000);
+  camera.position.set(1400, 10000, 1600);
+  camera.up.set(0, 0, 1);
+  camera.lookAt(...target);
+  camera.updateMatrixWorld();
+  const caster = new THREE.Raycaster();
+  caster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const snap = resolveSnap({
+    pointer: [500, 500],
+    camera,
+    width: 1000,
+    height: 1000,
+    ray: caster.ray,
+    start: base,
+    z: base[2],
+    workPlane: frame,
+    constrainToPlane: true,
+    sweeps: [{ id: 'off', type: 'helperpoint', start: [1400, 400, 1600] }],
+    grid: { x: [], y: [] },
+    axisSnap: false,
+    polar: 0,
+  });
+  assert.ok(new THREE.Vector3(...target).distanceTo(new THREE.Vector3(...snap.point)) < 1e-8);
+  const moved = moveGripPoints([plate], refs, snap.point, base)[0];
+  assert.ok(Math.hypot(...moved.polygon[2].map((v) => v - 1300)) < 1e-8);
+  assert.deepEqual(plate.polygon[2], [1000, 1000]);
+  const parallel = { ...plate, id: 'parallel', frame: { ...plate.frame, origin: [100, 500, 300] } };
+  assert.ok(gripWorkPlane([plate, parallel], [...refs, { id: 'parallel', kind: 2 }], base));
+  const perpendicular = { ...plate, id: 'perpendicular', frame: { ...plate.frame, v: [0, 1, 0] } };
+  assert.equal(
+    gripWorkPlane([plate, perpendicular], [...refs, { id: 'perpendicular', kind: 2 }], base),
+    null,
+  );
+  assert.equal(
+    gripWorkPlane(
+      [{ id: 's', type: 'helperline', start: base, end: target }],
+      [{ id: 's', kind: 'end' }],
+      base,
+    ),
+    null,
+  );
 });

@@ -1,3 +1,6 @@
+import { createPlaneTransformController } from '../src/model/ui/plane-transform-controller.js';
+import { planeTransformCandidates } from '../src/model/tools/plane-transform.js';
+import { createLinearTransformController } from '../src/model/ui/linear-transform-controller.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -8,6 +11,7 @@ import { createModelEditorState } from '../src/model/editor-state.js';
 import { createToolSession, resetToolInteraction } from '../src/model/tool-session.js';
 import { ProjectHistory } from '../src/project/project-history.js';
 import { createProject } from '../src/project/project-state.js';
+import { modelBlockDefinition, modelBlockMembers } from '../src/blocks/model-adapter.js';
 
 function fixture(t) {
   const previous = globalThis.document;
@@ -120,4 +124,351 @@ test('typed placement previews without changing the model, rejects invalid dista
   const undone = f.history.undo(f.project);
   assert.equal(undone.objects.length, 1);
   assert.deepEqual(f.history.undo(undone).objects, original);
+});
+test('native endpoint commands route a parametric part through parameter grips with one reversible commit', (t) => {
+  const f = fixture(t),
+    source = {
+      ...f.project.objects[0],
+      type: 'sweep',
+      profile: 'rect',
+      width: 100,
+      height: 200,
+      thickness: 0,
+      rotation: 0,
+    },
+    { definition, placement } = modelBlockDefinition([source]);
+  f.project.objects = modelBlockMembers(definition, {}, placement, 'block', [
+    { ...source, parametricBlock: { memberId: source.id } },
+  ]);
+  const before = structuredClone(f.project.objects);
+  f.controller.startTransform('end');
+  assert.equal(f.tools.operation.mode, 'grip');
+  assert.equal(f.controller.commitPoint([2000, 0, 0]), true);
+  assert.equal(f.project.objects[0].parametricBlock.values.B, 2000);
+  assert.deepEqual(f.project.objects[0].end, [2000, 0, 0]);
+  assert.equal(f.history.past.length, 1);
+  assert.deepEqual(f.history.undo(f.project).objects, before);
+});
+
+function linearFixture(t) {
+  const f = fixture(t),
+    rows = [];
+  let linear;
+  linear = createLinearTransformController({
+    tools: f.tools,
+    placement: f.controller,
+    setDrawing(value) {
+      linear?.suspend();
+      f.preview.clearPreview();
+      resetToolInteraction(f.tools, value);
+    },
+    createHUD(draft, callbacks) {
+      const row = { draft, callbacks, state: null, removed: false };
+      rows.push(row);
+      return {
+        sync: (state) => {
+          row.state = state;
+        },
+        remove: () => {
+          row.removed = true;
+        },
+      };
+    },
+    status() {},
+    focus() {},
+  });
+  return { ...f, linear, rows };
+}
+
+test('linear HUD keeps axis drafts, rejects invalid/zero moves, commits once and reuses current selection after copy', (t) => {
+  const f = linearFixture(t),
+    before = structuredClone(f.project.objects);
+  f.linear.open('move');
+  const row = f.rows[0];
+  assert.equal(f.ui.preview, null);
+  row.callbacks.change(0, '-250,5');
+  row.callbacks.change(1, 'bad');
+  assert.equal(row.state.ready, false);
+  assert.equal(f.ui.preview, null);
+  row.callbacks.confirm();
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.history.canUndo, false);
+  row.callbacks.enable(1, false);
+  assert.equal(row.draft.values[1], 'bad');
+  assert.equal(row.state.ready, true);
+  row.callbacks.confirm();
+  assert.deepEqual(f.project.objects[0].start, [-250.5, 0, 0]);
+  assert.equal(f.history.past.length, 1);
+  assert.equal(row.state.active, false);
+  assert.equal(row.draft.values[0], '-250,5');
+  assert.equal(f.tools.operation, null);
+  f.linear.open('copy');
+  const copy = f.rows[1];
+  copy.callbacks.change(2, '400');
+  copy.callbacks.confirm();
+  const firstCopy = f.project.objects[1];
+  assert.deepEqual(firstCopy.start, [-250.5, 0, 400]);
+  assert.notEqual(firstCopy.id, before[0].id);
+  copy.callbacks.activate();
+  assert.equal(copy.state.ready, true);
+  copy.callbacks.confirm();
+  assert.deepEqual(f.project.objects[2].start, [-250.5, 0, 800]);
+  assert.equal(f.history.past.length, 3);
+  assert.deepEqual(f.history.undo(f.history.undo(f.history.undo(f.project))).objects, before);
+});
+
+test('stacked linear drafts isolate preview; picker only sets vector and closing/cancel never commits', (t) => {
+  const f = linearFixture(t),
+    before = structuredClone(f.project.objects);
+  f.linear.open('move');
+  const move = f.rows[0];
+  move.callbacks.change(0, '100');
+  f.linear.open('copy');
+  const copy = f.rows[1];
+  copy.callbacks.change(1, '200');
+  assert.equal(move.state.active, false);
+  assert.equal(copy.state.active, true);
+  assert.deepEqual(f.ui.previewSweep.start, [0, 200, 0]);
+  move.callbacks.activate();
+  assert.equal(copy.state.active, false);
+  assert.deepEqual(f.ui.previewSweep.start, [100, 0, 0]);
+  copy.callbacks.close();
+  assert.equal(copy.removed, true);
+  assert.deepEqual(
+    f.ui.previewSweep.start,
+    [100, 0, 0],
+    'closing inactive row must not disturb active preview',
+  );
+  move.callbacks.pick();
+  assert.equal(move.state.picking, true);
+  assert.equal(move.state.ready, false);
+  f.linear.pickPoint([40, 50, 60]);
+  f.tools.activeSnap = { point: [340, 150, 80], kind: 'endpoint', label: 'Ändpunkt' };
+  f.linear.pointerPreview([340, 150, 80]);
+  assert.deepEqual(f.ui.previewSweep.start, [300, 100, 20]);
+  move.callbacks.confirm();
+  assert.equal(
+    f.history.canUndo,
+    false,
+    'Enter/confirmation before picker ends cannot use old vector',
+  );
+  f.linear.pickPoint([340, 150, 80]);
+  assert.deepEqual(move.draft.values, ['300', '100', '20']);
+  assert.equal(move.state.picking, false);
+  assert.deepEqual(f.project.objects, before);
+  move.callbacks.cancel();
+  assert.equal(f.ui.preview, null);
+  assert.equal(move.state.active, false);
+  assert.deepEqual(move.draft.values, ['300', '100', '20']);
+  move.callbacks.activate();
+  move.callbacks.change(0, '0');
+  move.callbacks.change(1, '0');
+  move.callbacks.change(2, '0');
+  assert.equal(f.ui.preview, null, 'zero vector clears earlier preview');
+  move.callbacks.close();
+  assert.equal(move.removed, true);
+  assert.equal(f.tools.operation, null);
+  assert.equal(f.history.canUndo, false);
+});
+
+test('native plate grips retain the plate plane and commit one reversible diagonal corner edit', (t) => {
+  const f = fixture(t),
+    plate = {
+      id: 'line',
+      type: 'plate',
+      thickness: 10,
+      side: 'center',
+      frame: { origin: [100, 200, 300], u: [1, 0, 0], v: [0, 0, 1] },
+      polygon: [
+        [0, 0],
+        [1000, 0],
+        [1000, 1000],
+        [0, 1000],
+      ],
+      radii: [0, 0, 100, 0],
+    };
+  f.project.objects = [plate];
+  const before = structuredClone(f.project.objects);
+  f.controller.startGrip({ point: [1100, 200, 1300], refs: [{ id: plate.id, kind: 2 }] });
+  assert.deepEqual(f.tools.operation.frame, {
+    origin: [1100, 200, 1300],
+    u: [1, 0, 0],
+    v: [0, 0, 1],
+  });
+  assert.equal(f.controller.commitPoint([1400, 200, 1600]), true);
+  assert.deepEqual(f.project.objects[0].polygon[2], [1300, 1300]);
+  assert.deepEqual(f.project.objects[0].radii, plate.radii);
+  assert.equal(f.history.past.length, 1);
+  assert.deepEqual(f.history.undo(f.project).objects, before);
+});
+
+function planeFixture(t) {
+  const f = fixture(t),
+    rows = [];
+  const plane = createPlaneTransformController({
+    tools: f.tools,
+    placement: f.controller,
+    setDrawing(value) {
+      f.preview.clearPreview();
+      resetToolInteraction(f.tools, value);
+    },
+    guides: { clear() {}, show() {} },
+    status() {},
+    focus() {},
+    createHUD(draft, callbacks) {
+      const row = { draft, callbacks };
+      rows.push(row);
+      return {
+        sync: (state) => {
+          row.state = state;
+        },
+        remove: () => {
+          row.removed = true;
+        },
+      };
+    },
+  });
+  return { ...f, plane, rows };
+}
+const sourcePlane = [
+  [0, 0, 0],
+  [1000, 0, 0],
+  [0, 1000, 0],
+];
+const targetPlane = [
+  [100, 200, 300],
+  [100, 200, 500],
+  [100, 600, 300],
+];
+
+test('six snapped plane points require explicit confirmation, rotate and translate rigidly, copy and undo once', (t) => {
+  const f = planeFixture(t),
+    before = structuredClone(f.project.objects);
+  f.plane.open('move');
+  const row = f.rows[0];
+  sourcePlane.forEach((p) => f.plane.pickPoint(p));
+  targetPlane.slice(0, 2).forEach((p) => f.plane.pickPoint(p));
+  f.plane.pointerPreview(targetPlane[2]);
+  f.plane.confirmActive();
+  assert.equal(f.history.canUndo, false);
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.originalMesh.visible, true);
+  assert.ok(f.ui.preview);
+  f.plane.pickPoint(targetPlane[2]);
+  assert.equal(row.state.ready, true);
+  assert.deepEqual(f.project.objects, before);
+  f.plane.confirmActive();
+  assert.deepEqual(f.project.objects[0].start, [100, 200, 300]);
+  assert.deepEqual(f.project.objects[0].end, [100, 200, 1300]);
+  assert.equal(f.history.past.length, 1);
+  assert.equal(row.state.active, false);
+  assert.deepEqual(f.history.undo(f.project).objects, before);
+  f.plane.open('copy');
+  targetPlane.forEach((p) => f.plane.pickPoint(p));
+  sourcePlane.forEach((p) => f.plane.pickPoint(p));
+  f.plane.confirmActive();
+  assert.equal(f.project.objects.length, 2);
+  assert.deepEqual(f.project.objects[1].start, [0, 0, 0]);
+  assert.deepEqual(f.project.objects[1].end, [1000, 0, 0]);
+  assert.notEqual(f.project.objects[0].id, f.project.objects[1].id);
+  assert.deepEqual([...f.ui.selectedIds], [f.project.objects[1].id]);
+  assert.equal(f.history.past.length, 1);
+  assert.equal(f.history.undo(f.project).objects.length, 1);
+});
+
+test('invalid plane points preserve picking, backspace and repicking clear preview, cancellation never commits', (t) => {
+  const f = planeFixture(t),
+    before = structuredClone(f.project.objects);
+  f.plane.open('move');
+  const row = f.rows[0];
+  f.plane.pickPoint(sourcePlane[0]);
+  f.plane.pickPoint(sourcePlane[0]);
+  assert.equal(row.state.start, 1);
+  f.plane.pickPoint(sourcePlane[1]);
+  f.plane.pickPoint([2000, 0, 0]);
+  assert.equal(row.state.start, 2);
+  assert.equal(row.state.ready, false);
+  f.plane.pickPoint(sourcePlane[2]);
+  targetPlane.forEach((p) => f.plane.pickPoint(p));
+  assert.equal(row.state.ready, true);
+  f.plane.removePoint();
+  assert.equal(row.state.target, 2);
+  assert.equal(f.ui.preview, null);
+  f.plane.confirmActive();
+  assert.equal(f.history.canUndo, false);
+  f.plane.pickPoint(targetPlane[2]);
+  row.callbacks.pick('start');
+  assert.equal(row.state.start, 0);
+  assert.equal(row.state.target, 0);
+  assert.equal(f.ui.preview, null);
+  sourcePlane.forEach((p) => f.plane.pickPoint(p));
+  targetPlane.forEach((p) => f.plane.pickPoint(p));
+  row.callbacks.close();
+  assert.equal(row.removed, true);
+  assert.equal(f.tools.operation, null);
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.history.canUndo, false);
+});
+
+test('plane mapping preserves plate radii, eccentric profiles and block coordinate frames without scaling', () => {
+  const sweep = {
+    id: 's',
+    type: 'sweep',
+    start: [0, 0, 0],
+    end: [1000, 0, 0],
+    profile: 'rect',
+    width: 100,
+    height: 200,
+    thickness: 0,
+    rotation: 35,
+    placement: { horizontalAlignment: 'right', verticalAlignment: 'top' },
+  };
+  const { definition, placement } = modelBlockDefinition([sweep]);
+  const block = modelBlockMembers(definition, {}, placement, 'block', [
+    { ...sweep, parametricBlock: { memberId: sweep.id } },
+  ])[0];
+  const plate = {
+    id: 'p',
+    type: 'plate',
+    frame: { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] },
+    polygon: [
+      [0, 0],
+      [1000, 0],
+      [1000, 1000],
+    ],
+    radii: [0, 50, 0],
+    thickness: 10,
+    side: 'center',
+  };
+  const original = structuredClone([block, plate]);
+  const moved = planeTransformCandidates(original, sourcePlane, targetPlane);
+  const back = planeTransformCandidates(moved, targetPlane, sourcePlane);
+  assert.deepEqual(original, [block, plate]);
+  assert.deepEqual(moved[1].polygon, plate.polygon);
+  assert.deepEqual(moved[1].radii, plate.radii);
+  assert.deepEqual(moved[0].end, [100, 200, 1300]);
+  assert.deepEqual(back[0].start, block.start);
+  assert.deepEqual(back[0].end, block.end);
+  for (const key of ['origin', 'u', 'v'])
+    back[1].frame[key].forEach((value, i) =>
+      assert.ok(Math.abs(value - plate.frame[key][i]) < 1e-8),
+    );
+  assert.deepEqual(
+    back[0].parametricBlock.placement.origin,
+    block.parametricBlock.placement.origin,
+  );
+  assert.throws(() =>
+    planeTransformCandidates(original, sourcePlane, [
+      [0, 0, 0],
+      [1, 0, 0],
+      [2, 0, 0],
+    ]),
+  );
+  assert.throws(() =>
+    planeTransformCandidates(original, sourcePlane, [
+      [NaN, 0, 0],
+      [1, 0, 0],
+      [0, 1, 0],
+    ]),
+  );
 });

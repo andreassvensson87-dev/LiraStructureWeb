@@ -137,14 +137,18 @@ export function stiffenerDistance(member, point) {
   const frame = sweepFrame(member);
   return new THREE.Vector3(...point).sub(frame.start).dot(frame.axis);
 }
+export function stiffenerProfile(member) {
+  const type = member?.profile === 'custom' ? member.section?.profileType : member?.profile;
+  return ['h', 'i', 'u'].includes(type) ? type : null;
+}
 export function resolveStiffener(s, model) {
   const error = validateStiffener(s);
   if (error) throw new Error(error);
   const member = model.find((o) => o.id === s.references[0]);
   if (!member || (member.type ?? 'sweep') !== 'sweep' || member.generatedBy)
     throw new Error('Avstyvningen saknar sin balk eller pelare.');
-  const profileType = member.profile === 'custom' ? member.section?.profileType : member.profile;
-  if (!['h', 'i', 'u'].includes(profileType)) throw new Error('Välj en H-, I- eller U-profil.');
+  const profileType = stiffenerProfile(member);
+  if (!profileType) throw new Error('Välj en H-, I- eller U-profil.');
   const loops = contours(member);
   if (loops.length !== 1) throw new Error('Avstyvning stöder öppna H-, I- och U-profiler.');
   const frame = sweepFrame(member),

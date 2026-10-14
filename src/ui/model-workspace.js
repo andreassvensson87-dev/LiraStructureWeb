@@ -20,9 +20,24 @@ export function installModelWorkspace({ root, controllers }) {
     size,
     label,
   });
+  const polysweep = document.createElement('button');
+  polysweep.textContent = 'Polysweep';
+  polysweep.onclick = () => controllers.polysweepUI.start();
   const profileLibrary = document.createElement('button');
   profileLibrary.textContent = 'Välj profil ur bibliotek';
   profileLibrary.onclick = () => controllers.sectionEditor.open();
+  const planeCommand = (mode, label) => {
+    const node = document.createElement('button');
+    node.textContent = label;
+    node.onclick = () => controllers.planeTransformUI.open(mode);
+    return { node, icon: mode };
+  };
+  const linearCommand = (mode, label) => {
+    const node = document.createElement('button');
+    node.textContent = label;
+    node.onclick = () => controllers.linearUI.open(mode);
+    return { node, icon: mode };
+  };
   root.id = 'model-ribbon';
   createRibbon(root, [
     {
@@ -32,9 +47,31 @@ export function installModelWorkspace({ root, controllers }) {
           label: 'Profil',
           primary: document.getElementById('draw'),
           size: 'large',
-          menu: [{ node: profileLibrary, icon: 'library' }],
+          menu: [
+            { node: polysweep, icon: 'polyline' },
+            { node: profileLibrary, icon: 'library' },
+          ],
         },
         { stack: [button('plate'), button('item')] },
+        {
+          label: 'Block',
+          icon: 'layers',
+          menu: [
+            { label: 'Från markering…', run: () => controllers.blockUI.create() },
+            { label: 'Blockbibliotek…', run: () => controllers.blockUI.library.open(3) },
+          ].map(({ label, run }) => {
+            const node = document.createElement('button');
+            node.textContent = label;
+            node.onclick = () => {
+              try {
+                run();
+              } catch (error) {
+                document.getElementById('status').textContent = error.message;
+              }
+            };
+            return { node };
+          }),
+        },
         {
           label: 'Koppling',
           size: 'large',
@@ -66,8 +103,25 @@ export function installModelWorkspace({ root, controllers }) {
       label: 'Ändra',
       items: [
         button('select', 'large'),
-        button('move', 'large'),
-        { stack: [button('copy'), button('rotate')] },
+        {
+          label: 'Flytta',
+          primary: document.getElementById('move'),
+          size: 'large',
+          menu: [linearCommand('move', 'Flytta linjärt'), planeCommand('move', 'Flytta till plan')],
+        },
+        {
+          stack: [
+            {
+              label: 'Kopiera',
+              primary: document.getElementById('copy'),
+              menu: [
+                linearCommand('copy', 'Kopiera linjärt'),
+                planeCommand('copy', 'Kopiera till plan'),
+              ],
+            },
+            button('rotate'),
+          ],
+        },
         button('box-select'),
       ],
     },
@@ -117,6 +171,7 @@ export function installModelWorkspace({ root, controllers }) {
             { node: action('Profiler', () => controllers.sectionEditor.open()) },
             { node: action('Material', () => controllers.materialUI.openLibrary()) },
             { node: action('Items', () => controllers.itemUI.library.open()) },
+            { node: action('Block', () => controllers.blockUI.library.open(3)) },
             { node: action('Skruvar', () => controllers.fastenerUI.openLibrary()) },
           ],
         },

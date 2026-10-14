@@ -13,6 +13,7 @@ export function createSelectionController({
   selectionHit,
   setSelection,
   isVisible,
+  getWorkArea = () => null,
 }) {
   const $ = (id) => document.getElementById(id);
   // Capture quick releases even when their target is outside the canvas.
@@ -83,7 +84,7 @@ export function createSelectionController({
           m.start,
           p,
           project.objects,
-          { exactProfileIds: ui.exactProfileIds },
+          { exactProfileIds: ui.exactProfileIds, workArea: getWorkArea() },
         );
         setSelection(m.additive ? [...ui.selectedIds, ...hits] : hits);
       }

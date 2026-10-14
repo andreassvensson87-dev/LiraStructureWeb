@@ -3,13 +3,23 @@ const listingFields = ['id', 'name', 'prefix', 'number', 'type', 'material', 'se
 export class ModelTree {
   constructor(
     root,
-    { select, selectGroup, selectable = () => true, visible, toggle, isolate, showAll },
+    {
+      select,
+      selectGroup,
+      selectable = () => true,
+      selectionDisabledReason = () => 'Stomlinjen är låst för markering',
+      visible,
+      toggle,
+      isolate,
+      showAll,
+    },
   ) {
     Object.assign(this, {
       root,
       select,
       selectGroup,
       selectable,
+      selectionDisabledReason,
       visible,
       toggle,
       isolate,
@@ -142,7 +152,7 @@ export class ModelTree {
         pick.title = `${s.name} · ${s.material?.name || 'Utan material'}`;
         pick.dataset.objectTitle = pick.title;
         pick.disabled = !this.selectable(s.id);
-        if (pick.disabled) pick.title = 'Stomlinjen är låst för markering';
+        if (pick.disabled) pick.title = this.selectionDisabledReason(s.id);
         pick.onclick = (e) => this.select(s.id, e.shiftKey);
         const eye = document.createElement('button');
         eye.type = 'button';
@@ -169,7 +179,7 @@ export class ModelTree {
     this.isolateButton.disabled = !selected.size;
     for (const [id, button] of this.rows || []) {
       button.disabled = !this.selectable(id);
-      if (button.disabled) button.title = 'Stomlinjen är låst för markering';
+      if (button.disabled) button.title = this.selectionDisabledReason(id);
       else button.title = button.dataset.objectTitle;
     }
     for (const id of new Set([...(this.selected || []), ...selected])) {

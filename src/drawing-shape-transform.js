@@ -312,6 +312,8 @@ export class DrawingShapeTransform {
     }
   }
   render(layer) {
-    for (const item of this.preview()) this.editor.paint(layer, item, false, true);
+    for (const item of this.preview())
+      if (!(item.parametricBlock && item.view === 'paper'))
+        this.editor.paint(layer, item, false, true);
   }
 }

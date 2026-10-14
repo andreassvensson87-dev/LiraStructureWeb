@@ -1,6 +1,7 @@
 import { gridLineType } from './grid-line-type.js';
 import { helperLineType, helperPointType } from './helper-types.js';
 import { createObjectRegistry } from './registry.js';
+import { polysweepType } from './polysweep-type.js';
 import { sweepType } from './sweep-type.js';
 import { plateType } from './plate-type.js';
 import { polygonCutType } from './polygon-cut-type.js';
@@ -10,6 +11,7 @@ import { fastenerType } from '../../fasteners/object-type.js';
 import { itemType } from '../../items/geometry.js';
 export const objectTypes = createObjectRegistry([
   sweepType,
+  polysweepType,
   plateType,
   polygonCutType,
   lineCutType,
