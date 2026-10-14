@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { WorkPlaneGuide, workPlaneFromPoints } from '../../work-plane.js';
+import { workPlaneFromPoints } from '../../work-plane.js';
+import { WorkPlaneGuide } from '../work-plane-guide.js';
 export function createWorkplaneController({
   scene,
   tools,

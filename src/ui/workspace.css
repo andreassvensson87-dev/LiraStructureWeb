@@ -3,6 +3,8 @@
   --ui-border: #d3dcdf;
   --ui-ink: #253e48;
   --ui-ribbon-height: 124px;
+  --ui-ribbon-command-height: 76px;
+  --ui-ribbon-row-height: 37px;
 }
 
 /* One ribbon, including the explicit adapters for existing editor styles. */
@@ -143,11 +145,15 @@
   gap: 8px;
   width: 74px;
   min-width: 66px;
-  height: 76px;
-  min-height: 76px;
+  height: var(--ui-ribbon-command-height);
+  min-height: var(--ui-ribbon-command-height);
   padding: 7px 6px;
   text-align: center;
   white-space: normal;
+}
+:is(#model-ribbon, .ui-editor-workspace .ui-ribbon) button.ui-command.ui-command-small {
+  height: var(--ui-ribbon-row-height);
+  min-height: var(--ui-ribbon-row-height);
 }
 :is(#model-ribbon, .ui-editor-workspace .ui-ribbon) .ui-command-large svg {
   width: 30px;
@@ -160,9 +166,10 @@
 .ui-command-stack {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(2, 32px);
+  grid-template-rows: repeat(2, var(--ui-ribbon-row-height));
   grid-auto-columns: max-content;
-  align-content: center;
+  align-content: start;
+  align-self: flex-start;
   justify-content: start;
   gap: 2px 4px;
 }
@@ -186,7 +193,7 @@
 :is(#model-ribbon, .ui-editor-workspace .ui-ribbon) button.ui-command.ui-command-split-arrow {
   width: 18px;
   min-width: 18px;
-  height: 76px;
+  height: var(--ui-ribbon-command-height);
   padding: 0;
   border-left: 1px solid var(--ui-border);
 }
@@ -598,8 +605,8 @@ body.ui-model-workspace > footer {
 :is(#model-ribbon, .ui-editor-workspace .ui-ribbon)
   .ui-command-split-small
   > button.ui-command-split-arrow {
-  height: 32px;
-  min-height: 32px;
+  height: var(--ui-ribbon-row-height);
+  min-height: var(--ui-ribbon-row-height);
 }
 #item-library.ui-library-window .item-table-wrap table {
   table-layout: fixed;

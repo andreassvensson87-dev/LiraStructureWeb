@@ -1,3 +1,4 @@
+import { WorkPlaneGuide } from '../src/model/work-plane-guide.js';
 import { gripWorkPlane, moveGripPoints } from '../src/model/grips.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -161,4 +162,50 @@ test('plate grip placement resolves a diagonal pointer in the plate plane and fi
     ),
     null,
   );
+});
+
+test('work plane guides keep screen size through zoom, face the camera and release replaced graphics', () => {
+  const scene = new THREE.Scene(),
+    guide = new WorkPlaneGuide(scene),
+    camera = new THREE.OrthographicCamera(-500, 500, 500, -500, 1, 10000);
+  camera.position.set(1000, 1000, 1000);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld();
+  const points = [
+      [0, 0, 0],
+      [100, 0, 0],
+      [0, 100, 0],
+    ],
+    frame = workPlaneFromPoints(points);
+  guide.show(points, frame);
+  guide.update(camera, 800, 800);
+  const tip = () =>
+    new THREE.Vector3()
+      .fromBufferAttribute(guide.axes[0].head.geometry.attributes.position, 0)
+      .project(camera);
+  const first = tip(),
+    scale = guide.ring.scale.x;
+  assert.equal(guide.axes.length, 3);
+  assert.ok(
+    guide.axes.every(
+      (axis) => axis.head.visible && axis.label.quaternion.equals(camera.quaternion),
+    ),
+  );
+  camera.zoom = 4;
+  camera.updateProjectionMatrix();
+  guide.update(camera, 800, 800);
+  assert.ok(Math.hypot(first.x - tip().x, first.y - tip().y) < 1e-10);
+  assert.equal(guide.ring.scale.x, scale / 4);
+  assert.deepEqual(frame.origin, [0, 0, 0]);
+  let disposed = 0;
+  for (const child of guide.group.children)
+    child.geometry.addEventListener('dispose', () => disposed++);
+  const count = guide.group.children.length;
+  guide.group.visible = false;
+  guide.show(points.slice(0, 2));
+  assert.equal(disposed, count);
+  assert.equal(guide.group.visible, true);
+  assert.equal(guide.group.children.length, 1);
+  guide.clear();
+  assert.equal(guide.group.children.length, 0);
 });

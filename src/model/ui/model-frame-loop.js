@@ -124,6 +124,10 @@ export function installModelFrameLoop({
       controllers.pointUI?.selected() || [],
     );
     updateSnapOverlay();
+    controllers.workPlaneGuide.update(camera, host.clientWidth, host.clientHeight);
+    controllers.planeTransformGuides.forEach((guide) =>
+      guide.update(camera, host.clientWidth, host.clientHeight),
+    );
     measurements.update();
     controllers.rotationHandle.update();
     updatePlateNormal();

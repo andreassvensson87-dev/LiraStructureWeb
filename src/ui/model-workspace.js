@@ -57,6 +57,10 @@ export function installModelWorkspace({ root, controllers }) {
   root.id = 'model-ribbon';
   createRibbon(root, [
     {
+      label: 'Markera',
+      items: [button('select', 'large')],
+    },
+    {
       label: 'Skapa',
       items: [
         {
@@ -118,7 +122,6 @@ export function installModelWorkspace({ root, controllers }) {
     {
       label: 'Ändra',
       items: [
-        button('select', 'large'),
         {
           label: 'Flytta',
           primary: document.getElementById('move'),

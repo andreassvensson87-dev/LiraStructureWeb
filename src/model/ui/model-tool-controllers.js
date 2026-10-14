@@ -2,7 +2,8 @@ import { createWorkAreaController } from './work-area-controller.js';
 import { createWorkAreaDisplay } from '../work-area-display.js';
 import { createLinearTransformController } from './linear-transform-controller.js';
 import { createPlaneTransformController } from './plane-transform-controller.js';
-import { WorkPlaneGuide, workPlaneFromPoints } from '../../work-plane.js';
+import { workPlaneFromPoints } from '../../work-plane.js';
+import { WorkPlaneGuide } from '../work-plane-guide.js';
 import {
   createToolHUDStack,
   createLinearHUD,
@@ -230,6 +231,7 @@ export function installModelTools({
     focus: () => renderer.domElement.focus({ preventScroll: true }),
   });
   const planeGuides = [new WorkPlaneGuide(scene), new WorkPlaneGuide(scene)];
+  controllers.planeTransformGuides = planeGuides;
   controllers.planeTransformUI = createPlaneTransformController({
     tools,
     placement: {
