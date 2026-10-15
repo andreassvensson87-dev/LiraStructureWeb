@@ -1,3 +1,4 @@
+import { gripRefKey, validGripRefs, selectGripRefs } from '../grip-selection.js';
 import { radiusPointObject, pointRadiusBatch } from '../insertion-point-edit.js';
 import { createInsertionPointInspector } from '../../inspector/insertion-point-inspector.js';
 /** Owns native grip selection and the point inspector's ordinary model transaction. */
@@ -27,7 +28,18 @@ export function installInsertionPointEditor({
       actions.render({ selectionOnly: true });
     },
   });
-  const editor = { activate, clear, sync, selected: () => refs };
+  const editor = {
+    activate,
+    clear,
+    sync,
+    select: selectPoints,
+    selected: () => validGripRefs(project.objects, refs, ui.selectedIds),
+    moving(grip) {
+      const selected = new Set(refs.map(gripRefKey));
+      if (!grip.refs.every((r) => selected.has(gripRefKey(r)))) selectPoints(grip.refs);
+      return { ...grip, refs: editor.selected() };
+    },
+  };
   controllers.pointUI = editor;
   function cancelPreview() {
     actions.cancelInspectorPreview();
@@ -49,48 +61,33 @@ export function installInsertionPointEditor({
     sync();
     frameGate.invalidate();
   }
-  function activate(grip, event) {
+  function activate(grip, event = {}) {
     if (!grip?.refs?.length || tools.operation) return false;
-    const chosen = grip.refs.filter(
-      (ref) =>
-        radiusPointObject(project.objects.find((o) => o.id === ref.id)) &&
-        typeof ref.kind === 'number',
-    );
+    const chosen = validGripRefs(project.objects, grip.refs, ui.selectedIds);
     if (!chosen.length) return false;
-    if (event?.detail >= 2 && !event.shiftKey) {
-      const moving = refs.length ? refs : chosen;
-      clear();
-      actions.startGrip({ ...grip, refs: moving });
-      controllers.polysweepUI?.sync();
+    const selected = new Set(refs.map(gripRefKey));
+    if (!event.altKey && !event.shiftKey && chosen.every((r) => selected.has(gripRefKey(r))))
       return true;
-    }
+    selectPoints(chosen, { additive: !!event.shiftKey, toggle: !!event.altKey });
+    return true;
+  }
+  function selectPoints(chosen, options) {
+    if (tools.operation) return;
     controllers.inspector.rollback();
     cancelPreview();
-    if (!event?.shiftKey) {
-      // The first click of a double-click must retain an already selected group.
-      if (!chosen.every((r) => refs.some((p) => p.id === r.id && p.kind === r.kind))) refs = chosen;
-    } else {
-      const has = chosen.every((r) => refs.some((p) => p.id === r.id && p.kind === r.kind));
-      refs = has
-        ? refs.filter((p) => !chosen.some((r) => p.id === r.id && p.kind === r.kind))
-        : [...refs, ...chosen.filter((r) => !refs.some((p) => p.id === r.id && p.kind === r.kind))];
-    }
+    refs = selectGripRefs(
+      editor.selected(),
+      validGripRefs(project.objects, chosen, ui.selectedIds),
+      options,
+    );
     signature = '';
     dirty = false;
     controllers.inspector.show('properties');
     sync();
     frameGate.invalidate();
-    return true;
   }
   function sync() {
-    refs = refs.filter((ref) => {
-      const o = project.objects.find((s) => s.id === ref.id);
-      return (
-        ui.selectedIds.has(ref.id) &&
-        radiusPointObject(o) &&
-        ref.kind < (o.type === 'plate' ? o.polygon.length : o.points.length)
-      );
-    });
+    refs = editor.selected();
     const visible = refs.length > 0 && !tools.drawing && !tools.operation;
     root.classList.toggle('point-context', visible);
     inspector.panel.hidden = !visible;
@@ -113,7 +110,10 @@ export function installInsertionPointEditor({
     if (!dirty) value = radii.every((r) => r === radii[0]) ? radii[0] : null;
     const disabled = refs.some((ref) => {
       const o = project.objects.find((s) => s.id === ref.id);
-      return o.type === 'polysweep' && [0, o.points.length - 1].includes(ref.kind);
+      return (
+        !radiusPointObject(o) ||
+        (o.type === 'polysweep' && [0, o.points.length - 1].includes(ref.kind))
+      );
     });
     inspector.sync({ total: refs.length, value, disabled, dirty, valid: !!batch });
   }

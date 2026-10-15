@@ -1,4 +1,5 @@
 import { transformObject } from '../../transform.js';
+import { objectType } from '../object-types/index.js';
 import { rotateObject } from '../../rotation.js';
 import { nextIdentity, designation } from '../../object-identity.js';
 import { followFasteners, remapFastenerCopy } from '../../fasteners/relations.js';
@@ -87,6 +88,8 @@ export function applyObjectBatch(
       while (used.has(label())) index++;
       object.name = label();
     }
+    if (object.type !== 'component' && objectType(object).cut && object.targets)
+      object.targets = object.targets.map((id) => ids.get(id) || id);
     if (object.type === 'component')
       object.references = object.references.map((id) => ids.get(id) || id);
     copies.push(remapFastenerCopy(object, ids));

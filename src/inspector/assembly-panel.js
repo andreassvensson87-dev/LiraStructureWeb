@@ -1,3 +1,4 @@
+import { createMarkChangeButton } from '../ui/mark-change-dialog.js';
 import './assembly-panel.css';
 import { assemblySeries, modelAssemblies } from '../assembly-series.js';
 import { updateAssembly } from '../project/assemblies.js';
@@ -6,7 +7,7 @@ import { designation } from '../object-identity.js';
 import { partStatus } from '../part-marks.js';
 import { createNumberingSeriesFields } from './attributes.js';
 
-export function installAssemblyPanel({ getState, commit, selectPart }) {
+export function installAssemblyPanel({ getState, commit, selectPart, changeMark }) {
   const parent = document.getElementById('inspector-properties');
   const root = document.createElement('section');
   root.id = 'assembly-inspector';
@@ -85,7 +86,10 @@ export function installAssemblyPanel({ getState, commit, selectPart }) {
       markValue.textContent = assembly.typeKey
         ? `${assembly.mark}${assemblyNumberStatus(assembly, state).valid ? '' : ' · kontroll krävs'}`
         : 'Ej numrerad';
-      mark.append(markCaption, markValue);
+      const change = createMarkChangeButton(() => changeMark(assembly.id));
+      change.setAttribute('aria-label', 'Byt assemblymark');
+      change.disabled = !assemblyNumberStatus(assembly, state).valid;
+      mark.append(markCaption, markValue, change);
       root.append(mark);
       const series = assemblySeries(assembly, state.objects);
       const { root: fields, inputs } = createNumberingSeriesFields({

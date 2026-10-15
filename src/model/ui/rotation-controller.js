@@ -1,5 +1,5 @@
 import { cadFeedback } from '../../ui/cad-feedback.js';
-import { componentTransformSources } from '../../components/ownership.js';
+import { modelTransformSources } from '../tools/transform-sources.js';
 import * as THREE from 'three';
 import { RotationHandle } from '../../rotation-handle.js';
 import { objectAnchors } from '../../model-object.js';
@@ -189,7 +189,7 @@ export function createRotationController({
       restartRotationAxis();
       return;
     }
-    const sources = componentTransformSources(project.objects, ui.selectedIds);
+    const sources = modelTransformSources(project.objects, ui.selectedIds);
     if (!sources.length) return;
     setDrawing(true);
     tools.operation = {

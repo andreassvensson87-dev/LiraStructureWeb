@@ -19,6 +19,7 @@ const core = [
   'transform',
   'rotation',
   'grips',
+  'grip-interaction',
   'model-navigation',
   'model-selection-controller',
   'selection-mode',
@@ -30,6 +31,9 @@ const core = [
   'project-snapshots',
   'project-recovery',
   'numbering-workflow',
+  'numbering-retention',
+  'numbering-stability',
+  'mark-change',
 ];
 const mode = process.argv[2] || 'core';
 if (!['core', 'all'].includes(mode)) throw new Error('Choose core or all.');

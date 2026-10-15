@@ -210,3 +210,58 @@ Separat localhost-projekt med två importerade balkar (HEA 200 och IPE 200): bå
 `profile-match.test.js` ingår i modellens centrala urval. Nio små metadataexempel från Revit och ett anonymiserat IFC2x3-utdrag skyddar HEA-mått/radier, UPE-namn, VKR/KKR-alias, roterade rektanglar, saknad limträdimension, tvetydiga rörserier, typ- och egenskapskopplingar samt mappade/kapade representationer. Tester skyddar också senaste revision, materialavgränsning, motstridiga godstjocklekar, ofullständiga mått, namn utan geometristöd, mm/m och egenskaper som motsäger profildefinitionen. Verklig web-ifc-tessellering av Revit-HEA 180 ger nu en verifierad biblioteksprofil trots förenklade rundningar; enbart namn får inte utnyttja denna radiebaserade tolerans. Material eller hållfasthetsklass tilldelas inte av matchningen.
 
 Slutkontroll: 975 regressionstester, lint, formatering och produktionsbygge passerade. Hela K-20-V-01.ifc importerades i ett separat browserprojekt utan browserfel. Det anonymiserade HEA-utdraget visade verifierad HEA 180 och anmärkning om förenklad tessellering; manuellt byte till HEA 200, Konvertera, Ångra och Gör om kontrollerades i den vanliga inspektorn. Rörutdraget RO101.6x5 visade CHS/KCKR som alternativa serier och behöll IFC-konturen automatiskt. Den rena metadataanalysen av filens 691 balkar/pelare/stänger gav 398 verifierade, 194 troliga, 4 tvetydiga och 95 utan förslag mot det inbyggda biblioteket. Detta är **inte** konverteringsstatistik eller en granskning av varje objekts slutgeometri. Ingen publicering ingick.
+
+## IFC-geometrikonvertering — 2026-10-15
+
+`reference-conversion.test.js` omfattar nu tre anonymiserade meshutdrag från Revit: rundad UPE, mappad hålprofil och snedkapad I-profil. De provas vid tre generiska placeringar, även cirka 140–158 m från origo. Tester jämför källans och modellens utbredning/volym samt avstånd i båda riktningar mellan meshytorna, med alla trianglars hörn och tyngdpunkter som provpunkter (under 0,05 mm). Originalmesh och konverteringsutkast förblir oförändrade. Separata beteenden skyddar en transaktion för del + kapningar, korrekta mål-ID:n, spara/öppna, Ångra/Gör om, manuellt profilval samt vanliga Move/Copy/Rotate med kapningarna. Avsmalnande och öppna solider avvisas.
+
+`scripts/analyze-ifc-conversion.mjs` kör samma importerade geometri med tom profilkatalog, faktiska världstransformer och modellens riktiga CSG. K-20-V-01.ifc gav 661 av 691 godkända objekt, varav 24 med ändkapningar, jämfört med 455 före ändringen. Alla godkända resultat klarade kontroll av utbredning och volym inklusive den dokumenterade Float32-budgeten. Återstående 30 är uttryckligen avvisade, inte approximerade. Detta verifierar konvertering mot web-ifc-meshen, inte IFC-läsarens tessellering mot originalet i Revit. Detaljer finns i `docs/ifc-conversion.md`.
+
+Browserkontroll i separat localhost-projekt: import av ett snedkapat Revit-utdrag genom den riktiga IFC-workern, objektval, högerklick → Konvertera, verifierad HEA 300, en Sweep med två namngivna Linecut-relationer, Ångra till 6 ursprungliga stomlinjer och Gör om till 9 objekt. Linjär Flytta 500 mm via befintlig HUD bekräftades. Projektfilen skapades genom Spara som, validerades med projektets filvalidator och återöppnades via Arkiv med båda kapningarnas målrelationer kvar. Inga browserfel rapporterades. Full regression, lint, formatering och produktionsbygge passerade.
+
+## Greppurval, dragning och Move — 2026-10-15
+
+Befintliga `grips`, `polysweep`, `model-placement` och `model-selection-controller` skyddar nu grepp på fler än fyra objekt, separat Alt-ruta med Shift/toggle, giltiga och inaktuella punktreferenser, gemensam förflyttning från godtycklig baspunkt utan att ändpunkter kollapsar, blandade punkttyper och bevarade radier. Helt markerad plåt flyttas genom sin frame; partiella hörn begränsas till planet. Placeringstestet kör verklig modell-editor, preview och historik: Move och samma linjära HUD förlänger valda ändpunkter, lämnar övriga punkter orörda och gör en checkpoint per bekräftelse. Ogiltig förkortning avvisas före projekt/historikändring.
+
+`grip-interaction.test.js` kör händelseägaren med uttryckliga adaptrar: enkelklick kontra dragtröskel, snabb release före första pointermove, exakt en commit vid släpp, annan pointer, Alt-routing till gemensam ruta samt avbrott vid Esc, captureförlust, blur och släpp utanför canvas. Testet ingår i det centrala urvalet. Det tidigare dubbelklickstestet har ersatts med det nya punkturvalets beteende.
+
+Browserkontroll i separat projekt med två Sweeps, Polysweep, Plate, hjälplinje och hjälppunkt: sex objekt visar grepp, enkelklick väljer punkt, Polysweep-punkt kan dras, Alt-klick väljer ändpunkter på olika balkar, vanlig Move väljer bas- och målpunkt, Flytta linjärt lägger till exakt 250 i Y och Ångra/Gör om fungerar. Projektfilen från Spara som bekräftade identisk förflyttning för de två valda ändpunkterna, oförändrade startpunkter och oförändrade övriga objekt; bara den tidigare dragna Polysweep-punkten hade ändrats där. Inga browserfel. Alt-rektangelns händelseflöde verifieras i controller-/domäntesterna; browserkontrollen av modifieraren använde Alt-klick.
+
+## Ritningsnummer från part-/assemblymark — 2026-10-15
+
+Befintliga numreringsscenarier skyddar nu både namn och nummer vid skapande, delning, sammanslagning och omnumrering. Spara/öppna och Ångra/Gör om behåller märkena; PDF-filnamnet använder samma nummer. Single Part-numret kan inte längre skrivas över manuellt eller få ett fristående kopienummer. GA:s kopiering och fria namn behålls.
+
+Separat browserprojekt med P100 och A200: en Single Part-post med SP-001/avvikande namn återöppnades med P100 i båda kolumnerna. Båda ritningarna öppnades och visade enbart respektive mark i editorns rubrik. Inga browserfel. Centrala modellflöden, berörda numrerings-/ritningsspecialister och lint passerade.
+
+## Byt part-/assemblymark — 2026-10-15
+
+`mark-change.test.js` ingår i det centrala urvalet. Det skyddar fristående förhandsgranskning, hela typens förekomster, upptagna/ogiltiga märken, inaktuell projektstämpel och no-op utan transaktion. Partbyte för över assemblynycklar och medlemstokens utan att ändra assemblynummer, ritnings-ID, vyer, annoteringar eller revisioner. Manuell reservation följer normal och full omnumrering, även när andra part marks ändras, samt projektfil och Ångra/Gör om. En annan typ får inte ta en manuell reservation från en oförändrad ägare. PDF-filnamnet följer ritningsnumret.
+
+Separat browserprojekt med tre balkar och fyra ritningar: Byt partmark visade två förekomster; P101 blockerades som upptagen och P100→P150 bekräftades. Ångra/Gör om, assemblyns bibehållna giltighet, A200→A250 för två assemblies samt Esc utan commit kontrollerades. Vanlig och full numreringspreview behöll de manuella märkena. Ritningslistan följde båda bytena och assemblybladet visade A250, P150 i stycklistan och totalantal 2. Spara som och återöppning behöll båda märkena. Inga browserfel. Full `npm run check` passerade. Ingen publicering ingick.
+
+
+## Bevarad numrering efter bearbetning — 2026-10-15
+
+`numbering-retention.test.js` ingår i centrala arbetsflöden. Samma verkliga numrerings-/ritningsplan verifierar längdändring, polygoncut och länkade skruvhål på ensam sweep, samtliga identiska förekomster och delurval i båda objektordningarna. Registerägarskap, part-/assemblygiltighet, ursprungliga ritnings-ID:n, annoteringar, revision, skala, granskningsflagga, PDF-filnamn, filåterläsning, repeterad numrering utan ändring samt Ångra/Gör om kontrolleras. Övriga scenarier täcker majoritetsgren när allt ändras olika, samtidiga delningar/sammanslagningar, uttryckligt ritningsval vid sammanfogning, ändrad serie, nya-nummer-policy, manuella märken, borttagen ägare och relativ ändring inne i flerdelsassemblies. Det tidigare scenariot som krävde ny mark även när alla manuellt numrerade förekomster ändrats har ersatts med oförändrad ägares företräde vid en verklig delning.
+
+Browserkontroll på separat localhost-projekt: en numrerad sweep med SP-/AS-ritningar kapades med befintligt Linecut-verktyg (två punkter, skärsida och bekräftelse). Numreringspreview visade P100→P100 och A200→A200 med ändrade typer. Tilldela behöll de två ritningarna och gav Kontrollera ritning; P100-bladet öppnades med kapad geometri. Testerna verifierar också att ritningsinnehållet bevaras; browserprojektet använde enkla standardblad.
+
+Slutkontroll: den verkliga projektfilen från browserns Spara som lästes med projektvalidatorn. Den innehöll Linecut med rätt mål, P100/A200, samma ritnings-ID:n som före kapningen och båda granskningsflaggorna. Upprepad numrering behöll märkena. Inga browserfel rapporterades. Full `npm run check` med regression, lint, formatering och produktionsbygge passerade. Ingen publicering ingick.
+
+## Stabilitetsgranskning av part-/assemblynumrering — 2026-10-15
+
+Reproducerade och rättade brister:
+
+- Tre detaljtyper med mått 100 / 101,6 / 103,2 och tolerans 1 kunde vid omordning få en ogiltig gemensam mark. Jämförelsen använder profilkonturens koordinater (halva breddskillnaden i detta exempel). Samma risk fanns vid assemblytolerans. Gruppering och registermatchning kontrollerar nu den verkliga representanten och samtliga medlemmar.
+- Gemensamma part-/assemblyprefix och befintliga GA-nummer kunde ge nummerkollisioner eller blockera skapande av assemblyritning. Båda områdena samt kvarvarande ritningar reserveras före tilldelning.
+- Ett kvarvarande SP-blad vars källa tagits bort kunde förlora sitt nummer till en annan typ vid återanvändning. Ritningen behåller nu reservationen.
+- Ett markbyte som återbildar en historisk assemblynyckel kunde ge två registerägare för samma nyckel. Den aktiva ägaren prioriteras och registret förblir entydigt.
+- Dialogen kunde använda datorns förval från ett annat projekt i stället för projektets tolerans, samt återaktivera full omnumrering. Projektregler används nu vid öppning; omnumrering är ett engångsval.
+
+`numbering-stability.test.js` ingår i centrala arbetsflöden och skyddar ovanstående samt felaktiga register/tilldelningar och sparade regler. Sex fasta slumpfrön kör 60 ändringssteg vardera (360 steg totalt) på åtta delar. Varje steg varierar geometri, material, serie, återanvändning och modifieringspolicy och verifierar giltig part-/assemblynumrering, unikt registerägarskap, ritningsnummer/-namn, bevarat ritningsinnehåll, oförändrad upprepning och omordning. Projektfiler läses åter under sekvenserna. Befintliga bearbetnings-, delnings-, sammanslagnings-, historik- och ritningsscenarier behålls.
+
+En separat körning på appens syntetiska lilla stomexempel (461 objekt, 454 fysiska delar, 9 parttyper och 9 assemblytyper) verifierade numrering, giltighet, upprepning, omordning och projektfil. Cirka 540 ms sammanlagt i denna Node-körning är ett exempel, inte en generell prestandagaranti.
+
+Browserkontroll på separat localhost-projekt reproducerade även felet med datorns toleransförval. Efter rättning gav återöppnad och omordnad toleransmodell 0 nya / 0 ändrade / 6 oförändrade; bekräftelse skapade ingen ångringspost. Byte till ett annat projekt behöll dess regler. GA P100, Single Part P101/P102 och Assembly P103/P104 visades som fem separata ritningar utan kollision. Inga browserfel. Full `npm run check` med formatering, lint, regression och produktionsbygge passerade.
+
+Detta är kontrollerad regression och syntetiska projektsekvenser. Granskningen är inte en jämförande certifiering mot Tekla eller en verifiering mot många verkliga produktionsprojekt. Ingen publicering ingick.

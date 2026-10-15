@@ -68,7 +68,8 @@ test('drawing copies retain sources, detach nested edits and get unique numbers 
   assert.equal(copy.reviewed, null);
   copy.sheet.views[0].scale = 50;
   assert.equal(state.drawings[0].sheet.views[0].scale, 20);
-  assert.throws(() => duplicateDrawings([{ id: 'a', type: 'AS' }], new Set(['a'])), /Assembly/);
+  for (const type of ['AS', 'SP'])
+    assert.throws(() => duplicateDrawings([{ id: 'a', type }], new Set(['a'])), /numrering/);
 });
 test('scale column shows all distinct view scales and leaves unconfigured scales blank', () => {
   assert.equal(

@@ -773,7 +773,16 @@ button.insertion-point {
   border-radius: 0;
 }
 button.insertion-point.start {
-  border-radius: 50%;
+  border-radius: 0;
+}
+button.insertion-point.emphasized {
+  touch-action: none;
+}
+.insertion-point.grip {
+  border-radius: 0;
+}
+.insertion-point.grip:not(.point-selected) {
+  background: #f8fcfd;
 }
 button.insertion-point:after {
   content: '';

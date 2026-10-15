@@ -1,3 +1,4 @@
+import { createMarkChangeButton } from '../ui/mark-change-dialog.js';
 import { isPhysical } from '../model-object.js';
 import { identityError } from '../object-identity.js';
 import { validateSeries, objectSeries } from '../numbering/rules.js';
@@ -40,6 +41,13 @@ export function installModelIdentity({ $, actions, controllers, modelEditor, pro
   const partLabel = document.createElement('div');
   partLabel.className = 'part-mark-row';
   partLabel.innerHTML = '<span>Part mark</span><strong id=object-part-mark></strong>';
+  const changeMark = createMarkChangeButton(() => {
+    const current = context();
+    if (current.mode === 'edit' && current.object)
+      controllers.markChange.open({ kind: 'part', id: current.object.id });
+  });
+  changeMark.setAttribute('aria-label', 'Byt partmark');
+  partLabel.append(changeMark);
   identityFields.append(partLabel);
   const { root: partSeriesFields } = createNumberingSeriesFields({
     prefix: '',
@@ -194,6 +202,13 @@ export function installModelIdentity({ $, actions, controllers, modelEditor, pro
       nameInput.value = creating ? ui.objectDrafts[current.type]?.name || '' : s.name || '';
     $('mode-label').hidden = !!s && isPhysical(s);
     root.inert = current.locked;
+    changeMark.hidden = creating || !physical;
+    changeMark.disabled =
+      !s ||
+      creating ||
+      current.locked ||
+      !!tools.operation ||
+      !partStatus(s, project.objects, project.parts).valid;
     const shortcut = $('inspector-open-drawing'),
       record = selectedPartDrawing();
     if (shortcut) {

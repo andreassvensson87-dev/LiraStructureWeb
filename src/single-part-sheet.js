@@ -770,8 +770,7 @@ export class SinglePartSheet {
       this.assembly ? 'Assembly ritningsblad' : 'Single Part ritningsblad',
     );
     fillLayoutPicker(this.layoutSelect, this.config.layoutId);
-    this.dialog.querySelector('header strong').textContent =
-      `${record.number} · ${record.type === 'AS' ? record.name : record.mark}`;
+    this.dialog.querySelector('header strong').textContent = record.mark;
     this.paperOptions();
     this.$('orientation').value = this.config.landscape ? 'landscape' : 'portrait';
     for (const v of ['top', 'front', 'section'])

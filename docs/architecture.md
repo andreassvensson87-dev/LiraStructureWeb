@@ -240,6 +240,41 @@ Objekttypens definition äger IFC-förvalet. Inspektorns gemensamma IFC-klassfä
 
 `references/profile-match.js` jämför kontur, hål, area, rotation och dimensioner mot senaste biblioteksrevisionerna. Namn eller omslutande mått räcker inte för ett automatiskt profilbyte. Utan säker match behålls den återvunna IFC-konturen. `conversionProfile` validerar ett manuellt profilval på ett fristående utkast och behåller start-/slutpunkt, rotation och källidentitet. Först Konvertera anropar befintlig modell-editorcommit. Avbrott lämnar modellen orörd.
 
-Konverteringen använder `profileLibraryNodes` från samma profilträd som fulla biblioteket, `createLibraryTreePicker`, gemensam dialogpresentation och `renderProfilePreview`. Profilbibliotekets befintliga editorinstans kan öppnas med en avgränsad urvalscallback; nästa vanliga biblioteksöppning återgår till modellens ordinarie användningskommando. Raka, slutna extrusioner stöds fortfarande; profilväljaren kringgår inte geometrivalideringen.
+Konverteringen använder `profileLibraryNodes` från samma profilträd som fulla biblioteket, `createLibraryTreePicker`, gemensam dialogpresentation och `renderProfilePreview`. Profilbibliotekets befintliga editorinstans kan öppnas med en avgränsad urvalscallback; nästa vanliga biblioteksöppning återgår till modellens ordinarie användningskommando. Raka, slutna extrusioner och två plana ändkapningar stöds; profilväljaren kringgår inte geometrivalideringen.
 
 Profilförslagen har ett fristående evidenskontrakt beskrivet i `docs/profile-matching.md`. IFC-adaptern `references/ifc-profile-data.js` äger läsning av profilmått, typnamn, utvalda egenskaper, mm-enheter och mappade/kapade representationer. Importworkern transporterar detta som metadata på referensobjekten. `profile-match.js` äger bedömning och rangordning; namn och konturgeometri är interna rena hjälpmoduler. UI visar säkerhetsnivå och anmärkningar men gör ingen egen matchning. Metadata kan identifiera profilen även när konverteringens geometrivalidering avvisar objektet. Troliga/tvetydiga förslag ändrar inte automatiskt utkastets profil.
+
+## IFC-geometrikonvertering
+
+Geometrins läsning/topologi, extrusionsanalys, ändplansanalys, objektadapter och slutkontroll ligger i `references/conversion-{mesh,geometry,caps,object,verification}.js`. Dessa är DOM-fria och oberoende av IFC-metadata, bibliotek och profilmatchning. `conversion.js` samordnar dem med den separata matchningen och returnerar fristående `{ object, cuts }`. Sneda ändar använder vanliga Linecut med målidentiteter till en vanlig Sweep; båda bekräftas i samma modell-editortransaktion. `model/tools/transform-sources.js` utökar befintligt urval med skärningar vars samtliga måldelar flyttas/kopieras/roteras, och kopieringsadaptern kopplar skärningarna till nya mål-ID:n. Ingen ny objekttyp, editor eller snapmotor tillkommer. Se `docs/ifc-conversion.md` för kontrakt och geometriska gränser.
+
+## Gemensamt greppurval och punktförflyttning
+
+`model/grip-selection.js` äger giltiga punktreferenser, urval/toggling och rutans rena skärmpunktsprövning. `model/grips.js` grupperar endast sammanfallande världspunkter utan gräns på antal markerade objekt och beräknar en gemensam förflyttning för blandade punkttyper. Alla valda ankare på en del innebär vanlig translation; helt flyttade delar tar med befintliga skärningar. Partiella plåthörn stannar i plåtens plan; radier, blockbindningar och objekttypernas validering gäller fortfarande.
+
+`insertion-points.js` målar och exponerar samma projicerade, synliga grepp till den befintliga markeringsrutans controller. Alt/Option väljer grepp i stället för objekt; Shift utökar urvalet. `insertion-point-controller.js` äger det tillfälliga greppurvalet och återanvänder punktinspektorn. Radiefältet är avstängt om urvalet innehåller punkter utan redigerbar radie.
+
+`model/ui/grip-interaction-controller.js` äger pointer capture och livscykel för greppdragning (4 px tröskel, släpp, Esc, pointercancel, captureförlust och fönsterblur). Den anropar befintlig placering, snap, förhandsvisning och commit; inga geometriregler eller projektmutationer ligger där. En enkel klickning väljer punkt, utan dolt dubbelklickskrav. Alt-rutan ligger i `selection-controller.js`, samma ruta och dokumentlyssnare som objektmarkeringen.
+
+`placement-controller.js` kopplar Move till greppurval när det finns och annars till hela objekt. Flytta linjärt använder samma operation och gemensamma HUD, med bibehållet greppurval och samma förflyttningsvektor. `setDrawing(..., { keepPoints: true })` bevarar endast det tillfälliga punkturvalet genom dessa operationer; byte av objekturval, andra verktyg och historikåterställning rensar som tidigare. Förhandsvisning ändrar inte projektet; en giltig bekräftelse går genom modell-editorn i en transaktion. Punktgreppen under preview använder samma utkast som modellens förhandsvisning. Inga nya permanenta kontroller eller snapinställningar tillkommer.
+
+## Manuellt byte av tillverkningsmark
+
+`numbering/mark-change.js` planerar ett byte för hela den numrerade typen och kontrollerar giltighet, kollisioner och projektstämpel utan DOM eller mutationer. `numbering/assembly-identity.js` för över markändringar till assemblynycklar och medlemstokens; geometrin, assemblynumret och ritningsinnehållet behålls. Samma överföring används när vanlig numrering ändrar en parts mark utan att typen ändras. Manuella registerposter reserveras även vid återanvändning och full omnumrering; en annan typ får inte ärva reservationen.
+
+`ui/mark-change-dialog.js` använder gemensamma attributrader, dialogpresentation och knapprad för båda typerna. `app/workspace-mark-change.js` äger projekttransaktionen med en checkpoint för register, tilldelningar, assemblies och ritningar. Inspektorerna rapporterar typ och identitet via callbacks. Ingen modellgeometri ändras och `main.js` har inga nya beteenden.
+
+
+## Bevara tillverkningsmark vid ändring
+
+`numbering/type-marks.js` löser gemensamt ägarskap för part- och assemblymärken före tilldelning. Befintlig matchande typ (inklusive historisk jämförelse enligt inställningarna) har företräde. Därefter kan en ändrad typ ärva en tidigare mark från sina kvarvarande objekt-/assemblyidentiteter inom samma serie. Om en oförändrad typ finns kvar behåller den märket. Om alla förekomster delas i nya typer prioriteras största gren, med stabila medlems-ID:n som skiljeregel. Fria omfördelningsvägar mellan samtidiga delningar/sammanslagningar bevarar fler märken utan att ta något från en matchande typ. Nya objekt utan tidigare tilldelning får inte ärva en borttagen ägares mark genom denna regel.
+
+Manuella märken följer samma ägarskap vid ändring. Explicit nya nummer för ändrade detaljer, ändrad serie och full omnumrering behåller sina avsiktliga regler. Registerpostens geometrinyckel uppdateras när märket överförs; två olika typer får aldrig äga samma mark. Ritningsplanerna prioriterar originalritningen för den gren som behåller märket, kopierar endast vid verklig delning och kräver ett uttryckligt val vid ritningssammanslagning. Ändrad typ flaggar ritningen för kontroll även när dess nummer behålls. Projekttransaktionen, förhandsgranskningsstämpeln och historiken är oförändrade.
+
+## Stabilitetsgranskning av numrering
+
+`numbering/type-groups.js` äger stabil gruppering före märktilldelningen. Befintliga giltiga förekomster behandlas först, därefter stabila objekt-ID:n. Gruppen jämförs mot sin sparade representant; `type-marks.js` får endast återanvända en registerpost som alla gruppmedlemmar klarar. Därmed kan en toleranskedja eller omordnad objektlista inte flytta den faktiska representanten utanför en medlems tolerans.
+
+`numbering/validation.js` validerar registerägarskap, tilldelningar och sparade jämförelseregler före numreringsplan, efter tillämpning och vid projektåterläsning. Markbyte använder samma commitkontroll. `assembly-identity.js` sammanför kolliderande historiska nycklar efter ett markbyte med företräde för den aktiva ägaren. Ritningsplanerna reserverar kvarvarande ritningsnummer och de andra numreringsområdena innan nya nummer tilldelas. Saknad källa innebär inte att ritningens nummer är ledigt.
+
+`projectNumberingSettings` i `numbering/plan.js` väljer projektets sparade regler före datorns förval. Dialogen fyller samma befintliga fält vid öppning. Full omnumrering är ett uttryckligt engångsval och återaktiveras inte av en sparad inställning. UI, numreringsregler och projekttransaktioner förblir separata.

@@ -247,12 +247,12 @@ export function installModelSession({
   }
   $('undo').onclick = () => restore('undo');
   $('redo').onclick = () => restore('redo');
-  function setDrawing(value) {
+  function setDrawing(value, { keepPoints = false } = {}) {
     controllers.coordinatePicker?.suspend();
     controllers.linearUI?.suspend();
     controllers.planeTransformUI?.suspend();
     controllers.workAreaUI?.suspend();
-    controllers.pointUI?.clear();
+    if (!keepPoints) controllers.pointUI?.clear();
     objectFeedback.clearHover();
     controllers.componentUI?.cancel();
     controllers.inspector?.rollback();
@@ -269,6 +269,7 @@ export function installModelSession({
       $('box-select').setAttribute('aria-pressed', 'false');
     }
     resetToolInteraction(tools, value);
+    controllers.pointUI?.sync();
     syncWorkPlane();
     resetLength();
     guide.visible = false;

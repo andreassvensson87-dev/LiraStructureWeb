@@ -199,8 +199,8 @@ export function drawingManagerRows(
 }
 export function duplicateDrawings(records, ids, makeId = () => crypto.randomUUID()) {
   const chosen = records.filter((r) => ids.has(r.id));
-  if (chosen.some((r) => r.type === 'AS'))
-    throw Error('Assemblyritningar följer assemblyns numrering.');
+  if (chosen.some((r) => ['AS', 'SP'].includes(r.type)))
+    throw Error('Single Part- och Assemblyritningar följer modellens numrering.');
   const numbers = new Set(records.map((r) => r.number));
   const copies = chosen.map((r) => {
     let i = 1;
@@ -414,7 +414,8 @@ export class DrawingManager {
     const records = this.getState().drawings.filter((r) => this.selection.has(r.id));
     this.$('open-selected').disabled = this.$('update-selected').disabled =
       records.length !== 1 || drawingStamp(records[0], this.getState()) === null;
-    this.$('duplicate-selected').disabled = !records.length || records.some((r) => r.type === 'AS');
+    this.$('duplicate-selected').disabled =
+      !records.length || records.some((r) => ['AS', 'SP'].includes(r.type));
     this.$('revision-selected').disabled = !records.length;
     this.$('export-pdf').disabled =
       this.exporting ||
@@ -575,8 +576,7 @@ export class DrawingManager {
         }
         if (
           !a.editable ||
-          (r.type === 'AS' && ['drawing.number', 'drawing.name'].includes(a.key)) ||
-          (r.type === 'SP' && a.key === 'drawing.name')
+          (['AS', 'SP'].includes(r.type) && ['drawing.number', 'drawing.name'].includes(a.key))
         ) {
           const span = document.createElement('span');
           span.textContent = attributeValue(a.key, context) || '—';

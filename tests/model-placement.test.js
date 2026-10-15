@@ -38,6 +38,7 @@ function fixture(t) {
   const ui = createModelEditorState(),
     tools = createToolSession(),
     history = new ProjectHistory(),
+    gripSelection = [],
     scene = new THREE.Scene(),
     objects = new THREE.Group();
   ui.selectedIds = new Set(['line']);
@@ -82,13 +83,25 @@ function fixture(t) {
     checkpoint: () => history.checkpoint(project),
     updateSnapOverlay() {},
     getReferences: () => null,
+    getPointSelection: () => gripSelection,
     getItem: () => null,
     getInspector: () => ({ focusGeometry() {} }),
     fillForm() {},
     updateForm() {},
     point: () => [100, 0, 0],
   });
-  return { controller, project, ui, tools, history, preview, originalMesh, scene, fields };
+  return {
+    controller,
+    project,
+    ui,
+    tools,
+    history,
+    preview,
+    originalMesh,
+    scene,
+    fields,
+    gripSelection,
+  };
 }
 
 test('typed placement previews without changing the model, rejects invalid distances and commits one reversible move/copy', (t) => {
@@ -526,4 +539,79 @@ test('plane mapping preserves plate radii, eccentric profiles and block coordina
       [0, 1, 0],
     ]),
   );
+});
+
+test('Move uses selected endpoints and a picked base; linear move reuses that point selection and commits once', (t) => {
+  const f = linearFixture(t);
+  f.project.objects.push({
+    ...structuredClone(f.project.objects[0]),
+    id: 'other',
+    start: [0, 1000, 0],
+    end: [1000, 1000, 0],
+  });
+  f.ui.selectedIds.add('other');
+  f.gripSelection.push({ id: 'line', kind: 'end' }, { id: 'other', kind: 'end' });
+  const before = structuredClone(f.project.objects);
+  f.controller.startTransform('move');
+  assert.equal(f.tools.first, null);
+  assert.equal(f.tools.operation.gripRefs.length, 2);
+  f.tools.first = [300, 400, 0];
+  assert.equal(f.controller.commitPoint([800, 400, 0]), true);
+  assert.deepEqual(
+    f.project.objects.map((o) => o.start),
+    before.map((o) => o.start),
+  );
+  assert.deepEqual(
+    f.project.objects.map((o) => o.end),
+    [
+      [1500, 0, 0],
+      [1500, 1000, 0],
+    ],
+  );
+  assert.equal(f.history.past.length, 1);
+  f.linear.open('move');
+  const row = f.rows[0];
+  row.callbacks.change(0, '250');
+  assert.equal(row.state.ready, true);
+  assert.deepEqual(
+    f.project.objects.map((o) => o.end),
+    [
+      [1500, 0, 0],
+      [1500, 1000, 0],
+    ],
+    'HUD preview is detached',
+  );
+  row.callbacks.confirm();
+  assert.deepEqual(
+    f.project.objects.map((o) => o.end),
+    [
+      [1750, 0, 0],
+      [1750, 1000, 0],
+    ],
+  );
+  assert.deepEqual(
+    f.project.objects.map((o) => o.start),
+    before.map((o) => o.start),
+  );
+  assert.equal(f.history.past.length, 2);
+  assert.deepEqual(
+    f.history.undo(f.project).objects.map((o) => o.end),
+    [
+      [1500, 0, 0],
+      [1500, 1000, 0],
+    ],
+  );
+});
+
+test('an invalid linear endpoint edit cannot partially change a group or add history', (t) => {
+  const f = linearFixture(t);
+  f.gripSelection.push({ id: 'line', kind: 'end' });
+  const before = structuredClone(f.project.objects);
+  f.linear.open('move');
+  const row = f.rows[0];
+  row.callbacks.change(0, '-1000');
+  assert.equal(row.state.ready, false);
+  row.callbacks.confirm();
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.history.canUndo, false);
 });

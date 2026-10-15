@@ -106,9 +106,11 @@ export function installModelFrameLoop({
         ? project.objects.map(
             (s) => controllers.inspector.session.batch.find((b) => b.id === s.id) || s,
           )
-        : tools.operation?.mode === 'rotate' && tools.operation.batch
-          ? project.objects.map((s) => tools.operation.batch.find((b) => b.id === s.id) || s)
-          : project.objects
+        : tools.operation?.gripPreview && ui.preview
+          ? project.objects.map((s) => tools.operation.gripPreview.find((b) => b.id === s.id) || s)
+          : tools.operation?.mode === 'rotate' && tools.operation.batch
+            ? project.objects.map((s) => tools.operation.batch.find((b) => b.id === s.id) || s)
+            : project.objects
       ).filter((s) => isVisible(s.id)),
       ui.selectedIds,
       tools.drawing,
@@ -122,6 +124,7 @@ export function installModelFrameLoop({
             ? tools.operation.points
             : [],
       controllers.pointUI?.selected() || [],
+      !!tools.operation?.gripRefs,
     );
     updateSnapOverlay();
     controllers.workPlaneGuide.update(camera, host.clientWidth, host.clientHeight);

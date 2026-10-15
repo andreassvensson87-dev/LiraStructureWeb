@@ -165,7 +165,7 @@ export function createModelPicking({
       workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
       constrainToPlane:
         ['plateCreate', 'plateVertex'].includes(tools.operation?.mode) ||
-        (tools.operation?.mode === 'grip' && !!tools.operation.frame),
+        (!!tools.operation?.gripRefs && !!tools.operation.frame),
     });
     if (import.meta.env.DEV) {
       host.dataset.snapObjects = snapObjects.length;

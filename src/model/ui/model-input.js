@@ -182,6 +182,8 @@ export function installModelInput({
           return;
         }
         tools.first = p;
+        if (tools.operation?.gripPlane)
+          tools.operation.frame = { ...tools.operation.gripPlane, origin: [...p] };
         if (!tools.operation) {
           ['sx', 'sy', 'sz'].forEach((k, i) => ($(k).value = p[i]));
           updateForm();
@@ -261,6 +263,17 @@ export function installModelInput({
         controllers.fastenerUI.confirmTargets();
         break;
       case 'cancel':
+        if (ui.marquee) {
+          cancelBox();
+          render({ selectionOnly: true });
+          break;
+        }
+        if (tools.operation?.gripRefs && !tools.operation?.linearId) {
+          setDrawing(false, { keepPoints: true });
+          render({ selectionOnly: true });
+          $('status').textContent = 'Förflyttning avbruten';
+          break;
+        }
         if (tools.operation?.mode === 'coordinatePoint') {
           controllers.coordinatePicker.cancel();
           break;

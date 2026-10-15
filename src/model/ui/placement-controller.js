@@ -5,9 +5,11 @@ import { drawingWorkPlane, workPlaneFromPoints } from '../../work-plane.js';
 import { plateNormal } from '../../plate.js';
 import { isHelper } from '../../model-object.js';
 import { componentTransformSources } from '../../components/ownership.js';
+import { modelTransformSources } from '../tools/transform-sources.js';
 import { groupSelection } from '../../fasteners/group-data.js';
 import { blockSelection } from '../../blocks/placement.js';
-import { moveGripPoints, gripWorkPlane } from '../grips.js';
+import { gripPoint, validGripRefs } from '../grip-selection.js';
+import { moveGripPoints, gripWorkPlane, wholeGripObjects } from '../grips.js';
 import { alignFastenerGroup, fastenerGroupBatch } from '../../fasteners/groups.js';
 import { axisPlacement } from '../../fasteners/geometry.js';
 import { resolveFastenerHoles } from '../../fasteners/placement.js';
@@ -50,6 +52,7 @@ export function createPlacementController({
   getLinear = () => null,
   getPlaneTransform = () => null,
   getWorkArea = () => null,
+  getPointSelection = () => [],
 }) {
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
@@ -160,6 +163,12 @@ export function createPlacementController({
     .forEach((b) => (b.onclick = () => toggleLock(b.dataset.axis)));
 
   function startTransform(mode) {
+    const pointRefs =
+      mode === 'move' ? validGripRefs(project.objects, getPointSelection(), ui.selectedIds) : [];
+    if (pointRefs.length) {
+      const source = project.objects.find((o) => o.id === pointRefs[0].id);
+      return startGrip({ point: gripPoint(source, pointRefs[0]), refs: pointRefs }, true);
+    }
     if (
       ['start', 'end'].includes(mode) &&
       project.objects.some((o) => ui.selectedIds.has(o.id) && o.parametricBlock)
@@ -182,7 +191,9 @@ export function createPlacementController({
       renderer.domElement.focus({ preventScroll: true });
       return;
     }
-    const sources = componentTransformSources(project.objects, ui.selectedIds);
+    const sources = (
+      mode === 'start' || mode === 'end' ? componentTransformSources : modelTransformSources
+    )(project.objects, ui.selectedIds);
     const source = sources[0];
     if (!source || ((mode === 'start' || mode === 'end') && sources.length !== 1)) return;
     setDrawing(true);
@@ -207,7 +218,10 @@ export function createPlacementController({
           : `Flytta ${mode === 'start' ? 'startpunkt' : 'slutpunkt'}`;
     renderer.domElement.focus({ preventScroll: true });
   }
-  function startGrip(grip) {
+  function startGrip(grip, pickBase = false) {
+    const refs = validGripRefs(project.objects, grip.refs, ui.selectedIds);
+    if (!refs.length) return false;
+    grip = { ...grip, refs };
     const ids = blockSelection(
       project.objects,
       groupSelection(
@@ -215,8 +229,14 @@ export function createPlacementController({
         grip.refs.map((r) => r.id),
       ),
     );
-    const sources = componentTransformSources(project.objects, ids).map(cloneTransformSource);
-    setDrawing(true);
+    const members = componentTransformSources(project.objects, ids);
+    const whole = wholeGripObjects(members, refs);
+    const sources = [
+      ...new Map(
+        [...members, ...modelTransformSources(project.objects, whole)].map((s) => [s.id, s]),
+      ).values(),
+    ].map(cloneTransformSource);
+    setDrawing(true, { keepPoints: true });
     tools.operation = sources.some(
       (s) =>
         s.group ||
@@ -224,17 +244,23 @@ export function createPlacementController({
     )
       ? { mode: 'move', sources }
       : {
-          mode: 'grip',
+          mode: pickBase ? 'move' : 'grip',
           sources,
           refs: grip.refs,
-          frame: gripWorkPlane(sources, grip.refs, grip.point),
+          gripRefs: grip.refs,
+          gripBase: [...grip.point],
+          gripPlane: gripWorkPlane(sources, grip.refs, grip.point),
+          frame: pickBase ? null : gripWorkPlane(sources, grip.refs, grip.point),
         };
-    $('status').textContent = 'Flytta insättningspunkter · Välj målpunkt eller ange avstånd';
-    tools.first = [...grip.point];
+    $('status').textContent = pickBase
+      ? 'Flytta insättningspunkter · Välj baspunkt'
+      : 'Flytta insättningspunkter · Välj målpunkt eller ange avstånd';
+    tools.first = pickBase ? null : [...grip.point];
     syncOperationUI();
     syncLocks();
-    $('draw-length-form').hidden = false;
+    $('draw-length-form').hidden = pickBase;
     renderer.domElement.focus({ preventScroll: true });
+    return true;
   }
   function candidates(target) {
     if (tools.operation?.planeId) {
@@ -266,7 +292,7 @@ export function createPlacementController({
         },
       ];
     }
-    if (tools.operation?.mode === 'grip')
+    if (tools.operation?.gripRefs || tools.operation?.mode === 'grip')
       return moveGripPoints(tools.operation.sources, tools.operation.refs, target, tools.first);
     if (['helperline', 'gridline'].includes(tools.operation?.mode))
       return [
@@ -359,7 +385,8 @@ export function createPlacementController({
       modelEditor.replace(result.objects);
       if (mode === 'copy') ui.selectedIds = new Set(result.ids);
       ui.selected = ui.selectedIds.size === 1 ? [...ui.selectedIds][0] : null;
-      setDrawing(false);
+      const keepPoints = !!tools.operation?.gripRefs;
+      setDrawing(false, { keepPoints });
       render();
     }
     $('status').textContent =
@@ -379,6 +406,7 @@ export function createPlacementController({
     return true;
   }
   function showPreview(p, showForm = true) {
+    if (tools.operation?.gripRefs) tools.operation.gripPreview = null;
     clearPreview();
     guide.visible = false;
     if (tools.operation?.referenceId) {
@@ -409,8 +437,17 @@ export function createPlacementController({
     }
     if (!batch.some((s) => validateSweep(s))) {
       $('draw-length-error').textContent = '';
+      if (tools.operation?.gripRefs) tools.operation.gripPreview = batch;
       ui.previewSweep = batch.length === 1 ? s : null;
-      ui.preview = previewModelBatch(batch);
+      try {
+        ui.preview = previewModelBatch(batch);
+      } catch (error) {
+        if (tools.operation?.gripRefs) tools.operation.gripPreview = null;
+        clearPreview();
+        $('draw-length-error').textContent = error.message;
+        frameGate.invalidate();
+        return false;
+      }
       scene.add(ui.preview);
       const positions = guide.geometry.attributes.position;
       positions.setXYZ(0, ...tools.first);

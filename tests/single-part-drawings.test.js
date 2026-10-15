@@ -42,6 +42,10 @@ test('split clones drawing with independent views and annotations; unchanged gro
   assert.equal(original.sourceId, 'b');
   assert.equal(original.mark, old.mark);
   assert.equal(clone.sourceId, 'a');
+  for (const record of next.drawings) {
+    assert.equal(record.number, record.mark);
+    assert.equal(record.name, record.mark);
+  }
   assert.equal(clone.needsReview, true);
   assert.equal(clone.reviewed, undefined);
   assert.deepEqual(clone.sheet, old.sheet);
@@ -102,6 +106,7 @@ test('batch groups identical parts and prevents duplicate creation on repeated r
   const keys = new Set([groups[0].key]);
   state.drawings = createBatchDrawings(state, selection, keys, () => 'one');
   assert.equal(state.drawings.length, 1);
+  assert.equal(state.drawings[0].number, parts.assignments.a.mark);
   assert.equal(createBatchDrawings(state, selection, keys).length, 1);
 });
 test('invalid or stale numbering cannot create a batch drawing', () => {

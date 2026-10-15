@@ -1,3 +1,4 @@
+import { validateNumberingOwnership } from '../numbering/validation.js';
 import { defaultCoordinates, validateCoordinates } from '../coordinates/coordinates.js';
 import { defaultWorkArea, validateWorkArea } from '../model/work-area.js';
 import { syncGridObjects } from '../model/grid-objects.js';
@@ -114,7 +115,12 @@ export function validateProjectFile(project) {
   )
     fail('Ogiltig detaljnumrering.');
   for (const item of [...project.parts.registry, ...Object.values(project.parts.assignments)])
-    if (!record(item) || typeof item.key !== 'string' || typeof item.mark !== 'string')
+    if (
+      !record(item) ||
+      typeof item.key !== 'string' ||
+      typeof item.mark !== 'string' ||
+      (item.manual !== undefined && typeof item.manual !== 'boolean')
+    )
       fail('Ogiltig detaljnumrering.');
   if (!Array.isArray(project.drawings) || project.drawings.length > 10000)
     fail('Ogiltig ritningslista.');
@@ -162,6 +168,7 @@ export function validateProjectFile(project) {
       !item.key ||
       !identity(item.mark) ||
       typeof item.name !== 'string' ||
+      (item.manual !== undefined && typeof item.manual !== 'boolean') ||
       typeKeys.has(item.key) ||
       typeMarks.has(item.mark)
     )
@@ -177,6 +184,7 @@ export function validateProjectFile(project) {
       )
     )
       fail('Assemblyn saknar giltig typnumrering.');
+  validateNumberingOwnership(project);
   const drawingIds = new Set();
   const drawnAssemblies = new Set();
   for (const drawing of project.drawings) {

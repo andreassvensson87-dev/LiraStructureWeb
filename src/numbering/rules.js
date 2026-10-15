@@ -47,7 +47,7 @@ export function matchingKey(a, b, tolerance = 0) {
     return a === b;
   }
 }
-function recordSeries(record) {
+export function recordSeries(record) {
   try {
     const key = JSON.parse(record.key);
     if (!Array.isArray(key)) return key.series;
@@ -61,19 +61,21 @@ export function allocateMark(series, records, used, options) {
   let number = series.start;
   if (!options.reuseOldNumbers) {
     for (const record of records) {
+      if (record.manual && options.renumberAll) continue;
       const owner = recordSeries(record);
       if (owner && (owner.prefix !== series.prefix || owner.start !== series.start)) continue;
       const mark = record.mark;
-      if (mark.startsWith(series.prefix)) {
+      if (mark.toLowerCase().startsWith(series.prefix.toLowerCase())) {
         const suffix = mark.slice(series.prefix.length).replace(/^-/, '');
         const value = Number(suffix);
         if (/^\d+$/.test(suffix) && value >= number) number = value + 1;
       }
     }
   }
+  const reserved = new Set([...used].map((mark) => mark.toLowerCase()));
   while (
-    used.has(`${series.prefix}${number}`) ||
-    used.has(`${series.prefix}-${String(number).padStart(3, '0')}`)
+    reserved.has(`${series.prefix}${number}`.toLowerCase()) ||
+    reserved.has(`${series.prefix}-${String(number).padStart(3, '0')}`.toLowerCase())
   )
     number++;
   if (number > 999999999) throw Error('Nummerserien är slut.');

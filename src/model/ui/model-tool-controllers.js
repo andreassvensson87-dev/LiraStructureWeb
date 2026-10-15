@@ -31,6 +31,7 @@ export function installModelTools({
   controllers,
   frameGate,
   renderState,
+  insertionPoints,
 }) {
   const setDrawing = (...args) => actions.setDrawing(...args);
   const ray = (...args) => actions.ray(...args);
@@ -68,6 +69,9 @@ export function installModelTools({
     ray,
     select: selectModelOrReference,
     getWorkArea: () => controllers.workAreaUI?.bounds() || null,
+    getGrip: (target) => insertionPoints.gripAtTarget(target),
+    gripsInRect: (a, b) => insertionPoints.refsInRect(a, b),
+    selectGrips: (refs, options) => controllers.pointUI?.select(refs, options),
     selectionHit,
     setSelection: (ids) => setSelection(userSelection(ids)),
     isVisible,

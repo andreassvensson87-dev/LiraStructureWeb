@@ -1,3 +1,4 @@
+import { isPhysical } from '../model-object.js';
 import { ReferenceModels } from '../references/reference-models.js';
 
 export function installWorkspaceReferences({
@@ -52,8 +53,9 @@ export function installWorkspaceReferences({
       controllers.inspector.finish();
       setDrawing(false);
       modelEditor.add(added);
-      setSelection(added.map((object) => object.id));
-      $('status').textContent = `${added.length} IFC-objekt konverterade · Kan ångras`;
+      const converted = added.filter(isPhysical);
+      setSelection(converted.map((object) => object.id));
+      $('status').textContent = `${converted.length} IFC-objekt konverterade · Kan ångras`;
     },
   });
 }

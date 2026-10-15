@@ -1,5 +1,7 @@
+import { groupNumberingTypes } from './numbering/type-groups.js';
+import { assignTypeMarks } from './numbering/type-marks.js';
 import { assemblySeries } from './assembly-series.js';
-import { matchingKey, allocateMark } from './numbering/rules.js';
+import { matchingKey } from './numbering/rules.js';
 import { partKey, partFrame, partStatus } from './part-marks.js';
 import { assemblyDrawingMatrix, rebaseAssemblyViews } from './assembly-frames.js';
 import { clean } from './model/object-types/shape-key.js';
@@ -158,52 +160,77 @@ export function planAssemblyNumbering(state, series, options) {
   };
   const allocation = series || { prefix: 'A', start: 1 };
   const registry = structuredClone(
-      options?.renumberAll ? [] : state.assemblyNumbering?.registry || [],
+      (state.assemblyNumbering?.registry || []).filter((r) => !options?.renumberAll || r.manual),
     ),
     groups = new Map();
   const used = new Set([
-    ...(options?.reuseOldNumbers ? [] : registry.map((r) => r.mark)),
+    ...registry.filter((r) => !options?.reuseOldNumbers || r.manual).map((r) => r.mark),
     ...state.drawings.filter((d) => d.type !== 'AS').map((d) => d.number),
   ]);
-  for (const assembly of state.assemblies || []) {
-    let key = assemblyKey(assembly, state.objects, state.parts);
-    if (options && key)
-      key = [...groups.keys()].find((k) => matchingKey(k, key, options.assemblyTolerance)) || key;
-    if (!key) {
-      used.add(assembly.mark);
-      continue;
+  if (options) {
+    const entries = (state.assemblies || [])
+      .map((a) => ({
+        id: a.id,
+        key: assemblyKey(a, state.objects, state.parts),
+        series: assemblySeries(a, state.objects),
+        value: a,
+        previous: a.typeKey ? { key: a.typeKey, mark: a.mark } : null,
+      }))
+      .filter((entry) => entry.key);
+    for (const group of groupNumberingTypes(
+      entries,
+      registry,
+      options,
+      options.assemblyTolerance,
+    )) {
+      group.assemblies = group.members.map((entry) => entry.value);
+      group.candidates = [];
+      groups.set(group.key, group);
     }
-    if (!groups.has(key)) groups.set(key, { key, assemblies: [], candidates: [] });
-    groups.get(key).assemblies.push(assembly);
+  } else {
+    for (const assembly of state.assemblies || []) {
+      const key = assemblyKey(assembly, state.objects, state.parts);
+      if (!key) {
+        used.add(assembly.mark);
+        continue;
+      }
+      if (!groups.has(key)) groups.set(key, { key, assemblies: [], candidates: [] });
+      groups.get(key).assemblies.push(assembly);
+    }
   }
-  if (options && !options.renumberAll)
-    for (const group of groups.values()) {
-      const existing = registry.find((r) =>
-        matchingKey(r.key, group.key, options.assemblyTolerance),
-      );
-      if (existing) used.add(existing.mark);
-    }
-  // Reserve existing type numbers first; new split types cannot steal a historical number.
+  const reserved = [
+    ...(state.parts?.registry || []).map((r) => r.mark),
+    ...state.drawings
+      .filter(
+        (d) =>
+          d.type === 'GA' ||
+          (d.type === 'AS' &&
+            ![...groups.values()].some(
+              (g) =>
+                g.key === d.assemblyKey ||
+                g.assemblies.some((a) => a.id === d.assemblyId || a.typeKey === d.assemblyKey),
+            )),
+      )
+      .map((d) => d.number),
+  ];
+  const assigned = options
+    ? assignTypeMarks([...groups.values()], registry, options, options.assemblyTolerance, reserved)
+    : null;
+  if (assigned) registry.splice(0, registry.length, ...assigned.registry);
   for (const group of groups.values()) {
-    let identity = options?.renumberAll
-      ? null
-      : registry.find((r) =>
-          options ? matchingKey(r.key, group.key, options.assemblyTolerance) : r.key === group.key,
-        );
+    let identity = assigned?.identities.get(group) || registry.find((r) => r.key === group.key);
     if (identity && options) group.key = identity.key;
     if (!identity) {
-      let mark = options
-        ? allocateMark(assemblySeries(group.assemblies[0], state.objects), registry, used, options)
-        : group.assemblies.find((a) => {
-            if (!series) return !used.has(a.mark);
-            const number = Number(a.mark.slice(series.prefix.length + 1));
-            return (
-              a.mark.startsWith(series.prefix + '-') &&
-              Number.isSafeInteger(number) &&
-              number >= series.start &&
-              !used.has(a.mark)
-            );
-          })?.mark;
+      let mark = group.assemblies.find((a) => {
+        if (!series) return !used.has(a.mark);
+        const number = Number(a.mark.slice(series.prefix.length + 1));
+        return (
+          a.mark.startsWith(series.prefix + '-') &&
+          Number.isSafeInteger(number) &&
+          number >= series.start &&
+          !used.has(a.mark)
+        );
+      })?.mark;
       if (!mark) {
         let i = allocation.start;
         while (used.has(`${allocation.prefix}-${String(i).padStart(3, '0')}`)) i++;
@@ -213,6 +240,7 @@ export function planAssemblyNumbering(state, series, options) {
       registry.push(identity);
       used.add(mark);
     }
+    identity.name ??= group.assemblies[0].name;
     Object.assign(group, { mark: identity.mark, name: identity.name });
     const origins = new Set(group.assemblies.map((a) => a.typeKey).filter(Boolean));
     const ids = new Set(group.assemblies.map((a) => a.id));
@@ -244,8 +272,10 @@ export function applyAssemblyNumbering(plan, choices = {}, uuid = () => crypto.r
     used = new Set();
   const groups = [...plan.groups].sort(
     (a, b) =>
-      Number(b.candidates.some((d) => d.assemblyKey === b.key)) -
-      Number(a.candidates.some((d) => d.assemblyKey === a.key)),
+      Number(b.candidates.some((d) => d.assemblyKey === b.key)) * 2 +
+      Number(b.candidates.some((d) => d.mark === b.mark)) -
+      Number(a.candidates.some((d) => d.assemblyKey === a.key)) * 2 -
+      Number(a.candidates.some((d) => d.mark === a.mark)),
   );
   for (const group of groups) {
     const old = group.candidates.find((d) => d.id === choices[group.key]) || group.candidates[0];

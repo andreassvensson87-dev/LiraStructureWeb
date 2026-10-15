@@ -29,14 +29,14 @@ export function createLinearTransformController({
     sync();
   }
   function cancel() {
-    setDrawing(false);
+    setDrawing(false, { keepPoints: !!tools.operation?.gripRefs });
     suspend();
     status('Linjär förflyttning avbruten');
     focus();
   }
   function activate(row) {
     if (row === active && tools.operation?.linearId === row.id) return true;
-    setDrawing(false);
+    setDrawing(false, { keepPoints: row.draft.mode === 'move' });
     suspend();
     placement.startTransform(row.draft.mode);
     if (!tools.operation || tools.operation.mode !== row.draft.mode) {
@@ -47,9 +47,11 @@ export function createLinearTransformController({
     }
     active = row;
     tools.operation.linearId = row.id;
-    row.base = tools.operation.source
-      ? [...(objectType(tools.operation.source).anchors(tools.operation.source)[0] || [0, 0, 0])]
-      : [0, 0, 0];
+    row.base = tools.operation.gripBase
+      ? [...tools.operation.gripBase]
+      : tools.operation.source
+        ? [...(objectType(tools.operation.source).anchors(tools.operation.source)[0] || [0, 0, 0])]
+        : [0, 0, 0];
     tools.first = [...row.base];
     tools.operation.linearPicking = false;
     row.error = '';
@@ -63,6 +65,8 @@ export function createLinearTransformController({
     try {
       const vector = linearVector(row.draft);
       tools.first = [...row.base];
+      if (tools.operation.gripPlane)
+        tools.operation.frame = { ...tools.operation.gripPlane, origin: [...row.base] };
       const target = vector.map((v, i) => row.base[i] + v);
       tools.typedPoint = target;
       tools.activeSnap = { point: target, kind: 'direction', label: 'Linjär förflyttning' };
@@ -83,6 +87,7 @@ export function createLinearTransformController({
     tools.typedPoint = null;
     tools.axisLock = null;
     tools.operation.linearPicking = true;
+    if (tools.operation.gripRefs) tools.operation.frame = null;
     row.ready = false;
     row.error = '';
     status('Välj startpunkt');
@@ -93,6 +98,8 @@ export function createLinearTransformController({
     if (!active || !tools.operation?.linearPicking) return;
     if (!tools.first) {
       tools.first = [...point];
+      if (tools.operation.gripPlane)
+        tools.operation.frame = { ...tools.operation.gripPlane, origin: [...point] };
       status('Välj slutpunkt');
       return;
     }

@@ -14,7 +14,8 @@ function fixture(t) {
   });
   const listeners = {},
     captured = new Set(),
-    selected = [];
+    selected = [],
+    pointSelections = [];
   const surface = {
     style: {},
     addEventListener: (name, handler) => {
@@ -63,6 +64,9 @@ function fixture(t) {
     selectionHit: () => 'beam',
     setSelection: (ids) => selected.push(ids),
     isVisible: () => true,
+    getGrip: (target) => target?.grip || null,
+    gripsInRect: (a, b) => (a.x <= 30 && b.x >= 150 ? [{ id: 'line', kind: 'end' }] : []),
+    selectGrips: (refs, options) => pointSelections.push({ refs, options }),
   });
   const event = (id = 1) => ({
     pointerId: id,
@@ -78,6 +82,7 @@ function fixture(t) {
     captured,
     listeners,
     selected,
+    pointSelections,
     event,
     replaceControls: () => {
       controls = { enabled: true };
@@ -176,4 +181,23 @@ test('explicit cancellation after capture loss still aborts without selecting', 
   f.rootListeners.pointerup(f.event());
   assert.deepEqual(f.selected, []);
   assert.equal(f.getControls().enabled, true);
+});
+
+test('Alt rectangle selects only grips, supports additive selection and preserves object selection', (t) => {
+  const f = fixture(t);
+  f.ui.selectedIds = new Set(['line']);
+  f.controller.beginBox({ ...f.event(), altKey: true });
+  f.rootListeners.pointerup({ ...f.event(), clientX: 210, clientY: 160 });
+  assert.deepEqual(f.pointSelections, [
+    { refs: [{ id: 'line', kind: 'end' }], options: { additive: true, toggle: false } },
+  ]);
+  assert.deepEqual(f.selected, []);
+  assert.deepEqual([...f.ui.selectedIds], ['line']);
+  const grip = { refs: [{ id: 'line', kind: 'start' }] };
+  f.controller.beginBox({ ...f.event(), altKey: true, shiftKey: false, target: { grip } });
+  f.rootListeners.pointerup(f.event());
+  assert.deepEqual(f.pointSelections[1], {
+    refs: grip.refs,
+    options: { additive: false, toggle: true },
+  });
 });

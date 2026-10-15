@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { selectionGrips } from './model/grips.js';
+import { gripRefKey, gripRefsInRect } from './model/grip-selection.js';
 import { plateVertices } from './plate.js';
 
 // Screen-sized overlays keep axis endpoints visible through the profile itself.
@@ -38,6 +39,14 @@ export class InsertionPoints {
     host.append(this.layer);
     this.markers = new Map();
     this.projected = new THREE.Vector3();
+    this.screenGrips = [];
+  }
+  gripAtTarget(target) {
+    const marker = target?.closest?.('.insertion-point');
+    return marker && this.layer.contains(marker) ? marker.grip : null;
+  }
+  refsInRect(a, b) {
+    return gripRefsInRect(this.screenGrips, a, b);
   }
   update(
     camera,
@@ -50,11 +59,14 @@ export class InsertionPoints {
     end,
     placed = [],
     selectedPoints = [],
+    movingPoints = false,
   ) {
     if (drawing || this.selection !== selected) this.menu.hidden = true;
     this.selection = selected;
     const selectedIds = selected instanceof Set ? selected : new Set(selected ? [selected] : []);
     const visible = new Set();
+    this.screenGrips = [];
+    const selectedKeys = new Set(selectedPoints.map(gripRefKey));
     const show = (key, point, kind, emphasis = false, grip = null) => {
       if (!point || this.allowsPoint?.(point) === false) return;
       visible.add(key);
@@ -88,7 +100,9 @@ export class InsertionPoints {
                 : 'Flytta slutpunkt';
           marker.onclick = (e) => {
             e.stopPropagation();
-            this.onActivate(marker.grip ?? kind, e);
+            // Pointer gestures are owned by the grip interaction adapter. Keyboard activation stays a click.
+            if (e.altKey && !marker.grip) return;
+            if (!marker.grip || e.detail === 0) this.onActivate(marker.grip ?? kind, e);
           };
           marker.oncontextmenu = (e) => {
             if (
@@ -120,14 +134,16 @@ export class InsertionPoints {
         marker.setAttribute('aria-label', marker.title);
       }
       const edge = String(kind).startsWith('edge:');
-      marker.className = `insertion-point ${edge ? 'edge-add' : kind}${emphasis ? ' emphasized' : ''}${grip?.refs.some((r) => selectedPoints.some((p) => p.id === r.id && p.kind === r.kind)) ? ' point-selected' : ''}`;
+      marker.className = `insertion-point ${edge ? 'edge-add' : kind}${emphasis ? ' emphasized' : ''}${grip ? ' grip' : ''}${grip?.refs.some((r) => selectedKeys.has(gripRefKey(r))) ? ' point-selected' : ''}`;
       if (marker.textContent !== (edge ? '+' : '')) marker.textContent = edge ? '+' : '';
       const p = this.projected.fromArray(point).project(camera);
       marker.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
       marker.style.left = `${((p.x + 1) * width) / 2}px`;
       marker.style.top = `${((1 - p.y) * height) / 2}px`;
+      if (grip && interactive && !marker.hidden)
+        this.screenGrips.push({ grip, x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2 });
     };
-    const grips = selectionGrips(sweeps, selectedIds, drawing);
+    const grips = selectionGrips(sweeps, selectedIds, drawing && !movingPoints);
     const screenGrips = grips.map(({ point }) => {
       const p = new THREE.Vector3(...point).project(camera);
       return [((p.x + 1) * width) / 2, ((1 - p.y) * height) / 2];
@@ -155,7 +171,7 @@ export class InsertionPoints {
         });
       }
     }
-    if (drawing) {
+    if (drawing && !movingPoints) {
       placed.forEach((p, i) => show(`draft:${i}`, p, 'start', true));
       show('preview:start', start, 'start', true);
       if (start) show('preview:end', end, 'end', true);

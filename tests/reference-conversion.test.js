@@ -40,7 +40,7 @@ function nearBounds(a, b) {
 }
 test('inclined rotated IFC I profiles become editable sweeps with matching geometry', () => {
   const source = part(sweepGeometry(beam)),
-    object = convertReferencePart(source, model, 'sweep');
+    object = convertReferencePart(source, model, 'sweep').object;
   assert.equal(validateSweep(object), '');
   assert.equal(object.profile, 'custom');
   nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(object)));
@@ -49,7 +49,7 @@ test('inclined rotated IFC I profiles become editable sweeps with matching geome
 });
 test('constant hollow profiles retain their holes', () => {
   const source = part(sweepGeometry({ ...beam, profile: 'rhs' }));
-  const object = convertReferencePart(source, model, 'sweep');
+  const object = convertReferencePart(source, model, 'sweep').object;
   assert.equal(object.section.loops.length, 2);
   nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(object)));
 });
@@ -70,7 +70,7 @@ test('inclined plates retain their outline, thickness and placement', () => {
     }),
     IFCPLATE,
   );
-  const object = convertReferencePart(source, model, 'plate');
+  const object = convertReferencePart(source, model, 'plate').object;
   assert.ok(Math.abs(object.thickness - 12) < 0.02);
   nearBounds(bounds(source.mesh.geometry), bounds(plateGeometry(object)));
 });
@@ -78,7 +78,7 @@ test('unsupported, open and multiple solids are reported without approximation o
   const source = part(new THREE.SphereGeometry(100, 12, 8));
   const rows = planReferenceConversion({ ...model, parts: [source] }, []);
   assert.equal(rows[0].object, null);
-  assert.match(rows[0].reason, /extrusion/);
+  assert.match(rows[0].reason, /tvärsnitt/);
   const open = part(new THREE.PlaneGeometry(100, 100));
   assert.match(planReferenceConversion({ ...model, parts: [open] }, [])[0].reason, /sluten/);
   assert.match(
@@ -103,7 +103,7 @@ test('real IFC millimetres and local placement survive conversion', async () => 
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       geometry.setIndex(Array.from(api.GetIndexArray(raw.GetIndexData(), raw.GetIndexDataSize())));
       geometry.applyMatrix4(ifcPlacement(p.flatTransformation));
-      const object = convertReferencePart(part(geometry), model, 'sweep');
+      const object = convertReferencePart(part(geometry), model, 'sweep').object;
       nearBounds(bounds(sweepGeometry(object)), [900, 1800, 3000, 1100, 2200, 3600]);
       raw.delete();
     });
@@ -176,7 +176,7 @@ test('all HEA sizes are recognized from inclined rotated IFC contours without as
         height: section.properties.bounds.height,
       };
     const source = part(sweepGeometry(input)),
-      converted = convertReferencePart(source, model, 'sweep');
+      converted = convertReferencePart(source, model, 'sweep').object;
     assert.equal(converted.section.id, section.id, definition.name);
     assert.equal(converted.section.name, definition.name);
     assert.equal(converted.material, undefined);
@@ -198,7 +198,7 @@ test('a HEA label or matching outside dimensions cannot replace a different cont
     }),
   );
   source.mesh.userData.name = 'HEA 200';
-  const object = convertReferencePart(source, model, 'sweep');
+  const object = convertReferencePart(source, model, 'sweep').object;
   assert.notEqual(object.section.id, section.id);
   nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(object)));
 });
@@ -222,7 +222,7 @@ test('library suggestions recognize IPE and hollow profiles; manual replacement 
         height: section.properties.bounds.height,
       }),
     );
-    const converted = convertReferencePart(source, model, 'sweep', [definition]);
+    const converted = convertReferencePart(source, model, 'sweep', [definition]).object;
     assert.equal(converted.section.id, section.id);
     nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(converted)));
     const before = structuredClone(converted);
@@ -250,4 +250,164 @@ test('library suggestions recognize IPE and hollow profiles; manual replacement 
     assert.throws(() => conversionProfile(converted, { ...replacement, loops: [] }));
     source.mesh.geometry.dispose();
   }
+});
+
+// Small anonymised meshes retain Revit's Float32 tessellation, with generic placement/identity.
+test('real Revit rounded sections and oblique ends preserve surfaces through the ordinary model geometry path', async () => {
+  const { MeshBVH } = await import('three-mesh-bvh');
+  const { geometryForModel } = await import('../src/model-object.js');
+  const { solidMeasures, compareSolids } = await import(
+    '../src/references/conversion-verification.js'
+  );
+  const fixtures = JSON.parse(
+    readFileSync(new URL('./fixtures/revit-conversion-meshes.json', import.meta.url)),
+  );
+  for (const fixture of fixtures) {
+    for (const placement of [fixture.origin, [23000, -12000, 6000], [158000, 103000, 140000]]) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(fixture.positions, 3));
+      geometry.setIndex(fixture.indices);
+      const source = part(geometry);
+      source.mesh.position.set(...placement);
+      const before = Array.from(geometry.attributes.position.array);
+      const draft = convertReferencePart(source, model, 'sweep', []);
+      assert.equal(draft.cuts.length, fixture.key === 'oblique-i-end' ? 2 : 0, fixture.key);
+      let id = 0;
+      const objects = conversionObjects([draft], [], () => `converted-${id++}`);
+      const target = geometryForModel(objects[0], objects);
+      const original = geometry.clone().applyMatrix4(source.mesh.matrixWorld);
+      const sourceMeasures = solidMeasures(original),
+        targetMeasures = solidMeasures(target);
+      nearBounds(sourceMeasures.bounds, targetMeasures.bounds);
+      assert.ok(compareSolids(sourceMeasures, targetMeasures).comparisonPassed);
+      // Check both directions: equal volume/bounds alone could conceal a lost opening or wrong shape.
+      for (const [from, to] of [
+        [original, target],
+        [target, original],
+      ]) {
+        const bvh = new MeshBVH(to, { indirect: true });
+        const a = from.attributes.position,
+          indices = from.index?.array;
+        const count = indices?.length ?? a.count;
+        for (let i = 0; i < count; i += 3) {
+          const points = [0, 1, 2].map((k) =>
+            new THREE.Vector3().fromBufferAttribute(a, indices?.[i + k] ?? i + k),
+          );
+          points.push(
+            points[0]
+              .clone()
+              .add(points[1])
+              .add(points[2])
+              .multiplyScalar(1 / 3),
+          );
+          for (const p of points)
+            assert.ok(bvh.closestPointToPoint(p).distance < 0.05, fixture.key);
+        }
+      }
+      assert.deepEqual(Array.from(geometry.attributes.position.array), before);
+      assert.equal(draft.object.id, undefined);
+      assert.ok(draft.cuts.every((c) => !c.id && c.targets.length === 0));
+      original.dispose();
+      target.dispose();
+      geometry.dispose();
+      source.mesh.material.dispose();
+    }
+  }
+});
+
+test('converted end cuts commit atomically with their sweep, survive files, and undo together', async () => {
+  const { createModelEditor } = await import('../src/app/model-editor.js');
+  const { conversionProfile } = await import('../src/references/conversion.js');
+  const fixtures = JSON.parse(
+    readFileSync(new URL('./fixtures/revit-conversion-meshes.json', import.meta.url)),
+  );
+  const fixture = fixtures.find((f) => f.key === 'oblique-i-end');
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(fixture.positions, 3));
+  geometry.setIndex(fixture.indices);
+  const source = part(geometry);
+  source.mesh.position.set(...fixture.origin);
+  const rows = planReferenceConversion({ ...model, parts: [source] }, [], null, []);
+  assert.ok(rows[0].object, rows[0].reason);
+  assert.equal(rows[0].cuts.length, 2);
+  const before = structuredClone(rows[0].cuts);
+  rows[0].object = conversionProfile(rows[0].object, rows[0].object.section);
+  assert.deepEqual(rows[0].cuts, before, 'profile selection keeps recovered cuts');
+  const project = createProject({
+    grid: { x: [], y: [] },
+    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
+  });
+  const history = new ProjectHistory();
+  const editor = createModelEditor({ project, checkpoint: () => history.checkpoint(project) });
+  let id = 0;
+  editor.add(conversionObjects(rows, [], () => `converted-${id++}`));
+  assert.equal(project.objects.length, 3);
+  assert.equal(history.past.length, 1);
+  for (const cut of project.objects.slice(1))
+    assert.deepEqual(cut.targets, [project.objects[0].id]);
+  assert.deepEqual(parseProjectFile(serializeProject(project)).objects, project.objects);
+  const restored = history.undo(project);
+  assert.equal(restored.objects.length, 0);
+  assert.equal(history.redo(restored).objects.length, 3);
+  geometry.dispose();
+  source.mesh.material.dispose();
+});
+
+test('tapered solids and missing faces cannot be accepted as constant profiles', () => {
+  const tapered = part(new THREE.CylinderGeometry(50, 100, 2000, 24));
+  const row = planReferenceConversion({ ...model, parts: [tapered] }, [], null, [])[0];
+  assert.equal(row.object, null);
+  assert.match(row.reason, /tvärsnitt/);
+  const fixture = JSON.parse(
+    readFileSync(new URL('./fixtures/revit-conversion-meshes.json', import.meta.url)),
+  )[0];
+  const open = new THREE.BufferGeometry();
+  open.setAttribute('position', new THREE.Float32BufferAttribute(fixture.positions, 3));
+  open.setIndex(fixture.indices.slice(3));
+  const rejected = planReferenceConversion({ ...model, parts: [part(open)] }, [], null, [])[0];
+  assert.equal(rejected.object, null);
+  assert.match(rejected.reason, /sluten/);
+  open.dispose();
+  tapered.mesh.geometry.dispose();
+  tapered.mesh.material.dispose();
+});
+
+test('converted cuts follow ordinary move, copy and rotate, including copied target identities', async () => {
+  const { modelTransformSources } = await import('../src/model/tools/transform-sources.js');
+  const { applyObjectBatch, transformCandidates, rotationCandidates } = await import(
+    '../src/model/tools/transform-tool.js'
+  );
+  const { geometryForModel } = await import('../src/model-object.js');
+  const fixture = JSON.parse(
+    readFileSync(new URL('./fixtures/revit-conversion-meshes.json', import.meta.url)),
+  ).find((f) => f.key === 'oblique-i-end');
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(fixture.positions, 3));
+  geometry.setIndex(fixture.indices);
+  const source = part(geometry);
+  source.mesh.position.set(...fixture.origin);
+  const draft = convertReferencePart(source, model, 'sweep', []);
+  let id = 0;
+  const objects = conversionObjects([draft], [], () => `part-${id++}`);
+  const sources = modelTransformSources(objects, new Set([objects[0].id]));
+  assert.equal(sources.length, 3);
+  const moved = transformCandidates({ sources, mode: 'move' }, [0, 0, 0], [500, -300, 700]);
+  const afterMove = applyObjectBatch(objects, moved).objects;
+  const original = geometryForModel(objects[0], objects);
+  const expected = original.clone().translate(500, -300, 700);
+  nearBounds(bounds(expected), bounds(geometryForModel(afterMove[0], afterMove)));
+  const copied = applyObjectBatch(objects, moved, { copy: true, newId: () => `copy-${id++}` });
+  const copies = copied.objects.filter((o) => copied.ids.includes(o.id));
+  assert.equal(copies.length, 3);
+  for (const cut of copies.slice(1)) assert.deepEqual(cut.targets, [copies[0].id]);
+  nearBounds(bounds(expected), bounds(geometryForModel(copies[0], copied.objects)));
+  const rotated = rotationCandidates({ sources, pivot: [0, 0, 0], axis: [0, 0, 1], angle: 90 });
+  const afterRotate = applyObjectBatch(objects, rotated).objects;
+  const rotatedExpected = original.clone().rotateZ(Math.PI / 2);
+  nearBounds(bounds(rotatedExpected), bounds(geometryForModel(afterRotate[0], afterRotate)));
+  original.dispose();
+  expected.dispose();
+  rotatedExpected.dispose();
+  geometry.dispose();
+  source.mesh.material.dispose();
 });

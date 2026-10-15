@@ -242,10 +242,12 @@ export function syncAssemblyDrawingIdentity(state) {
       if (
         status.valid &&
         status.key === drawing.partKey &&
-        (drawing.name !== status.mark || drawing.mark !== status.mark)
+        (drawing.number !== status.mark ||
+          drawing.name !== status.mark ||
+          drawing.mark !== status.mark)
       ) {
         changed = true;
-        return { ...drawing, name: status.mark, mark: status.mark };
+        return { ...drawing, number: status.mark, name: status.mark, mark: status.mark };
       }
       return drawing;
     }

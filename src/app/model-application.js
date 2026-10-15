@@ -1,3 +1,4 @@
+import { installWorkspaceMarkChange } from './workspace-mark-change.js';
 import { installWorkspaceWorkArea } from './workspace-work-area.js';
 import '../ui/workspace.css';
 import '../ui/editor.css';
@@ -8,6 +9,7 @@ import { installModelSweepForm } from '../model/ui/model-sweep-form-controller.j
 import { installModelTools } from '../model/ui/model-tool-controllers.js';
 import { installModelItems } from './model-items.js';
 import { installPolysweepTools } from '../model/ui/polysweep-controller.js';
+import { installModelGripInteraction } from '../model/ui/grip-interaction-controller.js';
 import { installInsertionPointEditor } from '../model/ui/insertion-point-controller.js';
 import { installModelBlocks } from './model-blocks.js';
 import { installModelToolbox } from '../model/ui/model-toolbox-controller.js';
@@ -236,6 +238,7 @@ export async function createModelApplication({
     getGridDraft: () => controllers.helperController.gridDraft(),
     getLinear: () => controllers.linearUI,
     getPlaneTransform: () => controllers.planeTransformUI,
+    getPointSelection: () => controllers.pointUI?.selected() || [],
     getWorkArea: () => controllers.workAreaUI,
   });
   Object.assign(actions, {
@@ -300,6 +303,7 @@ export async function createModelApplication({
   installWorkspaceSettings(context);
   installModelAttributes(context);
   installModelLibraries(context);
+  installWorkspaceMarkChange(context);
   installModelIdentity(context);
   installModelBrowser(context);
   installWorkspaceLevels(context);
@@ -312,6 +316,7 @@ export async function createModelApplication({
   installModelBlocks(context);
   installPolysweepTools(context);
   installInsertionPointEditor(context);
+  installModelGripInteraction(context);
   updateForm();
   render();
   navigation.controls.update();

@@ -255,7 +255,7 @@ export function drawingAttributeContext(record, state = {}) {
       documentTypeCode: choiceCodes(record.documentType),
       scale: drawingScale(record),
       ...(assembly ? { number: assembly.mark, name: assembly.mark } : {}),
-      ...(record.type === 'SP' && record.mark ? { name: record.mark } : {}),
+      ...(record.type === 'SP' && record.mark ? { number: record.mark, name: record.mark } : {}),
       partMark: record.mark || '',
       assemblyMark:
         state.assemblies?.find((a) => a.id === record.assemblyId)?.mark || record.mark || '',
@@ -285,8 +285,8 @@ export function updateDrawingAttribute(records, id, attribute, value) {
   const record = records.find((r) => r.id === id);
   if (!record || !attribute.editable || !attributeApplies(attribute, record.type)) return records;
   if (
-    (record.type === 'AS' && ['drawing.number', 'drawing.name'].includes(attribute.key)) ||
-    (record.type === 'SP' && attribute.key === 'drawing.name')
+    ['AS', 'SP'].includes(record.type) &&
+    ['drawing.number', 'drawing.name'].includes(attribute.key)
   )
     throw Error(
       'Ritningsnamnet följer Part mark eller Assembly mark. Ändra serien i modellen och numrera igen.',

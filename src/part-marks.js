@@ -1,4 +1,6 @@
-import { objectSeries, validateSeries, matchingKey, allocateMark } from './numbering/rules.js';
+import { groupNumberingTypes } from './numbering/type-groups.js';
+import { assignTypeMarks } from './numbering/type-marks.js';
+import { objectSeries, validateSeries, matchingKey } from './numbering/rules.js';
 import * as THREE from 'three';
 import { objectType } from './model/object-types/index.js';
 import { clean } from './model/object-types/shape-key.js';
@@ -81,57 +83,29 @@ export function numberParts(
   state = { registry: [], assignments: {} },
   series = {},
   options,
+  reserved = [],
 ) {
   options ||= state.options && { ...state.options, renumberAll: false };
   const next = structuredClone(state);
   if (options) {
     next.options = structuredClone(options);
-    next.registry = options.renumberAll ? [] : next.registry;
-    const used = new Set(options.reuseOldNumbers ? [] : next.registry.map((r) => r.mark));
-    const physical = objects.filter(isPhysical);
-    // Reserve numbers for unchanged active groups before recycling freed numbers.
-    for (const object of physical) {
-      const key = partKey(object, objects, options);
-      const record = next.registry.find((r) => matchingKey(r.key, key, options.tolerance));
-      if (record) used.add(record.mark);
-    }
-    const unchanged = physical
-      .filter((object) => {
-        const previous = state.assignments[object.id];
-        return (
-          previous &&
-          matchingKey(previous.key, partKey(object, objects, options), options.tolerance)
-        );
-      })
-      .map((object) => state.assignments[object.id]);
-    next.assignments = {};
-    for (const object of physical) {
-      const key = partKey(object, objects, options),
-        previous = state.assignments[object.id];
-      const force =
-        options.renumberAll ||
-        (previous
-          ? !matchingKey(previous.key, key, options.tolerance) && options.modifiedParts === 'new'
-          : options.newParts === 'new');
-      let record = next.registry.find(
-        (r) =>
-          matchingKey(r.key, key, options.tolerance) &&
-          (!force ||
-            (!options.renumberAll && unchanged.some((a) => a.key === r.key)) ||
-            Object.values(next.assignments).some((a) => a.key === r.key)),
-      );
-      if (!record) {
-        record = { key, mark: allocateMark(objectSeries(object), next.registry, used, options) };
-        next.registry = next.registry.filter((r) => r.key !== key);
-        next.registry.push(record);
-      }
-      next.assignments[object.id] = { ...record };
-    }
-    // A recycled number must have a single owner in the registry.
-    const active = new Map(Object.values(next.assignments).map((r) => [r.mark, r.key]));
-    next.registry = next.registry.filter(
-      (r) => !active.has(r.mark) || active.get(r.mark) === r.key,
+    const groups = groupNumberingTypes(
+      objects.filter(isPhysical).map((object) => ({
+        id: object.id,
+        key: partKey(object, objects, options),
+        series: objectSeries(object),
+        previous: state.assignments[object.id],
+      })),
+      state.registry,
+      options,
+      options.tolerance,
     );
+    const assigned = assignTypeMarks(groups, state.registry, options, options.tolerance, reserved);
+    next.registry = assigned.registry;
+    next.assignments = {};
+    for (const group of groups)
+      for (const member of group.members)
+        next.assignments[member.id] = { ...assigned.identities.get(group) };
     return next;
   }
   next.assignments = {};

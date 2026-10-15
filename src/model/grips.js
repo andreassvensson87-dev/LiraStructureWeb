@@ -1,3 +1,4 @@
+import { gripPoint } from './grip-selection.js';
 import { isPlate, objectAnchors } from '../model-object.js';
 import { plateLocal, platePoint, plateNormal } from '../plate.js';
 import { isFastener } from '../fasteners/object-type.js';
@@ -8,8 +9,10 @@ import { updateModelBlock } from '../blocks/model-adapter.js';
 import { cloneTransformSource } from './tools/transform-tool.js';
 /** Group only selected, coincident world points; never merge by screen position. */
 export function selectionGrips(objects, selectedIds, drawing = false) {
-  if (drawing || !selectedIds.size || selectedIds.size >= 5) return [];
-  const groups = [];
+  if (drawing || !selectedIds.size) return [];
+  const groups = [],
+    cells = new Map();
+  const cellKey = (p) => p.join(',');
   for (const object of objects.filter(
     (s) => selectedIds.has(s.id) && s.type !== 'component' && !s.generatedBy,
   )) {
@@ -19,15 +22,43 @@ export function selectionGrips(objects, selectedIds, drawing = false) {
         kind:
           isPlate(object) || object.type === 'polysweep' ? index : index === 0 ? 'start' : 'end',
       };
-      let group = groups.find((g) => Math.hypot(...point.map((v, i) => v - g.point[i])) < 1e-6);
+      const cell = point.map((v) => Math.floor(v / 1e-6));
+      let group;
+      for (let x = -1; x <= 1 && !group; x++)
+        for (let y = -1; y <= 1 && !group; y++)
+          for (let z = -1; z <= 1 && !group; z++)
+            group = cells
+              .get(cellKey([cell[0] + x, cell[1] + y, cell[2] + z]))
+              ?.find((g) => Math.hypot(...point.map((v, i) => v - g.point[i])) < 1e-6);
       if (!group) {
         group = { point: [...point], refs: [] };
         groups.push(group);
+        const key = cellKey(cell);
+        if (!cells.has(key)) cells.set(key, []);
+        cells.get(key).push(group);
       }
       group.refs.push(ref);
     });
   }
   return groups;
+}
+/** Fully selected physical anchors represent a rigid translation, including a plate's normal direction. */
+export function wholeGripObjects(sources, refs) {
+  return new Set(
+    sources
+      .filter(
+        (source) =>
+          !source.parametricBlock &&
+          objectAnchors(source).every((_, i) =>
+            refs.some(
+              (ref) =>
+                ref.id === source.id &&
+                (ref.kind === i || ref.kind === (i === 0 ? 'start' : 'end')),
+            ),
+          ),
+      )
+      .map((s) => s.id),
+  );
 }
 export function moveGripPoints(sources, refs, target, base) {
   if (sources.some((s) => s.parametricBlock)) {
@@ -39,16 +70,29 @@ export function moveGripPoints(sources, refs, target, base) {
       index = typeof ref.kind === 'number' ? ref.kind : ref.kind === 'start' ? 0 : 1;
     return updateModelBlock(
       members,
-      blockGripValues(source.parametricBlock, source.parametricBlock.memberId, index, target),
+      blockGripValues(
+        source.parametricBlock,
+        source.parametricBlock.memberId,
+        index,
+        base ? gripPoint(source, ref).map((v, i) => v + target[i] - base[i]) : target,
+      ),
     );
   }
+  const whole = wholeGripObjects(sources, refs);
+  const delta = base ? target.map((v, i) => v - base[i]) : null;
   return sources.map((source) => {
+    if (
+      delta &&
+      (whole.has(source.id) ||
+        (source.targets?.length && source.targets.every((id) => whole.has(id))))
+    )
+      return objectType(source).translate(source, delta);
     let result = cloneTransformSource(source);
     for (const ref of refs.filter((r) => r.id === source.id)) {
+      const original = gripPoint(source, ref);
+      if (!original) throw Error('Välj en giltig insättningspunkt.');
+      const destination = base ? original.map((v, i) => v + target[i] - base[i]) : target;
       if (typeof ref.kind === 'number') {
-        const destination = base
-          ? objectAnchors(source)[ref.kind].map((v, i) => v + target[i] - base[i])
-          : target;
         if (source.type === 'polysweep') {
           result.points[ref.kind] = [...destination];
           continue;
@@ -59,8 +103,8 @@ export function moveGripPoints(sources, refs, target, base) {
           throw new Error('Hörnet måste ligga i objektets plan.');
         result.polygon[ref.kind] = local;
       } else if (isFastener(source) || source.type === 'item')
-        result = objectType(source).moveAnchor(result, ref.kind, target);
-      else result[ref.kind] = [...target];
+        result = objectType(source).moveAnchor(result, ref.kind, destination);
+      else result[ref.kind] = [...destination];
     }
     return result;
   });
@@ -68,8 +112,10 @@ export function moveGripPoints(sources, refs, target, base) {
 
 /** Parallel plate grips constrain the displacement in their shared plane directions. */
 export function gripWorkPlane(sources, refs, base) {
+  const whole = wholeGripObjects(sources, refs);
   const plates = sources.filter(
-    (source) => isPlate(source) && refs.some((ref) => ref.id === source.id),
+    (source) =>
+      isPlate(source) && !whole.has(source.id) && refs.some((ref) => ref.id === source.id),
   );
   if (!plates.length) return null;
   const normal = plateNormal(plates[0]);

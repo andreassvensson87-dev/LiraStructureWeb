@@ -212,9 +212,9 @@
 #inspector-properties.point-context #insertion-point-inspector {
   display: block;
 }
-.insertion-point.point-selected {
-  background: #e89a30;
-  border-color: #805215;
+.insertion-point.emphasized.point-selected {
+  background: #177d60;
+  border-color: #11654d;
 }
 body:has(#inspector-properties.point-context) .selection-type-dock {
   display: none;

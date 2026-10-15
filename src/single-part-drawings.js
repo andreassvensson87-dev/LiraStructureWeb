@@ -1,13 +1,30 @@
 import { applyDrawingPreset, selectedDrawingPreset } from './drawing-presets.js';
+import { matchingKey } from './numbering/rules.js';
 import { isPhysical } from './model-object.js';
-import { numberParts, partStatus } from './part-marks.js';
-export function nextDrawingNumber(drawings, type = 'SP') {
-  let i = 1;
-  while (drawings.some((d) => d.number === `${type}-${String(i).padStart(3, '0')}`)) i++;
-  return `${type}-${String(i).padStart(3, '0')}`;
-}
-export function planDrawingNumbering(objects, parts, drawings, series = {}, options) {
-  const nextParts = numberParts(objects, parts, series, options),
+import { numberParts, partStatus, partKey } from './part-marks.js';
+export function planDrawingNumbering(
+  objects,
+  parts,
+  drawings,
+  series = {},
+  options,
+  reserved = [],
+) {
+  const physical = objects.filter(isPhysical);
+  const previousKeys = new Set(physical.map((o) => parts.assignments[o.id]?.key));
+  const unowned = drawings.filter((d) => d.type === 'SP' && !previousKeys.has(d.partKey));
+  const currentKeys = unowned.length
+    ? physical.map((o) => partKey(o, objects, options || parts.options))
+    : [];
+  const orphanNumbers = unowned
+    .filter(
+      (d) =>
+        !currentKeys.some((key) =>
+          matchingKey(key, d.partKey, options?.tolerance ?? parts.options?.tolerance),
+        ),
+    )
+    .map((d) => d.number);
+  const nextParts = numberParts(objects, parts, series, options, [...reserved, ...orphanNumbers]),
     groups = new Map();
   for (const object of objects.filter((o) => isPhysical(o))) {
     const next = nextParts.assignments[object.id];
@@ -48,13 +65,14 @@ export function applyDrawingNumbering(plan, choices = {}, uuid = () => crypto.ra
       throw Error(`Välj ritning att behålla för ${g.mark}.`);
   const involved = new Set(plan.groups.flatMap((g) => g.candidates.map((d) => d.id))),
     result = plan.drawings.filter((d) => !involved.has(d.id)),
-    used = new Set(),
-    allocated = [...plan.drawings];
+    used = new Set();
   // Keep the original drawing with unchanged geometry; splits receive independent copies.
   const groups = [...plan.groups].sort(
     (a, b) =>
-      Number(b.candidates.some((d) => d.partKey === b.key)) -
-      Number(a.candidates.some((d) => d.partKey === a.key)),
+      Number(b.candidates.some((d) => d.partKey === b.key)) * 2 +
+      Number(b.candidates.some((d) => d.mark === b.mark)) -
+      Number(a.candidates.some((d) => d.partKey === a.key)) * 2 -
+      Number(a.candidates.some((d) => d.mark === a.mark)),
   );
   for (const g of groups) {
     const old = g.candidates.find((d) => d.id === choices[g.key]) || g.candidates[0];
@@ -66,14 +84,13 @@ export function applyDrawingNumbering(plan, choices = {}, uuid = () => crypto.ra
     used.add(old.id);
     if (clone) {
       record.id = uuid();
-      record.number = nextDrawingNumber(allocated);
-      allocated.push(record);
       record.clonedFrom = old.number;
     }
     record.sourceId = source.id;
     record.partKey = g.key;
     record.mark = g.mark;
     record.name = g.mark;
+    record.number = g.mark;
     for (const annotation of record.annotations || [])
       if (annotation.sourceId) annotation.sourceId = source.id;
     if (changed) {
@@ -141,7 +158,7 @@ export function createBatchDrawings(
           id: uuid(),
           type: 'SP',
           ...(template ? { template: structuredClone(template) } : {}),
-          number: nextDrawingNumber(drawings),
+          number: group.mark,
           name: group.mark,
           sourceId: group.source.id,
           partKey: group.key,

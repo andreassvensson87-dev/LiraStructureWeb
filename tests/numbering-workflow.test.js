@@ -12,6 +12,7 @@ import { defaultNumberingSettings, planNumbering, applyNumbering } from '../src/
 import { partStatus } from '../src/part-marks.js';
 import { assemblyNumberStatus } from '../src/assembly-numbering.js';
 import { drawingCreationGroups, createSelectedDrawings } from '../src/drawing-creation.js';
+import { pdfFileName } from '../src/drawing-pdf.js';
 import { normalizePreset } from '../src/drawing-presets.js';
 const preset = normalizePreset({});
 function beam(id, start = 100, width = 100, x = 0, y = 0) {
@@ -66,7 +67,7 @@ function drawings(state) {
     () => `drawing-${++uuid}`,
   );
   assert.ok(
-    state.drawings.every((d) => d.name === d.mark),
+    state.drawings.every((d) => d.name === d.mark && d.number === d.mark),
     'drawing name must be the manufacturing mark',
   );
   assert.equal(
@@ -143,7 +144,7 @@ test('drawing names track marks through creation, split, explicit merge and renu
   state.objects[0].width = 120;
   number(state);
   assert.equal(state.drawings.length, 4);
-  assert.ok(state.drawings.every((d) => d.name === d.mark));
+  assert.ok(state.drawings.every((d) => d.name === d.mark && d.number === d.mark));
   assert.equal(new Set(state.drawings.map((d) => d.id)).size, 4);
   assert.ok(
     original.every((old) => state.drawings.some((d) => d.id === old.id && d.mark === old.mark)),
@@ -160,7 +161,7 @@ test('drawing names track marks through creation, split, explicit merge and renu
     choices[conflict.kind][conflict.key] = conflict.candidates.find((d) => d.sourceId === 'o1').id;
   Object.assign(state, applyNumbering(plan, state, choices));
   assert.equal(state.drawings.length, 2);
-  assert.ok(state.drawings.every((d) => d.name === d.mark));
+  assert.ok(state.drawings.every((d) => d.name === d.mark && d.number === d.mark));
   assert.equal(
     state.drawings.find((d) => d.type === 'SP').annotations[0].comment,
     'Keep chosen split',
@@ -216,6 +217,11 @@ test('marks and drawing names survive project files and undo/redo without mutati
   number(state);
   const loaded = parseProjectFile(serializeProject(state));
   assert.deepEqual(loaded, state);
+  for (const record of loaded.drawings) {
+    assert.equal(record.number, record.mark);
+    assert.equal(record.name, record.mark);
+    assert.equal(pdfFileName([record]), `${record.mark}.pdf`);
+  }
   const undone = history.undo(state);
   assert.deepEqual(undone, before);
   assert.deepEqual(history.redo(undone), state);
@@ -224,9 +230,12 @@ test('legacy drawing names upgrade to marks and assembly descriptive names remai
   const state = project([beam('o1')]);
   number(state);
   drawings(state);
-  state.drawings.forEach((d) => (d.name = 'Old descriptive drawing name'));
+  state.drawings.forEach((d) => {
+    d.name = 'Old descriptive drawing name';
+    d.number = `${d.type}-001`;
+  });
   state.drawings = syncAssemblyDrawingIdentity(state);
-  assert.ok(state.drawings.every((d) => d.name === d.mark));
+  assert.ok(state.drawings.every((d) => d.name === d.mark && d.number === d.mark));
   Object.assign(
     state,
     updateAssembly(state, state.assemblies[0].id, {

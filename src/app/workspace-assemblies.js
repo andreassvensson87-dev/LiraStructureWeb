@@ -28,6 +28,7 @@ export function installWorkspaceAssemblies({
       Object.assign(project, patch);
       render();
     },
+    changeMark: (id) => controllers.markChange.open({ kind: 'assembly', id }),
     selectPart: (id) => setSelection([id], true),
   });
   controllers.assemblyPanel.sync();

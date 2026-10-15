@@ -188,7 +188,7 @@ test('real IFC2x3 mapped profiles and Revit type/property data reach the matcher
         'sweep',
         undefined,
         (r) => (report = r),
-      );
+      ).object;
       assert.equal(converted.section.name, 'HEA 180');
       assert.equal(converted.material, undefined);
       assert.equal(report.status, 'verified');

@@ -1,3 +1,5 @@
+import { validateNumberingOwnership } from './validation.js';
+import { rekeyAssemblyPartMarks } from './assembly-identity.js';
 import { modelAssemblies } from '../assembly-series.js';
 import { partStatus } from '../part-marks.js';
 import { validateSeries } from './rules.js';
@@ -43,6 +45,24 @@ export function validateNumberingSettings(settings) {
   for (const series of Object.values(settings.series || {})) validateSeries(series);
   return settings;
 }
+/** Project rules override workstation preferences; a full renumber is a one-shot action. */
+export function projectNumberingSettings(state, fallback = defaultNumberingSettings()) {
+  const parts = state.parts?.options,
+    assemblies = state.assemblyNumbering?.options;
+  return validateNumberingSettings(
+    structuredClone({
+      ...fallback,
+      ...(assemblies || {}),
+      ...(parts || {}),
+      assemblyTolerance:
+        assemblies?.assemblyTolerance ?? parts?.assemblyTolerance ?? fallback.assemblyTolerance,
+      parts: true,
+      assemblies: true,
+      objectSeries: true,
+      renumberAll: false,
+    }),
+  );
+}
 export function numberingStamp(state) {
   return JSON.stringify([
     state.objects,
@@ -60,6 +80,7 @@ function description(object) {
 }
 export function planNumbering(state, settings = defaultNumberingSettings()) {
   validateNumberingSettings(settings);
+  validateNumberingOwnership(state);
   const snapshot = structuredClone(state);
   if (settings.assemblies && settings.objectSeries) snapshot.assemblies = modelAssemblies(snapshot);
   const parts = settings.parts
@@ -69,6 +90,14 @@ export function planNumbering(state, settings = defaultNumberingSettings()) {
         snapshot.drawings,
         settings.series,
         settings.objectSeries ? settings : undefined,
+        [
+          ...(snapshot.assemblyNumbering?.registry || [])
+            .filter((r) => !settings.assemblies || !settings.renumberAll || r.manual)
+            .map((r) => r.mark),
+          ...snapshot.drawings
+            .filter((d) => d.type === 'GA' || (d.type === 'AS' && !settings.assemblies))
+            .map((d) => d.number),
+        ],
       )
     : null;
   if (
@@ -83,7 +112,11 @@ export function planNumbering(state, settings = defaultNumberingSettings()) {
     )
   )
     throw Error('Numrera detaljerna först, eller välj både detaljer och assemblies.');
-  const assemblyState = { ...snapshot, parts: parts?.parts || snapshot.parts };
+  const assemblyState = {
+    ...snapshot,
+    ...(parts ? rekeyAssemblyPartMarks(snapshot, snapshot.parts, parts.parts) : {}),
+    parts: parts?.parts || snapshot.parts,
+  };
   const assemblies = settings.assemblies
     ? planAssemblyNumbering(
         assemblyState,
@@ -195,7 +228,11 @@ export function applyNumbering(
     assemblyNumbering: plan.state.assemblyNumbering || { registry: [] },
   };
   if (plan.parts) Object.assign(patch, applyDrawingNumbering(plan.parts, choices.part, uuid));
-  if (plan.assemblies)
+  if (plan.assemblies) {
+    Object.assign(
+      patch,
+      rekeyAssemblyPartMarks({ ...plan.state, ...patch }, plan.state.parts, patch.parts),
+    );
     Object.assign(
       patch,
       applyAssemblyNumbering(
@@ -204,5 +241,7 @@ export function applyNumbering(
         uuid,
       ),
     );
+  }
+  validateNumberingOwnership({ ...current, ...patch });
   return patch;
 }

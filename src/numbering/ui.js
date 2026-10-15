@@ -2,6 +2,7 @@ import { installManagementDialog } from '../ui/dialog-presentation.js';
 import './ui.css';
 import {
   defaultNumberingSettings,
+  projectNumberingSettings,
   validateNumberingSettings,
   planNumbering,
   applyNumbering,
@@ -54,7 +55,7 @@ export function installNumbering({
         <label>Detaljernas måttolerans (mm)<input name="tolerance" type="number" min="0" step="0.01"></label>
         <label>Placering i assembly (mm)<input name="assemblyTolerance" type="number" min="0" step="0.01"></label>
       </fieldset>
-      <p class="numbering-note">Profil, material och bearbetningar jämförs alltid. Assemblies jämförs även med delarnas part marks, antal, huvuddel och orientering. Tolerans 0 innebär exakt jämförelse. Vid omnumrering kan befintliga marks ändras.</p>
+      <p class="numbering-note">Profil, material och bearbetningar jämförs alltid. Assemblies jämförs även med delarnas part marks, antal, huvuddel och orientering. Tolerans 0 innebär exakt jämförelse. Vid omnumrering kan befintliga marks ändras. Manuellt bytta marks behålls.</p>
     </section>
     <section id="numbering-preview" role="tabpanel" aria-labelledby="numbering-preview-tab" hidden>
       <p class="numbering-summary" aria-live="polite"></p>
@@ -332,6 +333,10 @@ export function installNumbering({
     open(kinds) {
       if (dialog.open) return Promise.resolve(false);
       beforeOpen();
+      settings = projectNumberingSettings(getState(), settings);
+      for (const name of checkNames) $(`[name="${name}"]`).checked = settings[name];
+      for (const name of ['newParts', 'modifiedParts', 'tolerance', 'assemblyTolerance'])
+        $(`[name="${name}"]`).value = settings[name];
       if (kinds)
         for (const name of ['parts', 'assemblies']) $(`[name="${name}"]`).checked = kinds[name];
       assigned = false;

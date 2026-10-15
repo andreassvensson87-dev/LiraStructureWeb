@@ -14,6 +14,9 @@ export function createSelectionController({
   setSelection,
   isVisible,
   getWorkArea = () => null,
+  getGrip = () => null,
+  gripsInRect = () => [],
+  selectGrips = () => {},
 }) {
   const $ = (id) => document.getElementById(id);
   // Capture quick releases even when their target is outside the canvas.
@@ -71,7 +74,11 @@ export function createSelectionController({
       const m = ui.marquee,
         p = localPointer(e);
       cancelBox();
-      if (Math.hypot(p.x - m.start.x, p.y - m.start.y) < 5) {
+      if (m.grips) {
+        const click = Math.hypot(p.x - m.start.x, p.y - m.start.y) < 5;
+        const chosen = click ? m.hitGrip?.refs || [] : gripsInRect(m.start, p);
+        selectGrips(chosen, { additive: m.additive, toggle: click && chosen.length > 0 });
+      } else if (Math.hypot(p.x - m.start.x, p.y - m.start.y) < 5) {
         ray(e);
         select(selectionHit(), m.additive);
       } else {
@@ -108,6 +115,8 @@ export function createSelectionController({
       id: e.pointerId,
       start: localPointer(e),
       additive: e.shiftKey,
+      grips: e.altKey,
+      hitGrip: e.altKey ? getGrip(e.target) : null,
       persistent: ui.boxMode,
     };
     renderer.domElement.setPointerCapture(e.pointerId);

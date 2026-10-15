@@ -270,7 +270,7 @@ test('native transform, multi-point movement and drawing geometry preserve radii
   });
 });
 
-test('double-clicking an already selected grip retains the whole point group for native movement', async (t) => {
+test('point selection retains a group for dragging without requiring double-click', async (t) => {
   const { installInsertionPointEditor } = await import(
     '../src/model/ui/insertion-point-controller.js'
   );
@@ -319,13 +319,13 @@ test('double-clicking an already selected grip retains the whole point group for
   controllers.pointUI.activate(grip(1), { detail: 1 });
   controllers.pointUI.activate(grip(2), { detail: 1, shiftKey: true });
   controllers.pointUI.activate(grip(1), { detail: 1 });
-  controllers.pointUI.activate(grip(1), { detail: 2 });
+  moving = controllers.pointUI.moving(grip(1));
   assert.deepEqual(moving.refs, [grip(1).refs[0], grip(2).refs[0]]);
   const [moved] = moveGripPoints([source], moving.refs, [2100, 0, 0], moving.point);
   assert.deepEqual(moved.points[1], [2100, 0, 0]);
   assert.deepEqual(moved.points[2], [2100, 1500, 0]);
   assert.deepEqual(moved.radii, source.radii);
-  controllers.pointUI.activate(grip(1), { detail: 1 });
+  controllers.pointUI.activate(grip(2), { altKey: true });
   assert.equal(controllers.pointUI.selected().length, 1);
   const panel = root.children[0];
   panel.handlers.keydown({ key: 'Escape', stopPropagation() {}, preventDefault() {} });

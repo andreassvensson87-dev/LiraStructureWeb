@@ -1,0 +1,67 @@
+.mark-change-dialog {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px));
+  padding: 18px;
+}
+.mark-change-dialog .panel-title h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.mark-change-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 18px;
+}
+.mark-change-dialog .mark-change-fields label.attribute-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.mark-change-fields input[readonly] {
+  background: #f4f7f8;
+  color: var(--ui-muted);
+}
+.mark-change-impact {
+  padding: 12px;
+  background: #f4f7f8;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.mark-change-impact h3 {
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+.mark-change-impact dl {
+  margin: 0;
+}
+.mark-change-impact dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+}
+.mark-change-impact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.mark-change-dialog [role='status'] {
+  color: #177d60;
+  min-height: 18px;
+}
+.mark-change-dialog [role='alert']:empty {
+  display: none;
+}
+#inspector-properties .mark-change-button {
+  width: auto;
+  padding: 4px 8px;
+  min-height: 28px;
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+#inspector-properties :is(.part-mark-row, .assembly-inspector-mark) strong {
+  margin-left: auto;
+}
