@@ -129,3 +129,44 @@ test('nearby template features preserve drilled beam snapping after translation 
     }
   }
 });
+
+test('indexed nearest retains edge interiors and perspective projection produces a point on the true 3D edge', async () => {
+  const { nearestProjectedSegment } = await import('../src/model/snap-projection.js');
+  const model = [beam('near', 0), beam('far', 4000)],
+    index = new SnapIndex(model);
+  const target = [50, 321, 50],
+    p = pointer(target);
+  const options = {
+    endpoints: false,
+    cornerSnap: false,
+    midpointSnap: false,
+    perpendicularSnap: false,
+    axisSnap: false,
+    polar: 0,
+  };
+  const expected = snap(model, null, p, options);
+  const actual = snap(model, index, p, {
+    ...options,
+    geometryContext: index.nearbyContext(camera, 1000, 1000, p, null, false, false, true),
+  });
+  assert.equal(actual.label, 'Närmaste');
+  assert.deepEqual(actual, expected);
+  const perspective = new THREE.PerspectiveCamera(60, 1, 1, 10000);
+  perspective.position.set(0, 0, 2000);
+  perspective.lookAt(0, 0, 0);
+  perspective.updateMatrixWorld();
+  const a = [-400, 100, 0],
+    b = [600, 300, 1200],
+    t = 0.37;
+  const point = a.map((v, i) => v + t * (b[i] - v)),
+    q = new THREE.Vector3(...point).project(perspective);
+  const result = nearestProjectedSegment(
+    [(q.x + 1) * 500, (1 - q.y) * 500],
+    a,
+    b,
+    perspective,
+    1000,
+    1000,
+  );
+  assert.ok(Math.hypot(...result.map((v, i) => v - point[i])) < 1e-8);
+});

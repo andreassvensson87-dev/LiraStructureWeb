@@ -32,6 +32,7 @@ export async function installWorkspaceDiagnostics({
   projectHistory,
   renderer,
   scene,
+  tools,
 }) {
   const commitFastener = (...args) => actions.commitFastener(...args);
   const loadFrameExample = (...args) => actions.loadFrameExample(...args);
@@ -58,6 +59,21 @@ export async function installWorkspaceDiagnostics({
       host,
       project,
       history: projectHistory,
+    });
+  }
+  if (
+    import.meta.env.DEV &&
+    new URLSearchParams(location.search).get('referenceSnapPerformance') === '1'
+  ) {
+    const { installReferenceSnapBenchmark } = await import('../references/snap-benchmark.js');
+    installReferenceSnapBenchmark({
+      references: controllers.referenceModels,
+      camera,
+      host,
+      project,
+      tools,
+      pickPoint: (...args) => actions.point(...args),
+      updateOverlay: () => actions.updateSnapOverlay(),
     });
   }
 }

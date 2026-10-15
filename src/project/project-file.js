@@ -225,6 +225,7 @@ export function validateProjectFile(project) {
       'gridStepEnabled',
       'axes',
     ].every((k) => typeof project.snap[k] === 'boolean') ||
+    (project.snap.nearest !== undefined && typeof project.snap.nearest !== 'boolean') ||
     !Number.isFinite(project.snap.gridStep) ||
     project.snap.gridStep <= 0 ||
     project.snap.gridStep > 100000 ||

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import { edgeIndex } from '../src/references/edge-index.js';
 import { ReferenceModels } from '../src/references/reference-models.js';
 import { IfcAPI } from 'web-ifc';
 import { readFileSync } from 'node:fs';
@@ -35,7 +36,10 @@ function part() {
   const disposed = { geometry: 0, material: 0 };
   mesh.geometry.addEventListener('dispose', () => disposed.geometry++);
   mesh.material.addEventListener('dispose', () => disposed.material++);
-  return { mesh, disposed };
+  const lines = new THREE.EdgesGeometry(mesh.geometry);
+  const edges = lines.attributes.position.array.slice();
+  lines.dispose();
+  return { mesh, disposed, edges, index: edgeIndex(edges) };
 }
 function fakeWorkers(run) {
   const previous = globalThis.Worker;

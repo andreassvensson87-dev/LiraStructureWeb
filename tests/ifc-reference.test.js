@@ -70,7 +70,7 @@ test('reference edge search finds exact corner and nearest edge; axis locks stil
     z: 0,
     axisSnap: false,
   });
-  assert.equal(snap.label, 'IFC-kant');
+  assert.equal(snap.label, 'Närmaste');
   const constrained = resolveSnap({
     referencePoints: [{ coords: [10, 10, 0], label: 'IFC-hörn' }],
     ray,
@@ -85,4 +85,50 @@ test('reference edge search finds exact corner and nearest edge; axis locks stil
     lock: 'X',
   });
   assert.notEqual(constrained.label, 'IFC-hörn');
+});
+
+test('reference perpendicular has priority over nearest, uses a finite edge and obeys visibility and toggles', () => {
+  const camera = new THREE.OrthographicCamera(-100, 100, 100, -100, 1, 1000);
+  camera.position.set(0, 0, 200);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld();
+  const edges = new Float32Array([-50, 0, 0, 50, 0, 0]);
+  const mesh = new THREE.Mesh();
+  mesh.updateMatrixWorld();
+  const parts = [{ mesh, edges, index: edgeIndex(edges) }];
+  const options = {
+    ray: new THREE.Ray(new THREE.Vector3(14, 2, 200), new THREE.Vector3(0, 0, -1)),
+    camera,
+    pointer: [114, 98],
+    width: 200,
+    height: 200,
+    start: [10, 60, 0],
+    perpendicular: true,
+  };
+  const points = referenceCandidates(parts, options);
+  assert.ok(points.some((p) => p.symbol === 'perpendicular' && p.coords[0] === 10));
+  const hit = resolveSnap({
+    ...options,
+    referencePoints: points,
+    perpendicularSnap: true,
+    sweeps: [],
+    grid: { x: [], y: [] },
+    z: 0,
+    axisSnap: false,
+    polar: 0,
+  });
+  assert.equal(hit.label, 'Vinkelrät');
+  assert.deepEqual(hit.point, [10, 0, 0]);
+  assert.equal(
+    referenceCandidates(parts, { ...options, start: [100, 60, 0] }).some(
+      (p) => p.symbol === 'perpendicular',
+    ),
+    false,
+  );
+  assert.equal(
+    referenceCandidates(parts, { ...options, nearest: false, perpendicular: false }).length,
+    0,
+  );
+  mesh.visible = false;
+  assert.equal(referenceCandidates(parts, options).length, 0);
 });

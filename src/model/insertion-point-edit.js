@@ -1,26 +1,37 @@
+import { validGripRefs } from './grip-selection.js';
 import { validateObject } from '../model-object.js';
 export const radiusPointObject = (object) =>
   object &&
   ['plate', 'polysweep'].includes(object.type) &&
   !object.generatedBy &&
   !object.parametricBlock;
+/** Only physical corners accept radii; endpoints/other selected grips still participate in Move. */
+export function radiusPointRefs(objects, refs) {
+  const byId = new Map(objects.map((object) => [object.id, object]));
+  return refs.filter((ref) => {
+    const source = byId.get(ref.id);
+    if (!radiusPointObject(source) || !Number.isInteger(ref.kind)) return false;
+    const count = source.type === 'plate' ? source.polygon.length : source.points.length;
+    return (
+      ref.kind >= 0 &&
+      ref.kind < count &&
+      (source.type !== 'polysweep' || (ref.kind > 0 && ref.kind < count - 1))
+    );
+  });
+}
 export function pointRadiusBatch(objects, refs, radius) {
   if (!Number.isFinite(radius) || radius < 0 || radius > 1e7)
     throw Error('Ange en radie mellan 0 och 10 000 000 mm.');
   if (!refs.length) throw Error('Markera insättningspunkter.');
+  if (validGripRefs(objects, refs).length !== refs.length)
+    throw Error('Välj giltiga insättningspunkter.');
+  const corners = radiusPointRefs(objects, refs);
+  if (!corners.length)
+    throw Error('Markera ett hörn som kan ha radie. Ändpunkter har ingen hörnradie.');
   const updates = new Map();
-  for (const ref of refs) {
+  for (const ref of corners) {
     const source = objects.find((o) => o.id === ref.id),
       count = source?.type === 'plate' ? source.polygon.length : source?.points?.length;
-    if (
-      !radiusPointObject(source) ||
-      !Number.isInteger(ref.kind) ||
-      ref.kind < 0 ||
-      ref.kind >= count
-    )
-      throw Error('Välj giltiga insättningspunkter.');
-    if (source.type === 'polysweep' && [0, count - 1].includes(ref.kind) && radius !== 0)
-      throw Error('Ändpunkter kan inte ha hörnradie.');
     if (!updates.has(source.id))
       updates.set(source.id, {
         ...structuredClone(source),

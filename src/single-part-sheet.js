@@ -300,8 +300,18 @@ export class SinglePartSheet {
             : this.annotationCandidates[v] || [],
         snapEntities: (view) => {
           const data = this.extraSections.cache.get(view);
+          const viewConfig = this.config.views.find((v) => v.id === view);
           return data
-            ? [...data.cut, ...data.behind].map((points) => ({ type: 'line', points }))
+            ? [
+                ...data.cut,
+                ...(data.vectors || []).flatMap((set) => [
+                  ...set.visible,
+                  ...((viewConfig?.settings.hiddenLines || set.showHidden) &&
+                  set.showHidden !== false
+                    ? set.hidden
+                    : []),
+                ]),
+              ].map((points) => ({ type: 'line', points: points.map((p) => p.slice(0, 2)) }))
             : [];
         },
         referenceSource: (id) => (this.record.type === 'AS' ? id : 'part'),

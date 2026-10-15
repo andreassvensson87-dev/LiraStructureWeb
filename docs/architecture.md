@@ -278,3 +278,50 @@ Manuella märken följer samma ägarskap vid ändring. Explicit nya nummer för 
 `numbering/validation.js` validerar registerägarskap, tilldelningar och sparade jämförelseregler före numreringsplan, efter tillämpning och vid projektåterläsning. Markbyte använder samma commitkontroll. `assembly-identity.js` sammanför kolliderande historiska nycklar efter ett markbyte med företräde för den aktiva ägaren. Ritningsplanerna reserverar kvarvarande ritningsnummer och de andra numreringsområdena innan nya nummer tilldelas. Saknad källa innebär inte att ritningens nummer är ledigt.
 
 `projectNumberingSettings` i `numbering/plan.js` väljer projektets sparade regler före datorns förval. Dialogen fyller samma befintliga fält vid öppning. Full omnumrering är ett uttryckligt engångsval och återaktiveras inte av en sparad inställning. UI, numreringsregler och projekttransaktioner förblir separata.
+
+### Nearest och vinkelrät snap
+
+`src/snap-geometry.js` äger ändliga segmentprojektioner utan UI. Modellens
+`model/snap-projection.js` väljer närmaste skärmpunkt på den verkliga 3D-kanten,
+med perspektivkorrekt interpolation. `resolveSnap` och referensernas befintliga
+kantindex använder samma projektion; `SnapIndex` gallrar fortsatt bort avlägsna
+segment. Exakta punkter och vinkelräta fotpunkter prioriteras framför Nearest.
+Arbetsplan, axellås och arbetsområde prövas även för dessa kandidater.
+
+Ritningens befintliga punktplacering använder `snapFrame` för raka kanter och
+`drawing-snap-curves.js` för analytiska cirklar/bågar. Samma flöde används vid
+skapande, transform och greppredigering. SP/AS levererar de renderade synliga
+kantintervallen samt aktiverade dolda kanter. Ingen snap sker mot hatchmönster.
+Modellens projektinställning `snap.nearest` och ritningens befintliga CAD-val
+`nearest` styr respektive arbetsyta. Den gemensamma presentationsmodulen visar
+Närmaste med befintlig kantsymbol och Vinkelrät med rätvinkelsymbol, utan etikett
+vid markören.
+
+### Gallring av referensobjekt före kantsnap
+
+`references/snap-part-index.js` äger ett oföränderligt hierarkiskt index över
+importerade delars kantgränser i referensens lokala koordinater.
+`ReferenceModels.syncParts` bygger det en gång för en ny/ersatt objektlista.
+`candidates` frågar indexet med en smal, 16 pixels sökfrustum och skickar endast
+lokala kandidater vidare till befintligt kantindex och `resolveSnap`.
+Pekarrörelser bygger inte om indexet och går inte igenom alla referensdelar.
+
+Referensens aktuella gruppmatris används vid varje fråga: flytt, rotation,
+enhetsskala och baspunktsbyte kräver ingen ombyggnad. Synlighet/lager och
+arbetsområdets klippning fortsätter att prövas i befintliga flöden. Ursprunglig
+objektordning bevaras för lika snapavstånd. Indexet tillhör referensmodellen och
+följer dess livscykel vid borttagning/ersättning; det lagras inte i projektfilen.
+
+### Radie vid blandat greppurval
+
+`model/insertion-point-edit.js` äger `radiusPointRefs`: endast Plate-hörn och
+Polysweeps inre hörn har hörnradie. Punktinspektorn och dess modellbatch använder
+samma urval. Markerade ändpunkter/andra grepp hindrar inte längre redigering av
+radier på de markerade hörnen; de deltar fortsatt i greppflytt men ändras inte
+av radiekommandot. Utan ett redigerbart hörn är radiefältet inaktiverat.
+Hela radiebatchen valideras före en gemensam modell-editortransaktion.
+
+Profilens insättningsval återställs till modellens sparade värde när ett klick
+avvisas av valideringen. Polysweep-valideringen anger vilket hörn/radievärde som
+är för litet för profilens tvärsnitt och vald insättning. En profiländring får
+inte kringgå kontrollen av en kollapsad innerbåge.

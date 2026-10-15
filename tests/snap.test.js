@@ -122,11 +122,16 @@ test('explicit X lock intersects grid without rounding or leaving the axis', () 
   assert.deepEqual(r.point, [3150, 1234, 0]);
   assert.match(r.label, /X låst/);
 });
-test('polar tracking intersects grid exactly and preserves angle', () => {
-  const r = run([3150, 3150, 0], { grid: structuralGrid });
-  assert.match(r.label, /Polar 45/);
-  assert.ok(Math.abs(r.point[0] - 3150) < 1e-7);
-  assert.ok(Math.abs(r.point[1] - 3150) < 1e-7);
+test('polar tracking intersects grid exactly even when native grid objects expose Nearest edges', () => {
+  for (const sweeps of [
+    [],
+    [{ type: 'gridline', start: [3150, -1500, 0], end: [3150, 9800, 0] }],
+  ]) {
+    const r = run([3150, 3170, 0], { grid: structuralGrid, sweeps });
+    assert.match(r.label, /Polar 45/);
+    assert.ok(Math.abs(r.point[0] - 3150) < 1e-7);
+    assert.ok(Math.abs(r.point[1] - 3150) < 1e-7);
+  }
 });
 test('line snapping does not extend beyond drawn extents', () => {
   const r = run([3150, 12000, 0], { start: null, grid: structuralGrid });
@@ -250,6 +255,7 @@ test('midpoint snap finds sweep axis and edge centers independently of endpoint 
       endpoints: false,
       cornerSnap: false,
       midpointSnap: true,
+      nearestSnap: false,
       axisSnap: false,
       polar: 0,
     };
@@ -270,6 +276,7 @@ test('perpendicular snap computes a finite-segment 3D foot from the start point'
       endpoints: false,
       cornerSnap: false,
       perpendicularSnap: true,
+      nearestSnap: false,
       axisSnap: false,
       polar: 0,
     };
@@ -374,4 +381,38 @@ test('temporary plane does not filter visible structural intersections', () => {
   });
   assert.deepEqual(snap.point, [3150, 4150, 0]);
   assert.deepEqual(snap.gridIds, ['x:1', 'y:1']);
+});
+
+test('nearest finds finite native edges, yields to exact snaps and respects toggles, plane and axis locks', () => {
+  const options = {
+    sweeps: [{ start: [0, 0, 0], end: [3000, 0, 0] }],
+    endpoints: false,
+    cornerSnap: false,
+    midpointSnap: false,
+    perpendicularSnap: false,
+    axisSnap: false,
+    polar: 0,
+    start: null,
+  };
+  const hit = run([1234, -100, 150], options);
+  assert.equal(hit.label, 'Närmaste');
+  assert.ok(Math.hypot(...hit.point.map((v, i) => v - [1234, -100, 150][i])) < 1e-7);
+  assert.equal(run([1234, -100, 150], { ...options, nearestSnap: false }).kind, 'free');
+  assert.notEqual(run([4000, -100, 150], options).label, 'Närmaste');
+  const locked = run([1234, -100, 150], { ...options, start: [0, 0, 0], lock: 'X' });
+  assert.equal(locked.point[1], 0);
+  assert.equal(locked.point[2], 0);
+  assert.notEqual(
+    run([1234, -100, 150], {
+      ...options,
+      workPlane: { origin: [0, 0, 500], u: [1, 0, 0], v: [0, 1, 0] },
+    }).label,
+    'Närmaste',
+  );
+  assert.equal(run([1500, 0, 0], { ...options, midpointSnap: true }).label, 'Mittpunkt');
+  assert.equal(run([0, 0, 0], { ...options, endpoints: true }).label, 'Ändpunkt');
+  assert.equal(
+    run([1234, 0, 0], { ...options, start: [1234, 1000, 0], perpendicularSnap: true }).label,
+    'Vinkelrät',
+  );
 });

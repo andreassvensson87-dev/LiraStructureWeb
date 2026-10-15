@@ -155,8 +155,14 @@ export function createSweepForm({
           verticalAlignment: b.dataset.placementV,
         };
         updateForm();
-        if (ui.selected) save(readForm());
-        else {
+        if (ui.selected) {
+          if (save(readForm()) === false) {
+            const message = $('inspector-error').textContent || $('error').textContent;
+            fillForm(project.objects.find((s) => s.id === ui.selected));
+            $('inspector-error').textContent = $('error').textContent = message;
+            return;
+          }
+        } else {
           remember?.();
         }
         if (tools.drawing && tools.first) {

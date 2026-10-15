@@ -48,7 +48,7 @@ export function validatePolysweep(source) {
       if (frame.center) {
         const radial = frame.point.clone().sub(frame.center).normalize();
         if (loops[0].some((p) => vertex(frame, p).sub(frame.center).dot(radial) <= 0.001))
-          return 'Hörnradien är för liten för profilens tvärsnitt.';
+          return `Hörn ${frame.corner + 1}: radien ${source.radii[frame.corner]} mm är för liten för profilens tvärsnitt med vald insättning. Öka radien eller ändra insättningen.`;
       }
     }
     return '';

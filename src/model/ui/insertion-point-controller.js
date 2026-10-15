@@ -1,5 +1,5 @@
 import { gripRefKey, validGripRefs, selectGripRefs } from '../grip-selection.js';
-import { radiusPointObject, pointRadiusBatch } from '../insertion-point-edit.js';
+import { radiusPointRefs, pointRadiusBatch } from '../insertion-point-edit.js';
 import { createInsertionPointInspector } from '../../inspector/insertion-point-inspector.js';
 /** Owns native grip selection and the point inspector's ordinary model transaction. */
 export function installInsertionPointEditor({
@@ -104,17 +104,12 @@ export function installInsertionPointEditor({
       dirty = false;
       inspector.error.textContent = '';
     }
-    const radii = refs.map(
+    const editable = radiusPointRefs(project.objects, refs);
+    const radii = editable.map(
       (ref) => project.objects.find((o) => o.id === ref.id).radii?.[ref.kind] || 0,
     );
-    if (!dirty) value = radii.every((r) => r === radii[0]) ? radii[0] : null;
-    const disabled = refs.some((ref) => {
-      const o = project.objects.find((s) => s.id === ref.id);
-      return (
-        !radiusPointObject(o) ||
-        (o.type === 'polysweep' && [0, o.points.length - 1].includes(ref.kind))
-      );
-    });
+    if (!dirty) value = radii.length && radii.every((r) => r === radii[0]) ? radii[0] : null;
+    const disabled = editable.length === 0;
     inspector.sync({ total: refs.length, value, disabled, dirty, valid: !!batch });
   }
   function preview(text) {

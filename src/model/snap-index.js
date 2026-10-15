@@ -1,3 +1,4 @@
+import { nearestProjectedSegment } from './snap-projection.js';
 import * as THREE from 'three';
 import { createSnapGeometryContext, objectAnchors } from '../model-object.js';
 
@@ -10,7 +11,7 @@ export class SnapIndex {
     this.cells = new Map();
     this.large = [];
   }
-  nearbyContext(camera, width, height, pointer, start, midpoint, perpendicular) {
+  nearbyContext(camera, width, height, pointer, start, midpoint, perpendicular, nearest = true) {
     const clip = new THREE.Matrix4().multiplyMatrices(
       camera.projectionMatrix,
       camera.matrixWorldInverse,
@@ -57,6 +58,17 @@ export class SnapIndex {
             const length = delta.lengthSq();
             const t = length > 1e-12 ? candidate.copy(origin).sub(a).dot(delta) / length : -1;
             include = t >= 0 && t <= 1 && near(candidate.copy(a).addScaledVector(delta, t), 12);
+          }
+          if (!include && nearest) {
+            const point = nearestProjectedSegment(
+              pointer,
+              a.toArray(),
+              b.toArray(),
+              camera,
+              width,
+              height,
+            );
+            include = point && near(candidate.fromArray(point), 10);
           }
           if (include) result.push([a.toArray(), b.toArray()]);
         }

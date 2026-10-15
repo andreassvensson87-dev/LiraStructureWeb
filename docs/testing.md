@@ -265,3 +265,88 @@ En separat körning på appens syntetiska lilla stomexempel (461 objekt, 454 fys
 Browserkontroll på separat localhost-projekt reproducerade även felet med datorns toleransförval. Efter rättning gav återöppnad och omordnad toleransmodell 0 nya / 0 ändrade / 6 oförändrade; bekräftelse skapade ingen ångringspost. Byte till ett annat projekt behöll dess regler. GA P100, Single Part P101/P102 och Assembly P103/P104 visades som fem separata ritningar utan kollision. Inga browserfel. Full `npm run check` med formatering, lint, regression och produktionsbygge passerade.
 
 Detta är kontrollerad regression och syntetiska projektsekvenser. Granskningen är inte en jämförande certifiering mot Tekla eller en verifiering mot många verkliga produktionsprojekt. Ingen publicering ingick.
+
+### Nearest och vinkelrät i modell och ritning
+
+2026-10-15: riktade geometriprov kontrollerar ändliga native-kanter,
+IFC-referenskanter, av/på-val, prioritet för exakta punkter, arbetsplan/axellås,
+indexerad kontra full snapsökning och perspektivkorrekt punkt på en 3D-kant.
+Ritningsflödet kontrollerar raka ritobjekt/modellkonturer, analytiska cirklar och
+ändliga bågar samt att Move inte snappar tillbaka till den egna källgeometrin.
+Copy får fortsatt snappa mot originalet. Kärntester och full `npm run check`
+(formatering, lint, regression, bygge) har körts.
+
+I separat lokalt webbläsarprojekt kontrollerades Nearest på modellkant och
+linjeplacering mot motsatt kant. På Single Part, Assembly och GA placerades en
+linjes start med Nearest på modellkonturen och slutpunkten vinkelrätt på motsatt
+kant: ritningens koordinatfält behöll samma X medan Y gick från +200 till −200.
+Befintlig kantsymbol och rätvinkelsymbol används utan text vid markören.
+Modellens nya kryssruta och ritningens val under Snappunkter kontrollerades.
+Inga konsolfel rapporterades. Detta är funktionsprov i ett litet syntetiskt
+projekt; det ersätter inte ett prestandaprov med en stor IFC-referens.
+
+### Prestandajämförelse för referenssnap
+
+2026-10-15: `node scripts/benchmark-reference-snap.mjs` jämför uttömmande och
+indexerad sökning på samma deterministiska positioner. `--large` ökar från
+20 × 1 000 till 100 × 1 000 syntetiska referensdelar. Varje box har 12 feature-
+kanter. Alla fyra kombinationer av Nearest/Vinkelrät körs med hörnsnap på,
+uppvärmning per kombination och både utspridda och helt överlappande referenser.
+Varje kombination har 240 positioner; valt snapresultat måste vara identiskt
+före/efter. Tiderna omfattar `ReferenceModels.candidates` och `resolveSnap`,
+inte IFC-läsning, verklig rendering eller DOM.
+
+I det överlappande provet gav båda snapparna på följande modell-p95:
+20 000 delar: 3,82 → 0,33 ms; 100 000 delar: 25,04 → 1,78 ms.
+Efter optimeringen, båda av/på: 20 000 delar 0,14/0,33 ms,
+100 000 delar 0,85/1,78 ms. Ritningens befintliga referensindex och hela
+`locateDrawingPoint` kördes med samma geometri; båda på gav p95 0,03 respektive
+0,30 ms. Det syntetiska ritningsprovet innehåller överlappande rektangelkonturer,
+inte en komplex IFC-snittprojektion. Uppvärmning, GC och körordning påverkar
+enskilda värden; små skillnader mellan av/på ska inte tolkas som förbättringar.
+
+`?referenceSnapPerformance=1` aktiverar ett uttryckligt utvecklingstest i en
+separat flik. Det kör samma arbetslast (120 positioner) och även appens riktiga
+modellpunktval med overlayns DOM-uppdateringar. Syntetiska referenser används
+bara synkront under respektive mätning och skrivs aldrig till projekt/lagring.
+Projektobjekt, kameran, snapinställningar, baspunkt och referenser återställs.
+Webbläsarens överlappande 20 000-prov gav punktval+overlay p95 4,5 → 1,0 ms
+med båda snapparna på, jämfört med 0,8 ms efter optimeringen med båda av.
+Det inkluderar inte efterföljande layout/paint, preview, GPU, eventkö eller
+fysisk musfördröjning; alla 20 000 syntetiska delar renderades inte.
+
+Beteendetester jämför kandidater med uttömmande sökning vid ortografisk och
+perspektivkamera, ändrad placering/rotation/skala, synlighet och arbetsområde.
+Ett strukturellt prov kontrollerar att en lokal fråga prövar färre än 100 av
+1 000 objektgränser och att indexet återanvänds/ersätts med referensens objektlista.
+Befintliga import-, återställnings-, borttagnings- och ersättningsprov körs också.
+
+Vanlig webbläsarimport kontrollerades dessutom med en syntetisk IFC om 1 000
+verkligt importerade delar (boxar och runda extruderingar). Workerimporten
+slutfördes, referensen visades och en native musdragning med profilverktyget
+fångade IFC-snappunkter. Inga konsolfel rapporterades. En sista snapmätning på
+0,3 ms observerades under dragningen, men det enskilda värdet är inget
+percentilmått. Testreferensen togs bort efter kontrollen. Full `npm run check`
+passerade efter produktionsändringen.
+
+### Polysweep: flera radiegrepp och insättning
+
+2026-10-15 rättades spärren som gjorde radiefältet inaktivt när ett urval även
+innehöll en ändpunkt eller annat grepp utan hörnradie. Domän- och controllerprov
+kontrollerar gemensam radie för blandade Plate-/Polysweep-hörn och ändpunkter,
+att andra grepp lämnas orörda, atomiskt avvisad ogiltig batch, oförändrat projekt
+under preview, en checkpoint vid Modifiera samt Ångra/Gör om.
+
+Ett formulärprov använder den riktiga sweep-formens 3×3-knapp och modell-editorn:
+R60 med 100 mm profil tillåter centrum men avvisar en insättning som kollapsar
+innerbågen. Knapp/insättningssammanfattning återgår till centrum, felmeddelandet
+behålls och ingen historik skapas. R300 tillåter samma byte; punkter och radier
+bevaras och save/load samt Ångra kontrolleras.
+
+Separat webbläsarprojekt med två rundade hörn: alla fyra grepp, inklusive båda
+ändpunkter, markerades och hörnradier ändrades gemensamt. Modifiera och Ångra
+kontrollerades. Efter R60→R300 ändrades 3×3-insättningen till Höger/uppe och
+ett rundat hörn flyttades med native drag. Den nedladdningsbara projektlänkens
+faktiska JSON kontrollerades: endast punkt 1 flyttad, radier [0,300,300,0],
+insättning right/top. Ett avvisat R60-insättningsval verifierades också i UI.
+Inga konsolfel rapporterades. Full `npm run check` passerade.

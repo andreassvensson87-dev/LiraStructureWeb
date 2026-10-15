@@ -25,6 +25,7 @@ export function createProject({ grid, levels }) {
       quadrants: true,
       midpoints: true,
       perpendicular: true,
+      nearest: true,
       gridLines: true,
       gridIntersections: true,
       gridStepEnabled: false,

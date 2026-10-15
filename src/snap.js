@@ -1,3 +1,5 @@
+import { perpendicularPoint } from './snap-geometry.js';
+import { nearestProjectedSegment } from './model/snap-projection.js';
 import { withinWorkArea } from './model/work-area.js';
 import { gridSegments, gridCrossings, gridProjection, lineIntersection } from './grid-geometry.js';
 import { roundProfile } from './round-profile.js';
@@ -23,6 +25,7 @@ export function resolveSnap({
   quadrantSnap = cornerSnap,
   midpointSnap = false,
   perpendicularSnap = false,
+  nearestSnap = true,
   gridLines = true,
   gridIntersections = true,
   gridStepEnabled = false,
@@ -84,8 +87,9 @@ export function resolveSnap({
   const holePoints = cornerSnap
     ? sweeps.flatMap((s) => geometryContext.holeCenters?.(s) || [])
     : [];
-  const segmentPoints = [];
-  if (midpointSnap || (perpendicularSnap && origin))
+  const segmentPoints = [],
+    nearestPoints = [];
+  if (nearestSnap || midpointSnap || (perpendicularSnap && origin))
     for (const s of sweeps)
       for (const [a, b] of geometryContext.objectSegments(s)) {
         const av = new THREE.Vector3(...a),
@@ -99,23 +103,26 @@ export function resolveSnap({
             label: 'Mittpunkt',
           });
         if (perpendicularSnap && origin) {
-          const t = origin.clone().sub(av).dot(delta) / lengthSq;
-          if (t >= 0 && t <= 1) {
-            const point = av.clone().addScaledVector(delta, t);
-            if (point.distanceTo(origin) > 0.01)
-              segmentPoints.push({
-                coords: point.toArray(),
-                symbol: 'perpendicular',
-                label: 'Vinkelrät',
-              });
-          }
+          const point = perpendicularPoint(start, a, b);
+          if (point)
+            segmentPoints.push({ coords: point, symbol: 'perpendicular', label: 'Vinkelrät' });
+        }
+        if (nearestSnap && s.type !== 'gridline') {
+          const point = nearestProjectedSegment(pointer, a, b, camera, width, height);
+          if (point) nearestPoints.push({ coords: point, symbol: 'line', label: 'Närmaste' });
         }
       }
   for (const [points, tolerance] of [
     [holePoints, 14],
     [objectPoints, 14],
-    [referencePoints.filter((p) => !p.edge), 14],
-    [segmentPoints, 12],
+    [referencePoints.filter((p) => !p.edge && p.symbol !== 'perpendicular'), 14],
+    [
+      [
+        ...segmentPoints,
+        ...(perpendicularSnap ? referencePoints.filter((p) => p.symbol === 'perpendicular') : []),
+      ],
+      12,
+    ],
     [
       endpoints
         ? gridSegments(grid).flatMap((line) =>
@@ -129,7 +136,6 @@ export function resolveSnap({
         : [],
       14,
     ],
-    [referencePoints.filter((p) => p.edge), 10],
     [
       gridIntersections
         ? gridCrossings(grid).map(({ point, lines }) => ({
@@ -141,6 +147,7 @@ export function resolveSnap({
         : [],
       20,
     ],
+    [[...nearestPoints, ...(nearestSnap ? referencePoints.filter((p) => p.edge) : [])], 10],
   ]) {
     let best = null,
       distance = tolerance,

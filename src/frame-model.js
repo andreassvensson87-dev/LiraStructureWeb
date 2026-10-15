@@ -1,3 +1,4 @@
+import { nearestSegmentPoint, perpendicularPoint } from './snap-geometry.js';
 import { nearestFrameIntersection } from './frame-snap-intersections.js';
 export { intersection } from './frame-snap-intersections.js';
 export const FRAME_LIBRARY_KEY = 'lirastructure.drawing-frames.v1';
@@ -31,6 +32,7 @@ export function snapFrame(
     midpoints = true,
     intersections = true,
     perpendicular = true,
+    nearest = false,
     ortho = false,
     polar = 0,
     grid = false,
@@ -63,11 +65,8 @@ export function snapFrame(
   }
   if (perpendicular && base)
     for (const [a, b] of lines) {
-      const d = sub(b, a),
-        l = d[0] ** 2 + d[1] ** 2,
-        t = l ? ((base[0] - a[0]) * d[0] + (base[1] - a[1]) * d[1]) / l : -1;
-      if (t >= 0 && t <= 1)
-        candidates.push({ point: [a[0] + t * d[0], a[1] + t * d[1]], kind: 'Vinkelrät' });
+      const point = perpendicularPoint(base, a, b);
+      if (point) candidates.push({ point, kind: 'Vinkelrät' });
     }
   let closest = null,
     best = tolerance;
@@ -86,6 +85,24 @@ export function snapFrame(
     }
   }
   if (closest) return closest;
+  if (nearest) {
+    for (const [a, b] of lines) {
+      const point = nearestSegmentPoint(raw, a, b);
+      if (
+        !point ||
+        (ortho &&
+          base &&
+          Math.min(Math.abs(point[0] - base[0]), Math.abs(point[1] - base[1])) > 1e-7)
+      )
+        continue;
+      const d = distance(raw, point);
+      if (d < best) {
+        best = d;
+        closest = { point, kind: 'Närmaste' };
+      }
+    }
+    if (closest) return closest;
+  }
   let point = [...raw],
     kind = 'Fritt';
   if (base && (ortho || polar)) {

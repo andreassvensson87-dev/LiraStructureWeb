@@ -4,6 +4,7 @@ import { withinWorkArea } from '../model/work-area.js';
 import { ReferenceImport } from './reference-import.js';
 import { renderReferenceList, renderReferencePlacement } from './reference-inspector.js';
 import * as THREE from 'three';
+import { createReferencePartSnapIndex } from './snap-part-index.js';
 import { referenceCandidates } from './edge-index.js';
 import { applyCADPlacement } from './cad-geometry.js';
 import { dxfUnits } from '../frame-dxf.js';
@@ -725,6 +726,9 @@ export class ReferenceModels {
     }
   }
   syncParts() {
+    for (const model of this.models)
+      if (model.snapIndex?.parts !== model.parts)
+        model.snapIndex = createReferencePartSnapIndex(model.parts, model.group);
     this.parts = this.models.flatMap((model) => model.parts);
     this.setWorkArea(this.workAreaBounds || null, true);
   }
@@ -828,7 +832,7 @@ export class ReferenceModels {
     if (!this.group.visible) return [];
     return this.models.flatMap((model) =>
       model.group.visible && (model.corners || model.edges)
-        ? referenceCandidates(model.parts, {
+        ? referenceCandidates(model.snapIndex?.query(options) || model.parts, {
             ...options,
             workArea: this.workAreaBounds,
             corners: model.corners,

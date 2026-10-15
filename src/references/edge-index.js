@@ -1,3 +1,5 @@
+import { perpendicularPoint } from '../snap-geometry.js';
+import { nearestProjectedSegment } from '../model/snap-projection.js';
 import { withinWorkArea, clipSegmentToBox } from '../model/work-area.js';
 import * as THREE from 'three';
 /** Bounding-volume tree over geometric feature edges, never triangle diagonals. */
@@ -24,6 +26,7 @@ export function edgeIndex(array) {
   };
   const root = build(ids);
   return {
+    bounds: root.box,
     query(ray, radius) {
       const result = [],
         box = new THREE.Box3();
@@ -50,10 +53,14 @@ export function referenceCandidates(
     height,
     corners = true,
     edges = true,
+    nearest = true,
+    perpendicular = false,
+    start = null,
     labelPrefix = 'IFC',
     workArea = null,
   },
 ) {
+  if (!corners && (!edges || (!nearest && (!perpendicular || !start)))) return [];
   const result = [],
     cursor = new THREE.Vector2(...pointer);
   const screen = (p) => {
@@ -86,18 +93,18 @@ export function referenceCandidates(
         if (!clipped) continue;
         a.fromArray(clipped[0]);
         b.fromArray(clipped[1]);
-        const sa = screen(a),
-          delta = screen(b).sub(sa),
-          length = delta.lengthSq();
-        if (length < 1e-8) continue;
-        const t = THREE.MathUtils.clamp(cursor.clone().sub(sa).dot(delta) / length, 0, 1);
-        if (sa.addScaledVector(delta, t).distanceTo(cursor) < 10)
-          result.push({
-            coords: a.lerp(b, t).toArray(),
-            label: `${labelPrefix}-kant`,
-            symbol: 'line',
-            edge: true,
-          });
+        const from = a.toArray(),
+          to = b.toArray();
+        if (perpendicular && start) {
+          const point = perpendicularPoint(start, from, to);
+          if (point && screen(new THREE.Vector3(...point)).distanceTo(cursor) < 12)
+            result.push({ coords: point, label: 'Vinkelrät', symbol: 'perpendicular' });
+        }
+        if (nearest) {
+          const point = nearestProjectedSegment(pointer, from, to, camera, width, height);
+          if (point && screen(new THREE.Vector3(...point)).distanceTo(cursor) < 10)
+            result.push({ coords: point, label: 'Närmaste', symbol: 'line', edge: true });
+        }
       }
     }
   }

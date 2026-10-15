@@ -1,3 +1,4 @@
+import { curveSnapCandidates } from './drawing-snap-curves.js';
 import { nearbySnapEntities } from './drawing-snap-geometry.js';
 import { defaultCadSettings } from './cad-statusbar.js';
 import { constrainCadPoint, polarTrackingIntersection } from './cad-tracking.js';
@@ -27,7 +28,16 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
     const p = editor.adapter.project(hit.point, hit.view);
     let best = 10;
     const drawn = editor.items
-      .filter((item) => item.type === 'shape' && item.view === hit.view && item.id !== excludeId)
+      .filter(
+        (item) =>
+          item.type === 'shape' &&
+          item.view === hit.view &&
+          item.id !== excludeId &&
+          !(
+            ['move-shapes', 'rotate-shapes'].includes(editor.mode) &&
+            editor.transform?.ids.includes(item.id)
+          ),
+      )
       .flatMap((item) =>
         item.shape === 'circle'
           ? []
@@ -41,6 +51,10 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
           item.type === 'shape' &&
           item.view === hit.view &&
           item.id !== excludeId &&
+          !(
+            ['move-shapes', 'rotate-shapes'].includes(editor.mode) &&
+            editor.transform?.ids.includes(item.id)
+          ) &&
           ['line', 'polyline', 'polygon', 'rectangle', 'insulation'].includes(item.shape),
       )
       .map((item) => {
@@ -65,6 +79,8 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
       midpoints: settings.midpoints,
       intersections: settings.intersections,
       perpendicular: settings.perpendicular,
+      nearest: settings.nearest !== false,
+      ortho: settings.ortho,
     });
     const candidates = editor.adapter
       .candidates(hit.view, rawPoint, pixelSize * best)
@@ -84,7 +100,14 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
       );
     if (additional.kind !== 'Fritt') candidates.push(additional);
     for (const item of editor.items.filter(
-      (item) => item.type === 'shape' && item.view === hit.view && item.id !== excludeId,
+      (item) =>
+        item.type === 'shape' &&
+        item.view === hit.view &&
+        item.id !== excludeId &&
+        !(
+          ['move-shapes', 'rotate-shapes'].includes(editor.mode) &&
+          editor.transform?.ids.includes(item.id)
+        ),
     )) {
       if (!['circle', 'arc'].includes(item.shape)) continue;
       try {
@@ -135,7 +158,20 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
       }
     if (editor.draft?.points.length >= 3 && ['polyline', 'polygon'].includes(editor.mode))
       candidates.push({ point: editor.draft.points[0], kind: 'Ändpunkt' });
+    for (const item of editor.items.filter(
+      (item) =>
+        item.type === 'shape' &&
+        item.view === hit.view &&
+        item.id !== excludeId &&
+        !(
+          ['move-shapes', 'rotate-shapes'].includes(editor.mode) &&
+          editor.transform?.ids.includes(item.id)
+        ),
+    ))
+      candidates.push(...curveSnapCandidates(item, rawPoint, base, settings));
+    candidates.sort((a, b) => Number(a.kind === 'Närmaste') - Number(b.kind === 'Närmaste'));
     for (const { point: candidate, kind } of candidates) {
+      if (kind === 'Närmaste' && hit.snapped && hit.kind !== 'Närmaste') continue;
       if (
         settings.ortho &&
         base &&

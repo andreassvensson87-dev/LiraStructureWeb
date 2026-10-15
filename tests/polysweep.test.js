@@ -502,3 +502,205 @@ test('projected add-corner controls never intercept actual corner hit areas at s
   assert.equal([...overlay.markers.keys()].filter((key) => key.includes(':edge:')).length, 0);
   assert.equal(overlay.markers.size, 4);
 });
+
+test('radius edit accepts a mixed grip selection, updates only actual corners and preserves all other grips', () => {
+  const p = poly(),
+    pl = plate(),
+    beam = { id: 'beam', type: 'sweep', start: [0, 0, 0], end: [1000, 0, 0] };
+  const objects = [p, pl, beam],
+    before = structuredClone(objects);
+  const refs = [
+    ...p.points.map((_, kind) => ({ id: p.id, kind })),
+    ...pl.polygon.map((_, kind) => ({ id: pl.id, kind })),
+    { id: 'beam', kind: 'start' },
+  ];
+  const batch = pointRadiusBatch(objects, refs, 200);
+  assert.equal(batch.length, 2);
+  assert.deepEqual(batch.find((o) => o.id === p.id).radii, [0, 200, 200, 200, 0]);
+  assert.deepEqual(
+    batch.find((o) => o.id === pl.id).radii,
+    pl.polygon.map(() => 200),
+  );
+  assert.deepEqual(objects, before);
+  assert.throws(
+    () => pointRadiusBatch(objects, [...refs, { id: p.id, kind: 999 }], 200),
+    /giltiga/,
+  );
+  assert.throws(() => pointRadiusBatch(objects, refs, 2000), /plats/);
+  assert.deepEqual(objects, before);
+});
+
+test('point inspector previews and commits multiple corner radii even with endpoints selected, preserving undo and redo', async (t) => {
+  const { installInsertionPointEditor } = await import(
+    '../src/model/ui/insertion-point-controller.js'
+  );
+  const previous = globalThis.document;
+  const element = (tag) => ({
+    tag,
+    dataset: {},
+    children: [],
+    handlers: {},
+    classList: { remove() {}, toggle() {} },
+    append(...nodes) {
+      this.children.push(...nodes);
+    },
+    setAttribute() {},
+    addEventListener(name, fn) {
+      this.handlers[name] = fn;
+    },
+    querySelector(tag) {
+      return this.children.find((n) => n.tag === tag);
+    },
+  });
+  globalThis.document = { createElement: element };
+  t.after(() => {
+    globalThis.document = previous;
+  });
+  const project = createProject({
+    grid: { x: [], y: [] },
+    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
+  });
+  project.objects = [poly()];
+  const before = structuredClone(project),
+    history = new ProjectHistory();
+  let checkpoints = 0;
+  const editor = createModelEditor({
+      project,
+      checkpoint: () => {
+        checkpoints++;
+        history.checkpoint(project);
+      },
+    }),
+    root = element('aside'),
+    controllers = { inspector: { rollback() {}, show() {} } };
+  const actions = {
+    cancelInspectorPreview() {},
+    previewModelBatch: () => new THREE.Group(),
+    render() {},
+  };
+  installInsertionPointEditor({
+    $: () => root,
+    actions,
+    controllers,
+    frameGate: { invalidate() {} },
+    modelEditor: editor,
+    project,
+    scene: new THREE.Scene(),
+    tools: {},
+    ui: { selectedIds: new Set(['poly']) },
+  });
+  const refs = poly().points.map((_, kind) => ({ id: 'poly', kind }));
+  controllers.pointUI.select(refs);
+  const panel = root.children[0],
+    input = panel.children[2].querySelector('input'),
+    apply = panel.children[3].children[0];
+  assert.equal(input.disabled, false);
+  assert.equal(input.value, '', 'eligible radii are mixed');
+  input.value = '200';
+  input.oninput();
+  assert.equal(apply.disabled, false);
+  assert.deepEqual(project, before);
+  assert.equal(checkpoints, 0);
+  apply.onclick();
+  assert.equal(checkpoints, 1);
+  assert.deepEqual(project.objects[0].radii, [0, 200, 200, 200, 0]);
+  assert.deepEqual(controllers.pointUI.selected(), refs);
+  Object.assign(project, history.undo(project));
+  assert.deepEqual(project, before);
+  Object.assign(project, history.redo(project));
+  assert.deepEqual(project.objects[0].radii, [0, 200, 200, 200, 0]);
+  controllers.pointUI.select([
+    { id: 'poly', kind: 0 },
+    { id: 'poly', kind: 4 },
+  ]);
+  assert.equal(input.disabled, true);
+});
+
+test('profile insertion changes on a rounded polysweep commit atomically; rejected insertion keeps the persisted button and useful error', async (t) => {
+  const { createSweepForm } = await import('../src/model/ui/sweep-form.js');
+  const previous = globalThis.document,
+    fields = new Map();
+  const element = (value = '') => ({
+    value,
+    style: {},
+    dataset: {},
+    attributes: {},
+    setAttribute(k, v) {
+      this.attributes[k] = v;
+    },
+    getAttribute(k) {
+      return this.attributes[k] || '';
+    },
+    addEventListener() {},
+  });
+  const $ = (id) => {
+    if (!fields.has(id)) fields.set(id, element());
+    return fields.get(id);
+  };
+  const buttons = ['left', 'center', 'right'].flatMap((h) =>
+    ['top', 'center', 'bottom'].map((v) =>
+      Object.assign(element(), { dataset: { placementH: h, placementV: v } }),
+    ),
+  );
+  globalThis.document = {
+    getElementById: $,
+    querySelectorAll: (selector) => (selector === '[data-placement-h]' ? buttons : []),
+  };
+  t.after(() => {
+    globalThis.document = previous;
+  });
+  const project = createProject({
+    grid: { x: [], y: [] },
+    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
+  });
+  project.objects = [{ ...poly(), radii: [0, 60, 60, 0, 0] }];
+  const ui = { selected: 'poly' },
+    history = new ProjectHistory();
+  let checkpoints = 0;
+  const editor = createModelEditor({
+    project,
+    checkpoint: () => {
+      history.checkpoint(project);
+      checkpoints++;
+    },
+  });
+  const form = createSweepForm({
+    project,
+    tools: {},
+    ui,
+    getProfilePicker: () => null,
+    save: (changes) => {
+      try {
+        editor.update([{ ...project.objects[0], ...changes }]);
+        return true;
+      } catch (error) {
+        $('inspector-error').textContent = $('error').textContent = error.message;
+        return false;
+      }
+    },
+  });
+  form.fillForm(project.objects[0]);
+  const button = (h, v) =>
+    buttons.find((b) => b.dataset.placementH === h && b.dataset.placementV === v);
+  const before = structuredClone(project);
+  button('right', 'top').onclick();
+  assert.deepEqual(project, before);
+  assert.equal(checkpoints, 0);
+  assert.equal(button('center', 'center').attributes['aria-pressed'], 'true');
+  assert.equal(button('right', 'top').attributes['aria-pressed'], 'false');
+  assert.match($('inspector-error').textContent, /radien 60 mm.*vald insättning/);
+  assert.match($('error').textContent, /Öka radien/);
+  editor.update([{ ...project.objects[0], radii: [0, 300, 300, 0, 0] }]);
+  form.fillForm(project.objects[0]);
+  const points = structuredClone(project.objects[0].points),
+    radii = [...project.objects[0].radii];
+  button('right', 'top').onclick();
+  assert.equal(checkpoints, 2);
+  assert.deepEqual(project.objects[0].points, points);
+  assert.deepEqual(project.objects[0].radii, radii);
+  assert.equal(project.objects[0].placement.horizontalAlignment, 'right');
+  assert.equal(button('right', 'top').attributes['aria-pressed'], 'true');
+  assert.deepEqual(parseProjectFile(serializeProject(project)).objects, project.objects);
+  Object.assign(project, history.undo(project));
+  assert.equal(project.objects[0].placement, undefined);
+});

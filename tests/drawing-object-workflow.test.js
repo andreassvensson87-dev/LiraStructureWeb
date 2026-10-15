@@ -198,6 +198,177 @@ test('snap kinds survive point resolution; closed edges, circle centers and quad
   assert.equal(hit().kind, 'Centrum');
   point = [100, 120];
   assert.equal(hit().kind, 'Kvadrant');
-  editor.cad.get = () => ({ ...defaultCadSettings, centers: false, quadrants: false });
+  editor.cad.get = () => ({
+    ...defaultCadSettings,
+    centers: false,
+    quadrants: false,
+    nearest: false,
+  });
   assert.equal(hit().snapped, undefined);
+});
+
+test('drawing nearest and perpendicular use finite visible edges, share priority and work during transforms', () => {
+  let point = [32, 1],
+    settings = { ...defaultCadSettings, polar: 0 },
+    base = null;
+  const editor = {
+    items: [
+      {
+        id: 'line',
+        type: 'shape',
+        shape: 'line',
+        view: 'v',
+        points: [
+          [0, 0],
+          [100, 0],
+        ],
+      },
+    ],
+    cad: { get: () => settings, coordinates() {} },
+    tracking: new CadTracking(),
+    transform: {
+      active: () => !!base,
+      get base() {
+        return base;
+      },
+    },
+    adapter: {
+      locate: () => ({ view: 'v', point: [...point] }),
+      project: (p) => p,
+      pixelScale: () => 1,
+      candidates: () => [],
+    },
+  };
+  const hit = () => locateDrawingPoint(editor, { clientX: 0, clientY: 0 }, 'v');
+  assert.equal(hit().kind, 'Närmaste');
+  assert.deepEqual(hit().point, [32, 0]);
+  point = [49, 1];
+  assert.equal(hit().kind, 'Mittpunkt');
+  point = [1, 1];
+  assert.equal(hit().kind, 'Ändpunkt');
+  base = [32, 50];
+  point = [33, 1];
+  assert.equal(hit().kind, 'Vinkelrät');
+  assert.deepEqual(hit().point, [32, 0]);
+  base = [130, 50];
+  point = [130, 0];
+  assert.equal(hit().snapped, undefined);
+  base = null;
+  point = [32, 1];
+  settings.nearest = false;
+  assert.equal(hit().snapped, undefined);
+  settings.snap = false;
+  base = [32, 50];
+  assert.equal(hit().snapped, undefined);
+  settings = { ...defaultCadSettings };
+  base = [32, 50];
+  editor.items = [];
+  editor.adapter.snapEntities = () => [
+    {
+      type: 'line',
+      points: [
+        [0, 0],
+        [100, 0],
+      ],
+    },
+  ];
+  assert.equal(hit().kind, 'Vinkelrät');
+  base = null;
+  assert.equal(hit().kind, 'Närmaste');
+});
+
+test('drawing curve snapping uses analytic circle and finite arc rather than chord approximations', () => {
+  const circle = {
+    id: 'c',
+    type: 'shape',
+    shape: 'circle',
+    view: 'v',
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+  };
+  let point = [61, 81],
+    base = null;
+  const settings = {
+    ...defaultCadSettings,
+    centers: false,
+    quadrants: false,
+    endpoints: false,
+    midpoints: false,
+    intersections: false,
+  };
+  const editor = {
+    items: [circle],
+    cad: { get: () => settings, coordinates() {} },
+    tracking: new CadTracking(),
+    transform: {
+      active: () => !!base,
+      get base() {
+        return base;
+      },
+    },
+    adapter: {
+      locate: () => ({ view: 'v', point: [...point] }),
+      project: (p) => p,
+      pixelScale: () => 1,
+      candidates: () => [],
+    },
+  };
+  const hit = () => locateDrawingPoint(editor, {}, 'v');
+  assert.equal(hit().kind, 'Närmaste');
+  assert.ok(Math.abs(Math.hypot(...hit().point) - 100) < 1e-8);
+  base = [120, 160];
+  point = [60, 80];
+  assert.equal(hit().kind, 'Vinkelrät');
+  assert.ok(Math.hypot(hit().point[0] - 60, hit().point[1] - 80) < 1e-8);
+  editor.items = [
+    {
+      ...circle,
+      shape: 'arc',
+      points: [
+        [100, 0],
+        [0, 100],
+        [-100, 0],
+      ],
+    },
+  ];
+  base = [120, -160];
+  point = [60, -80];
+  assert.equal(hit().snapped, undefined);
+  base = null;
+  point = [101, -2];
+  assert.equal(hit().kind, 'Närmaste');
+  assert.deepEqual(hit().point, [100, 0]);
+  point = [60, 80];
+  assert.equal(hit().kind, 'Närmaste');
+});
+
+test('nearest does not drag the source back onto itself during Move, and still targets it during Copy', () => {
+  const line = {
+    id: 'source',
+    type: 'shape',
+    shape: 'line',
+    view: 'v',
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+  };
+  const editor = {
+    items: [line],
+    mode: 'move-shapes',
+    cad: { get: () => defaultCadSettings, coordinates() {} },
+    tracking: new CadTracking(),
+    transform: { active: () => true, base: [25, 20], ids: ['source'] },
+    adapter: {
+      locate: () => ({ view: 'v', point: [32, 1] }),
+      project: (p) => p,
+      pixelScale: () => 1,
+      candidates: () => [],
+    },
+  };
+  assert.equal(locateDrawingPoint(editor, {}, 'v').snapped, undefined);
+  editor.mode = 'copy-shapes';
+  assert.equal(locateDrawingPoint(editor, {}, 'v').kind, 'Vinkelrät');
 });

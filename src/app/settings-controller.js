@@ -215,11 +215,13 @@ export function createSettingsController({
       'quadrants',
       'midpoints',
       'perpendicular',
+      'nearest',
       'gridLines',
       'gridIntersections',
       'gridStepEnabled',
     ])
-      $('snap-' + key).checked = project.snap[key];
+      $('snap-' + key).checked =
+        key === 'nearest' ? project.snap.nearest !== false : project.snap[key];
     $('snap-gridStep').value = project.snap.gridStep;
     $('snap-gridStep').disabled = !project.snap.gridStepEnabled;
     for (const key of ['name', 'number', 'client']) $('project-' + key).value = project.info[key];
@@ -303,6 +305,7 @@ export function createSettingsController({
           'quadrants',
           'midpoints',
           'perpendicular',
+          'nearest',
           'gridLines',
           'gridIntersections',
           'gridStepEnabled',

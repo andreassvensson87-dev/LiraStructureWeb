@@ -7,6 +7,7 @@ export const defaultCadSettings = {
   quadrants: true,
   intersections: true,
   perpendicular: true,
+  nearest: true,
   ortho: false,
   polar: 0,
   otrack: false,
@@ -56,10 +57,10 @@ export function createCadStatusbar(dialog, footer, onChange = () => {}) {
   bar.append(snap);
   popup(
     'Snappunkter',
-    ['endpoints', 'midpoints', 'intersections', 'perpendicular', 'centers', 'quadrants']
+    ['endpoints', 'midpoints', 'intersections', 'perpendicular', 'centers', 'quadrants', 'nearest']
       .map(
         (key, i) =>
-          `<label><input type="checkbox" data-cad="${key}">${['Ändpunkt', 'Mittpunkt', 'Korsning', 'Vinkelrät', 'Centrum', 'Kvadrant'][i]}</label>`,
+          `<label><input type="checkbox" data-cad="${key}">${['Ändpunkt', 'Mittpunkt', 'Korsning', 'Vinkelrät', 'Centrum', 'Kvadrant', 'Närmaste'][i]}</label>`,
       )
       .join(''),
   );
