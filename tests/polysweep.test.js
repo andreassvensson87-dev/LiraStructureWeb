@@ -386,7 +386,14 @@ test('Backspace in a polysweep draft keeps exact length available until the last
   const previous = globalThis.document,
     fields = new Map();
   const $ = (id) => {
-    if (!fields.has(id)) fields.set(id, { hidden: true, value: '', textContent: '' });
+    if (!fields.has(id))
+      fields.set(id, {
+        hidden: true,
+        value: '',
+        textContent: '',
+        classList: { toggle() {} },
+        setAttribute() {},
+      });
     return fields.get(id);
   };
   globalThis.document = { getElementById: $ };
@@ -572,6 +579,7 @@ test('point inspector previews and commits multiple corner radii even with endpo
       },
     }),
     root = element('aside'),
+    messages = new Map(),
     controllers = { inspector: { rollback() {}, show() {} } };
   const actions = {
     cancelInspectorPreview() {},
@@ -579,7 +587,11 @@ test('point inspector previews and commits multiple corner radii even with endpo
     render() {},
   };
   installInsertionPointEditor({
-    $: () => root,
+    $: (id) => {
+      if (id === 'inspector-properties') return root;
+      if (!messages.has(id)) messages.set(id, { textContent: '' });
+      return messages.get(id);
+    },
     actions,
     controllers,
     frameGate: { invalidate() {} },
@@ -596,6 +608,8 @@ test('point inspector previews and commits multiple corner radii even with endpo
     apply = panel.children[3].children[0];
   assert.equal(input.disabled, false);
   assert.equal(input.value, '', 'eligible radii are mixed');
+  messages.set('inspector-error', { textContent: 'Tidigare radiefel' });
+  messages.set('error', { textContent: 'Tidigare radiefel' });
   input.value = '200';
   input.oninput();
   assert.equal(apply.disabled, false);
@@ -603,6 +617,8 @@ test('point inspector previews and commits multiple corner radii even with endpo
   assert.equal(checkpoints, 0);
   apply.onclick();
   assert.equal(checkpoints, 1);
+  assert.equal(messages.get('inspector-error').textContent, '');
+  assert.equal(messages.get('error').textContent, '');
   assert.deepEqual(project.objects[0].radii, [0, 200, 200, 200, 0]);
   assert.deepEqual(controllers.pointUI.selected(), refs);
   Object.assign(project, history.undo(project));

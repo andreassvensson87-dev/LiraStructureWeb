@@ -37,11 +37,9 @@ export function installModelWorkspace({ root, controllers }) {
     'Arbetsområde från två motstående hörn i XY',
   );
   const polysweep = document.createElement('button');
+  polysweep.id = 'polysweep';
   polysweep.textContent = 'Polysweep';
   polysweep.onclick = () => controllers.polysweepUI.start();
-  const profileLibrary = document.createElement('button');
-  profileLibrary.textContent = 'Välj profil ur bibliotek';
-  profileLibrary.onclick = () => controllers.sectionEditor.open();
   const planeCommand = (mode, label) => {
     const node = document.createElement('button');
     node.textContent = label;
@@ -63,15 +61,8 @@ export function installModelWorkspace({ root, controllers }) {
     {
       label: 'Skapa',
       items: [
-        {
-          label: 'Profil',
-          primary: document.getElementById('draw'),
-          size: 'large',
-          menu: [
-            { node: polysweep, icon: 'polyline' },
-            { node: profileLibrary, icon: 'library' },
-          ],
-        },
+        button('draw', 'large', 'Sweep'),
+        { node: polysweep, icon: 'polyline', size: 'large' },
         { stack: [button('plate'), button('item')] },
         {
           label: 'Block',

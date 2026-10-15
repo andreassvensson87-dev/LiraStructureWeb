@@ -140,6 +140,7 @@ export function installInsertionPointEditor({
           JSON.stringify(next) !== JSON.stringify(project.objects.find((o) => o.id === next.id)),
       );
       if (changed) modelEditor.update(batch);
+      $('inspector-error').textContent = $('error').textContent = '';
       reset();
       actions.render();
       $('status').textContent = 'Hörnradier uppdaterade';

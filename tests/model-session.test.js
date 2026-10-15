@@ -315,3 +315,45 @@ test('shared create attributes commit with geometry once and never overwrite att
   f.actions.restore('undo');
   assert.deepEqual(f.project.objects, before);
 });
+
+test('a successful radius correction clears both errors left by a rejected profile insertion', (t) => {
+  const f = fixture(t);
+  f.project.objects = [
+    {
+      id: 'poly',
+      name: 'Polysweep',
+      type: 'polysweep',
+      prefix: 'PS',
+      number: 1,
+      profile: 'rect',
+      width: 100,
+      height: 100,
+      thickness: 0,
+      rotation: 0,
+      points: [
+        [0, 0, 0],
+        [2000, 0, 0],
+        [2000, 2000, 0],
+        [4000, 2000, 0],
+      ],
+      radii: [0, 60, 60, 0],
+    },
+  ];
+  f.actions.select('poly');
+  assert.equal(
+    f.actions.save({ placement: { horizontalAlignment: 'right', verticalAlignment: 'top' } }),
+    false,
+  );
+  assert.match(f.$('inspector-error').textContent, /för liten/);
+  assert.match(f.$('error').textContent, /för liten/);
+  assert.equal(f.projectHistory.past.length, 0);
+  assert.equal(f.actions.save({ radii: [0, 300, 300, 0] }), true);
+  assert.equal(f.$('inspector-error').textContent, '');
+  assert.equal(f.$('error').textContent, '');
+  assert.equal(f.projectHistory.past.length, 1);
+  assert.equal(
+    f.actions.save({ placement: { horizontalAlignment: 'right', verticalAlignment: 'top' } }),
+    true,
+  );
+  assert.equal(f.$('inspector-error').textContent, '');
+});

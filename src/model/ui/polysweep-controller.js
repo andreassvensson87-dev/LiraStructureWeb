@@ -91,6 +91,8 @@ export function installPolysweepTools({
   }
   function sync(preview) {
     const creating = tools.operation?.mode === 'polysweepCreate';
+    $('polysweep')?.classList.toggle('active', creating);
+    $('polysweep')?.setAttribute('aria-pressed', String(creating));
     const selected =
       project.objects.find((o) => o.id === ui.selected) ||
       (tools.operation?.sources?.length === 1 ? tools.operation.sources[0] : null);

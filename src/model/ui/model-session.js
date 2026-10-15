@@ -195,6 +195,7 @@ export function installModelSession({
       ui.selected = id;
     }
     ui.selectedIds = new Set([ui.selected]);
+    $('inspector-error').textContent = $('error').textContent = '';
     setDrawing(false);
     render();
     rememberSweep(project.objects.find((o) => o.id === ui.selected));
