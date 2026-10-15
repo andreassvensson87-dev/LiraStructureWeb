@@ -16,6 +16,7 @@ export function createModelEditorState() {
     sequence: 0,
     draftMaterial: { material: null, colorOverride: null },
     draftMaterialAutomatic: true,
+    objectDrafts: {},
     formSection: null,
     libraryMode: false,
     placement: { horizontalAlignment: 'center', verticalAlignment: 'center' },

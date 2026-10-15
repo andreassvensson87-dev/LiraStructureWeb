@@ -4,7 +4,7 @@ import { sweepFrame, validateSweep } from '../sweep.js';
 import { validatePlate } from '../plate.js';
 import { sectionProperties, validateContours } from '../section-profile.js';
 import { nextIdentity } from '../object-identity.js';
-import { matchHeaProfile } from './hea-profile.js';
+import { matchLibraryProfile } from './profile-match.js';
 const tolerance = 0.02;
 const pointKey = (p) => p.map((v) => Math.round(v / tolerance)).join(',');
 const edgeKey = (a, b) => [a, b].sort().join('|');
@@ -181,7 +181,7 @@ export function extrusionFromMesh(mesh, kind = 'sweep') {
     throw Error('Plate med genomgående hål stöds inte ännu.');
   return result;
 }
-export function convertReferencePart(part, model, kind) {
+export function convertReferencePart(part, model, kind, profiles, onProfileMatch = () => {}) {
   const { axis, x, y, min, depth, loops, properties, origin } = extrusionFromMesh(part.mesh, kind);
   const center = origin
     .clone()
@@ -234,20 +234,43 @@ export function convertReferencePart(part, model, kind) {
       end: center.clone().addScaledVector(axis, depth).toArray(),
     };
   if (kind === 'sweep') {
-    const match = matchHeaProfile(loops, properties);
-    if (match) {
-      object.section = match.section;
-      object.rotation = match.rotation;
-      object.width = match.section.properties.bounds.width;
-      object.height = match.section.properties.bounds.height;
+    const evidence = referenceProfileEvidence(part);
+    const result = matchLibraryProfile({ ...evidence, geometry: { loops, properties } }, profiles);
+    onProfileMatch(result);
+    const match = result.suggestion;
+    if (result.status === 'verified' && match?.rotation != null) {
+      object = conversionProfile({ ...object, rotation: match.rotation }, match.section);
     }
   }
   const error = kind === 'plate' ? validatePlate(object) : validateSweep(object);
   if (error) throw Error(error);
   return object;
 }
+/** A manual profile choice changes the section, never the recovered axis or source identity. */
+export function conversionProfile(object, section) {
+  if (object.type !== 'sweep') throw Error('Profilval gäller bara Sweep.');
+  const snapshot = structuredClone(section);
+  snapshot.anchor = [snapshot.properties.cx, snapshot.properties.cy];
+  const next = {
+    ...object,
+    profile: 'custom',
+    section: snapshot,
+    width: snapshot.properties.bounds.width,
+    height: snapshot.properties.bounds.height,
+  };
+  const error = validateSweep(next);
+  if (error) throw Error(error);
+  return next;
+}
+export function referenceProfileEvidence(part) {
+  const source = part.mesh.userData.profileEvidence || {};
+  return {
+    ...source,
+    names: [...new Set([...(source.names || []), part.mesh.userData.name].filter(Boolean))],
+  };
+}
 const sourceKey = (s) => s.globalId || `${s.fileName}:${s.expressId}`;
-export function planReferenceConversion(model, objects, selectedIds = null) {
+export function planReferenceConversion(model, objects, selectedIds = null, profiles) {
   const groups = new Map(),
     existing = new Set(objects.filter((o) => o.ifcSource).map((o) => sourceKey(o.ifcSource)));
   for (const part of model.parts) {
@@ -259,7 +282,7 @@ export function planReferenceConversion(model, objects, selectedIds = null) {
   return [...groups].map(([id, parts]) => {
     const part = parts[0],
       data = part.mesh.userData,
-      row = { id, name: data.name || `IFC #${id}`, object: null, reason: '' };
+      row = { id, name: data.name || `IFC #${id}`, object: null, reason: '', profileMatch: null };
     try {
       if (
         existing.has(
@@ -268,6 +291,7 @@ export function planReferenceConversion(model, objects, selectedIds = null) {
       )
         throw Error('Redan konverterat.');
       if (parts.length !== 1) throw Error('Objekt med flera geometridelar stöds inte ännu.');
+      row.profileMatch = matchLibraryProfile(referenceProfileEvidence(part), profiles);
       const kind =
         data.ifcType === IFCPLATE
           ? 'plate'
@@ -275,7 +299,10 @@ export function planReferenceConversion(model, objects, selectedIds = null) {
             ? 'sweep'
             : null;
       if (!kind) throw Error('Den här IFC-objekttypen stöds inte ännu.');
-      row.object = convertReferencePart(part, model, kind);
+      row.kind = kind;
+      row.object = convertReferencePart(part, model, kind, profiles, (result) => {
+        row.profileMatch = result;
+      });
     } catch (error) {
       row.reason = error.message;
     }

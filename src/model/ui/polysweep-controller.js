@@ -48,7 +48,7 @@ export function installPolysweepTools({
   }
   function finish() {
     try {
-      const object = candidate(null),
+      const object = actions.applyCreationAttributes?.(candidate(null)) || candidate(null),
         error = validatePolysweep(object);
       if (error) throw Error(error);
       object.id = crypto.randomUUID();
@@ -57,7 +57,7 @@ export function installPolysweepTools({
         nextIdentity(object, project.objects),
         structuredClone(ui.draftMaterial),
       );
-      object.name = `Polysweep ${String(++ui.sequence).padStart(2, '0')}`;
+      object.name ||= `Polysweep ${String(++ui.sequence).padStart(2, '0')}`;
       modelEditor.add([object]);
       actions.setDrawing(false);
       actions.setSelection([object.id]);

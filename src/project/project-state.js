@@ -1,3 +1,4 @@
+import { defaultCoordinates } from '../coordinates/coordinates.js';
 import { defaultWorkArea } from '../model/work-area.js';
 import { createGridObjects, syncGridObjects } from '../model/grid-objects.js';
 /** Serializable project data only. Cameras, selections and active tools belong to the UI. */
@@ -5,10 +6,12 @@ export const PROJECT_SCHEMA_VERSION = 1;
 export function createProject({ grid, levels }) {
   const project = structuredClone({
     schemaVersion: PROJECT_SCHEMA_VERSION,
+    id: crypto.randomUUID(),
     objects: createGridObjects(grid),
     grid,
     levels,
     workArea: defaultWorkArea(),
+    coordinates: defaultCoordinates(),
     info: { name: '', number: '', client: '' },
     parts: { registry: [], assignments: {} },
     drawings: [],
@@ -37,6 +40,7 @@ export function createProject({ grid, levels }) {
 export function projectData(project) {
   const {
     schemaVersion,
+    id,
     objects,
     grid,
     levels,
@@ -49,9 +53,11 @@ export function projectData(project) {
     assemblies,
     assemblyNumbering,
     workArea,
+    coordinates,
   } = project;
   return {
     schemaVersion,
+    id,
     objects,
     grid,
     levels,
@@ -64,6 +70,7 @@ export function projectData(project) {
     assemblies,
     assemblyNumbering,
     workArea,
+    coordinates,
   };
 }
 export function captureProject(project) {

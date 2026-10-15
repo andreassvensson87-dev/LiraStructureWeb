@@ -138,7 +138,7 @@ export function installModelSession({
     if (reference) {
       setSelection([], true);
       if (reference.ifcId != null) controllers.referenceModels.selectObject(reference);
-      else controllers.referenceModels.showModel(reference.modelId);
+      else controllers.referenceModels.selectReference(reference.modelId);
       controllers.inspector.show('references');
       frameGate.invalidate();
     } else select(id, additive);
@@ -149,6 +149,14 @@ export function installModelSession({
   }
   function save(s) {
     const updating = !!ui.selected;
+    if (!updating) {
+      try {
+        s = actions.applyCreationAttributes?.(s) || s;
+      } catch (error) {
+        $('inspector-error').textContent = error.message;
+        return false;
+      }
+    }
     if (ui.selected) s = { ...project.objects.find((o) => o.id === ui.selected), ...s };
     const error = validateSweep(s);
     if (error) {
@@ -176,11 +184,12 @@ export function installModelSession({
           ...nextIdentity(s, project.objects),
           id,
           name:
-            s.type === 'gridline'
+            s.name ||
+            (s.type === 'gridline'
               ? s.name
               : s.type === 'item'
                 ? s.item.name
-                : `${typeName(s)} ${String(++ui.sequence).padStart(2, '0')}`,
+                : `${typeName(s)} ${String(++ui.sequence).padStart(2, '0')}`),
         },
       ]);
       ui.selected = id;
@@ -239,6 +248,7 @@ export function installModelSession({
   $('undo').onclick = () => restore('undo');
   $('redo').onclick = () => restore('redo');
   function setDrawing(value) {
+    controllers.coordinatePicker?.suspend();
     controllers.linearUI?.suspend();
     controllers.planeTransformUI?.suspend();
     controllers.workAreaUI?.suspend();
@@ -405,6 +415,10 @@ export function installModelSession({
           ? 'Kopiera ↵'
           : 'Flytta ↵'
         : 'Skapa ↵';
+    controllers.sweepPropertyUI?.sync();
+    controllers.platePropertyUI?.sync();
+    actions.syncIdentity?.();
+    actions.syncMaterialPanel?.();
   }
   $('move').onclick = () => startTransform('move');
   $('copy').onclick = () => startTransform('copy');

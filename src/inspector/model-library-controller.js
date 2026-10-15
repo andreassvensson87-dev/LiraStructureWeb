@@ -3,6 +3,7 @@ import { SectionEditor } from '../section-editor.js';
 import { ProfilePicker } from '../profile-picker.js';
 import { MaterialUI } from '../material-ui.js';
 import { isPhysical } from '../model-object.js';
+import { objectInspectorContext } from './object-context.js';
 
 export function installModelLibraries({
   $,
@@ -94,6 +95,8 @@ export function installModelLibraries({
     $('status').textContent = `${section.name} · version ${section.revision}`;
   }
   const sectionEditor = new SectionEditor(applyLibrarySection);
+  actions.getLibraryProfiles = () => sectionEditor.profiles;
+  actions.openProfileLibrary = (onUse) => sectionEditor.open({ onUse });
   controllers.profilePicker = new ProfilePicker($('profile-quick-picker'), {
     profiles: () => sectionEditor.profiles,
     apply: applyLibrarySection,
@@ -139,6 +142,18 @@ export function installModelLibraries({
         render();
       } else {
         ui.draftMaterial = { ...ui.draftMaterial, ...structuredClone(patch) };
+        const context = objectInspectorContext({
+          selected: [],
+          drawing: tools.drawing,
+          operation: tools.operation,
+        });
+        if (context.mode === 'create') {
+          ui.objectDrafts ||= {};
+          ui.objectDrafts[context.type] = {
+            ...ui.objectDrafts[context.type],
+            ...structuredClone(patch),
+          };
+        }
         if ('material' in patch) ui.draftMaterialAutomatic = false;
         syncMaterialPanel();
         if (tools.drawing && !tools.operation)
@@ -162,12 +177,12 @@ export function installModelLibraries({
     const selectedObjects = (
       controllers.inspector?.editingObjects() || inspectorSelection()
     ).filter(isPhysical);
-    const creating =
-      tools.drawing &&
-      !ui.selectedIds.size &&
-      (!tools.operation ||
-        tools.operation.mode === 'itemCreate' ||
-        (tools.operation.mode === 'plateCreate' && !tools.operation.cutTargets?.length));
+    const context = objectInspectorContext({
+      selected: inspectorSelection(),
+      drawing: tools.drawing,
+      operation: tools.operation,
+    });
+    const creating = context.mode === 'create' && isPhysical(context.object);
     const section = selectedObjects.length
       ? selectedObjects.every(
           (s) =>
@@ -175,13 +190,15 @@ export function installModelLibraries({
         )
         ? selectedObjects[0].section
         : null
-      : creating && !tools.operation && $('profile').value === 'custom'
+      : creating && ['sweep', 'polysweep'].includes(context.type) && $('profile').value === 'custom'
         ? ui.formSection
         : null;
     controllers.materialUI?.sync(
-      selectedObjects.length ? selectedObjects : [ui.draftMaterial],
+      selectedObjects.length
+        ? selectedObjects
+        : [{ ...ui.draftMaterial, ...ui.objectDrafts?.[context.type] }],
       !!selectedObjects.length || creating,
-      !!tools.operation && !['plateCreate', 'itemCreate'].includes(tools.operation.mode),
+      context.locked,
       profileMaterialSuggestions(section, controllers.materialUI?.records),
     );
   }

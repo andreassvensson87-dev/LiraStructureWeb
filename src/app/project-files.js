@@ -6,12 +6,23 @@ import {
 } from '../project/project-file.js';
 
 /** Project files include embedded library snapshots, bore identities and editable drawings. */
-export function installProjectFiles({ project, finishEditing, loadProject, onLoaded, newProject }) {
+export function installProjectFiles({
+  project,
+  finishEditing,
+  loadProject,
+  onLoaded,
+  newProject,
+  exportIFC,
+}) {
   const section = document.createElement('details');
   section.className = 'project-menu';
   section.innerHTML =
-    '<summary>Arkiv <span aria-hidden="true">▾</span></summary><div class="project-menu-panel"><div class="project-file-actions"><button type="button" data-new-project>Nytt projekt</button><button type="button" data-open-project>Öppna projekt…</button><button type="button" data-save-project>Spara projekt</button><button type="button" data-save-as-project>Spara som…</button><button type="button" data-export-ifc disabled title="IFC-export är inte tillgänglig ännu">IFC</button></div><input type="file" accept=".json,.lira.json" data-project-file hidden><p data-project-file-status role="status"></p></div>';
+    '<summary>Arkiv <span aria-hidden="true">▾</span></summary><div class="project-menu-panel"><div class="project-file-actions"><button type="button" data-new-project>Nytt projekt</button><button type="button" data-open-project>Öppna projekt…</button><button type="button" data-save-project>Spara projekt</button><button type="button" data-save-as-project>Spara som…</button><button type="button" data-export-ifc>Exportera IFC…</button></div><input type="file" accept=".json,.lira.json" data-project-file hidden><p data-project-file-status role="status"></p></div>';
   document.querySelector('body > header').prepend(section);
+  section.querySelector('[data-export-ifc]').onclick = () => {
+    section.open = false;
+    exportIFC();
+  };
   const trigger = section.querySelector('summary');
   document.addEventListener('pointerdown', (event) => {
     if (!section.contains(event.target)) section.open = false;

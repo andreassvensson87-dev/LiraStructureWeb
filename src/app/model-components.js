@@ -81,6 +81,8 @@ export function installModelComponents({
     commit: (draft, mode) => {
       clearPreview();
       if (mode === 'clear') return;
+      if (draft && !project.objects.some((s) => s.id === draft.id))
+        draft = actions.applyCreationAttributes?.(draft) || draft;
       if (mode === 'preview') {
         ui.preview = previewModelBatch([draft], false);
         ui.componentPreview = true;

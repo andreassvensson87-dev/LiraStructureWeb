@@ -1,0 +1,288 @@
+[
+  {
+    "key": "hea180",
+    "source": "HE-Bearing Pile:SB04- HEA 180",
+    "evidence": {
+      "names": [
+        "HE-Bearing Pile:SB04- HEA 180",
+        "HE-Bearing Pile",
+        "HEA 180",
+        "SB04- HEA 180",
+        "HE-Bearing Pile: SB04- HEA 180"
+      ],
+      "material": "Default Steel",
+      "profiles": [
+        {
+          "kind": "i",
+          "name": "SB04- HEA 180",
+          "dimensions": {
+            "B": 180.00000000000267,
+            "H": 170.9999999999958,
+            "tw": 6.000000000055316,
+            "tf": 9.500000000006503,
+            "R": 15.000000000006871
+          }
+        }
+      ],
+      "hints": {
+        "B": 180,
+        "H": 171,
+        "R": 15.000000000000002,
+        "tf": 9.5,
+        "tw": 6
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "verified",
+      "profile": "HEA 180"
+    }
+  },
+  {
+    "key": "upe180",
+    "source": "UPE:SB23- UPE180",
+    "evidence": {
+      "names": [
+        "UPE:SB23- UPE180",
+        "UPE",
+        "UPE180",
+        "SB23- UPE180",
+        "UPE: SB23- UPE180"
+      ],
+      "material": "Default Steel",
+      "profiles": [
+        {
+          "kind": "custom",
+          "name": "SB23- UPE180",
+          "dimensions": {}
+        }
+      ],
+      "hints": {},
+      "warnings": []
+    },
+    "expected": {
+      "status": "probable",
+      "profile": "UPE 180"
+    }
+  },
+  {
+    "key": "vkr120",
+    "source": "Rectangular and Square Hollow Sections-Column:SPxx- VKR120x120x5",
+    "evidence": {
+      "names": [
+        "Rectangular and Square Hollow Sections-Column:SPxx- VKR120x120x5",
+        "Rectangular and Square Hollow Sections-Column",
+        "SPxx- VKR120x120x5",
+        "Rectangular and Square Hollow Sections-Column: SPxx- VKR120x120x5"
+      ],
+      "material": "STÅL",
+      "profiles": [
+        {
+          "kind": "custom",
+          "name": "SPxx- VKR120x120x5",
+          "dimensions": {}
+        }
+      ],
+      "hints": {
+        "B": 120,
+        "R": 10,
+        "t": 5
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "probable",
+      "profile": "VKR 120x120x5"
+    }
+  },
+  {
+    "key": "missing-glulam",
+    "source": "Limträbalk:LB04- LT190x225",
+    "evidence": {
+      "names": [
+        "Limträbalk:LB04- LT190x225",
+        "Limträbalk",
+        "LIMTRÄ 190x225",
+        "LB04- LT190x225",
+        "Limträbalk: LB04- LT190x225"
+      ],
+      "material": "",
+      "profiles": [
+        {
+          "kind": "rect",
+          "name": "LB04- LT190x225",
+          "dimensions": {
+            "B": 225.00000000000082,
+            "H": 190.00000000000114
+          }
+        }
+      ],
+      "hints": {
+        "B": 190.00000000000003,
+        "H": 225.00000000000003
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "none",
+      "profile": null
+    }
+  },
+  {
+    "key": "stud-rotated",
+    "source": "M_Dimension Lumber:45x145",
+    "evidence": {
+      "names": [
+        "M_Dimension Lumber:45x145",
+        "M_Dimension Lumber",
+        "45x145",
+        "M_Dimension Lumber: 45x145"
+      ],
+      "material": "C24",
+      "profiles": [
+        {
+          "kind": "rect",
+          "name": "45x145",
+          "dimensions": {
+            "B": 145.0000000000017,
+            "H": 44.99999999997627
+          }
+        }
+      ],
+      "hints": {
+        "B": 45,
+        "H": 145
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "verified",
+      "profile": "Träregel 45x145"
+    }
+  },
+  {
+    "key": "kkr-alias",
+    "source": "Rectangular and Square Hollow Sections-Column:SP02- KKRK70x70x4",
+    "evidence": {
+      "names": [
+        "Rectangular and Square Hollow Sections-Column:SP02- KKRK70x70x4",
+        "Rectangular and Square Hollow Sections-Column",
+        "KKR 70x70x4",
+        "SP02- KKRK70x70x4",
+        "Rectangular and Square Hollow Sections-Column: SP02- KKRK70x70x4"
+      ],
+      "material": "Metal - Steel - 345 MPa",
+      "profiles": [
+        {
+          "kind": "custom",
+          "name": "SP02- KKRK70x70x4",
+          "dimensions": {}
+        }
+      ],
+      "hints": {
+        "B": 70,
+        "R": 8,
+        "t": 4
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "probable",
+      "profile": "KKR 70x70x4"
+    }
+  },
+  {
+    "key": "round-ambiguous",
+    "source": "RO (EN 10210-2) Column:RO101.6x5",
+    "evidence": {
+      "names": [
+        "RO (EN 10210-2) Column:RO101.6x5",
+        "RO (EN 10210-2) Column",
+        "RÖR101.6x5",
+        "RO101.6x5",
+        "RO (EN 10210-2) Column: RO101.6x5"
+      ],
+      "material": "Structural Steel - S235",
+      "profiles": [
+        {
+          "kind": "chs",
+          "name": "RO101.6x5",
+          "dimensions": {
+            "t": 4.999999999999368,
+            "D": 101.59999999999964
+          }
+        }
+      ],
+      "hints": {},
+      "warnings": []
+    },
+    "expected": {
+      "status": "ambiguous",
+      "profile": null
+    }
+  },
+  {
+    "key": "stud170",
+    "source": "M_Dimension Lumber:45x170",
+    "evidence": {
+      "names": [
+        "M_Dimension Lumber:45x170",
+        "M_Dimension Lumber",
+        "45x170",
+        "M_Dimension Lumber: 45x170"
+      ],
+      "material": "C24",
+      "profiles": [
+        {
+          "kind": "rect",
+          "name": "45x170",
+          "dimensions": {
+            "B": 169.999999999996,
+            "H": 44.99999999997627
+          }
+        }
+      ],
+      "hints": {
+        "B": 45,
+        "H": 170
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "verified",
+      "profile": "Träregel 45x170"
+    }
+  },
+  {
+    "key": "clipped-stud",
+    "source": "M_Dimension Lumber:45x120",
+    "evidence": {
+      "names": [
+        "M_Dimension Lumber:45x120",
+        "M_Dimension Lumber",
+        "45x120",
+        "M_Dimension Lumber: 45x120"
+      ],
+      "material": "C24",
+      "profiles": [
+        {
+          "kind": "rect",
+          "name": "45x120",
+          "dimensions": {
+            "B": 119.99999999999005,
+            "H": 45.00000000000988
+          }
+        }
+      ],
+      "hints": {
+        "B": 45,
+        "H": 120
+      },
+      "warnings": []
+    },
+    "expected": {
+      "status": "verified",
+      "profile": "Träregel 45x120"
+    }
+  }
+]

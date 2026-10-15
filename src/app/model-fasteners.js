@@ -68,6 +68,7 @@ export function installModelFasteners({
     commit: commitFastener,
   });
   function commitFastener(draft) {
+    if (!draft.id) draft = actions.applyCreationAttributes?.(draft) || draft;
     if (draft.group) {
       const batch = fastenerGroupBatch(draft, project.objects);
       const known = new Set(project.objects.map((s) => s.id));
@@ -79,7 +80,7 @@ export function installModelFasteners({
             : {
                 ...s,
                 ...nextIdentity(s, [...project.objects, ...identified]),
-                name: `${s.spec.name} · ${s.group.row + 1}:${s.group.column + 1}`,
+                name: s.name || `${s.spec.name} · ${s.group.row + 1}:${s.group.column + 1}`,
               },
         );
       }
@@ -103,7 +104,7 @@ export function installModelFasteners({
         ...draft,
         ...nextIdentity(draft, project.objects),
         id: crypto.randomUUID(),
-        name: draft.spec.name,
+        name: draft.name || draft.spec.name,
       };
       modelEditor.add([draft]);
     }

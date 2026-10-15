@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 const core = [
   'blocks',
   'work-area',
+  'coordinates',
+  'ifc-export',
+  'profile-match',
   'polysweep',
   'measurements',
   'model-editor',

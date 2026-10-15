@@ -1,3 +1,4 @@
+import { commandIcon } from './icons.js';
 const states = new WeakMap();
 const leafCount = (node) =>
   node.count ?? (node.children ? node.children.reduce((n, child) => n + leafCount(child), 0) : 1);
@@ -82,6 +83,7 @@ export function renderLibraryTree(
       const summary = document.createElement('summary');
       summary.dataset.key = `summary:${node.key}`;
       summary.title = node.label;
+      if (node.icon) summary.append(commandIcon(node.icon));
       summary.append(document.createTextNode(node.label));
       const count = document.createElement('span');
       count.className = 'ui-library-count';
@@ -105,6 +107,7 @@ export function renderLibraryTree(
       button.type = 'button';
       button.dataset.key = node.key;
       button.textContent = node.label;
+      if (node.icon) button.prepend(commandIcon(node.icon));
       if (node.badge) {
         button.setAttribute('aria-label', node.label);
         const badge = document.createElement('span');

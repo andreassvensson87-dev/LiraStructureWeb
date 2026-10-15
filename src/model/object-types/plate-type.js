@@ -14,6 +14,7 @@ import { cornerPath } from '../geometry/corner-path.js';
 import { cornerMeasures } from '../../geometry/measurements.js';
 export const plateType = {
   id: 'plate',
+  ifcClass: 'IfcPlate',
   label: 'Plate',
   prefix: 'P',
   family: 'plate',

@@ -1,3 +1,4 @@
+import { validateIFCClass } from './ifc/classes.js';
 import { fitEnvelope } from './components/fit.js';
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -23,6 +24,13 @@ export const cutsForModel = (s, model) => [
 ];
 export const objectAnchors = (s) => objectType(s).anchors(s);
 export function validateObject(s) {
+  if (s?.ifcClass !== undefined) {
+    try {
+      validateIFCClass(s.ifcClass);
+    } catch (error) {
+      return error.message;
+    }
+  }
   if (!s || !objectTypes.find(s)) return `Okänd objekttyp: ${s?.type}`;
   if (isCut(s) && (!s.targets?.length || s.targets.includes(s.id)))
     return 'Välj minst ett målobjekt.';

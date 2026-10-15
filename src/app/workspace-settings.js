@@ -1,3 +1,5 @@
+import { createIFCExportController } from './ifc-export-controller.js';
+import { createCoordinatePicker } from '../model/ui/coordinate-pick-controller.js';
 import { createFrameExample } from '../project/frame-example.js';
 import { levelElevation, initialLevels } from '../levels.js';
 import * as THREE from 'three';
@@ -52,7 +54,19 @@ export function installWorkspaceSettings({
     const holes = screws.reduce((n, s) => n + s.holes.length, 0);
     return `Exempel inläst · ${project.objects.length} objekt · ${screws.length} skruvar · ${holes} hål · uppbyggnad ${((performance.now() - started) / 1000).toFixed(1)} s`;
   }
+  controllers.coordinatePicker = createCoordinatePicker({
+    tools,
+    setDrawing,
+    syncOperationUI: () => actions.syncOperationUI(),
+    focus: () => renderer.domElement.focus({ preventScroll: true }),
+    status: (text) => {
+      $('status').textContent = text;
+    },
+  });
   const settingsController = createSettingsController({
+    pickCoordinatePoint: () => controllers.coordinatePicker.start(),
+    validateCoordinateChange: (next) => controllers.referenceModels?.validateCoordinates(next),
+    onCoordinatesChanged: () => controllers.referenceModels?.setCoordinates(project.coordinates),
     project,
     checkpoint,
     onOrbitDampingChanged: (enabled) => {
@@ -143,7 +157,14 @@ export function installWorkspaceSettings({
   function fillSettings() {
     settingsController.fill();
   }
+  controllers.ifcExport = createIFCExportController({
+    getProject: () => project,
+    getSelection: () => ui.selectedIds,
+    getVisible: () => project.objects.filter((o) => actions.isVisible(o.id)).map((o) => o.id),
+    finishEditing: () => controllers.inspector?.finish(),
+  });
   installProjectFiles({
+    exportIFC: () => controllers.ifcExport.open(),
     project,
     newProject: () => createProject({ grid: defaultGrid, levels: initialLevels() }),
     finishEditing: () => controllers.inspector?.finish(),

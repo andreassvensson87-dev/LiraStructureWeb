@@ -85,14 +85,14 @@ export function libraryGroups(profiles, search = '') {
       .sort((a, b) => a.label.localeCompare(b.label, 'sv', { numeric: true })),
   })).filter((g) => g.families.length);
 }
-export function renderProfileTree(root, profiles, current, search, onSelect) {
+export function profileLibraryNodes(profiles, search = '') {
   const item = (profile, label = profile.name) => ({
     key: `${profile.id}:${profile.revision}`,
     label,
     title: `${profile.name} · version ${profile.revision}`,
     value: profile,
   });
-  const nodes = libraryGroups(profiles, search).map((group) => ({
+  return libraryGroups(profiles, search).map((group) => ({
     key: JSON.stringify([group.id]),
     label: group.label,
     count: group.families.reduce((n, family) => n + family.sizes.length, 0),
@@ -116,8 +116,10 @@ export function renderProfileTree(root, profiles, current, search, onSelect) {
       ]),
     })),
   }));
+}
+export function renderProfileTree(root, profiles, current, search, onSelect) {
   renderLibraryTree(root, {
-    nodes,
+    nodes: profileLibraryNodes(profiles, search),
     selectedKey: `${current?.id}:${current?.revision}`,
     query: search,
     onSelect: (node) => onSelect(node.value),

@@ -11,6 +11,7 @@ import {
 } from '../polysweep.js';
 export const polysweepType = {
   id: 'polysweep',
+  ifcClass: 'IfcMember',
   label: 'Polysweep',
   prefix: 'B',
   family: 'sweep',

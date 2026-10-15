@@ -29,6 +29,10 @@ export function installModelContextMenu({ $, actions, controllers, project, rend
     assemblyMenu.append(button);
     return button;
   };
+  const convertReferenceButton = profileMenuButton('Konvertera…', () => {
+    controllers.referenceModels?.openConversion?.();
+  });
+  convertReferenceButton.hidden = true;
   const objectInformation = new ObjectInformation({
     getObjects: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
     getModel: () => project.objects,
@@ -56,6 +60,17 @@ export function installModelContextMenu({ $, actions, controllers, project, rend
     event.preventDefault();
     if (tools.drawing || tools.operation) return;
     const selected = project.objects.filter((s) => ui.selectedIds.has(s.id));
+    const referenceObject = controllers.referenceModels?.selectedObject;
+    convertReferenceButton.hidden =
+      !referenceObject || !controllers.referenceModels?.openConversion;
+    for (const button of [
+      informationButton,
+      showExactButton,
+      showSchematicButton,
+      addAssemblyButton,
+    ])
+      button.hidden = !!referenceObject;
+    redrawViewButton.hidden = !!referenceObject;
     informationButton.disabled = !selected.length;
     const profiles = selected.filter(hasExactProfile);
     showExactButton.disabled =
@@ -65,7 +80,7 @@ export function installModelContextMenu({ $, actions, controllers, project, rend
     assemblyMenu.hidden = false;
     assemblyMenu.style.left = `${Math.max(0, Math.min(event.clientX, innerWidth - assemblyMenu.offsetWidth))}px`;
     assemblyMenu.style.top = `${Math.max(0, Math.min(event.clientY, innerHeight - assemblyMenu.offsetHeight))}px`;
-    addAssemblyButton.focus();
+    (convertReferenceButton.hidden ? addAssemblyButton : convertReferenceButton).focus();
   });
   // Capture outside presses before model selection consumes the pointer event.
   document.addEventListener(

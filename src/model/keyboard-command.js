@@ -19,6 +19,7 @@ export function modelKeyboardCommand(
   if (settingsOpen || modalOpen) return null;
   if (e.key === 'Escape') return 'cancel';
   if (editing) return null;
+  if (mode === 'coordinatePoint') return null;
   if (mode === 'componentProperties')
     return e.key === 'Enter' ? 'confirm-component-properties' : null;
   if (mode === 'plateProperties') return e.key === 'Enter' ? 'confirm-plate-properties' : null;

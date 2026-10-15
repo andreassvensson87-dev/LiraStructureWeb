@@ -388,3 +388,58 @@ test('DXF and DWG enter the same reference list, preserve CAD placement on repla
     assert.equal(references.parts.length, 0);
   });
 });
+
+test('whole-reference and object modes share picking, restore highlights and prevent moving a reference from an object selection', () => {
+  const refs = referenceFixture(),
+    first = part(),
+    other = part();
+  first.mesh.userData = { ifcId: 20, name: 'First' };
+  other.mesh.userData = { ifcId: 21, name: 'Other' };
+  const model = { id: 'ref', format: 'IFC', group: new THREE.Group(), parts: [first, other] };
+  refs.models = [model];
+  refs.parts = model.parts;
+  refs.panel = { hidden: false };
+  refs.$('[data-model]').hidden = false;
+  const ray = {
+    intersectObjects: (meshes) => (meshes.includes(first.mesh) ? [{ object: first.mesh }] : []),
+  };
+  refs.setSelectionMode('reference');
+  assert.deepEqual(refs.pickReference(ray), { modelId: 'ref', ifcId: null });
+  refs.selectReference('ref');
+  assert.equal(refs.transformSelection(), model);
+  assert.ok(model.parts.every((p) => p.mesh.material.emissive.getHex() === 0x176b53));
+  refs.setSelectionMode('object');
+  assert.equal(refs.transformSelection(), null);
+  assert.ok(model.parts.every((p) => p.mesh.material.emissive.getHex() === 0));
+  assert.deepEqual(refs.pickReference(ray), { modelId: 'ref', ifcId: 20 });
+  refs.selectObject(refs.pickReference(ray));
+  assert.equal(refs.transformSelection(), null);
+  assert.equal(other.mesh.material.emissive.getHex(), 0);
+  refs.setSelectionMode('reference');
+  assert.equal(refs.selectedObject, null);
+  assert.equal(refs.transformSelection(), model);
+  refs.clearObjectSelection();
+  assert.equal(refs.transformSelection(), null);
+  model.group.visible = false;
+  assert.equal(refs.pickReference(ray), null);
+  assert.throws(() => refs.setSelectionMode('unsupported'));
+  model.group.visible = true;
+  model.format = 'DXF';
+  first.mesh.material.dispose();
+  first.mesh.material = new THREE.MeshBasicMaterial({ color: '#789abc' });
+  const originalCAD = first.mesh.material.color.clone();
+  refs.setSelectionMode('object');
+  assert.deepEqual(
+    refs.pickReference(ray),
+    { modelId: 'ref', ifcId: null },
+    'CAD stays a whole-reference selection',
+  );
+  refs.selectReference('ref');
+  assert.equal(first.mesh.material.color.getHex(), 0x176b53);
+  refs.clearObjectSelection();
+  assert.ok(first.mesh.material.color.equals(originalCAD));
+  model.parts.forEach((p) => {
+    p.mesh.geometry.dispose();
+    p.mesh.material.dispose();
+  });
+});

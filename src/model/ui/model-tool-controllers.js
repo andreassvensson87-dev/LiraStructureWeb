@@ -145,6 +145,7 @@ export function installModelTools({
     dispose,
     remember: rememberPlate,
     restoreDefaults: restorePlateDefaults,
+    applyCreationAttributes: (object) => actions.applyCreationAttributes?.(object) || object,
     syncPropertyUI: () => {
       controllers.sweepPropertyUI?.sync();
       controllers.platePropertyUI?.sync();

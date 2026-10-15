@@ -13,11 +13,12 @@ import {
   folderPath,
   folderDescendants,
   editItemFolder,
-  findLibraryItems,
 } from './store.js';
 import { itemKey } from './data.js';
 import { importStepFile } from './import.js';
 import { ItemView } from './view.js';
+import { itemLibraryTree } from './tree-data.js';
+import { createLibraryTreePicker } from '../ui/library-tree-picker.js';
 
 import './style.css';
 import { bundledItemCatalog } from './bundled.js';
@@ -173,7 +174,7 @@ export class ItemLibrary {
     validateItemLibrary(next);
     await this.store.save(next);
     this.library = next;
-    this.renderPicker?.();
+    this.picker?.sync();
   }
   latest() {
     const map = new Map();
@@ -190,46 +191,7 @@ export class ItemLibrary {
   }
   renderTree() {
     const query = this.$('[data-search]').value.trim();
-    const entries = findLibraryItems(this.library, 'all', query);
-    const itemNode = (entry) => ({
-      key: itemKey(entry.definition),
-      label: [entry.definition.article, entry.definition.name].filter(Boolean).join(' · '),
-      title: `${entry.definition.name} · ${entry.definition.article} · v${entry.definition.revision}`,
-      value: entry,
-    });
-    const folders = (parent) =>
-      this.library.folders
-        .filter((folder) => folder.parent === parent)
-        .map((folder) => {
-          const children = [
-            ...folders(folder.id),
-            ...entries.filter((entry) => entry.folder === folder.id).map(itemNode),
-          ];
-          return {
-            key: `folder:${folder.id}`,
-            label: folder.name,
-            folder: folder.id,
-            selectable: true,
-            children,
-          };
-        })
-        .filter((node) => !query || node.children.length);
-    const favorites = entries.filter((entry) => entry.starred);
-    const nodes = [
-      ...(favorites.length
-        ? [
-            {
-              key: 'favorites',
-              label: 'Favoriter',
-              children: favorites.map((entry) => ({
-                ...itemNode(entry),
-                key: 'favorite:' + itemKey(entry.definition),
-              })),
-            },
-          ]
-        : []),
-      ...folders(null),
-    ];
+    const nodes = itemLibraryTree(this.library, query);
     renderLibraryTree(this.$('[data-tree]'), {
       nodes,
       query,
@@ -322,102 +284,46 @@ export class ItemLibrary {
       }),
     );
   }
-  mountPicker(host) {
-    host.innerHTML = `<strong>Välj item</strong><label class="field">Mapp<select data-picker-folder aria-label="Item-mapp"></select></label>
-      <input type="search" data-picker-search placeholder="Sök item, artikel eller leverantör" aria-label="Sök item i modellen">
-      <div class="item-picker-list" data-picker-list></div><div class="item-pagination" data-picker-pages></div>
-      <p class="inspector-note" data-picker-status role="status"></p><button type="button" data-picker-library>Hantera bibliotek ↗</button>`;
-    const $ = (selector) => host.querySelector(selector);
-    this.pickerFolder = '';
-    try {
-      this.pickerFolder = localStorage.getItem('lirastructure-item-folder') || '';
-    } catch {
-      /* Storage may be unavailable. */
-    }
-    this.pickerPage = 0;
-    $('[data-picker-library]').onclick = () => this.open();
-    $('[data-picker-folder]').onchange = (e) => {
-      this.pickerFolder = e.target.value;
-      try {
-        localStorage.setItem('lirastructure-item-folder', this.pickerFolder);
-      } catch {
-        /* Keep the selection for this session. */
-      }
-      this.pickerPage = 0;
-      this.renderPicker();
-    };
-    $('[data-picker-search]').oninput = () => {
-      this.pickerPage = 0;
-      this.renderPicker();
-    };
-    this.renderPicker = () => {
-      const select = $('[data-picker-folder]');
-      select.replaceChildren(
-        new Option('Välj mapp…', ''),
-        new Option('Alla items', 'all'),
-        new Option('☆ Favoriter', 'starred'),
-      );
-      const append = (parent) => {
-        for (const f of this.library.folders.filter((f) => f.parent === parent)) {
-          select.append(new Option(folderPath(this.library, f.id), f.id));
-          append(f.id);
-        }
-      };
-      append(null);
-      if (![...select.options].some((o) => o.value === this.pickerFolder)) this.pickerFolder = '';
-      select.value = this.pickerFolder;
-      const entries = findLibraryItems(
-        this.library,
-        this.pickerFolder,
-        $('[data-picker-search]').value,
-        { recursive: false },
-      ).sort((a, b) =>
-        a.definition.name.localeCompare(b.definition.name, 'sv-SE', { numeric: true }),
-      );
-      this.pickerPage = Math.max(0, Math.min(this.pickerPage, Math.ceil(entries.length / 30) - 1));
-      const list = $('[data-picker-list]');
-      list.replaceChildren();
-      for (const entry of entries.slice(this.pickerPage * 30, (this.pickerPage + 1) * 30)) {
-        const b = button(entry.definition.name, () => this.use(entry.definition));
-        b.title = [
-          entry.definition.name,
-          entry.definition.article,
-          folderPath(this.library, entry.folder),
-        ]
-          .filter(Boolean)
-          .join(' · ');
-        list.append(b);
-      }
-      const previous = button('‹', () => {
-        this.pickerPage--;
-        this.renderPicker();
-      });
-      const next = button('›', () => {
-        this.pickerPage++;
-        this.renderPicker();
-      });
-      previous.setAttribute('aria-label', 'Föregående items');
-      next.setAttribute('aria-label', 'Nästa items');
-      previous.disabled = this.pickerPage === 0;
-      next.disabled = (this.pickerPage + 1) * 30 >= entries.length;
-      const count = document.createElement('small');
-      count.textContent = `${entries.length ? this.pickerPage * 30 + 1 : 0}–${Math.min(entries.length, (this.pickerPage + 1) * 30)} av ${entries.length}`;
-      $('[data-picker-pages]').replaceChildren(previous, count, next);
-      $('[data-picker-status]').textContent =
-        this.loadError ||
-        (entries.length
-          ? 'Välj item och placera startpunkt och riktning i modellen.'
-          : !this.pickerFolder
-            ? 'Välj en mapp för att se dess items.'
-            : this.library.folders.some((f) => f.parent === this.pickerFolder) &&
-                !$('[data-picker-search]').value.trim()
-              ? 'Inga items direkt i denna mapp. Välj en undermapp.'
-              : 'Inga items i mappen matchar sökningen.');
-    };
-    return async () => {
-      $('[data-picker-status]').textContent = 'Läser item-bibliotek…';
-      await this.ensureLoaded();
-      this.renderPicker();
+  mountPicker(host, { getDefinition }) {
+    const picker = createLibraryTreePicker({
+      label: 'Biblioteksitem',
+      placeholder: 'Välj item…',
+      searchLabel: 'Sök item i snabblistan',
+      searchPlaceholder: 'Sök item…',
+      emptyLabel: 'Biblioteket är tomt.',
+      getNodes: (query) => itemLibraryTree(this.library, query, { compact: true }),
+      beforeOpen: async () => {
+        await this.ensureLoaded();
+        picker.sync();
+      },
+      onSelect: (node) => this.use(node.value.definition),
+      getSelection: () => {
+        const definition = getDefinition();
+        const entry = this.library.items.find(
+          (e) => itemKey(e.definition) === itemKey(definition || {}),
+        );
+        return {
+          key: definition ? itemKey(definition) : null,
+          label: definition?.name,
+          path: entry ? folderPath(this.library, entry.folder) : '',
+        };
+      },
+      getError: () => this.loadError,
+      icon: 'cube',
+    });
+    const openLibrary = button('Öppna bibliotek ↗', () => {
+      picker.close();
+      this.open(getDefinition()).catch((error) => this.status(error.message));
+    });
+    openLibrary.className = 'library-open';
+    host.replaceChildren(picker.root, openLibrary);
+    this.picker = picker;
+    return {
+      ...picker,
+      load: async () => {
+        await this.ensureLoaded();
+        picker.sync();
+      },
     };
   }
   revealFolder() {

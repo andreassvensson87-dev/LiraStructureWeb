@@ -125,6 +125,7 @@ export class ReferenceImport {
             ifcType: data.ifcType,
             name: data.name,
             globalId: data.globalId,
+            profileEvidence: data.profileEvidence,
           };
           this.pending.push({
             mesh,
@@ -147,6 +148,8 @@ export class ReferenceImport {
           schema: data.schema,
           format,
           source,
+          coordinateMode: saved?.coordinateMode || previous?.coordinateMode || 'map',
+          sourceCoordinates: data.sourceCoordinates || null,
           placement: structuredClone(previous?.placement || initialReferencePlacement()),
           locked: previous?.locked || false,
           ...(format !== 'IFC'
@@ -177,7 +180,13 @@ export class ReferenceImport {
           }
           model.group.add(part.mesh);
         }
-        this.commitModel(model, previous, saved);
+        try {
+          this.commitModel(model, previous, saved);
+        } catch (error) {
+          this.dispose(model.parts);
+          fail(error.message);
+          return;
+        }
         worker.terminate();
         this.worker = null;
         this.busy(false);

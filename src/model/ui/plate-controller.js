@@ -33,6 +33,7 @@ export function createPlateController({
   dispose,
   remember,
   restoreDefaults,
+  applyCreationAttributes = (object) => object,
   syncPropertyUI,
 }) {
   const $ = (id) => document.getElementById(id),
@@ -378,14 +379,20 @@ export function createPlateController({
 
   function finishPlate() {
     if (tools.operation?.mode !== 'plateCreate' || !tools.operation.frame) return;
-    const s = draftPlate(),
-      error = validateSweep(s);
+    let s;
+    try {
+      s = applyCreationAttributes(draftPlate());
+    } catch (error) {
+      $('plate-error').textContent = error.message;
+      return;
+    }
+    const error = validateSweep(s);
     if (error) {
       $('plate-error').textContent = error;
       return;
     }
     s.id = crypto.randomUUID();
-    s.name = `${isLineCut(s) ? 'Linecut' : isCut(s) ? 'Polygoncut' : 'Plate'} ${String(++ui.sequence).padStart(2, '0')}`;
+    s.name ||= `${isLineCut(s) ? 'Linecut' : isCut(s) ? 'Polygoncut' : 'Plate'} ${String(++ui.sequence).padStart(2, '0')}`;
     if (!isCut(s)) Object.assign(s, structuredClone(ui.draftMaterial));
     Object.assign(s, nextIdentity(s, project.objects));
     modelEditor.add([s]);

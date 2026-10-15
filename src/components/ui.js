@@ -287,10 +287,9 @@ export function createComponentUI({
     if (panel.hidden) {
       document.getElementById('inspector-properties').classList.remove('component-inspector');
       if (identity.previousSibling !== identityHome) identityHome.after(identity);
-      document.getElementById('identity-fields').hidden = selected.length !== 1;
     } else if (identity.parentElement !== panel.querySelector('.component-object-options'))
       panel.querySelector('.component-object-options').append(identity);
-    panel.querySelector('.component-object-options').hidden = !!creation;
+    panel.querySelector('.component-object-options').hidden = false;
     form.hidden = creation ? !creation.ready : !component;
     if (component && !creation && source !== component) fill(component);
     copyBar.hidden = !!creation || !component || !componentCopyKeys(component.kind).length;

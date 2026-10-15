@@ -164,6 +164,7 @@ export function validateFastener(s) {
 }
 export const fastenerType = {
   id: 'fastener',
+  ifcClass: 'IfcMechanicalFastener',
   label: 'Skruv',
   prefix: 'SK',
   family: 'fastener',

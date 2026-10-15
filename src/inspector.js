@@ -3,6 +3,7 @@ import { SelectionScope } from './inspector/selection-scope.js';
 import { installSelectionDock } from './inspector/selection-dock.js';
 import { FORM_OPTIONS, isRound, hasWall, normalizeForm } from './profile-forms.js';
 import { adoptAttributeLabel } from './inspector/attributes.js';
+import { objectInspectorContext } from './inspector/object-context.js';
 // Inspector transactions keep the model unchanged until a field is confirmed.
 export class Inspector {
   constructor({
@@ -278,8 +279,9 @@ export class Inspector {
     const has = selected.length > 0,
       creating = drawing && !has;
     $('model-empty').hidden = true;
-    $('inspector-identity').hidden = selected.length !== 1;
-    $('inspector-name').disabled = !!operation;
+    const context = objectInspectorContext({ selected, drawing, operation });
+    $('inspector-identity').hidden = selected.length !== 1 && context.mode !== 'create';
+    $('inspector-name').disabled = context.locked;
     if (selected.length === 1 && document.activeElement !== $('inspector-name'))
       $('inspector-name').value = selected[0].name;
     $('inspector-empty').hidden = has || creating;
@@ -515,7 +517,6 @@ export class Inspector {
           'plate-contour-offset': 'contourOffset',
           'plate-thickness': 'thickness',
           'plate-side': 'side',
-          'inspector-name': 'name',
         }[input.id];
     session.error = '';
     session.errors.delete(input.id);

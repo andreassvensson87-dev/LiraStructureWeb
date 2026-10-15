@@ -1,3 +1,4 @@
+import { createCoordinateSettingsController } from './coordinate-settings-controller.js';
 import {
   defaultWorkArea,
   validateWorkArea,
@@ -28,6 +29,9 @@ export function createSettingsController({
   libraries = [],
   loadExample,
   editGrid,
+  pickCoordinatePoint,
+  validateCoordinateChange = () => {},
+  onCoordinatesChanged = () => {},
 }) {
   const $ = (id) => document.getElementById(id);
   const gridLabelEditor = createGridLabelEditor(
@@ -158,6 +162,25 @@ export function createSettingsController({
   areaPanel.innerHTML =
     '<label class="field">Övre plushöjd · m<input id="work-area-upper" type="text" inputmode="decimal" aria-label="Övre plushöjd · m"></label><label class="field">Nedre plushöjd · m<input id="work-area-lower" type="text" inputmode="decimal" aria-label="Nedre plushöjd · m"></label>';
   $('settings-error').before(areaPanel);
+  let pickingCoordinates = false;
+  const coordinateSettings = createCoordinateSettingsController({
+    getCoordinates: () => project.coordinates,
+    reportError: (text) => {
+      $('settings-error').textContent = text;
+    },
+    pickPoint: async () => {
+      pickingCoordinates = true;
+      $('settings-dialog').close();
+      try {
+        return await pickCoordinatePoint();
+      } finally {
+        pickingCoordinates = false;
+        $('settings-dialog').showModal();
+      }
+    },
+  });
+  document.querySelector('.settings-nav').append(coordinateSettings.tab);
+  $('settings-error').before(coordinateSettings.panel);
   function settingsCategory(name) {
     document
       .querySelectorAll('[data-settings]')
@@ -171,6 +194,7 @@ export function createSettingsController({
     .querySelectorAll('[data-settings]')
     .forEach((b) => (b.onclick = () => settingsCategory(b.dataset.settings)));
   function fillSettings() {
+    coordinateSettings.fill();
     const area = project.workArea || defaultWorkArea();
     $('work-area-upper').value = formatElevation(area.upper);
     $('work-area-lower').value = formatElevation(area.lower);
@@ -212,7 +236,7 @@ export function createSettingsController({
   $('settings-open').onclick = () => open();
   $('settings-close').onclick = $('settings-cancel').onclick = () => $('settings-dialog').close();
   $('settings-dialog').addEventListener('close', () => {
-    fillSettings();
+    if (!pickingCoordinates) fillSettings();
     onClose();
   });
   $('settings-form').onsubmit = (e) => {
@@ -247,6 +271,15 @@ export function createSettingsController({
       $('settings-error').textContent = error.message;
       return;
     }
+    let coordinates;
+    try {
+      coordinates = coordinateSettings.read();
+      validateCoordinateChange(coordinates);
+    } catch (error) {
+      settingsCategory('coordinates');
+      $('settings-error').textContent = error.message;
+      return;
+    }
     setInputDevice($('input-device').value);
     setZoomSpeed(Number($('zoom-speed').value) / 100);
     setZoomInverted($('zoom-inverted').checked);
@@ -257,6 +290,8 @@ export function createSettingsController({
     checkpoint();
     project.grid = next;
     project.workArea = workArea;
+    project.coordinates = coordinates;
+    onCoordinatesChanged();
     project.info = Object.fromEntries(
       ['name', 'number', 'client'].map((key) => [key, $('project-' + key).value.trim()]),
     );

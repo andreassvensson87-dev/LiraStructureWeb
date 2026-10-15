@@ -1,3 +1,6 @@
+import { createIFCProfileReader } from './ifc-profile-data.js';
+import { IFCBEAM, IFCCOLUMN, IFCMEMBER, IFCBUILDINGELEMENTPROXY } from 'web-ifc';
+import { readIFCGeoreferencing } from '../coordinates/ifc-georeferencing.js';
 import { ifcPlacement } from './ifc-coordinates.js';
 import { IfcAPI } from 'web-ifc';
 import wasmURL from 'web-ifc/web-ifc.wasm?url';
@@ -13,10 +16,24 @@ self.onmessage = async ({ data }) => {
     });
     if (model < 0) throw Error('Filen kunde inte läsas som IFC.');
     const schema = api.GetModelSchema(model);
+    const sourceCoordinates = readIFCGeoreferencing(api, model);
+    const readProfile = createIFCProfileReader(api, model);
+    const structural = new Set([IFCBEAM, IFCCOLUMN, IFCMEMBER, IFCBUILDINGELEMENTPROXY]);
     let count = 0;
     // web-ifc streams metres in a Y-up frame; the editor uses millimetres and Z-up.
     api.StreamAllMeshes(model, (mesh, index, total) => {
       const line = api.GetLine(model, mesh.expressID);
+      let profileEvidence = null;
+      if (structural.has(line?.type)) {
+        try {
+          profileEvidence = readProfile(line);
+        } catch {
+          profileEvidence = {
+            names: [line?.Name?.value || ''],
+            warnings: ['metadata-unavailable'],
+          };
+        }
+      }
       for (let j = 0; j < mesh.geometries.size(); j++) {
         const part = mesh.geometries.get(j),
           raw = api.GetGeometry(model, part.geometryExpressID);
@@ -46,6 +63,7 @@ self.onmessage = async ({ data }) => {
           ifcType: line?.type,
           name: line?.Name?.value || '',
           globalId: line?.GlobalId?.value || '',
+          profileEvidence,
         };
         self.postMessage(output, [output.positions.buffer, indices.buffer, edgePositions.buffer]);
         edges.dispose();
@@ -60,7 +78,7 @@ self.onmessage = async ({ data }) => {
         });
     });
     if (!count) throw Error('IFC-filen innehåller ingen visningsbar geometri.');
-    self.postMessage({ type: 'done', schema, count });
+    self.postMessage({ type: 'done', schema, count, sourceCoordinates });
   } catch (error) {
     self.postMessage({ type: 'error', message: error.message || 'IFC-importen misslyckades.' });
   } finally {

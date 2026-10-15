@@ -1,3 +1,4 @@
+import { IFC_CLASSES } from '../ifc/classes.js';
 import { editablePlate, platePropertyGroups } from '../model/plate-properties.js';
 import { editableSweep, sweepPropertyGroups } from '../model/sweep-properties.js';
 import { defineAttributeSchema } from './attributes.js';
@@ -11,8 +12,18 @@ const field = (key, label, type, selector, copy, extra = {}) => ({
   row: 'label',
   ...extra,
 });
+export const objectNameField = field('name', 'Namn', 'text', '#inspector-name', 'name');
+export const objectIFCClassField = field(
+  'ifcClass',
+  'IFC-klass',
+  'select',
+  '#inspector-ifc-class',
+  null,
+  { options: IFC_CLASSES.map(([key, label]) => [key, `${label} · ${key}`]) },
+);
 const shared = [
-  field('name', 'Namn', 'text', '#inspector-name', 'name'),
+  objectNameField,
+  objectIFCClassField,
   field('material', 'Material', 'custom', '.material-quick-row', 'material', { row: 'self' }),
   field('color', 'Objektfärg', 'custom', '#object-color-toggle', 'color', {
     row: 'self',

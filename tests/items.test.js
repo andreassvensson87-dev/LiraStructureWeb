@@ -1,3 +1,4 @@
+import { itemLibraryTree } from '../src/items/tree-data.js';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import test from 'node:test';
@@ -330,4 +331,38 @@ test('search filters a library with thousands of items without duplicate revisio
   };
   assert.equal(findLibraryItems(library, 'all').length, 5000);
   assert.equal(findLibraryItems(library, 'standard', '4999').length, 1);
+});
+
+test('library and quick selector share latest items, folder searches and favorites without selecting folders in the picker', () => {
+  const library = emptyItemLibrary();
+  library.folders = [
+    { id: 'vendor', name: 'Weland', parent: null },
+    { id: 'gates', name: 'Grindar', parent: 'vendor' },
+    { id: 'empty', name: 'Tom mapp', parent: null },
+  ];
+  const old = { definition: { ...item, name: 'Grind 1000' }, folder: 'gates', starred: false };
+  const latest = { definition: { ...old.definition, revision: 2 }, folder: 'gates', starred: true };
+  library.items = [old, latest];
+  const before = structuredClone(library);
+  const regular = itemLibraryTree(library),
+    quick = itemLibraryTree(library, '', { compact: true });
+  const leaves = (nodes) => nodes.flatMap((n) => (n.children ? leaves(n.children) : [n]));
+  assert.deepEqual(
+    leaves(regular).map((n) => n.key),
+    leaves(quick).map((n) => n.key),
+  );
+  assert.ok(leaves(quick).every((n) => n.value === latest));
+  assert.ok(quick.find((n) => n.folder === 'vendor').children.every((n) => !n.selectable));
+  const search = itemLibraryTree(library, 'Weland Grindar 1000', { compact: true });
+  assert.equal(
+    search.find((n) => n.folder === 'empty'),
+    undefined,
+  );
+  assert.equal(
+    search.find((n) => n.folder === 'vendor').children[0].children[0].label,
+    'Grind 1000',
+  );
+  assert.equal(search[0].key, 'favorites');
+  assert.equal(itemLibraryTree(library, 'saknas').length, 0);
+  assert.deepEqual(library, before);
 });

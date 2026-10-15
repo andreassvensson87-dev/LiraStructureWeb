@@ -293,10 +293,6 @@
 #item-form .item-inspector-coordinates input {
   width: 100%;
 }
-.item-form-reference {
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
 @media (max-width: 850px) {
   .item-library-layout,
   .item-editor-layout {
@@ -383,33 +379,11 @@
   gap: 10px;
   padding: 12px 0;
 }
-#item-picker input,
-#item-picker select {
-  width: 100%;
-}
-.item-picker-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 320px;
-  overflow: auto;
-}
-.item-picker-list button {
-  display: block;
-  flex-shrink: 0;
-  width: 100%;
-  text-align: left;
-  padding: 7px 4px;
+#item-picker > .library-open {
+  align-self: flex-start;
+  padding: 0;
   border: 0;
-  border-bottom: 1px solid #dce6e8;
-  border-radius: 0;
   background: transparent;
+  color: var(--ui-accent);
   font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.item-picker-list button:hover,
-.item-picker-list button:focus-visible {
-  background: #e6f3ec;
 }

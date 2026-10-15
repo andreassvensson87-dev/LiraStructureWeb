@@ -1,3 +1,4 @@
+import { defaultCoordinates, validateCoordinates } from '../coordinates/coordinates.js';
 import { defaultWorkArea, validateWorkArea } from '../model/work-area.js';
 import { syncGridObjects } from '../model/grid-objects.js';
 import { validateGridGeometry } from '../grid-geometry.js';
@@ -34,6 +35,9 @@ export function validateProjectFile(project) {
   if (!record(project) || project.schemaVersion !== PROJECT_SCHEMA_VERSION)
     fail('Projektversionen stöds inte av det här programmet.');
   finiteData(project);
+  project.id ??= crypto.randomUUID();
+  if (!identity(project.id)) fail('Ogiltig projektidentitet.');
+  project.coordinates = validateCoordinates(project.coordinates ?? defaultCoordinates());
   project.workArea = validateWorkArea(
     project.workArea === undefined ? defaultWorkArea() : project.workArea,
   );

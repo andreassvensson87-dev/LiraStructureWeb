@@ -1,3 +1,4 @@
+import { referenceFrame, validateReferenceCRS } from '../coordinates/reference-frame.js';
 import * as THREE from 'three';
 export const initialReferencePlacement = () => ({ offset: [0, 0, 0], rotation: 0, scale: 1 });
 export function placementQuaternion(p) {
@@ -34,10 +35,23 @@ export function rotateReferencePlacement(p, pivot, axis, angle) {
 }
 export function applyReferencePlacement(model) {
   if (!model.placement) return;
-  model.group.position.fromArray(model.placement.offset);
-  model.group.quaternion.copy(placementQuaternion(model.placement));
-  model.group.scale.setScalar(
-    model.placement.scale * (model.format === 'IFC' ? 1 : model.unitFactor),
+  validateReferenceCRS(model.sourceCoordinates, model.coordinateMode, model.projectCoordinates);
+  const frame = referenceFrame(
+    model.coordinateMode,
+    model.sourceCoordinates,
+    model.projectCoordinates,
   );
+  const mapping = new THREE.Matrix4()
+    .makeRotationZ(THREE.MathUtils.degToRad(frame.rotation))
+    .scale(new THREE.Vector3().setScalar(frame.scale))
+    .setPosition(...frame.offset);
+  const unit = model.format === 'IFC' ? 1 : model.unitFactor;
+  const placement = new THREE.Matrix4().compose(
+    new THREE.Vector3().fromArray(model.placement.offset),
+    placementQuaternion(model.placement),
+    new THREE.Vector3().setScalar(model.placement.scale),
+  );
+  const matrix = placement.multiply(mapping).scale(new THREE.Vector3().setScalar(unit));
+  matrix.decompose(model.group.position, model.group.quaternion, model.group.scale);
   model.group.updateMatrixWorld(true);
 }

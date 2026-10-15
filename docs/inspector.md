@@ -175,3 +175,11 @@ Snappade punkter behåller modellreferenser, inklusive hålcentrum. Befintliga
 referenser uppdaterar måtten när geometrin ändras och visar brutna kopplingar
 om en refererad punkt försvinner. Hålbildsverktyget skapar avståndsmått mellan
 befintliga centrum; nya hål läggs till med **Lägg till måttpunkt** eller en ny kedja.
+
+## Samma objektfält vid skapa och redigera
+
+`object-context.js` avgör skapa/redigera/markering från samma editorstatus för namn, numrering och material. `model-identity-controller.js` äger en enda namnrad från `objectNameField` och en enda uppsättning numreringsfält från `createNumberingSeriesFields`. Samma DOM-kontroller används i båda lägena; geometriformulären för respektive objekttyp är också gemensamma. Verktygens steg för punkt- och referensval hör fortfarande till deras ordinarie placeringsflöden.
+
+Vid skapande skriver fälten till `ui.objectDrafts` per objekttyp, utan projekt- eller historikändring. Tomt namn betyder automatiskt namn. `model/object-draft.js` validerar och kopierar de angivna attributen till ett nytt objekt, samtidigt som Item-geometri behåller sin delade biblioteksdefinition. Sweep/Item, Plate, Polysweep, skruvar och kopplingar ansluts via sina befintliga commitadaptrar till samma funktion. Ogiltig serie avvisas före modellcommit. Befintliga objekt läser aldrig skapandeförval vid redigering.
+
+I redigeringsläget bekräftar namn- och nummerfältens gemensamma controller en ändring genom modell-editorn. Namn kräver ingen geometripreview; Escape återställer texten. Material använder samma kontroll och lägesbeslut; även Polysweep och skruvplacering använder den gemensamma källan. Kopplingarnas parameterfält fortsätter använda sitt befintliga schema för både placeringsutkast och sparade objekt. Inga dubbla formulär eller parallella UI-fabriker skapas.

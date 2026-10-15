@@ -5,6 +5,7 @@ import { roundProfile } from '../../round-profile.js';
 import { distanceMeasure } from '../../geometry/measurements.js';
 export const sweepType = {
   id: 'sweep',
+  ifcClass: 'IfcBeam',
   label: 'Sweep',
   prefix: 'B',
   family: 'sweep',

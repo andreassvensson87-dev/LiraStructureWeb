@@ -159,6 +159,7 @@ export function installModelInput({
       },
       helperpoint: (p) => save({ type: 'helperpoint', start: p }),
       workplane: pickWorkPlane,
+      'coordinate-point': (p) => controllers.coordinatePicker.pickPoint(p),
       'work-area': (p) => controllers.workAreaUI.pickPoint(p),
       plate: (p) => pickPlatePoint(p),
       rotation: pickRotationAxis,
@@ -260,6 +261,10 @@ export function installModelInput({
         controllers.fastenerUI.confirmTargets();
         break;
       case 'cancel':
+        if (tools.operation?.mode === 'coordinatePoint') {
+          controllers.coordinatePicker.cancel();
+          break;
+        }
         if (tools.operation?.mode === 'workArea') {
           controllers.workAreaUI.cancel();
           break;

@@ -249,3 +249,178 @@ dialog.ui-standard-dialog [role='alert']:not(:empty) {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* Shared Settings frame with the same compact coordinate columns as editors. */
+.coordinate-base-choice,
+.coordinate-pick-row {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+.coordinate-base-choice > label,
+.coordinate-pick-row > .coordinate-grid {
+  flex: 1;
+  min-width: 0;
+}
+dialog.ui-standard-dialog .coordinate-base-choice > label {
+  margin-bottom: 0;
+}
+.coordinate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+dialog.ui-standard-dialog .coordinate-grid label.attribute-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+[data-settings-panel='coordinates'] :is(h3, h4) {
+  margin: 14px 0 10px;
+  font-size: 12px;
+}
+[data-settings-panel='coordinates'] h3 {
+  border-bottom: 1px solid var(--ui-border);
+  padding-bottom: 8px;
+}
+.coordinate-pick-row > button {
+  margin-bottom: 10px;
+  white-space: nowrap;
+}
+/* One fixed width for all categories, including the coordinate groups. */
+#settings-dialog.ui-standard-dialog {
+  width: min(700px, calc(100vw - 32px));
+}
+[data-settings-panel='coordinates'] label.attribute-row {
+  margin-bottom: 6px;
+}
+[data-settings-panel='coordinates'] h3 {
+  margin: 6px 0;
+  padding-bottom: 6px;
+}
+[data-settings-panel='coordinates'] h4 {
+  margin: 8px 0 6px;
+}
+
+.coordinate-crs-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+[data-settings-panel='coordinates'] .coordinate-pick-row {
+  margin-bottom: 0;
+}
+[data-settings-panel='coordinates'] h4 {
+  margin-top: 4px;
+}
+[data-settings-panel='coordinates'] .coordinate-grid label.attribute-row {
+  gap: 2px;
+  margin-bottom: 2px;
+}
+[data-settings-panel='coordinates'] h3 {
+  padding-bottom: 4px;
+}
+.reference-fields label:has([data-coordinate-mode]) {
+  grid-column: 1 / -1;
+}
+
+/* IFC uses the ordinary task-dialog frame, settings tabs and property rows. */
+.ifc-export-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.ifc-export-dialog h3 {
+  font-size: 12px;
+  margin: 12px 0 8px;
+}
+.ifc-export-dialog .setting-toggle {
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 2px 0;
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+.ifc-export-dialog .ifc-export-check {
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 12px;
+}
+.ifc-export-check-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.ifc-export-check-heading h3 {
+  margin: 0;
+}
+.ifc-export-dialog [data-issues] {
+  max-height: 90px;
+  overflow: auto;
+  font-size: 12px;
+}
+.ifc-export-dialog [data-issues] li {
+  margin: 4px 0;
+}
+.ifc-export-dialog [data-panel='settings'] p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ifc-export-dialog progress {
+  width: 100%;
+}
+.ifc-export-dialog.ui-standard-dialog {
+  height: min(680px, calc(100dvh - 32px));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.ifc-export-dialog > form {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
+  height: 100%;
+  min-height: 0;
+}
+.ifc-export-dialog .panel-title {
+  grid-row: 1;
+  margin-bottom: 10px;
+}
+.ifc-export-dialog .panel-title h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.ifc-export-dialog .settings-nav {
+  grid-row: 2;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+}
+.ifc-export-dialog [data-panel] {
+  grid-area: 3 / 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.ifc-export-dialog .ifc-export-check {
+  grid-row: 4;
+}
+.ifc-export-dialog [data-error] {
+  grid-row: 5;
+}
+.ifc-export-dialog [data-error]:empty {
+  display: none;
+}
+.ifc-export-dialog [data-download] {
+  grid-row: 6;
+  font-size: 12px;
+}
+.ifc-export-dialog .settings-actions {
+  grid-row: 7;
+}
+.ifc-export-dialog .ifc-export-check p {
+  margin: 8px 0;
+}
+.ifc-export-dialog label.attribute-row {
+  margin-bottom: 6px;
+}
+.ifc-export-dialog [data-panel] > .inspector-note {
+  margin: 6px 0;
+  font-size: 11px;
+  line-height: 1.3;
+}

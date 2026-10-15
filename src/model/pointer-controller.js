@@ -19,6 +19,7 @@ export function pointerCommand({
   if (mode === 'fastenerTargets') return 'fastener-target';
   if (mode === 'assemblyMain') return 'assembly-main';
   if (mode === 'helperpoint') return 'helperpoint';
+  if (mode === 'coordinatePoint') return 'coordinate-point';
   if (mode === 'workArea') return 'work-area';
   if (mode === 'workPlane') return 'workplane';
   if (mode === 'plateCreate' || mode === 'plateVertex')

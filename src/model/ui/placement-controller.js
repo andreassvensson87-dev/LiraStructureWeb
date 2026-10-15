@@ -431,6 +431,10 @@ export function createPlacementController({
   function updatePointer(e) {
     tools.lastPointer = { clientX: e.clientX, clientY: e.clientY };
     if (!tools.drawing) return;
+    if (tools.operation?.mode === 'coordinatePoint') {
+      point(e);
+      return;
+    }
     if (tools.operation?.mode === 'workArea') {
       getWorkArea()?.pointerPreview(point(e));
       return;

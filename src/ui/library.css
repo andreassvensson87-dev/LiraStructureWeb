@@ -132,7 +132,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree-actions
   button {
@@ -147,7 +148,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree {
   flex: 1;
@@ -161,7 +163,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree
   details {
@@ -175,7 +178,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree
   details
@@ -188,7 +192,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree
   summary {
@@ -212,7 +217,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree
   button {
@@ -238,7 +244,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree
   [aria-current='true'] {
@@ -251,7 +258,8 @@
     #fastener-library,
     #item-library,
     #drawing-attribute-library,
-    .block-library
+    .block-library,
+    .ui-library-tree-picker-panel
   ).ui-standard-library
   .ui-library-tree
   :is(button, summary):hover {
@@ -741,4 +749,16 @@
 }
 .ui-material-hatch [hidden] {
   display: none !important;
+}
+
+.ui-library-tree svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -3px;
+  margin-right: 7px;
 }

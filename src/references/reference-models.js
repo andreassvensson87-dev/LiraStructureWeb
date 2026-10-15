@@ -1,9 +1,10 @@
+import { highlightReferenceParts } from './selection-highlight.js';
+import { validateReferenceCRS } from '../coordinates/reference-frame.js';
 import { withinWorkArea } from '../model/work-area.js';
 import { ReferenceImport } from './reference-import.js';
 import { renderReferenceList, renderReferencePlacement } from './reference-inspector.js';
 import * as THREE from 'three';
 import { referenceCandidates } from './edge-index.js';
-import { installReferenceConversion } from './conversion-ui.js';
 import { applyCADPlacement } from './cad-geometry.js';
 import { dxfUnits } from '../frame-dxf.js';
 import { decodeReference, emptyReferences } from './reference-state.js';
@@ -18,10 +19,13 @@ export class ReferenceModels {
     status,
     getObjects,
     convert,
+    getProfiles,
+    openProfileLibrary,
     onChange,
     onSelect,
     beforePlacementChange,
     onExtentChange,
+    getCoordinates = () => null,
   }) {
     Object.assign(this, {
       scene,
@@ -31,12 +35,15 @@ export class ReferenceModels {
       onSelect,
       beforePlacementChange,
       onExtentChange,
+      getCoordinates,
     });
+    this.selectionMode = 'reference';
     this.models = [];
     this.folders = ['Standard'];
     this.collapsed = new Set();
     this.selectedId = null;
     this.selectedObject = null;
+    this.selectedReferenceId = null;
     this.parts = [];
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -88,7 +95,7 @@ export class ReferenceModels {
           <div class="reference-layer-list" data-layer-list role="group" aria-label="CAD-lager"></div>
         </details>
         <details data-cad-placement hidden open><summary>Placering av referens</summary><p>Förflyttning från filens ursprungliga läge.</p><div class="reference-fields" data-placement-fields>
-          <label>Enhet<select data-cad-unit></select></label>
+          <label>Koordinater<select data-coordinate-mode aria-label="Referensens koordinater"><option value="map">Verkliga koordinater</option><option value="local">Lokala modellkoordinater</option></select></label><label>Enhet<select data-cad-unit></select></label>
           <label>X · mm<input type="number" step="any" data-offset-x></label>
           <label>Y · mm<input type="number" step="any" data-offset-y></label>
           <label>Z · mm<input type="number" step="any" data-offset-z></label>
@@ -110,6 +117,22 @@ export class ReferenceModels {
     const $ = (s) => this.panel.querySelector(s);
     this.$ = $;
     installLayerControls(this);
+    $('[data-coordinate-mode]').onchange = () => {
+      const model = this.selected();
+      if (!model || model.locked) return;
+      const mode = $('[data-coordinate-mode]').value;
+      try {
+        validateReferenceCRS(model.sourceCoordinates, mode, this.getCoordinates());
+        this.beforePlacementChange?.();
+        model.coordinateMode = mode;
+        applyCADPlacement(model);
+        this.changed();
+        this.onExtentChange?.(model);
+      } catch (error) {
+        $('[data-coordinate-mode]').value = model.coordinateMode || 'map';
+        this.message(error.message, true);
+      }
+    };
     $('[data-placement-locked]').onchange = () =>
       this.setLocked(this.selected(), $('[data-placement-locked]').checked);
     $('[data-placement-reset]').onclick = () => this.resetPlacement(this.selected());
@@ -161,14 +184,29 @@ export class ReferenceModels {
       };
     if (getObjects && convert) {
       this.conversionEnabled = true;
-      const openConversion = installReferenceConversion({ getObjects, commit: convert });
-      $('[data-convert]').onclick = () => {
-        const model = this.selected();
-        if (model && this.selectedObject?.modelId === model.id) {
-          inspector.finish();
-          openConversion(model, [this.selectedObject.ifcId]);
+      let conversion;
+      this.openConversion = async () => {
+        const selection = this.selectedObject;
+        if (!selection) return;
+        inspector.finish();
+        try {
+          conversion ||= import('./conversion-ui.js').then(({ installReferenceConversion }) =>
+            installReferenceConversion({
+              getObjects,
+              getProfiles,
+              openProfileLibrary,
+              commit: convert,
+            }),
+          );
+          const open = await conversion;
+          const model = this.selected();
+          if (model?.id === selection.modelId && this.selectedObject === selection)
+            open(model, [selection.ifcId]);
+        } catch (error) {
+          this.message(error.message);
         }
       };
+      $('[data-convert]').onclick = this.openConversion;
     } else $('[data-convert]').hidden = true;
     const pickFile = (replaceId = null) => {
       if ($('[data-import]').disabled) return;
@@ -275,6 +313,8 @@ export class ReferenceModels {
           folder: m.folder,
           format: m.format || 'IFC',
           source: m.source,
+          coordinateMode: m.coordinateMode || 'map',
+          sourceCoordinates: m.sourceCoordinates || null,
           visible: m.group.visible,
           transparent: m.transparent,
           corners: m.corners,
@@ -293,13 +333,29 @@ export class ReferenceModels {
       ],
     };
   }
+  validateCoordinates(coordinates) {
+    for (const model of [...this.models, ...(this.unloaded || [])])
+      validateReferenceCRS(model.sourceCoordinates, model.coordinateMode, coordinates);
+  }
+  setCoordinates(coordinates) {
+    this.validateCoordinates(coordinates);
+    this.clearPlacementPreview();
+    for (const model of this.models) {
+      model.projectCoordinates = coordinates;
+      applyCADPlacement(model);
+    }
+    this.setWorkArea(this.workAreaBounds || null, true);
+    this.models.forEach((model) => this.onExtentChange?.(model));
+  }
   changed() {
     this.setWorkArea(this.workAreaBounds || null);
     if (!this.restoring) this.onChange?.(this.snapshot());
   }
   transformSelection() {
     const model = this.selected();
-    return model?.group.visible &&
+    return this.selectedReferenceId === model?.id &&
+      !this.selectedObject &&
+      model?.group.visible &&
       !model.locked &&
       !this.importSession?.worker &&
       !this.restoring &&
@@ -373,6 +429,8 @@ export class ReferenceModels {
     return renderReferencePlacement({ selectedId: this.selectedId, $: this.$ }, model);
   }
   applySettings(model, saved) {
+    model.coordinateMode = saved.coordinateMode || 'map';
+    model.projectCoordinates = this.getCoordinates?.();
     for (const key of ['title', 'folder', 'transparent', 'corners', 'edges'])
       model[key] = saved[key];
     model.group.visible = saved.visible;
@@ -474,16 +532,37 @@ export class ReferenceModels {
       );
     if (!hit) return null;
     const model = models.find((m) => m.parts.some((p) => p.mesh === hit.object));
-    return { modelId: model.id, ifcId: hit.object.userData.ifcId };
+    return {
+      modelId: model.id,
+      ifcId:
+        this.selectionMode === 'object' && model.format === 'IFC'
+          ? hit.object.userData.ifcId
+          : null,
+    };
+  }
+  setSelectionMode(mode) {
+    if (!['reference', 'object'].includes(mode)) throw Error('Ogiltigt referensmarkeringsläge.');
+    const modelId = this.selectedObject?.modelId || this.selectedReferenceId;
+    this.selectionMode = mode;
+    this.clearObjectSelection();
+    if (mode === 'reference' && modelId) this.selectReference(modelId);
+    this.onSelect?.();
   }
   clearObjectSelection() {
-    for (const part of this.parts)
-      if (part.selectionEmissive) {
-        part.mesh.material.emissive.copy(part.selectionEmissive);
-        delete part.selectionEmissive;
-      }
+    highlightReferenceParts(this.parts, false);
     this.selectedObject = null;
+    this.selectedReferenceId = null;
     this.syncObjectSelection();
+  }
+  selectReference(id) {
+    this.clearObjectSelection();
+    const model = this.models.find((model) => model.id === id);
+    if (!model?.group.visible) return;
+    this.selectedReferenceId = id;
+    highlightReferenceParts(model.parts, true);
+    this.showModel(id);
+    this.message(`Referens markerad: ${model.title || model.id}`);
+    this.onSelect?.(model);
   }
   selectObject(selection) {
     this.clearObjectSelection();
@@ -492,10 +571,7 @@ export class ReferenceModels {
     const parts = model.parts.filter((part) => part.mesh.userData.ifcId === selection.ifcId);
     if (!parts.length) return;
     this.selectedObject = selection;
-    for (const part of parts) {
-      part.selectionEmissive = part.mesh.material.emissive.clone();
-      part.mesh.material.emissive.setHex(0x176b53);
-    }
+    highlightReferenceParts(parts, true);
     this.showModel(model.id);
     this.message(`IFC-objekt markerat: ${parts[0].mesh.userData.name || '#' + selection.ifcId}`);
   }
@@ -517,6 +593,7 @@ export class ReferenceModels {
     this.$('[data-convert]').disabled = !!this.importSession?.worker || !part;
   }
   showList() {
+    this.clearObjectSelection();
     this.selectedId = null;
     this.$('[data-new-group]').hidden = false;
     this.$('[data-model]').hidden = true;
@@ -539,6 +616,7 @@ export class ReferenceModels {
     this.$('[data-title]').value = model.title;
     this.$('[data-file]').textContent = model.fileName;
     this.$('[data-cad-placement]').hidden = !model.placement;
+    this.$('[data-coordinate-mode]').value = model.coordinateMode || 'map';
     renderLayerControls(this, model);
     if (model.placement) {
       this.syncPlacementLock(model);
@@ -570,7 +648,12 @@ export class ReferenceModels {
     this.onSelect?.(model);
   }
   setVisible(models, visible) {
-    if (!visible && models.some((model) => model.id === this.selectedObject?.modelId))
+    if (
+      !visible &&
+      models.some(
+        (model) => model.id === (this.selectedObject?.modelId || this.selectedReferenceId),
+      )
+    )
       this.clearObjectSelection();
     for (const model of models) model.group.visible = visible;
     this.renderList();
@@ -584,7 +667,7 @@ export class ReferenceModels {
       models: this.models,
       folders: this.folders,
       collapsed: this.collapsed,
-      showModel: this.showModel.bind(this),
+      showModel: this.selectReference.bind(this),
       toggleFolder: (folder) => {
         if (this.collapsed.has(folder)) this.collapsed.delete(folder);
         else this.collapsed.add(folder);
@@ -662,7 +745,8 @@ export class ReferenceModels {
   }
   remove(id = this.selectedId) {
     this.clearPlacementPreview();
-    if (this.selectedObject?.modelId === id) this.clearObjectSelection();
+    if ((this.selectedObject?.modelId || this.selectedReferenceId) === id)
+      this.clearObjectSelection();
     this.cancel();
     const model = this.models.find((m) => m.id === id);
     if (model) {
@@ -708,7 +792,9 @@ export class ReferenceModels {
     return (this.importSession ||= new ReferenceImport({
       getModels: () => this.models,
       commitModel: (model, previous, saved) => {
-        if (previous?.id === this.selectedObject?.modelId) this.clearObjectSelection();
+        model.projectCoordinates = this.getCoordinates?.();
+        if (previous?.id === (this.selectedObject?.modelId || this.selectedReferenceId))
+          this.clearObjectSelection();
         applyCADPlacement(model);
         applyLayerVisibility(model);
         if (saved) this.applySettings(model, saved);

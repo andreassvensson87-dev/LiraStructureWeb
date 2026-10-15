@@ -1,3 +1,4 @@
+import { applyObjectDraft } from '../src/model/object-draft.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -275,4 +276,42 @@ test('grid selection lock excludes picks and bulk selection while preserving vis
   f.actions.select('grid');
   assert.equal(f.ui.selected, 'grid');
   assert.equal(picking.selectionHit(), 'grid');
+});
+
+test('shared create attributes commit with geometry once and never overwrite attributes during later edits', (t) => {
+  const f = fixture(t),
+    before = structuredClone(f.project.objects);
+  let draft = { name: 'Balk', partSeries: { prefix: 'BT', start: 0 } };
+  f.actions.applyCreationAttributes = (object) => applyObjectDraft(object, draft);
+  const shape = {
+    type: 'sweep',
+    profile: 'rect',
+    width: 100,
+    height: 200,
+    thickness: 0,
+    rotation: 0,
+    start: [0, 0, 0],
+    end: [1000, 0, 0],
+  };
+  assert.equal(f.actions.save(shape), false);
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.projectHistory.past.length, 0);
+  draft.partSeries.start = 100;
+  assert.equal(f.actions.save(shape), true);
+  assert.equal(f.projectHistory.past.length, 1);
+  const saved = f.project.objects.find((o) => o.id === f.ui.selected);
+  assert.equal(saved.name, 'Balk');
+  assert.deepEqual(saved.partSeries, { prefix: 'BT', start: 100 });
+  draft = { name: 'Annat utkast', partSeries: { prefix: 'XX', start: 999 } };
+  assert.equal(f.actions.save({ width: 300 }), true);
+  assert.equal(f.projectHistory.past.length, 2);
+  assert.equal(f.project.objects.find((o) => o.id === saved.id).name, 'Balk');
+  assert.deepEqual(f.project.objects.find((o) => o.id === saved.id).partSeries, {
+    prefix: 'BT',
+    start: 100,
+  });
+  f.actions.restore('undo');
+  assert.equal(f.project.objects.find((o) => o.id === saved.id).width, 100);
+  f.actions.restore('undo');
+  assert.deepEqual(f.project.objects, before);
 });

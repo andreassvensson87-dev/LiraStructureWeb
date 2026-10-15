@@ -1,3 +1,4 @@
+import { validateSourceCoordinates } from '../coordinates/reference-frame.js';
 export const emptyReferences = () => ({ folders: ['Standard'], models: [] });
 export function encodeReference(bytes) {
   const array = new Uint8Array(bytes);
@@ -43,6 +44,9 @@ export function validateReferences(value = emptyReferences()) {
     )
       fail();
     ids.add(model.id);
+    if (model.coordinateMode !== undefined && !['local', 'map'].includes(model.coordinateMode))
+      fail();
+    if (model.sourceCoordinates != null) validateSourceCoordinates(model.sourceCoordinates);
     if (model.locked !== undefined && typeof model.locked !== 'boolean') fail();
     if (
       model.layerVisibility !== undefined &&

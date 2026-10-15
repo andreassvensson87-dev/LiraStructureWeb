@@ -1,10 +1,20 @@
 const paths = {
+  folder: 'M3 6h7l2 2h9v12H3ZM3 6V4h7l2 2',
+  cube: 'm12 3 9 5v8l-9 5-9-5V8ZM3 8l9 5 9-5M12 13v8',
+  star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z',
   workArea: 'M5 5h14v14H5ZM3 3h4v4H3ZM17 17h4v4h-4Z',
   workAreaFit: 'M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5M7 9l5-3 5 3v6l-5 3-5-3ZM7 9l5 3 5-3M12 12v6',
   elevations: 'M3 4h12M3 20h12M18 4v16M15 7l3-3 3 3M15 17l3 3 3-3M6 8h6v8H6Z',
   lock: 'M7 10V7a5 5 0 0 1 10 0v3M4 10h16v12H4ZM12 14v4',
   insulation: 'M3 6h18v12H3ZM3 18l3-12 3 12 3-12 3 12 3-12 3 12',
   properties: 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',
+  profile: 'M5 3h14v3h-5v12h5v3H5v-3h5V6H5Z',
+  referenceWhole:
+    'M7 3H3v4M17 3h4v4M3 17v4h4M21 17v4h-4M6 6h5v5H6ZM13 6h5v5h-5ZM6 13h5v5H6ZM13 13h5v5h-5Z',
+  referenceObject: [
+    'M5 5h5v5H5ZM5 14h5v5H5ZM14 14h5v5h-5Z',
+    'M12 6V3h3M18 3h3v3M21 9v3h-3M15 12h-3V9M15 6h3v3h-3Z',
+  ],
   references: 'M5 3h11v14H5ZM9 17v4h11V7h-4M8 7h5M8 11h5',
   origin: 'M12 3v18M3 12h18M8 8h8v8H8Z',
   delete: 'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7',
@@ -46,6 +56,9 @@ export function commandIcon(name = 'page') {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = `<path d="${paths[name] || paths.page}"/>`;
+  const path = paths[name] || paths.page;
+  svg.innerHTML = Array.isArray(path)
+    ? path.map((d, i) => `<path d="${d}" opacity="${i ? 1 : 0.4}"/>`).join('')
+    : `<path d="${path}"/>`;
   return svg;
 }

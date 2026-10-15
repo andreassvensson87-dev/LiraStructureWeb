@@ -451,7 +451,8 @@ export class SectionEditor {
       this.fit();
     });
   }
-  open() {
+  open({ onUse = null } = {}) {
+    this.selectionUse = onUse;
     this.list();
     this.libraryUI.preview();
     this.libraryWindow.open();
@@ -874,7 +875,8 @@ export class SectionEditor {
           this.def = clone(saved);
         }
         if (action === 'use') {
-          this.onUse(profileSnapshot(saved));
+          (this.selectionUse || this.onUse)(profileSnapshot(saved));
+          this.selectionUse = null;
           this.dialog.close();
         }
         this.sync();

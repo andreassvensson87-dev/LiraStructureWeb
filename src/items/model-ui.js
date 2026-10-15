@@ -33,7 +33,7 @@ export function createItemController({
   form.hidden = true;
   form.dataset.independentEditor = '';
   form.innerHTML =
-    '<div class="item-form-reference"></div><button type="button" class="library-open" data-library>Hantera bibliotek ↗</button><button type="button" data-change>Byt item…</button><div data-item-coords></div><label class="field">Rotation · °<input type="number" name="rotation" step="any" value="0" required></label><p class="inspector-note" data-item-note>Fast geometri · Start → slut bestämmer riktningen.</p><p data-item-error role="alert"></p><button type="submit" class="primary">Uppdatera item</button><button type="button" data-remove class="danger">Ta bort markerad</button>';
+    '<div data-item-coords></div><label class="field">Rotation · °<input type="number" name="rotation" step="any" value="0" required></label><p data-item-error role="alert"></p><button type="submit" class="primary">Uppdatera item</button><button type="button" data-remove class="danger">Ta bort markerad</button>';
   const rotationRow = createAttributeRow(
     { key: 'rotation', label: 'Rotation', unit: '°', type: 'number', step: 'any' },
     { value: 0 },
@@ -107,10 +107,14 @@ export function createItemController({
   picker.id = 'item-picker';
   picker.hidden = true;
   picker.dataset.independentEditor = '';
-  form.after(picker);
+  form.before(picker);
   for (const event of ['input', 'change', 'keydown'])
     picker.addEventListener(event, (e) => e.stopPropagation());
-  const loadPicker = library.mountPicker(picker);
+  const pickerUI = library.mountPicker(picker, {
+    getDefinition: () => selected()?.item || tools.operation?.definition,
+  });
+  let pickerLoading;
+  const loadPicker = () => (pickerLoading ||= pickerUI.load());
   let picking = false;
   const openPicker = async () => {
     picking = true;
@@ -124,6 +128,7 @@ export function createItemController({
     $('inspector-properties').querySelector('.panel-title').hidden = false;
     showProperties();
     await loadPicker();
+    await pickerUI.open();
   };
   let draft = null,
     signature = '';
@@ -133,9 +138,6 @@ export function createItemController({
       $('status').textContent = e.message;
     });
   };
-  form.querySelector('[data-library]').onclick = () =>
-    library.open(selected()?.item || tools.operation?.definition);
-  form.querySelector('[data-change]').onclick = () => openPicker();
   form.querySelector('[data-remove]').onclick = remove;
   form.onsubmit = (e) => {
     e.preventDefault();
@@ -192,12 +194,16 @@ export function createItemController({
       picking = false;
       picker.hidden = true;
     }
+    picker.inert = !!tools.operation && !creating;
+    if (picker.hidden || picker.inert) pickerUI.close();
+    else {
+      pickerUI.sync();
+      void loadPicker().then(() => pickerUI.sync());
+    }
     if (form.hidden) return;
     $('form').hidden = $('plate-form').hidden = true;
     $('object-heading').textContent = 'Item';
     $('mode-label').textContent = creating ? 'Nytt item' : source.name;
-    form.querySelector('.item-form-reference').textContent =
-      `${object.item.name} · ${object.item.article || 'Artikel utan nummer'} · v${object.item.revision}`;
     form.inert = !!tools.operation && !creating;
     form.querySelector('[data-remove]').hidden = creating;
     form.querySelector('[type=submit]').textContent = creating ? 'Skapa item' : 'Uppdatera item';

@@ -266,3 +266,23 @@ body > footer.model-statusbar :is(#status, #snap-status) {
   color: #71838a;
   background: #f7fafb;
 }
+
+.model-reference-switch {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+  color: #386b62;
+  background: #e9f2ef;
+  border-color: #adc9c0;
+}
+.model-reference-switch svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}

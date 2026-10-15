@@ -202,3 +202,52 @@ test('a HEA label or matching outside dimensions cannot replace a different cont
   assert.notEqual(object.section.id, section.id);
   nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(object)));
 });
+
+test('library suggestions recognize IPE and hollow profiles; manual replacement preserves source axis and undo', async () => {
+  const { TIBNOR_PROFILES } = await import('../src/tibnor-catalog.js');
+  const { profileSnapshot } = await import('../src/section-profile.js');
+  const { conversionProfile } = await import('../src/references/conversion.js');
+  const { createModelEditor } = await import('../src/app/model-editor.js');
+  for (const definition of [
+    TIBNOR_PROFILES.find((p) => p.name === 'IPE 200'),
+    TIBNOR_PROFILES.find((p) => p.name === 'VKR 200x200x8'),
+  ]) {
+    const section = profileSnapshot(definition);
+    const source = part(
+      sweepGeometry({
+        ...beam,
+        profile: 'custom',
+        section,
+        width: section.properties.bounds.width,
+        height: section.properties.bounds.height,
+      }),
+    );
+    const converted = convertReferencePart(source, model, 'sweep', [definition]);
+    assert.equal(converted.section.id, section.id);
+    nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(converted)));
+    const before = structuredClone(converted);
+    const replacement = profileSnapshot(TIBNOR_PROFILES.find((p) => p.name === 'HEA 220'));
+    const updated = conversionProfile(converted, replacement);
+    assert.deepEqual(updated.start, converted.start);
+    assert.deepEqual(updated.end, converted.end);
+    assert.equal(updated.rotation, converted.rotation);
+    assert.deepEqual(updated.ifcSource, converted.ifcSource);
+    assert.equal(updated.section.id, replacement.id);
+    assert.equal(updated.width, replacement.properties.bounds.width);
+    assert.deepEqual(converted, before, 'profile selection edits only a detached draft');
+    const project = createProject({
+      grid: { x: [], y: [] },
+      levels: { active: 'l', items: [{ id: 'l', name: 'Plan 1', elevation: 0 }] },
+    });
+    const history = new ProjectHistory();
+    const editor = createModelEditor({ project, checkpoint: () => history.checkpoint(project) });
+    editor.add(conversionObjects([{ object: updated }], project.objects));
+    assert.equal(project.objects.length, 1);
+    assert.equal(project.objects[0].section.id, replacement.id);
+    assert.equal(history.past.length, 1);
+    assert.equal(history.undo(project).objects.length, 0);
+    assert.throws(() => conversionProfile({ ...converted, type: 'plate' }, replacement), /Sweep/);
+    assert.throws(() => conversionProfile(converted, { ...replacement, loops: [] }));
+    source.mesh.geometry.dispose();
+  }
+});

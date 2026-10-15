@@ -12,6 +12,8 @@ const svg = (path) =>
 
 /** Move existing controls so their command handlers and state stay connected. */
 export function installModelChrome({
+  getReferenceSelectionMode,
+  setReferenceSelectionMode,
   getSelectionMode,
   setSelectionMode,
   getGridSelectionLocked,
@@ -83,6 +85,27 @@ export function installModelChrome({
       );
   }
   syncSelection();
+
+  const referenceSwitch = document.createElement('button');
+  referenceSwitch.type = 'button';
+  referenceSwitch.id = 'reference-selection-mode';
+  referenceSwitch.className = 'model-reference-switch';
+  referenceSwitch.setAttribute('role', 'switch');
+  referenceSwitch.setAttribute('aria-label', 'Markera enskilda referensobjekt');
+  const syncReferenceSwitch = () => {
+    const object = getReferenceSelectionMode() === 'object';
+    referenceSwitch.setAttribute('aria-checked', String(object));
+    referenceSwitch.title = object
+      ? 'Markeringsläge: referensobjekt · klicka för hel referens'
+      : 'Markeringsläge: hel referens · klicka för enskilt objekt';
+    referenceSwitch.replaceChildren(commandIcon(object ? 'referenceObject' : 'referenceWhole'));
+  };
+  referenceSwitch.onclick = () => {
+    setReferenceSelectionMode(getReferenceSelectionMode() === 'object' ? 'reference' : 'object');
+    syncReferenceSwitch();
+  };
+  syncReferenceSwitch();
+  controls.append(referenceSwitch);
 
   const gridLock = document.createElement('button');
   gridLock.type = 'button';

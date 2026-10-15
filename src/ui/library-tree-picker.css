@@ -1,0 +1,83 @@
+.ui-library-tree-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ui-library-tree-picker > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  background: #f8fafb;
+  color: var(--ui-ink);
+  font-size: 12px;
+  text-align: left;
+}
+.ui-library-tree-picker > button > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-library-tree-picker svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ui-library-picker-path {
+  color: #73878e;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-library-tree-picker-panel {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  background: white;
+  color: var(--ui-ink);
+  box-shadow: 0 8px 24px #172b3226;
+}
+.ui-library-tree-picker-panel:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ui-library-tree-picker-panel > input {
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  background: #f8fafb;
+  font-size: 12px;
+}
+.ui-library-tree-picker-panel .ui-library-tree {
+  overscroll-behavior: contain;
+}
+.ui-library-tree-picker-panel :is(button, summary, input):focus-visible,
+.ui-library-tree-picker > button:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+.ui-library-tree-picker-panel > p {
+  margin: 0;
+  font-size: 12px;
+}

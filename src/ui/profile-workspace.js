@@ -1,3 +1,4 @@
+import { renderProfilePreview } from './profile-preview.js';
 import { installFloatingWindow } from './floating-window.js';
 import { installEditorWorkspace } from './editor-workspace.js';
 import { evaluateSection } from '../section-profile.js';
@@ -125,7 +126,7 @@ export function installProfileWorkspace(editor) {
   back.setAttribute('aria-label', 'Till profilbiblioteket');
   back.onclick = () => {
     dialog.close();
-    editor.open();
+    editor.open({ onUse: editor.selectionUse });
   };
   return {
     refreshProperties: surface.refreshFields,
@@ -137,24 +138,7 @@ export function installProfileWorkspace(editor) {
       message.setAttribute('role', 'status');
       try {
         const section = evaluateSection(editor.def);
-        const points = section.loops.flat();
-        const xs = points.map((p) => p[0]),
-          ys = points.map((p) => p[1]);
-        const x = Math.min(...xs),
-          y = Math.min(...ys);
-        const w = Math.max(...xs) - x,
-          h = Math.max(...ys) - y;
-        const pad = Math.max(w, h) * 0.15 || 10;
-        svg.setAttribute('viewBox', `${x - pad} ${-y - h - pad} ${w + 2 * pad} ${h + 2 * pad}`);
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute(
-          'd',
-          section.loops
-            .map((loop) => 'M' + loop.map(([a, b]) => `${a},${-b}`).join('L') + 'Z')
-            .join(''),
-        );
-        path.setAttribute('fill-rule', 'evenodd');
-        svg.append(path);
+        const { width: w, height: h } = renderProfilePreview(svg, section);
         message.textContent = editor.error || `${editor.fmt(w)} × ${editor.fmt(h)} mm`;
         profileFields.replaceChildren();
         for (const [key, label, value, unit] of [

@@ -20,6 +20,7 @@ export function installWorkspaceReferences({
   const syncOperationUI = (...args) => actions.syncOperationUI(...args);
   controllers.referenceModels = new ReferenceModels({
     scene,
+    getCoordinates: () => project.coordinates,
     inspector: controllers.inspector,
     onChange: (references) => {
       project.references = references;
@@ -45,6 +46,8 @@ export function installWorkspaceReferences({
       document.querySelector('footer [role=status]').textContent = text;
     },
     getObjects: () => project.objects,
+    getProfiles: () => actions.getLibraryProfiles(),
+    openProfileLibrary: (onUse) => actions.openProfileLibrary(onUse),
     convert: (added) => {
       controllers.inspector.finish();
       setDrawing(false);

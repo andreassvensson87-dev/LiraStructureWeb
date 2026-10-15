@@ -129,6 +129,7 @@ export function setItemRoll(object, rotation) {
 }
 export const itemType = {
   id: 'item',
+  ifcClass: 'IfcBuildingElementProxy',
   label: 'Item',
   prefix: 'IT',
   family: 'item',
