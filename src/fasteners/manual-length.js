@@ -1,3 +1,4 @@
+import { iso4014ThreadLength } from './standard-dimensions.js';
 import { validateFastenerSpec } from './library.js';
 import { fastenerAccessories } from './accessories.js';
 
@@ -10,6 +11,8 @@ export function withFastenerLength(spec, length) {
     (spec.kind === 'rod' || spec.standard === 'ISO 4017' || spec.thread.length === spec.length)
   )
     result.thread.length = length;
+  if (result.thread && spec.standard === 'ISO 4014')
+    result.thread.length = iso4014ThreadLength(spec.diameter, length);
   validateFastenerSpec(result, { instance: true });
   return result;
 }

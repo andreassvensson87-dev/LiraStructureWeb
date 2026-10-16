@@ -59,6 +59,11 @@ export function createAssemblyPicker(root, changed) {
     set(nextSpec, nextValue) {
       spec = nextSpec;
       value = { ...assemblyDefaults(spec || { kind: 'wood' }), ...nextValue };
+      if (!spec?.nut) value.nearNut = value.nut = value.extraNut = false;
+      if (spec?.kind !== 'rod') value.nearNut = false;
+      if (!spec?.washer) value.nearWasher = value.farWasher = false;
+      if (spec?.head?.kind === 'countersunk') value.nearWasher = false;
+      if (!value.nut) value.extraNut = false;
       render();
     },
     get: () => ({ ...value }),

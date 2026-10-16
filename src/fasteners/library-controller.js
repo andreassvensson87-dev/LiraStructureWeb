@@ -1,3 +1,4 @@
+import { withDefaultFasteners } from './default-catalog.js';
 import {
   renderFastenerLibrary,
   renderFastenerSpec,
@@ -30,10 +31,10 @@ const button = (text, action) => {
 export class FastenerLibraryController {
   constructor({ useSpec, closed }) {
     this.useSpec = useSpec;
-    this.records = [];
+    this.records = withDefaultFasteners();
     try {
       const raw = localStorage.getItem(FASTENER_LIBRARY_KEY);
-      if (raw) this.records = validateFastenerLibrary(JSON.parse(raw));
+      if (raw) this.records = withDefaultFasteners(validateFastenerLibrary(JSON.parse(raw)));
     } catch (e) {
       this.loadError = e.message;
     }
@@ -41,7 +42,7 @@ export class FastenerLibraryController {
     this.library.id = 'fastener-library';
     this.library.setAttribute('aria-labelledby', 'fastener-library-title');
     this.library.innerHTML = `
-      <div class="panel-title"><div><h2 id="fastener-library-title">Skruvbibliotek</h2><span class="fastener-subtitle">Egna skruvar och dimensioner · mm</span></div><button type="button" data-close aria-label="Stäng skruvbibliotek">×</button></div>
+      <div class="panel-title"><div><h2 id="fastener-library-title">Skruvbibliotek</h2><span class="fastener-subtitle">Grundsortiment och egna skruvar · mm</span></div><button type="button" data-close aria-label="Stäng skruvbibliotek">×</button></div>
       <div class="fastener-library-layout">
         <nav aria-label="Skruvar i biblioteket"><input aria-label="Sök skruvar" type="search" data-search placeholder="Sök namn eller dimension…"><div data-records></div><button type="button" data-new>+ Ny skruv</button></nav>
         <form data-edit>
@@ -78,7 +79,8 @@ export class FastenerLibraryController {
     this.editForm.elements.hasThread.onchange = () => this.syncNut();
     this.editForm.elements.standard.onchange = () => {
       if (this.editForm.elements.standard.value) {
-        this.editForm.elements.kind.value = 'bolt';
+        this.editForm.elements.kind.value =
+          this.editForm.elements.standard.value === 'DIN 976-1' ? 'rod' : 'bolt';
         this.editForm.elements.headKind.value = 'hex';
         this.editForm.elements.hasThread.checked = true;
       }

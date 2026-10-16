@@ -10,7 +10,7 @@ export function renderFastenerLibrary({ library, records, editingSpec, editSpec,
       const series = spec.series || spec.standard || 'Egna skruvar';
       if (
         !normalize(
-          `${label} ${series} ${spec.name} ${spec.diameter} ${spec.length} ${spec.manufacturer || ''} ${spec.article || ''}`,
+          `${label} ${series} ${spec.standard || ''} ${spec.name} ${spec.diameter} ${spec.length} ${spec.manufacturer || ''} ${spec.article || ''}`,
         ).includes(normalize(query))
       )
         continue;
@@ -113,7 +113,11 @@ export function syncFastenerHardwareFields({ editForm, library }) {
   f.namedItem('length').closest('label').firstChild.textContent = rod
     ? 'Längd'
     : 'Längd under huvud';
-  if (f.kind.value !== 'bolt') f.standard.value = '';
+  if (
+    (f.standard.value === 'DIN 976-1' && !rod) ||
+    (f.standard.value !== 'DIN 976-1' && f.kind.value !== 'bolt')
+  )
+    f.standard.value = '';
   const full = rod || f.standard.value === 'ISO 4017';
   if (full || f.standard.value) f.hasThread.checked = true;
   f.hasThread.disabled = full || !!f.standard.value;

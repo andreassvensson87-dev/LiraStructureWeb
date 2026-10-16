@@ -5,7 +5,7 @@ export const FASTENER_KINDS = [
   ['rod', 'Gängstång'],
   ['concrete', 'Betongskruv'],
 ];
-export const FASTENER_STANDARDS = ['', 'ISO 4014', 'ISO 4017'];
+export const FASTENER_STANDARDS = ['', 'ISO 4014', 'ISO 4017', 'DIN 976-1'];
 export const hasNut = (spec) => ['bolt', 'rod'].includes(spec?.kind);
 const dimension = (value, label, max = 10000) => {
   if (!Number.isFinite(value) || value <= 0 || value > max)
@@ -36,7 +36,12 @@ export function validateFastenerSpec(spec, { instance = false } = {}) {
   } else if (spec.nut != null) throw new Error('Denna skruvtyp har ingen tillhörande mutter.');
   if (spec.standard != null && !FASTENER_STANDARDS.includes(spec.standard))
     throw new Error('Välj en giltig skruvstandard.');
-  if (spec.standard && (spec.kind !== 'bolt' || spec.head.kind !== 'hex'))
+  if (spec.standard === 'DIN 976-1' && spec.kind !== 'rod')
+    throw new Error('DIN 976-1 kräver gängstång.');
+  if (
+    ['ISO 4014', 'ISO 4017'].includes(spec.standard) &&
+    (spec.kind !== 'bolt' || spec.head?.kind !== 'hex')
+  )
     throw new Error('ISO 4014 och ISO 4017 kräver skruv med sexkantshuvud.');
   for (const key of ['manufacturer', 'article', 'grade', 'coating', 'series'])
     if (spec[key] != null && (typeof spec[key] !== 'string' || spec[key].length > 120))

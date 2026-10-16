@@ -260,6 +260,11 @@ export class FastenerUI {
     if (selected && records.some((s) => `${s.id}:${s.revision}` === selected))
       select.value = selected;
     else if (snapshot) select.value = `${snapshot.id}:${snapshot.revision}`;
+    else if (records.length) {
+      const initial =
+        records.find((s) => s.standard === 'ISO 4017' && s.diameter === 12) || records[0];
+      select.value = `${initial.id}:${initial.revision}`;
+    }
     this.specChanged(false);
   }
   currentSpec() {
