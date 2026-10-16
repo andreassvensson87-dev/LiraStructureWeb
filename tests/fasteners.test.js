@@ -701,3 +701,37 @@ test('selected parts beyond the drilling range remain undrilled and inside inser
   assert.equal(inside.holes[0].depth, 12);
   assert.deepEqual(inside.start, [500, 60, 150]);
 });
+
+test('atomic linear copy series remaps every bore to its own copied target and preserves manual bolt lengths', async () => {
+  const { createModelEditor } = await import('../src/app/model-editor.js');
+  const source = resolveFastenerHoles(
+    spanPlacement({ ...axialScrew(tube, 'span'), spec: bolt }, [500, 60, 150], [500, 60, 138]),
+    [tube],
+  );
+  const project = createProject({ grid: { x: [], y: [] }, levels: {} });
+  project.objects = [tube, source];
+  const before = structuredClone(project.objects),
+    history = new ProjectHistory();
+  const editor = createModelEditor({ project, checkpoint: () => history.checkpoint(project) });
+  const batches = [1000, 2000, 3000].map((x) =>
+    [tube, source].map((o) => transformObject(o, 'move', [0, 0, 0], [x, 0, 0])),
+  );
+  const result = editor.prepareCopySeries(batches);
+  assert.deepEqual(project.objects, before);
+  editor.replace(result.objects);
+  const copies = project.objects.filter((o) => o.type === 'fastener' && o.id !== source.id);
+  assert.equal(copies.length, 3);
+  const targetIds = new Set(copies.map((o) => o.holes[0].targetId));
+  assert.equal(targetIds.size, 3);
+  assert.ok(!targetIds.has(tube.id));
+  assert.equal(
+    new Set(copies.flatMap((o) => o.holes.map((h) => h.id))).size,
+    copies.reduce((n, o) => n + o.holes.length, 0),
+  );
+  for (const copy of copies) {
+    assert.equal(copy.spec.length, source.spec.length);
+    assert.ok(copy.holes.every((h) => targetIds.has(h.targetId)));
+  }
+  assert.equal(history.past.length, 1);
+  assert.deepEqual(history.undo(project).objects, before);
+});

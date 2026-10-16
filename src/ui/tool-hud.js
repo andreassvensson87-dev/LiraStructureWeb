@@ -88,12 +88,12 @@ export function createLinearHUD(stack, draft, callbacks) {
     check.setAttribute('aria-label', `Använd ${axis}`);
     check.onchange = () => callbacks.enable(i, check.checked);
     const caption = document.createElement('span');
-    caption.textContent = axis;
+    caption.textContent = `d${axis}`;
     const input = document.createElement('input');
     input.type = 'text';
-    input.inputMode = 'decimal';
+    input.inputMode = 'text';
     input.setAttribute('aria-label', `Avstånd ${axis}`);
-    input.title = `Avstånd ${axis} · mm`;
+    input.title = `Avstånd ${axis} · mm · + − * / ( )`;
     input.value = draft.values[i];
     input.oninput = () => callbacks.change(i, input.value);
     input.onfocus = () => {
@@ -104,7 +104,28 @@ export function createLinearHUD(stack, draft, callbacks) {
     inputs.push(input);
     checks.push(check);
   }
-  const confirm = iconButton('check', 'Bekräfta ' + label.toLowerCase(), callbacks.confirm);
+  let countInput;
+  if (draft.mode === 'copy') {
+    const group = document.createElement('label');
+    group.className = 'ui-linear-hud-axis ui-linear-hud-count';
+    const caption = document.createElement('span');
+    caption.textContent = 'Antal';
+    countInput = document.createElement('input');
+    countInput.type = 'number';
+    countInput.min = '1';
+    countInput.max = '1000';
+    countInput.step = '1';
+    countInput.value = draft.count;
+    countInput.setAttribute('aria-label', 'Antal kopior');
+    countInput.oninput = () => callbacks.count(countInput.value);
+    group.append(caption, countInput);
+    content.append(group);
+  }
+  const action = draft.mode === 'copy' ? 'Kopiera' : 'Flytta';
+  const confirm = iconButton('check', action, callbacks.confirm);
+  const caption = document.createElement('span');
+  caption.textContent = action;
+  confirm.append(caption);
   confirm.type = 'submit';
   confirm.onclick = null;
   confirm.className = 'ui-tool-hud-confirm';
@@ -115,6 +136,11 @@ export function createLinearHUD(stack, draft, callbacks) {
     callbacks.confirm();
   };
   row.root.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.repeat) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
@@ -123,13 +149,15 @@ export function createLinearHUD(stack, draft, callbacks) {
   });
   return {
     ...row,
-    sync({ active, picking, error = '', ready = false }) {
+    sync({ active, picking, error = '', ready = false, coordinateSystem }) {
       row.active(active);
-      row.root.title = error;
+      row.root.title = error || coordinateSystem || '';
       row.root.classList.toggle('has-error', !!error);
       picker.setAttribute('aria-pressed', String(picking));
       picker.title = picking ? 'Välj start- och slutpunkt i modellen' : 'Välj start- och slutpunkt';
-      confirm.disabled = !ready;
+      confirm.disabled = !ready || picking;
+      if (countInput && countInput.value !== String(draft.count)) countInput.value = draft.count;
+      if (countInput) countInput.setAttribute('aria-invalid', String(!!error && active));
       for (const [i, input] of inputs.entries()) {
         const raw = draft.values[i];
         const display =

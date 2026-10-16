@@ -311,7 +311,53 @@ export function createPlacementController({
       tools.operation ? null : readForm(),
     );
   }
+  function prepareLinear(target) {
+    const count = tools.operation.linearCount || 1;
+    if (!Number.isInteger(count) || count < 1 || count > 1000) throw Error('Ange 1–1000 kopior.');
+    if (tools.operation.mode !== 'copy') return modelEditor.prepare(candidates(target));
+    const delta = target.map((v, i) => v - tools.first[i]);
+    return modelEditor.prepareCopySeries(
+      Array.from({ length: count }, (_, i) =>
+        candidates(tools.first.map((v, j) => v + delta[j] * (i + 1))),
+      ),
+    );
+  }
+  function previewLinear(target) {
+    if (tools.operation?.referenceId) return showPreview(target, false);
+    clearPreview();
+    guide.visible = false;
+    try {
+      const result = prepareLinear(target),
+        ids = new Set(result.ids);
+      const batch = result.objects.filter((object) => ids.has(object.id));
+      ui.previewSweep = batch.length === 1 ? batch[0] : null;
+      ui.preview = previewModelBatch(batch);
+      if (tools.operation.gripRefs) tools.operation.gripPreview = batch;
+      scene.add(ui.preview);
+      frameGate.invalidate();
+      return true;
+    } catch (error) {
+      if (tools.operation.gripRefs) tools.operation.gripPreview = null;
+      clearPreview();
+      $('status').textContent = error.message;
+      frameGate.invalidate();
+      return false;
+    }
+  }
   function commitPoint(target) {
+    if (tools.operation?.linearId && !tools.operation.referenceId) {
+      try {
+        const result = prepareLinear(target),
+          keepPoints = !!tools.operation.gripRefs;
+        modelEditor.replace(result.objects);
+        setDrawing(false, { keepPoints });
+        render();
+        return true;
+      } catch (error) {
+        $('status').textContent = error.message;
+        return false;
+      }
+    }
     if (tools.operation?.mode === 'polysweepCreate') return getPolysweep().pick(target);
     if (tools.operation?.referenceId) {
       const { referenceId, placement } = tools.operation;
@@ -533,7 +579,7 @@ export function createPlacementController({
   }
 
   return {
-    previewLinear: (target) => showPreview(target, false),
+    previewLinear,
     previewPlane: (batch) => {
       clearPreview();
       guide.visible = false;
@@ -550,6 +596,7 @@ export function createPlacementController({
       }
     },
     clearTransformPreview: () => {
+      if (tools.operation?.gripRefs) tools.operation.gripPreview = null;
       clearPreview();
       guide.visible = false;
       tools.activeSnap = null;

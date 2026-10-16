@@ -120,6 +120,14 @@ test('plate grip placement resolves a diagonal pointer in the plate plane and fi
   const frame = gripWorkPlane([plate], refs, base);
   assert.deepEqual(frame.origin, base);
   assert.equal(drawingWorkPlane({ mode: 'grip', frame }, null), frame);
+  assert.equal(
+    drawingWorkPlane({ mode: 'move', gripRefs: refs, linearId: 'linear' }, frame),
+    frame,
+  );
+  assert.equal(
+    drawingWorkPlane({ mode: 'move', gripRefs: refs, linearId: 'linear', frame }, null),
+    frame,
+  );
   const target = [1400, 200, 1600],
     camera = new THREE.OrthographicCamera(-2500, 2500, 2500, -2500, 1, 100000);
   camera.position.set(1400, 10000, 1600);

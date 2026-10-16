@@ -85,16 +85,16 @@
   accent-color: var(--ui-accent, #287c65);
 }
 .ui-linear-hud-axis input[type='text'] {
-  width: 46px;
+  width: 96px;
   min-width: 0;
-  height: 25px;
+  height: 29px;
   box-sizing: border-box;
   border: 1px solid var(--ui-border, #d3dcdf);
   border-radius: 4px;
-  padding: 2px 4px;
+  padding: 3px 6px;
   background: white;
   color: inherit;
-  font: 12px system-ui;
+  font: 13px system-ui;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -129,4 +129,26 @@
   border: 1px solid var(--ui-border, #d3dcdf);
   font: 12px system-ui;
   font-variant-numeric: tabular-nums;
+}
+
+.ui-linear-hud-axis input[type='number'] {
+  width: 60px;
+  min-width: 0;
+  height: 29px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border, #d3dcdf);
+  border-radius: 4px;
+  padding: 3px 5px;
+  background: white;
+  color: inherit;
+  font: 13px system-ui;
+  text-align: right;
+}
+.ui-linear-hud-fields .ui-tool-hud-confirm {
+  display: flex;
+  gap: 3px;
+  width: auto;
+  flex-basis: auto;
+  padding: 3px 5px;
+  font: 12px system-ui;
 }

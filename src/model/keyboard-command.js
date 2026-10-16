@@ -64,7 +64,8 @@ export function modelKeyboardCommand(
     if (e.key === 'Enter') return 'confirm-plane-transform';
     return e.key === 'Backspace' ? 'remove-plane-transform-point' : null;
   }
-  if (linear && !modifier) return e.key === 'Enter' && !picking ? 'confirm-linear' : null;
+  if (linear && !modifier)
+    return e.key === 'Enter' && !picking ? (e.repeat ? 'consume' : 'confirm-linear') : null;
   if (drawing && hasStart && !modifier) {
     if (!e.altKey && /^\d$/.test(e.key)) return 'length';
     if (axis) return 'axis';

@@ -32,7 +32,10 @@ export function createSnapOverlay({ project, ui, tools, host, scene, camera, gri
       ...(tools.drawing ? tools.activeSnap?.gridIds || [] : []),
     ]);
     const active = tools.drawing && tools.activeSnap?.point;
-    const text = active && tools.operation?.mode !== 'workPlane' ? tools.activeSnap.label : '';
+    const text =
+      active && tools.operation?.mode !== 'workPlane' && !tools.operation?.linearId
+        ? tools.activeSnap.label
+        : '';
     if (snapStatus.textContent !== text) snapStatus.textContent = text;
     const colors = { X: '#ba4b47', Y: '#22845f', Z: '#3e75b5' };
     guide.material.color.set(colors[tools.activeSnap?.axis] || cadFeedback.tracking);

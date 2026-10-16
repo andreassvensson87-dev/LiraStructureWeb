@@ -28,6 +28,7 @@ export function drawingWorkPlane(operation, temporaryPlane) {
   if (operation?.planeId) return null;
   if (operation?.mode === 'plateCreate') return operation.frame;
   if (operation?.mode === 'plateVertex') return operation.source.frame;
-  if (operation?.gripRefs || operation?.mode === 'grip') return operation.frame || null;
+  if (operation?.gripRefs || operation?.mode === 'grip')
+    return operation.frame || (operation.linearId ? temporaryPlane : null) || null;
   return !operation || ['move', 'copy'].includes(operation.mode) ? temporaryPlane : null;
 }

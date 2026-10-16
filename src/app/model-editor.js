@@ -42,6 +42,21 @@ export function createModelEditor({ project, checkpoint }) {
   return {
     prepare,
     replace,
+    prepareCopySeries(batches) {
+      let objects = project.objects;
+      const ids = [];
+      for (const batch of batches) {
+        for (const object of batch) {
+          const error = validateObject(object);
+          if (error) throw new Error(error);
+        }
+        const result = applyObjectBatch(objects, [...batch], { copy: true });
+        objects = result.objects;
+        ids.push(...result.ids);
+      }
+      validate(objects);
+      return { objects, ids };
+    },
     update(batch, options) {
       const result = prepare(batch, options);
       replace(result.objects);

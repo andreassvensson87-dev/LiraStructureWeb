@@ -251,7 +251,7 @@ function linearFixture(t) {
   return { ...f, linear, rows };
 }
 
-test('linear HUD keeps axis drafts, rejects invalid/zero moves, commits once and reuses current selection after copy', (t) => {
+test('linear HUD keeps axis drafts, rejects invalid/zero moves, commits once and retains copy originals', (t) => {
   const f = linearFixture(t),
     before = structuredClone(f.project.objects);
   f.linear.open('move');
@@ -270,9 +270,9 @@ test('linear HUD keeps axis drafts, rejects invalid/zero moves, commits once and
   row.callbacks.confirm();
   assert.deepEqual(f.project.objects[0].start, [-250.5, 0, 0]);
   assert.equal(f.history.past.length, 1);
-  assert.equal(row.state.active, false);
+  assert.equal(row.state.active, true);
   assert.equal(row.draft.values[0], '-250,5');
-  assert.equal(f.tools.operation, null);
+  assert.equal(f.tools.operation.linearPicking, false);
   f.linear.open('copy');
   const copy = f.rows[1];
   copy.callbacks.change(2, '400');
@@ -283,7 +283,8 @@ test('linear HUD keeps axis drafts, rejects invalid/zero moves, commits once and
   copy.callbacks.activate();
   assert.equal(copy.state.ready, true);
   copy.callbacks.confirm();
-  assert.deepEqual(f.project.objects[2].start, [-250.5, 0, 800]);
+  assert.deepEqual(f.project.objects[2].start, [-250.5, 0, 400]);
+  assert.deepEqual([...f.ui.selectedIds], ['line']);
   assert.equal(f.history.past.length, 3);
   assert.deepEqual(f.history.undo(f.history.undo(f.history.undo(f.project))).objects, before);
 });
@@ -655,4 +656,177 @@ test('two-point workplane previews the same frame without changing the active pl
   assert.deepEqual(frame, workPlaneFromTwoPoints(points, reference));
   assert.equal(f.tools.temporaryPlane, reference);
   assert.deepEqual(f.project.objects, before);
+});
+
+test('linear Copy previews and commits an entire series in the inclined workplane with formulas and one undo', (t) => {
+  const f = linearFixture(t),
+    before = structuredClone(f.project.objects);
+  f.tools.temporaryPlane = { origin: [900, 800, 700], u: [0.8, 0, 0.6], v: [0, 1, 0] };
+  f.linear.open('copy');
+  const row = f.rows[0];
+  assert.equal(row.state.picking, true, 'opening starts the picker');
+  row.callbacks.change(0, '=2*50');
+  row.callbacks.change(1, '(20-5)*2');
+  row.callbacks.change(2, '10/2');
+  row.callbacks.count('3');
+  const delta = [77, 30, 64];
+  assert.equal(row.state.coordinateSystem, 'Arbetsplanets axlar');
+  assert.equal(row.state.ready, true);
+  assert.equal(f.ui.preview.children.length, 3);
+  f.ui.preview.updateMatrixWorld(true);
+  const boxes = f.ui.preview.children.map((child) => new THREE.Box3().setFromObject(child));
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      assert.ok(Math.abs(boxes[i].min.getComponent(j) - delta[j] * (i + 1)) < 1e-5);
+  assert.deepEqual(f.project.objects, before);
+  row.callbacks.confirm();
+  assert.equal(f.history.past.length, 1);
+  assert.equal(f.project.objects.length, 4);
+  assert.deepEqual([...f.ui.selectedIds], ['line']);
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      assert.ok(Math.abs(f.project.objects[i + 1].start[j] - delta[j] * (i + 1)) < 1e-8);
+  assert.equal(new Set(f.project.objects.map((o) => o.id)).size, 4);
+  assert.equal(row.draft.values[0], '=2*50');
+  assert.equal(row.draft.count, '3');
+  const after = structuredClone(f.project);
+  Object.assign(f.project, f.history.undo(f.project));
+  assert.deepEqual(f.project.objects, before);
+  Object.assign(f.project, f.history.redo(f.project));
+  assert.deepEqual(f.project, after);
+});
+
+test('picked local components and disabled axes give the same preview and confirmed displacement for selected endpoints', (t) => {
+  const f = linearFixture(t);
+  f.project.objects.push({
+    ...structuredClone(f.project.objects[0]),
+    id: 'other',
+    start: [0, 1000, 0],
+    end: [1000, 1000, 0],
+  });
+  f.ui.selectedIds.add('other');
+  f.gripSelection.push({ id: 'line', kind: 'end' }, { id: 'other', kind: 'end' });
+  const before = structuredClone(f.project.objects);
+  f.tools.temporaryPlane = { origin: [900, 800, 700], u: [0.8, 0, 0.6], v: [0, 1, 0] };
+  f.linear.open('move');
+  const row = f.rows[0];
+  row.callbacks.enable(1, false);
+  f.linear.pickPoint([10, 20, 30]);
+  f.linear.pointerPreview([87, 50, 94]);
+  assert.equal(row.state.picking, true);
+  assert.equal(f.ui.preview.children.length, 2);
+  assert.ok(Math.abs(+row.draft.values[0] - 100) < 1e-8);
+  assert.ok(Math.abs(+row.draft.values[1] - 30) < 1e-8);
+  assert.ok(Math.abs(+row.draft.values[2] - 5) < 1e-8);
+  const preview = structuredClone(f.tools.operation.gripPreview);
+  assert.deepEqual(
+    preview.map((o) => o.start),
+    before.map((o) => o.start),
+  );
+  assert.deepEqual(
+    preview.map((o) => o.end),
+    [
+      [1077, 0, 64],
+      [1077, 1000, 64],
+    ],
+  );
+  row.callbacks.confirm();
+  assert.equal(f.history.past.length, 0, 'second point still required');
+  f.linear.pickPoint([87, 50, 94]);
+  assert.equal(row.state.picking, false);
+  assert.equal(row.draft.enabled[1], false);
+  assert.deepEqual(f.project.objects, before);
+  row.callbacks.confirm();
+  assert.deepEqual(f.project.objects, preview);
+  assert.equal(f.history.past.length, 1);
+  row.callbacks.change(0, '50');
+  row.callbacks.change(2, '0');
+  row.callbacks.confirm();
+  assert.deepEqual(
+    f.project.objects.map((o) => o.start),
+    before.map((o) => o.start),
+  );
+  assert.deepEqual(
+    f.project.objects.map((o) => o.end),
+    [
+      [1117, 0, 94],
+      [1117, 1000, 94],
+    ],
+  );
+  assert.equal(f.history.past.length, 2);
+});
+
+test('linear Copy rejects invalid counts and expressions without replacing an earlier valid preview or committing stale values', (t) => {
+  const f = linearFixture(t),
+    before = structuredClone(f.project.objects);
+  f.linear.open('copy');
+  const row = f.rows[0];
+  row.callbacks.change(0, '100');
+  row.callbacks.count('2');
+  assert.equal(row.state.ready, true);
+  for (const count of ['0', '-1', '1.5', '1001', 'bad', '']) {
+    row.callbacks.count(count);
+    row.callbacks.confirm();
+    assert.equal(row.state.ready, false);
+    assert.equal(f.ui.preview, null);
+    assert.equal(f.history.canUndo, false);
+    assert.deepEqual(f.project.objects, before);
+  }
+  row.callbacks.count('2');
+  for (const text of ['1/0', 'globalThis.process.exit()', '1+', 'NaN']) {
+    row.callbacks.change(0, text);
+    row.callbacks.confirm();
+    assert.equal(row.state.ready, false);
+    assert.equal(f.history.canUndo, false);
+  }
+  row.callbacks.change(0, '2*(30+20)');
+  assert.equal(row.state.ready, true);
+  row.callbacks.cancel();
+  assert.equal(f.ui.preview, null);
+  assert.equal(row.state.active, false);
+  assert.equal(row.draft.values[0], '2*(30+20)');
+  row.callbacks.activate();
+  row.callbacks.confirm();
+  assert.equal(f.project.objects.length, 3);
+  assert.equal(f.history.past.length, 1);
+});
+
+test('linear series copies block instances independently and Copy ignores partial point selection', (t) => {
+  const f = linearFixture(t),
+    source = {
+      ...f.project.objects[0],
+      type: 'sweep',
+      profile: 'rect',
+      width: 100,
+      height: 200,
+      thickness: 0,
+      rotation: 0,
+    };
+  const { definition, placement } = modelBlockDefinition([source]);
+  f.project.objects = modelBlockMembers(definition, {}, placement, 'block', [
+    { ...source, parametricBlock: { memberId: source.id } },
+  ]);
+  const before = structuredClone(f.project.objects);
+  f.gripSelection.push({ id: 'line', kind: 'end' });
+  f.linear.open('copy');
+  const row = f.rows[0];
+  assert.equal(
+    f.tools.operation.gripRefs,
+    undefined,
+    'Copy transforms full objects, not selected corners',
+  );
+  row.callbacks.change(1, '500');
+  row.callbacks.count('2');
+  row.callbacks.confirm();
+  assert.equal(f.project.objects.length, 3);
+  assert.deepEqual(f.project.objects[0], before[0]);
+  assert.equal(new Set(f.project.objects.map((o) => o.parametricBlock.instanceId)).size, 3);
+  assert.deepEqual(
+    f.project.objects.slice(1).map((o) => o.start),
+    [
+      [0, 500, 0],
+      [0, 1000, 0],
+    ],
+  );
+  assert.equal(f.history.past.length, 1);
 });

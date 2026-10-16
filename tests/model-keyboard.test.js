@@ -79,6 +79,7 @@ test('linear HUD owns confirmation and does not route canvas typing into the old
   assert.equal(command({ key: '2' }, state), null);
   assert.equal(command({ key: 'x' }, state), null);
   assert.equal(command({ key: 'Enter' }, state), 'confirm-linear');
+  assert.equal(command({ key: 'Enter', repeat: true }, state), 'consume');
   assert.equal(command({ key: 'Enter' }, { ...state, picking: true }), null);
   assert.equal(command({ key: 'Enter' }, { ...state, editing: true }), null);
   assert.equal(command({ key: 'Escape' }, state), 'cancel');
