@@ -2,6 +2,7 @@ import { fastenerAccessories, validateAccessories } from './accessories.js';
 import { validateFastenerSpec } from './library.js';
 
 export const assemblyDefaults = (spec) => ({
+  bolt: true,
   nearWasher: false,
   nearNut: spec.kind === 'rod',
   farWasher: false,
@@ -26,6 +27,24 @@ export function validateAssembly(s) {
       throw new Error('Extra mutter kräver första muttern.');
     if (s.assembly.nearWasher && s.spec.head?.kind === 'countersunk')
       throw new Error('Plan bricka passar inte under försänkt huvud.');
+    const nearWidth = s.assembly.nearNut
+      ? s.spec.nut?.acrossFlats
+      : s.assembly.bolt !== false
+        ? s.spec.head?.diameter
+        : null;
+    if (
+      (s.assembly.nearWasher && nearWidth && s.spec.washer.innerDiameter >= nearWidth) ||
+      (s.assembly.farWasher &&
+        s.assembly.nut &&
+        s.spec.washer.innerDiameter >= s.spec.nut.acrossFlats)
+    )
+      throw new Error('Brickans hål måste vara mindre än huvudet eller muttern som håller den.');
+    if (
+      s.assembly.bolt === false &&
+      !['nearWasher', 'farWasher', 'nearNut', 'nut', 'extraNut'].some((key) => s.assembly[key]) &&
+      !s.holes?.some((hole) => hole.kind !== 'none')
+    )
+      throw new Error('Välj skruvdelar eller minst ett hål.');
   }
   if (s.lengthMode != null && !['manual', 'auto'].includes(s.lengthMode))
     throw new Error('Välj giltigt längdläge.');
@@ -42,7 +61,7 @@ export function assemblyAllowance(s) {
   const a = s.assembly;
   const near =
     (a.nearWasher ? s.spec.washer.thickness : 0) + (a.nearNut ? s.spec.nut.thickness : 0);
-  return s.spec.kind === 'rod' ? Math.max(s.startAllowance || 0, near) : near;
+  return s.spec.kind === 'rod' ? (s.startAllowance ?? near) : near;
 }
 export function fittedAssembly(s, grip) {
   validateAssembly(s);
@@ -95,7 +114,7 @@ export function fastenerSeriesKey(spec) {
 }
 export function selectFastenerLength(s, grip, records = s.lengthOptions || []) {
   validateAssembly(s);
-  if (s.lengthMode !== 'auto') return s;
+  if (s.lengthMode !== 'auto' || s.assembly?.bolt === false) return s;
   const key = fastenerSeriesKey(s.spec);
   const candidates = [...records, s.spec].filter((spec) => fastenerSeriesKey(spec) === key);
   const unique = [

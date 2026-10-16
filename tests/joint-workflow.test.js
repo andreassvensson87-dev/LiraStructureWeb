@@ -1,3 +1,4 @@
+import { fastenerFitWarnings } from '../src/fasteners/manual-length.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -133,11 +134,10 @@ test('selected layers seat both washers and nut outside material, then refit aft
   assert.ok(Math.abs(nut.z + 42) < 1e-6);
   assert.deepEqual(history.undo(project), original);
   assert.deepEqual(history.redo(original), project);
-  assert.throws(
-    () => applyObjectBatch(project.objects, [{ ...a, thickness: 80 }]),
-    /för kort|Muttern/,
-  );
-  assert.equal(project.objects[0].thickness, 30, 'failed edit leaves live objects unchanged');
+  const thicker = applyObjectBatch(project.objects, [{ ...a, thickness: 80 }]).objects;
+  assert.equal(thicker.at(-1).spec.length, screw.spec.length);
+  assert.ok(fastenerFitWarnings(thicker.at(-1)).length);
+  assert.equal(project.objects[0].thickness, 30, 'proposal leaves live objects unchanged');
 });
 
 test('drawn bore contours and local machining dimensions survive moving, rotation, file reopening and undo', () => {

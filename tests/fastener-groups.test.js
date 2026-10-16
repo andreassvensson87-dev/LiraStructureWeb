@@ -60,9 +60,7 @@ const draft = {
   ],
   anchorId: 'p',
   assembly: { nearWasher: true, farWasher: true, nut: true },
-  lengthMode: 'auto',
-  extraLength: 5,
-  lengthOptions: [spec(40), spec(50), spec(60)],
+  lengthMode: 'manual',
   group: {
     id: 'grid',
     rows: 2,
@@ -149,7 +147,7 @@ test('each cell adapts to the material it intersects and updates after thickness
   const batch = fastenerGroupBatch(d, [plate, packing]);
   assert.deepEqual(
     batch.map((s) => s.spec.length),
-    [40, 50, 40, 50],
+    [40, 40, 40, 40],
   );
   assert.equal(holesForPart(packing, batch).length, 2);
   assert.equal(batch[0].holes[1].active, false);
@@ -163,7 +161,7 @@ test('each cell adapts to the material it intersects and updates after thickness
   );
   assert.deepEqual(
     updated.slice(2).map((s) => s.spec.length),
-    [50, 60, 50, 60],
+    [40, 40, 40, 40],
   );
 });
 test('group selection, move, rotation and reference following retain a shared frame', () => {
@@ -222,9 +220,14 @@ test('group settings survive project reload; missing cells and impossible placem
     () => fastenerGroupBatch({ ...draft, group: { ...draft.group, spacingX: 0 } }, [plate]),
     /positivt skruvavstånd/,
   );
-  assert.throws(
-    () => fastenerGroupBatch({ ...draft, group: { ...draft.group, spacingX: 500 } }, [plate]),
-    /rad 1, kolumn 2/,
+  const outside = fastenerGroupBatch({ ...draft, group: { ...draft.group, spacingX: 500 } }, [
+    plate,
+  ]);
+  assert.ok(outside.some((s) => s.layerCount === 0));
+  assert.ok(
+    outside
+      .filter((s) => s.layerCount === 0)
+      .every((s) => s.holes.every((h) => h.active === false)),
   );
 });
 test('grid edits invalidate machined plate numbering; removing a group restores all its bores', () => {

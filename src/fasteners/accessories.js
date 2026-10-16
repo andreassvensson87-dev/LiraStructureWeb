@@ -11,6 +11,7 @@ export function fastenerAccessories(s) {
   ];
 }
 export function validateAccessories(s) {
+  const flexible = s.placementMode === 'range';
   if (s.accessories != null && (!Array.isArray(s.accessories) || s.accessories.length > 32))
     throw new Error('Förbandet får ha högst 32 muttrar och brickor.');
   const items = fastenerAccessories(s);
@@ -23,9 +24,14 @@ export function validateAccessories(s) {
           item.kind === 'nut' ? 'Ange muttermått i biblioteket.' : 'Ange brickmått i biblioteket.',
         );
       const end = item.offset + spec.thickness;
-      if (!Number.isFinite(item.offset) || item.offset < 0 || end > s.spec.length + 0.001)
+      if (
+        !Number.isFinite(item.offset) ||
+        Math.abs(item.offset) > 1e7 ||
+        (!flexible && (item.offset < 0 || end > s.spec.length + 0.001))
+      )
         throw new Error('Muttrar och brickor måste ligga inom skaftets längd.');
       if (
+        !flexible &&
         item.kind === 'nut' &&
         s.spec.thread &&
         item.offset < s.spec.length - s.spec.thread.length - 0.001

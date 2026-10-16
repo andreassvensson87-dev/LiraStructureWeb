@@ -11,7 +11,7 @@ const dimension = (value, label, max = 10000) => {
   if (!Number.isFinite(value) || value <= 0 || value > max)
     throw new Error(`${label} måste vara större än 0 och högst ${max} mm.`);
 };
-export function validateFastenerSpec(spec) {
+export function validateFastenerSpec(spec, { instance = false } = {}) {
   if (!spec || !FASTENER_KINDS.some(([kind]) => kind === spec.kind))
     throw new Error('Välj en giltig skruvtyp.');
   if (typeof spec.name !== 'string' || !spec.name.trim() || spec.name.length > 120)
@@ -24,13 +24,13 @@ export function validateFastenerSpec(spec) {
     if (!['cylinder', 'countersunk', 'hex'].includes(spec.head?.kind))
       throw new Error('Välj en giltig huvudtyp.');
     dimension(spec.head.diameter, 'Huvuddiameter / nyckelvidd', 2000);
-    dimension(spec.head.height, 'Huvudhöjd', spec.length);
+    dimension(spec.head.height, 'Huvudhöjd', instance ? 10000 : spec.length);
     if (spec.head.diameter <= spec.diameter)
       throw new Error('Huvudet måste vara bredare än skruven.');
   }
   if (hasNut(spec)) {
     dimension(spec.nut?.acrossFlats, 'Mutterns nyckelvidd', 2000);
-    dimension(spec.nut?.thickness, 'Muttertjocklek', spec.length);
+    dimension(spec.nut?.thickness, 'Muttertjocklek', instance ? 10000 : spec.length);
     if (spec.nut.acrossFlats <= spec.diameter)
       throw new Error('Mutterns nyckelvidd måste vara större än skruvdiametern.');
   } else if (spec.nut != null) throw new Error('Denna skruvtyp har ingen tillhörande mutter.');
@@ -44,11 +44,11 @@ export function validateFastenerSpec(spec) {
   if (spec.thread != null) {
     if (typeof spec.thread !== 'object' || Array.isArray(spec.thread))
       throw new Error('Ange giltiga gänguppgifter.');
-    dimension(spec.thread.length, 'Gänglängd', spec.length);
+    dimension(spec.thread.length, 'Gänglängd', instance ? 10000 : spec.length);
     if (spec.thread.pitch != null) dimension(spec.thread.pitch, 'Gängstigning', spec.diameter);
     if ((spec.standard === 'ISO 4017' || spec.kind === 'rod') && spec.thread.length !== spec.length)
       throw new Error('Helgängad skruv och gängstång ska ha gänglängd lika med längden.');
-    if (spec.standard === 'ISO 4014' && spec.thread.length >= spec.length)
+    if (!instance && spec.standard === 'ISO 4014' && spec.thread.length >= spec.length)
       throw new Error('ISO 4014 behöver en ogängad del av skaftet.');
   } else if (spec.standard) throw new Error('Ange gänglängd för vald standard.');
   if (spec.anchor != null) {
@@ -63,7 +63,7 @@ export function validateFastenerSpec(spec) {
   if (spec.washer != null) {
     dimension(spec.washer.innerDiameter, 'Brickans innerdiameter', 2000);
     dimension(spec.washer.outerDiameter, 'Brickans ytterdiameter', 3000);
-    dimension(spec.washer.thickness, 'Bricktjocklek', spec.length);
+    dimension(spec.washer.thickness, 'Bricktjocklek', instance ? 10000 : spec.length);
     if (
       spec.washer.innerDiameter < spec.diameter ||
       spec.washer.outerDiameter <= spec.washer.innerDiameter

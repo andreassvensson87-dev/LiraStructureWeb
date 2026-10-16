@@ -40,8 +40,8 @@ function cylinder(top, bottom, length, offset, segments = 48) {
 function localFastenerGeometry(s) {
   const spec = s.spec,
     r = spec.diameter / 2;
-  const pieces = [cylinder(r, r, spec.length, 0)];
-  if (spec.head?.kind === 'hex')
+  const pieces = s.assembly?.bolt === false ? [] : [cylinder(r, r, spec.length, 0)];
+  if (s.assembly?.bolt !== false && spec.head?.kind === 'hex')
     pieces.push(
       cylinder(
         spec.head.diameter / Math.sqrt(3),
@@ -51,7 +51,7 @@ function localFastenerGeometry(s) {
         6,
       ),
     );
-  else if (spec.head)
+  else if (s.assembly?.bolt !== false && spec.head)
     pieces.push(
       cylinder(
         spec.head.diameter / 2,
@@ -98,7 +98,8 @@ function localFastenerGeometry(s) {
     ring.translate(0, 0, offset);
     pieces.push(ring);
   }
-  const geometry = mergeGeometries(pieces);
+  const geometry = pieces.length ? mergeGeometries(pieces) : new THREE.BufferGeometry();
+  if (!pieces.length) geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
   pieces.forEach((g) => g.dispose());
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
@@ -108,7 +109,7 @@ function localFastenerGeometry(s) {
 // never change the screw shape. Render wrappers own their GPU attributes.
 const templates = new Map();
 export function fastenerDisplayTemplate(s) {
-  const key = JSON.stringify([s.spec, fastenerAccessories(s)]);
+  const key = JSON.stringify([s.spec, s.assembly?.bolt !== false, fastenerAccessories(s)]);
   let template = templates.get(key);
   if (!template) {
     const geometry = localFastenerGeometry(s);

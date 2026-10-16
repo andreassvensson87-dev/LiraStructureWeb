@@ -1,40 +1,24 @@
+import { withFastenerLength, fastenerFitWarnings } from './manual-length.js';
+import { createHoleSettings } from './hole-settings.js';
+import { changeHoleSettings, resizeFastenerHoles } from './hole-edit.js';
+import { createFastenerPlacementForm } from './placement-form.js';
+import { createFastenerProductPicker } from './product-picker.js';
 import { renderFastenerAccessories, renderFastenerHoles } from './placement-inspector.js';
-import {
-  renderFastenerLibrary,
-  renderFastenerSpec,
-  syncFastenerHardwareFields,
-  syncFastenerHoleFields,
-} from './library-inspector.js';
-import { installFloatingWindow } from '../ui/floating-window.js';
-import { installLibraryWorkspace } from '../ui/library-workspace.js';
-
-import {
-  FASTENER_LIBRARY_KEY,
-  defaultHoleForSpec,
-  FASTENER_KINDS,
-  FASTENER_STANDARDS,
-  hasNut,
-  latestFasteners,
-  mergeFasteners,
-  validateFastenerLibrary,
-  validateFastenerSpec,
-} from './library.js';
-import { assemblyDefaults, fastenerSeriesKey } from './assembly.js';
+import { FastenerLibraryController } from './library-controller.js';
+import { defaultHoleForSpec, FASTENER_KINDS, latestFasteners } from './library.js';
+import { assemblyDefaults } from './assembly.js';
+import { prepareFastenerPlacement } from './placement-draft.js';
 import { createAssemblyPicker } from './assembly-ui.js';
 import { createFastenerGroupEditor } from './group-ui.js';
-import { fastenerGroupBatch } from './groups.js';
 import { selectedFastenerGroup } from './group-data.js';
 import { fastenerAccessories } from './accessories.js';
-import { isFastener, validateFastener } from './object-type.js';
+import { isFastener } from './object-type.js';
 import { axisPlacement } from './geometry.js';
-import { validateFastenerTargets, holesForPart } from './relations.js';
+import { holesForPart } from './relations.js';
 import { boreFeature } from './holes.js';
-import { automaticPlacement, resolveFastenerHoles } from './placement.js';
 import { isPhysical } from '../model-object.js';
 import './style.css';
 
-const numeric = (name, label, value, min = 0) =>
-  `<label class="field">${label}<input name="${name}" type="number" step="any" min="${min}" value="${value}" required></label>`;
 const button = (text, action) => {
   const b = document.createElement('button');
   b.type = 'button';
@@ -67,13 +51,19 @@ export class FastenerUI {
       beginTargets,
       previewPlacement,
     });
-    this.records = [];
-    try {
-      const raw = localStorage.getItem(FASTENER_LIBRARY_KEY);
-      if (raw) this.records = validateFastenerLibrary(JSON.parse(raw));
-    } catch (e) {
-      this.loadError = e.message;
-    }
+    this.catalog = new FastenerLibraryController({
+      useSpec: (spec) => {
+        if (this.panel.hidden) this.startCreation();
+        const previous = this.activeSpec;
+        this.refreshSpecs(`${spec.id}:${spec.revision}`);
+        this.activeSpec = previous;
+        this.specChanged();
+        this.previewRange();
+      },
+      closed: () => {
+        if (this.placeForm.isConnected) this.refreshSpecs(this.placeForm.elements.spec.value);
+      },
+    });
     const tool = button('Skruv', () => this.startCreation());
     tool.id = 'fastener';
     tool.setAttribute('aria-label', 'Skruv och hål');
@@ -92,105 +82,32 @@ export class FastenerUI {
     this.panel.id = 'fastener-panel';
     this.panel.hidden = true;
     document.getElementById('form').after(this.panel);
-    this.library = document.createElement('dialog');
-    this.library.id = 'fastener-library';
-    this.library.setAttribute('aria-labelledby', 'fastener-library-title');
-    this.library.innerHTML = `
-      <div class="panel-title"><div><h2 id="fastener-library-title">Skruvbibliotek</h2><span class="fastener-subtitle">Egna skruvar och dimensioner · mm</span></div><button type="button" data-close aria-label="Stäng skruvbibliotek">×</button></div>
-      <div class="fastener-library-layout">
-        <nav aria-label="Skruvar i biblioteket"><input aria-label="Sök skruvar" type="search" data-search placeholder="Sök namn eller dimension…"><div data-records></div><button type="button" data-new>+ Ny skruv</button></nav>
-        <form data-edit>
-          <div class="fastener-edit-heading"><h3 data-edit-title>Ny skruv</h3><span data-version></span></div>
-          <div class="dimensions"><label class="field">Typ<select name="kind">${FASTENER_KINDS.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select></label><label class="field">Namn<input name="name" maxlength="120" placeholder="T.ex. Träskruv 6 × 100" required></label></div>
-          <div class="dimensions">${numeric('diameter', 'Diameter', 6, 0.001)}${numeric('length', 'Längd under huvud', 100, 0.001)}</div>
-          <div class="dimensions"><label class="field">Standard<select name="standard">${FASTENER_STANDARDS.map((value) => `<option value="${value}">${value || 'Egen specifikation'}</option>`).join('')}</select></label><label class="field">Serie<input name="series" maxlength="120" placeholder="Gemensamt namn för längdvarianter"></label><label class="field">Hållfasthetsklass<input name="grade" maxlength="120" placeholder="T.ex. 8.8"></label></div>
-          <div class="dimensions"><label class="field">Tillverkare<input name="manufacturer" maxlength="120"></label><label class="field">Artikelnummer<input name="article" maxlength="120"></label><label class="field">Ytbehandling<input name="coating" maxlength="120"></label></div>
-          <fieldset data-thread><legend>Gänga</legend><label class="fastener-check"><input type="checkbox" name="hasThread">Ange gängmått</label><div class="dimensions" data-thread-dimensions>${numeric('threadLength', 'Gänglängd från spets', 100, 0.001)}${numeric('threadPitch', 'Stigning (0 = ej angiven)', 0)}</div></fieldset>
-          <fieldset data-anchor hidden><legend>Förankring i betong · produktdata</legend><div class="fastener-head-fields">${numeric('embedment', 'Förankringsdjup', 60, 0.001)}${numeric('drillDiameter', 'Borrdiameter i betong', 6, 0.001)}${numeric('anchorDrillDepth', 'Borrdjup i betong', 70, 0.001)}</div><p class="inspector-note">Ange mått för vald produkt. Frigångshål i plåten ställs separat under Hålstandard.</p></fieldset>
-          <fieldset data-head><legend>Huvud</legend><div class="fastener-head-fields"><label class="field">Form<select name="headKind"><option value="countersunk">Försänkt</option><option value="cylinder">Cylindriskt</option><option value="hex">Sexkant</option></select></label>${numeric('headDiameter', 'Diameter / nyckelvidd', 12, 0.001)}${numeric('headHeight', 'Höjd', 4, 0.001)}</div></fieldset>
-          <fieldset data-nut><legend>Mutter</legend><div class="dimensions">${numeric('nutAcrossFlats', 'Nyckelvidd', 17, 0.001)}${numeric('nutThickness', 'Tjocklek', 8, 0.001)}</div></fieldset>
-          <fieldset><legend><label class="fastener-check"><input type="checkbox" name="hasWasher">Brickmått</label></legend><div class="fastener-head-fields" data-washer-dimensions>${numeric('washerInner', 'Innerdiameter', 11, 0.001)}${numeric('washerOuter', 'Ytterdiameter', 22, 0.001)}${numeric('washerThickness', 'Tjocklek', 2, 0.001)}</div></fieldset>
-          <details data-library-holes><summary>Hålstandard <span data-hole-summary></span></summary>
-            <div class="fastener-head-fields"><label class="field">Håltyp<select name="defaultHoleKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label>${numeric('defaultHoleDiameter', 'Diameter', 6, 0.001)}${numeric('defaultHoleDepth', 'Djup', 50, 0.001)}</div>
-            <label class="field" data-default-extent>Omfattning<select name="defaultHoleExtent"><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option></select></label>
-            <label class="fastener-check fastener-default-cs"><input type="checkbox" name="defaultHasCountersink">Försänkning</label><div class="dimensions" data-default-countersink>${numeric('defaultCsDiameter', 'Diameter', 12, 0.001)}${numeric('defaultCsDepth', 'Djup', 4, 0.001)}</div>
-            <p class="inspector-note">Standard för nya delkopplingar. Varje del kan ändras i inspectorn. Startläget beräknas från delens ytor vid placering. För genomgående hål beräknas även djupet.</p>
-          </details>
-          <div class="fastener-save"><span>Placerade skruvar behåller sin version.</span><button type="submit" class="primary">Spara skruv</button></div>
-          <p data-error role="alert"></p>
-        </form>
-      </div>
-      <footer><span>Sparas i webbläsaren · egna, ej verifierade produkter</span><div><button type="button" data-export title="Exportera bibliotek för säkerhetskopia">Exportera</button><button type="button" data-import>Importera</button><input type="file" data-file accept=".json,application/json" hidden></div></footer>`;
-    document.body.append(this.library);
-    this.window = installFloatingWindow(this.library);
-    this.library.addEventListener('keydown', (e) => e.stopPropagation());
-    this.library.querySelector('[data-close]').onclick = () => this.library.close();
-    this.library.querySelector('[data-new]').onclick = () => this.editSpec(null);
-    this.library.querySelector('[data-search]').oninput = () => this.renderLibrary();
-    this.editForm = this.library.querySelector('[data-edit]');
-    this.editForm.elements.kind.onchange = () => this.syncNut();
-    this.editForm.elements.hasWasher.onchange = () => this.syncNut();
-    this.editForm.elements.hasThread.onchange = () => this.syncNut();
-    this.editForm.elements.standard.onchange = () => {
-      if (this.editForm.elements.standard.value) {
-        this.editForm.elements.kind.value = 'bolt';
-        this.editForm.elements.headKind.value = 'hex';
-        this.editForm.elements.hasThread.checked = true;
-      }
-      this.syncNut();
-    };
-    this.editForm.elements.namedItem('length').oninput = () => this.syncNut();
-    for (const name of [
-      'defaultHoleKind',
-      'defaultHasCountersink',
-      'defaultHoleDiameter',
-      'defaultHoleDepth',
-    ])
-      this.editForm.elements.namedItem(name).oninput = () => this.syncHoleDefaults();
-    this.editForm.onsubmit = (e) => {
-      e.preventDefault();
-      this.run(this.library, () => this.saveSpec());
-    };
-    this.library.querySelector('[data-export]').onclick = () => this.exportLibrary();
-    this.library.querySelector('[data-import]').onclick = () =>
-      this.library.querySelector('[data-file]').click();
-    this.library.querySelector('[data-file]').onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        if (file.size > 2e6) throw new Error('Biblioteksfilen får vara högst 2 MB.');
-        const records = validateFastenerLibrary(JSON.parse(await file.text()));
-        this.persist(mergeFasteners(this.records, records));
-        this.renderLibrary();
-        this.library.querySelector('[data-error]').textContent = 'Bibliotek importerat.';
-      } catch (error) {
-        this.library.querySelector('[data-error]').textContent = error.message;
-      }
-      e.target.value = '';
-    };
-    this.placeForm = document.createElement('form');
-    this.placeForm.className = 'fastener-editor';
-    this.placeForm.dataset.placement = '';
-    this.placeForm.innerHTML = `
-      <div class="fastener-spec-row"><label class="field">Skruv ur bibliotek<select name="spec" required></select></label><button type="button" data-library title="Öppna skruvbibliotek" aria-label="Öppna skruvbibliotek">↗</button></div><p data-spec-info class="inspector-note"></p>
-      <div class="dimensions fastener-length-options"><label class="field">Längdval<select name="lengthMode"><option value="manual">Vald bibliotekslängd</option><option value="auto">Automatisk längd</option></select></label><label class="field" data-extra-length>Extra längd efter mutter · mm<input name="extraLength" type="number" min="0" max="1000" step="any" value="5"></label></div><p data-length-result class="fastener-length-result" role="status"></p>
-      <fieldset class="fastener-assembly-section"><legend>Förband</legend><label class="field">Utförande<select name="assemblyMode"><option value="preset">Visuella förbandsval</option><option value="manual">Manuella tillbehör</option></select></label><div data-assembly-picker></div><p class="inspector-note" data-assembly-hint>Muttrar och brickor placeras mot delarnas ytor. Klicka på bilden eller kryssa i valen.</p></fieldset>
-      <section data-connections class="fastener-connections"><div class="fastener-connections-heading"><h3>Objekt i förbandet <span data-hole-count></span></h3><button type="button" data-select-targets>Välj objekt…</button></div><p data-target-empty class="inspector-note">Inga objekt valda. Välj vilka delar som ska ingå.</p><div data-holes></div><details data-hole-tools><summary>Avancerat · referensdel och hålstandard</summary><label class="field">Referensdel<select name="anchor"><option value="">Fristående</option></select></label><button type="button" data-apply-hole-defaults>Hämta hålstandard från bibliotek</button><p class="inspector-note">Endast valda delar med förborrning eller frigång får hål. Referensdelen styr skruvens läge vid flytt och rotation.</p></details></section>
-      <p class="inspector-note">Ytor och materiallager hittas automatiskt i valda objekt. Punkterna anger bara skruvaxeln.</p><p class="inspector-note" data-layer-info></p>
-      <details data-search-settings><summary>Begränsa vilka lager som ingår</summary><label class="fastener-check"><input type="checkbox" name="limitLayers">Begränsa söklängden</label><label class="field" data-drill-depth>Söklängd från första materialytan · mm<input name="drillDepth" type="number" min="0.001" step="any" value="100"></label><p class="inspector-note">En vägg som träffas tas med i sin helhet. För en enda rörvägg kan du också välja Närmaste vägg under objektets hålinställningar.</p></details><details data-position><summary>Placering · XYZ i mm</summary><fieldset><legend data-entry-label>Ingångsyta</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`start${i}`, a, 0, -1e7)).join('')}</div></fieldset><fieldset><legend data-exit-label>Utgångsyta</legend><div class="coordinates">${['X', 'Y', 'Z'].map((a, i) => numeric(`direction${i}`, a, i === 2 ? -100 : 0, -1e7)).join('')}</div></fieldset></details>
-      <details data-manual-hardware><summary>Avancerat · manuella lägen</summary><label class="field" data-nut-offset hidden>Mutterläge · mm från under huvud<input name="nutOffset" type="number" step="any" min="0"></label>
-      <fieldset data-washers><legend>Brickor</legend><div class="fastener-washer-options"><label class="fastener-check"><input type="checkbox" name="washerHead">Under huvud</label><label class="fastener-check" data-washer-nut><input type="checkbox" name="washerNut">Vid mutter</label></div><p data-washer-info class="inspector-note"></p></fieldset>
-
-      <fieldset data-accessory-editor><legend>Muttrar och brickor</legend><label class="fastener-check"><input type="checkbox" name="customAccessories">Placera muttrar och brickor längs axeln</label><div data-accessories hidden><p class="inspector-note">Lägen i mm från skaftets start, längs skruvaxeln.</p><div data-accessory-rows></div><div class="fastener-accessory-actions"><button type="button" data-add-nut>+ Mutter</button><button type="button" data-add-washer>+ Bricka</button></div></div><label class="field" data-start-allowance hidden>Utstick före första ytan · mm<input name="startAllowance" type="number" min="0" step="any" value="0"></label></fieldset>
-      </details><p data-error role="alert"></p><div class="fastener-actions"><button type="submit" class="primary">Skapa skruv</button><button type="button" data-delete class="danger">Ta bort skruv</button></div>`;
+    this.placeForm = createFastenerPlacementForm();
     this.placeForm.dataset.independentEditor = '';
     const groupRoot = document.createElement('fieldset');
     groupRoot.dataset.fastenerGroup = '';
-    this.placeForm.querySelector('.fastener-assembly-section').before(groupRoot);
+    this.placeForm.querySelector('[data-length-section]').before(groupRoot);
     this.groupEditor = createFastenerGroupEditor(groupRoot);
     for (const event of ['input', 'change'])
       this.placeForm.addEventListener(event, (e) => e.stopPropagation());
-    this.placeForm.querySelector('[data-library]').onclick = () => this.openLibrary();
+    this.productPicker = createFastenerProductPicker(this.placeForm, {
+      openLibrary: () => this.openLibrary({ preserveOperation: true }),
+      changed: () => {
+        this.specChanged();
+        this.previewRange();
+      },
+    });
+    this.placeForm.querySelector('[data-cancel]').onclick = () => this.finish();
+    this.placeForm.querySelector('[data-reverse]').onclick = () => {
+      const f = this.placeForm.elements;
+      const start = [0, 1, 2].map((i) => Number(f[`start${i}`].value));
+      const end = [0, 1, 2].map((i) => Number(f[`direction${i}`].value));
+      end.forEach((v, i) => {
+        f[`direction${i}`].value = 2 * start[i] - v;
+      });
+      this.groupEditor.reverse();
+      this.previewRange();
+    };
     this.placeForm.elements.limitLayers.onchange = () => {
       this.syncPlacementMode();
       this.previewRange();
@@ -198,13 +115,23 @@ export class FastenerUI {
     this.placeForm.addEventListener('input', () => this.previewRange());
     this.placeForm.addEventListener('change', () => this.previewRange());
     this.placeForm.elements.spec.onchange = () => this.specChanged();
+    this.holeSettings = createHoleSettings(
+      this.placeForm.querySelector('[data-hole-settings]'),
+      (key, value) => {
+        this.run(this.placeForm, () => {
+          this.readHoles();
+          this.holeRows = changeHoleSettings(this.holeRows, this.currentSpec(), key, value);
+          this.renderHoles();
+        });
+        this.previewRange();
+      },
+    );
     this.accessoryRows = [];
     this.assemblyPicker = createAssemblyPicker(
       this.placeForm.querySelector('[data-assembly-picker]'),
       () => this.previewRange(),
     );
     this.placeForm.elements.assemblyMode.onchange = () => this.renderAccessories();
-    this.placeForm.elements.lengthMode.onchange = () => this.renderAccessories();
     this.placeForm.elements.customAccessories.onchange = () => {
       if (this.placeForm.elements.customAccessories.checked && !this.accessoryRows.length) {
         const spec = this.currentSpec();
@@ -251,49 +178,12 @@ export class FastenerUI {
         return;
       }
       this.run(this.placeForm, () => {
-        const draft = this.readPlacement(true);
+        const draft = this.readPlacement();
         this.commit(draft);
       });
     };
-    this.library.addEventListener('close', () => {
-      if (this.placeForm.isConnected) this.refreshSpecs(this.placeForm.elements.spec.value);
-    });
-    const edit = button('Redigera', () => {});
-    const use = button(
-      'Använd',
-      () => {
-        if (!this.editingSpec) return;
-        this.refreshSpecs(`${this.editingSpec.id}:${this.editingSpec.revision}`);
-        this.library.close();
-        this.startCreation();
-      },
-      'primary',
-    );
-    use.className = 'primary';
-    const preview = document.createElement('div');
-    preview.className = 'ui-fastener-preview';
-    preview.innerHTML =
-      '<svg viewBox="0 0 300 160" aria-label="Skruvens mått"><path d="M55 55h30v50H55Z M85 65h150v30H85Z M95 65l12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30m0-30 12 30"/><text x="160" y="135" text-anchor="middle"></text></svg>';
-    this.editForm.querySelector('.fastener-edit-heading').after(preview);
-    this.libraryUI = installLibraryWorkspace(this.library, {
-      search: this.library.querySelector('[data-search]'),
-      tree: this.library.querySelector('[data-records]'),
-      details: this.editForm,
-      form: this.editForm,
-      save: this.editForm.querySelector('[type=submit]'),
-      edit,
-      use,
-      refresh: () => this.renderLibrary(),
-      commands: [
-        { node: this.library.querySelector('[data-new]'), label: 'Ny' },
-        { node: this.library.querySelector('[data-import]'), label: 'Importera' },
-        { node: this.library.querySelector('[data-export]'), label: 'Exportera' },
-      ],
-      message: this.library.querySelector('[data-error]'),
-    });
-    this.library.querySelector('.fastener-library-layout').remove();
-    this.editSpec(null);
   }
+
   run(dialog, action) {
     try {
       action();
@@ -302,153 +192,26 @@ export class FastenerUI {
       dialog.querySelector('[data-error]').textContent = e.message;
     }
   }
-  persist(records) {
-    localStorage.setItem(FASTENER_LIBRARY_KEY, JSON.stringify({ schema: 1, fasteners: records }));
-    this.records = records;
+  get records() {
+    return this.catalog.records;
   }
   openLibrary({ preserveOperation = false } = {}) {
     if (!preserveOperation) this.finish();
-    if (!this.editingSpec) this.editSpec(latestFasteners(this.records)[0] || null);
-    this.renderLibrary();
-    this.library.querySelector('[data-error]').textContent = this.loadError || '';
-    this.window.open();
-  }
-  renderLibrary() {
-    return renderFastenerLibrary({
-      library: this.library,
-      records: this.records,
-      editingSpec: this.editingSpec,
-      editSpec: this.editSpec.bind(this),
-      renderLibrary: this.renderLibrary.bind(this),
-    });
-  }
-  editSpec(spec) {
-    this.editingSpec = spec;
-    return renderFastenerSpec(
-      {
-        editForm: this.editForm,
-        library: this.library,
-        syncHoleDefaults: this.syncHoleDefaults.bind(this),
-        libraryUI: this.libraryUI,
-        syncNut: this.syncNut.bind(this),
-      },
-      spec,
-    );
-  }
-  syncNut() {
-    return syncFastenerHardwareFields({ editForm: this.editForm, library: this.library });
-  }
-  syncHoleDefaults() {
-    return syncFastenerHoleFields({ editForm: this.editForm, library: this.library });
-  }
-  saveSpec() {
-    const f = this.editForm.elements,
-      spec = {
-        id: this.editingSpec?.id || crypto.randomUUID(),
-        revision:
-          1 +
-          Math.max(
-            0,
-            ...this.records.filter((s) => s.id === this.editingSpec?.id).map((s) => s.revision),
-          ),
-        kind: f.kind.value,
-        name: f.namedItem('name').value.trim(),
-        diameter: Number(f.diameter.value),
-        length: Number(f.namedItem('length').value),
-        holeDefaults: {
-          kind: f.defaultHoleKind.value,
-          ...(f.defaultHoleKind.value !== 'none'
-            ? {
-                extent: f.defaultHoleKind.value === 'pilot' ? 'blind' : f.defaultHoleExtent.value,
-                diameter: Number(f.defaultHoleDiameter.value),
-                depth: Number(f.defaultHoleDepth.value),
-                ...(f.defaultHasCountersink.checked
-                  ? {
-                      countersink: {
-                        diameter: Number(f.defaultCsDiameter.value),
-                        depth: Number(f.defaultCsDepth.value),
-                      },
-                    }
-                  : {}),
-              }
-            : {}),
-        },
-        ...(f.kind.value !== 'rod'
-          ? {
-              head: {
-                kind: f.headKind.value,
-                diameter: Number(f.headDiameter.value),
-                height: Number(f.headHeight.value),
-              },
-            }
-          : {}),
-        ...(f.standard.value ? { standard: f.standard.value } : {}),
-        ...Object.fromEntries(
-          ['manufacturer', 'article', 'grade', 'coating', 'series']
-            .filter((key) => f.namedItem(key).value.trim())
-            .map((key) => [key, f.namedItem(key).value.trim()]),
-        ),
-        ...(f.hasThread.checked
-          ? {
-              thread: {
-                length: Number(f.threadLength.value),
-                ...(Number(f.threadPitch.value) ? { pitch: Number(f.threadPitch.value) } : {}),
-              },
-            }
-          : {}),
-        ...(f.kind.value === 'concrete'
-          ? {
-              anchor: {
-                embedment: Number(f.embedment.value),
-                drillDiameter: Number(f.drillDiameter.value),
-                drillDepth: Number(f.anchorDrillDepth.value),
-              },
-            }
-          : {}),
-        ...(f.hasWasher.checked
-          ? {
-              washer: {
-                innerDiameter: Number(f.washerInner.value),
-                outerDiameter: Number(f.washerOuter.value),
-                thickness: Number(f.washerThickness.value),
-              },
-            }
-          : {}),
-        ...(hasNut({ kind: f.kind.value })
-          ? {
-              nut: {
-                acrossFlats: Number(f.nutAcrossFlats.value),
-                thickness: Number(f.nutThickness.value),
-              },
-            }
-          : {}),
-      };
-    validateFastenerSpec(spec);
-    this.persist(mergeFasteners(this.records, [spec]));
-    this.editSpec(spec);
-    this.renderLibrary();
-  }
-  exportLibrary() {
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify({ schema: 1, fasteners: this.records }, null, 2)], {
-        type: 'application/json',
-      }),
-    );
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'skruvbibliotek.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.catalog.openLibrary();
   }
   startCreation(group = false) {
+    const targets = this.getSelection().filter((s) => isPhysical(s) && !isFastener(s));
     this.finish();
     this.selectSource(null);
     this.loadPlacement(null);
     this.groupEditor.load(null, group);
-    this.holeRows = [];
-    this.anchor = '';
+    this.holeRows = targets.map((s) => this.defaultHole(s.id));
+    this.anchor = targets[0]?.id || '';
     this.renderHoles();
-    this.beginTargets([], group);
+    this.beginTargets(
+      targets.map((s) => s.id),
+      group,
+    );
   }
   pickTargets() {
     this.readHoles();
@@ -466,7 +229,7 @@ export class FastenerUI {
   }
   confirmTargets() {
     this.run(this.placeForm, () => {
-      const draft = this.readPlacement(!!this.editingObject);
+      const draft = this.readPlacement();
       if (this.editingObject) {
         this.finish();
         this.commit(draft);
@@ -480,7 +243,8 @@ export class FastenerUI {
     const select = this.placeForm.elements.spec;
     select.replaceChildren(new Option('Välj skruv…', ''));
     const snapshot = this.editingObject?.spec;
-    const records = latestFasteners(this.records).filter(
+    const known = [...(this.editingObject?.lengthOptions || []), ...latestFasteners(this.records)];
+    const records = [...new Map(known.map((s) => [`${s.id}:${s.revision}`, s])).values()].filter(
       (s) => !snapshot || `${s.id}:${s.revision}` !== `${snapshot.id}:${snapshot.revision}`,
     );
     if (snapshot) records.unshift(snapshot);
@@ -505,11 +269,18 @@ export class FastenerUI {
   specChanged(resetNut = true) {
     const spec = this.currentSpec();
     if (resetNut) {
-      this.accessoryRows = [];
-      this.placeForm.elements.customAccessories.checked = spec?.kind === 'rod';
-      this.placeForm.elements.lengthMode.value = spec?.kind === 'bolt' ? 'auto' : 'manual';
-      this.assemblyPicker.set(spec);
+      this.readHoles();
+      const previous = this.activeSpec;
+      if (previous && spec && previous.diameter !== spec.diameter) {
+        this.holeRows = resizeFastenerHoles(this.holeRows, previous, spec);
+        this.renderHoles();
+      }
+      const assembly = this.assemblyPicker.get();
+      if (spec?.kind !== 'rod') assembly.nearNut = false;
+      this.assemblyPicker.set(spec, assembly);
     }
+    this.activeSpec = spec;
+    this.productPicker.set(this.specOptions, spec);
     this.placeForm.querySelector('[data-nut-offset]').hidden = true;
     this.placeForm.querySelector('[data-washer-nut]').hidden = spec?.kind !== 'bolt';
     const head = this.placeForm.elements.washerHead,
@@ -525,13 +296,6 @@ export class FastenerUI {
     if (resetNut)
       this.placeForm.elements.nutOffset.value =
         spec?.kind === 'bolt' ? spec.length - spec.nut.thickness : '';
-    if (resetNut && !this.editingObject?.id && this.holeRows) {
-      this.holeRows = this.holeRows.map((h) => this.defaultHole(h.targetId));
-      this.renderHoles();
-    }
-    this.placeForm.querySelector('[data-spec-info]').textContent = spec
-      ? `${spec.standard ? `${spec.standard} · ` : ''}${spec.kind === 'rod' ? 'Gängstång utan huvud' : spec.head?.kind === 'hex' ? 'Sexkantshuvud' : spec.head?.kind === 'countersunk' ? 'Försänkt huvud' : 'Cylindriskt huvud'}${spec.thread ? ` · Gänglängd ${spec.thread.length} mm` : ''}${spec.nut ? ` · Mutter ${spec.nut.acrossFlats} × ${spec.nut.thickness} mm` : ''}${spec.anchor ? ` · Förankring ${spec.anchor.embedment} mm · betongborr Ø${spec.anchor.drillDiameter} / ${spec.anchor.drillDepth} mm` : ''}`
-      : 'Skapa först en bibliotekspost om biblioteket är tomt.';
     if (!resetNut) this.assemblyPicker.set(spec, this.assemblyPicker.get());
     this.renderAccessories();
   }
@@ -621,41 +385,40 @@ export class FastenerUI {
     this.anchor = source?.anchorId ?? this.holeRows[0]?.targetId ?? '';
     this.accessoryRows = source ? fastenerAccessories(source) : [];
     f.customAccessories.checked = source?.accessories != null || this.currentSpec()?.kind === 'rod';
-    f.startAllowance.value = source?.startAllowance || 0;
+    f.startAllowance.value = source?.startAllowance ?? 20;
     f.assemblyMode.value = source && !source.assembly ? 'manual' : 'preset';
     this.assemblyPicker.set(
       this.currentSpec(),
       source?.assembly || assemblyDefaults(this.currentSpec() || { kind: 'wood' }),
     );
-    f.lengthMode.value =
-      source?.lengthMode || (!source && this.currentSpec()?.kind === 'bolt' ? 'auto' : 'manual');
-    f.extraLength.value = source?.extraLength ?? 5;
-    this.placeForm.querySelector('[data-length-result]').textContent = source
-      ? `Vald längd: ${source.spec.length} mm`
-      : '';
-    if (source?.group) {
-      const members = this.getObjects().filter((s) => s.group?.id === source.group.id);
-      if (members.length) {
-        const lengths = [...new Set(members.map((s) => s.spec.length))].sort((a, b) => a - b);
-        this.placeForm.querySelector('[data-length-result]').textContent =
-          `${members.length} skruvar · längder: ${lengths.join(', ')} mm`;
-      }
-    }
+    f.manualLength.value = source?.spec.length ?? this.currentSpec()?.length ?? '';
+    const warningSources = source?.group
+      ? this.getObjects().filter((s) => s.group?.id === source.group.id)
+      : source
+        ? [source]
+        : [];
+    this.placeForm.querySelector('[data-length-result]').textContent = [
+      ...new Set(warningSources.flatMap(fastenerFitWarnings)),
+    ].join(' ');
     this.placeForm.querySelector('[data-manual-hardware]').open = false;
     this.renderAccessories();
     this.renderHoles();
     this.placeForm.querySelector('[data-delete]').hidden = !source;
-    this.placeForm.querySelector('[type=submit]').textContent = source
-      ? source.group
-        ? 'Modifiera skruvgrupp'
-        : 'Spara skruv och hål'
-      : 'Skapa skruv';
+    this.placeForm.querySelector('[type=submit]').textContent = source ? 'Modifiera' : 'Skapa';
+    this.productPicker.set(this.specOptions, this.currentSpec());
+    this.placeForm.querySelector('[type=submit]').disabled = false;
     this.placeForm.querySelector('[data-delete]').textContent = source?.group
       ? 'Ta bort skruvgrupp'
       : 'Ta bort skruv';
     this.placeForm.querySelector('[data-error]').textContent = '';
   }
   renderHoles() {
+    this.holeSettings.sync(this.holeRows, this.currentSpec());
+    const sizes = [
+      ...new Set(this.holeRows.filter((h) => h.kind !== 'none').map((h) => h.diameter)),
+    ];
+    this.placeForm.querySelector('[data-hole-overview]').textContent =
+      `${sizes.length ? 'Ø' + sizes.join('/') + ' · ' : ''}${this.holeRows.length} delar`;
     return renderFastenerHoles({
       placeForm: this.placeForm,
       holeRows: this.holeRows,
@@ -691,9 +454,10 @@ export class FastenerUI {
     });
     this.anchor = this.placeForm.elements.anchor.value;
   }
-  readPlacement(resolve = false) {
-    const spec = this.currentSpec();
-    if (!spec) throw new Error('Välj en skruv ur biblioteket.');
+  readPlacement() {
+    const product = this.currentSpec();
+    if (!product) throw new Error('Välj en skruv ur biblioteket.');
+    const spec = withFastenerLength(product, Number(this.placeForm.elements.manualLength.value));
     this.readHoles();
     this.readAccessories();
     if (!this.holeRows.length) throw new Error('Välj minst ett objekt som ska ingå i förbandet.');
@@ -715,22 +479,9 @@ export class FastenerUI {
           ? structuredClone(this.accessoryRows)
           : undefined,
       assembly: f.assemblyMode.value === 'preset' ? this.assemblyPicker.get() : undefined,
-      lengthMode: f.lengthMode.value,
-      extraLength: Number(f.extraLength.value),
-      lengthOptions:
-        f.lengthMode.value === 'auto'
-          ? [
-              ...new Map(
-                [
-                  ...(this.editingObject?.lengthOptions || []),
-                  ...latestFasteners(this.records),
-                  spec,
-                ]
-                  .filter((option) => fastenerSeriesKey(option) === fastenerSeriesKey(spec))
-                  .map((option) => [`${option.id}:${option.revision}`, option]),
-              ).values(),
-            ]
-          : undefined,
+      lengthMode: 'manual',
+      extraLength: undefined,
+      lengthOptions: undefined,
       startAllowance: spec.kind === 'rod' ? Number(f.startAllowance.value) : undefined,
       ...(spec.kind === 'bolt'
         ? {
@@ -741,58 +492,52 @@ export class FastenerUI {
           }
         : { nutOffset: null }),
     };
-    delete draft.span;
-    delete draft.insertion;
     draft = this.groupEditor.apply(draft, start, direction);
-    this.previewBatch = null;
-    if (draft.group) {
-      draft.groupLimit = f.limitLayers.checked ? Number(f.drillDepth.value) : null;
-      if (this.editingObject || this.getOperation()?.mode !== 'fastenerTargets') {
-        this.previewBatch = fastenerGroupBatch(draft, this.getObjects());
-        draft = this.previewBatch[0];
-      }
-    } else if (this.editingObject || this.getOperation()?.mode !== 'fastenerTargets')
-      draft = automaticPlacement(
-        draft,
-        start,
-        direction,
-        this.getObjects(),
-        f.limitLayers.checked ? Number(f.drillDepth.value) : null,
-      );
-    if (resolve && !draft.group) draft = resolveFastenerHoles(draft, this.getObjects());
-    this.placeForm.querySelector('[data-length-result]').textContent =
-      `${draft.lengthMode === 'auto' ? 'Automatiskt vald längd' : 'Vald längd'}: ${draft.spec.length} mm`;
-    if (this.previewBatch) {
-      const lengths = [...new Set(this.previewBatch.map((s) => s.spec.length))].sort(
-        (a, b) => a - b,
-      );
-      this.placeForm.querySelector('[data-length-result]').textContent =
-        `${this.previewBatch.length} skruvar · längder: ${lengths.join(', ')} mm`;
-    }
-    const error = validateFastener(draft);
-    if (error) throw new Error(error);
-    validateFastenerTargets(draft, this.getObjects());
+    const result = prepareFastenerPlacement(draft, {
+      model: this.getObjects(),
+      start,
+      direction,
+      limit: f.limitLayers.checked ? Number(f.drillDepth.value) : null,
+      fit: !!this.editingObject || this.getOperation()?.mode === 'fastenerDepth',
+    });
+    draft = result.draft;
+    this.previewBatch = result.batch;
+    const warnings = [...new Set((this.previewBatch || [draft]).flatMap(fastenerFitWarnings))];
+    this.placeForm.querySelector('[data-length-result]').textContent = warnings.join(' ');
     return draft;
   }
   previewRange() {
-    const placing = this.getOperation()?.mode === 'fastenerDepth';
-    if (!placing && !this.editingObject) return;
+    const operation = this.getOperation();
+    const placing = operation?.mode === 'fastenerDepth';
+    const preparing = ['fastenerCreate', 'fastenerTargets'].includes(operation?.mode);
+    if (!placing && !preparing && !this.editingObject) return;
     try {
-      const draft = this.readPlacement(true);
-      if (placing || draft.group) this.previewPlacement(this.previewBatch || draft);
+      const draft = this.readPlacement();
+      if (operation?.mode === 'fastenerCreate') {
+        operation.draft = draft;
+        delete operation.error;
+      }
+      if (!preparing) this.previewPlacement(this.previewBatch || draft);
       else this.previewPlacement(null);
       draft.holes.forEach((h, i) => {
         const summary = this.placeForm.querySelector(`[data-hole="${i}"] > summary`);
         if (summary)
-          summary.textContent = `${this.getObjects().find((o) => o.id === h.targetId)?.name || 'Del'} · ${h.kind === 'none' ? 'Ingen borrning' : `Ø${h.diameter} · ${h.kind === 'pilot' ? 'Förborrning' : 'Genomgående'}`} · ${h.layers.length} lager`;
+          summary.textContent = `${this.getObjects().find((o) => o.id === h.targetId)?.name || 'Del'} · ${h.kind === 'none' ? 'Ingen borrning' : `Ø${h.diameter} · ${h.kind === 'pilot' ? 'Förborrning' : 'Genomgående'}`} · ${h.layers?.length || 0} lager`;
       });
+      this.placeForm.querySelector('[data-hole-overview]').textContent =
+        `${draft.holes.length} delar`;
       this.placeForm.querySelector('[data-layer-info]').textContent =
         `${draft.layerCount} materiallager i förbandet`;
       this.placeForm.querySelector('[data-error]').textContent = '';
+      this.placeForm.querySelector('[type=submit]').disabled = false;
     } catch (e) {
-      if (placing || this.groupEditor.enabled()) this.previewPlacement(null);
+      if (operation?.mode === 'fastenerCreate') operation.error = e.message;
+      this.placeForm.querySelector('[type=submit]').disabled = true;
+      if (!preparing) this.previewPlacement(null);
       this.placeForm.querySelector('[data-length-result]').textContent = '';
       this.placeForm.querySelector('[data-error]').textContent = e.message;
+      this.placeForm.querySelector('[data-hole-overview]').textContent =
+        `${this.holeRows.length} delar`;
       this.placeForm.querySelector('[data-layer-info]').textContent = '';
     }
   }
@@ -829,6 +574,7 @@ export class FastenerUI {
       this.placeForm.querySelector('[data-select-targets]').hidden = true;
       this.placeForm.querySelector('[data-position]').hidden = true;
       this.placeForm.querySelector('[data-delete]').hidden = true;
+      this.placeForm.querySelector('[type=submit]').hidden = false;
       this.placeForm.querySelector('[type=submit]').textContent = 'Bekräfta delar ↵';
       this.placeForm.querySelector('[data-target-empty]').textContent =
         'Klicka på delarna i modellen. Enter bekräftar, Escape avbryter.';
@@ -839,22 +585,18 @@ export class FastenerUI {
     this.placeForm.querySelector('[data-select-targets]').hidden = false;
     this.placeForm.querySelector('[data-position]').hidden = false;
     if (creating) {
-      this.panel.replaceChildren();
       this.panel.hidden = false;
+      if (this.placeForm.parentElement !== this.panel) this.panel.replaceChildren(this.placeForm);
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent = operation.draft.group
-        ? 'Placera skruvgrupp'
-        : 'Placera skruv';
-      document.getElementById('mode-label').textContent =
-        operation.draft.placementMode === 'range'
-          ? 'Insättningspunkt → riktning'
-          : 'Under huvud → riktning';
-      const p = document.createElement('p');
-      p.textContent = `${operation.draft.spec.name} · ${operation.draft.placementMode === 'range' ? 'Välj två punkter längs skruvaxeln. Ytor och hål beräknas automatiskt i valda objekt.' : 'Klicka under huvud och sedan i skruvens riktning.'} Skruvlängd ${operation.draft.spec.length} mm. Escape avbryter.`;
-      this.panel.append(p);
+        ? 'Skruvgrupp'
+        : 'Skruv';
+      document.getElementById('mode-label').textContent = 'Insättningspunkt → riktning';
+      this.placeForm.querySelector('[type=submit]').hidden = true;
       this.panel.inert = false;
       return;
     }
+    this.placeForm.querySelector('[type=submit]').hidden = false;
     const source =
       operation?.mode === 'fastenerDepth'
         ? operation.draft
@@ -896,9 +638,7 @@ export class FastenerUI {
     if (operation?.mode === 'fastenerDepth') {
       this.placeForm.querySelector('[data-delete]').hidden = true;
       this.placeForm.querySelector('[data-select-targets]').hidden = true;
-      this.placeForm.querySelector('[type=submit]').textContent = source.group
-        ? 'Skapa skruvgrupp'
-        : 'Skapa skruv och hål';
+      this.placeForm.querySelector('[type=submit]').textContent = source.group ? 'Skapa' : 'Skapa';
       document.getElementById('object-heading').textContent = source.group
         ? 'Skruvgrupp · Kontrollera förband'
         : 'Skruv · Kontrollera förband';

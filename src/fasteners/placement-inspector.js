@@ -23,19 +23,13 @@ export function renderFastenerAccessories({
   f.customAccessories.disabled = !spec || spec.kind === 'rod';
   const preset = f.assemblyMode.value === 'preset';
   placeForm.querySelector('[data-assembly-picker]').hidden = !preset;
-  placeForm.querySelector('[data-assembly-hint]').hidden = !preset;
   placeForm.querySelector('[data-manual-hardware]').hidden = preset;
-  if (spec?.kind !== 'bolt') f.lengthMode.value = 'manual';
-  f.lengthMode.disabled = spec?.kind !== 'bolt';
-  const auto = f.lengthMode.value === 'auto';
-  placeForm.querySelector('[data-extra-length]').hidden = !auto;
-  f.extraLength.disabled = !auto;
   for (const input of placeForm.querySelectorAll('[data-accessory-row] input'))
     input.disabled = preset;
   const custom = !preset && f.customAccessories.checked;
   placeForm.querySelector('[data-accessories]').hidden = !custom;
   placeForm.querySelector('[data-start-allowance]').hidden = spec?.kind !== 'rod';
-  f.startAllowance.disabled = spec?.kind !== 'rod' || preset;
+  f.startAllowance.disabled = spec?.kind !== 'rod';
   placeForm.querySelector('[data-washers]').hidden = custom || !spec?.washer;
   placeForm.querySelector('[data-add-nut]').disabled = !hasNut(spec);
   placeForm.querySelector('[data-add-washer]').disabled = !spec?.washer;

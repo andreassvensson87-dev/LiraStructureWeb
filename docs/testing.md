@@ -350,3 +350,19 @@ ett rundat hörn flyttades med native drag. Den nedladdningsbara projektlänkens
 faktiska JSON kontrollerades: endast punkt 1 flyttad, radier [0,300,300,0],
 insättning right/top. Ett avvisat R60-insättningsval verifierades också i UI.
 Inga konsolfel rapporterades. Full `npm run check` passerade.
+
+## Skruvinspektorns ändringsflöden
+
+`fastener-edit.test.js` kör den gemensamma utkastberedningen med verklig materialträff och längdberäkning: andra muttern, ändrad skruvdiameter med bibehållet hålspel, ändrat hålspel, nya delningar och borttagna gruppceller. Modell-editor och projekthistorik verifierar atomisk bekräftelse, avvisad placering utan checkpoint, ångra/gör om och omräkning när plåttjocklek/placering ändras. Rutnät, cirkel och fria mönster valideras och sparas/läses tillbaka. Vändning bevarar positioner och borridentiteter även för roterade grupper. Enbart hål behåller borrning utan skruvsolid. För kort manuell längd ger numera en icke-blockerande förbandsvarning, se nedan. De tidigare specialisttesterna för skruvar, förband, gruppkopiering, hålgeometri och kopplingar körs också.
+
+Webbläsarkontroll 2026-10-15 i separat localhost-projekt med två plåtar och testbibliotek: M24 → M20, andra mutter, ändrade delningar, hålspel 2 → 4, manuell för kort längd och återgång till Auto, rutnät → cirkel → fritt samt ångra. En ny skruv placerades med ordinarie punktval och Z-lås. Vändning samt enbart hål och återgång till komplett förband kontrollerades. Exporterade projektdata bekräftade skruvlängder, diametrar, tillbehör och oförändrade borr-ID:n vid vändning; exakt bearbetad geometri var ändlig och gav rätt antal kopplade hål. Kontroll gjordes också av layouten i ordinarie panelbredd och manuellt längdläge. Inga fel rapporterades i den avslutande webbläsarkörningen. `npm run check` passerade. `model-placement.test.js` skyddar att ogiltiga skruvinställningar blockerar punktbekräftelse i stället för att placera det senaste giltiga utkastet.
+
+### Skruvar utanför delarna
+
+`fastener-edit.test.js` verifierar att enskilda skruvar och grupper kan skapas utanför delarna och flyttas in, ut och in igen genom modell-editorn. Hål är inaktiva utanför och återaktiveras med samma identiteter vid materialträff. Ångra/gör om och projektfil skyddar att gamla borrningar inte blir kvar. Befintliga scenarier för materialträff, längd, ogiltiga mönster och hål körs också. Webbläsarprov: linjär flytt utanför plåt, greppdragning tillbaka in samt gruppflytt ut och in. Den sparade projektfilen bekräftade återaktiverad borrning efter greppdragningen. `npm run check` passerade.
+
+### Angiven skruvlängd och utstick före — 2026-10-16
+
+Befintliga skruv-, grupp- och förbandsflöden verifierar nu bibehållen längd när muttrar, hål eller måldelars tjocklek ändras. `fastener-assembly` skyddar fristående instansmått, oförändrat bibliotek, hel-/delgängning, kort skaft, exakt stångutstick och varning som försvinner efter rättning. Bibliotekets egna ogiltiga produktmått avvisas fortsatt. `fastener-edit` kör en 103 mm grupp genom modell-editor, borridentiteter, en checkpoint, ångra/gör om och projektfil. Tester för kopplingarnas separata längdserieberäkning behålls.
+
+Browserprov i separat lokalt projekt: gruppens längd 53 med andra mutter kunde bekräftas trots varning; ångra/gör om och rättning till 103 kontrollerades. Alla åtta sparade skruvar hade längd och helgängning 103 samt båda borrrelationerna. Stångens längd 217 och utstick 5 behölls med varning; rättning till 30 tog bort varningen. Ny skruv med längd 113 skapades med vanligt punktval och Z-lås. Ordinarie panelbredd kontrollerades med gemensamma längd-/utsticksfält. Full regression, lint, formatering och produktionsbygge passerade. Ingen publicering ingick.

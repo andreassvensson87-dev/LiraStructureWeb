@@ -4,7 +4,46 @@ import { boreFeature } from './holes.js';
 import { axisPlacement, fastenerFrame } from './geometry.js';
 import { isFastener } from './object-type.js';
 import { hasNut } from './library.js';
-import { assemblyAllowance, fittedAssembly, selectFastenerLength } from './assembly.js';
+import { assemblyAllowance, fittedAssembly } from './assembly.js';
+
+class AxisMiss extends Error {
+  constructor(part, bounds, frame) {
+    super(`Skruvaxeln träffar inte ${part.name || part.id}.`);
+    const center = bounds.getCenter(new THREE.Vector3()).sub(frame.origin).dot(frame.z);
+    const half = bounds.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+    const radius =
+      Math.abs(frame.z.x) * half.x + Math.abs(frame.z.y) * half.y + Math.abs(frame.z.z) * half.z;
+    this.from = center - radius;
+    this.to = center + radius;
+  }
+}
+
+/** A missed axis retains a movable joint, but never produces machining. Bounds only seat its preview. */
+function missedPlacement(s, frame, misses, start, direction, limit) {
+  const allowance = entryAllowance(s);
+  const from = Math.min(...misses.map((m) => m.from));
+  const grip = Math.max(0.001, Math.max(...misses.map((m) => m.to)) - from);
+  const origin = frame.origin.clone().addScaledVector(frame.z, from - allowance);
+  const result = {
+    ...fittedAssembly(s, grip),
+    ...(s.spec.kind === 'bolt' && s.accessories == null && !s.assembly
+      ? { nutOffset: allowance + grip + (s.washers?.nut ? s.spec.washer.thickness : 0) }
+      : {}),
+    ...axisPlacement(s.spec, origin.toArray(), origin.clone().add(frame.z).toArray()),
+    placementMode: 'range',
+    insertion: {
+      start: [...start],
+      direction: [...direction],
+      depth: limit ?? grip,
+      automatic: true,
+      limited: limit != null,
+    },
+    layerCount: 0,
+    holes: s.holes.map((h) => ({ ...h, active: false, layers: [] })),
+  };
+  delete result.span;
+  return result;
+}
 
 /** Separate solid intervals, preserving cavities between walls and flanges. */
 export function partAxisIntervals(s, part, model, geometryContext = null) {
@@ -43,7 +82,7 @@ export function partAxisIntervals(s, part, model, geometryContext = null) {
         entry = null;
       }
     }
-    if (!intervals.length) throw new Error(`Skruvaxeln träffar inte ${part.name || part.id}.`);
+    if (!intervals.length) throw new AxisMiss(part, geometry.boundingBox, f);
     return intervals;
   } finally {
     geometry.dispose();
@@ -62,19 +101,16 @@ const millimeters = (v) => Math.round(v * 1e6) / 1e6;
 export const holeExtent = (h) => h.extent || (h.kind === 'pilot' ? 'blind' : 'profile');
 
 /** Search the selected parts along the whole axis, independently of click distance. */
-export function automaticPlacement(
-  s,
-  start,
-  direction,
-  model,
-  limit = null,
-  allowMissedTargets = false,
-) {
+export function automaticPlacement(s, start, direction, model, limit = null) {
   if (limit != null && (!Number.isFinite(limit) || limit <= 0 || limit > 1e7))
     throw new Error('Ange en söklängd större än 0 och högst 10 000 000 mm.');
+  s = { ...s, lengthMode: 'manual' };
+  delete s.lengthOptions;
+  delete s.extraLength;
   const axisDraft = { ...s, ...axisPlacement(s.spec, start, direction) };
   const f = fastenerFrame(axisDraft);
   const materialModel = model.filter((o) => !isFastener(o));
+  const misses = [];
   const candidates = s.holes.flatMap((h) => {
     const part = materialModel.find((o) => o.id === h.targetId);
     if (!part) throw new Error('Hålets måldel saknas.');
@@ -82,13 +118,19 @@ export function automaticPlacement(
     try {
       intervals = partAxisIntervals(axisDraft, part, materialModel);
     } catch (error) {
-      if (allowMissedTargets && error.message.includes('träffar inte')) return [];
+      if (error instanceof AxisMiss) {
+        misses.push(error);
+        return [];
+      }
       throw error;
     }
     const chosen = ['wall', 'blind'].includes(holeExtent(h)) ? intervals.slice(0, 1) : intervals;
     return chosen.map((v) => ({ ...v, targetId: h.targetId }));
   });
-  if (!candidates.length) throw new Error('Välj minst ett objekt i förbandet.');
+  if (!candidates.length) {
+    if (misses.length) return missedPlacement(s, f, misses, start, direction, limit);
+    throw new Error('Välj minst ett objekt i förbandet.');
+  }
   const first = Math.min(...candidates.map((v) => v.offset));
   const reach = !hasNut(s.spec) ? first + s.spec.length - entryAllowance(s) : Infinity;
   // A search limit selects complete layers from the first material surface.
@@ -110,7 +152,7 @@ export function automaticPlacement(
   if (limit == null) {
     const missed = s.holes.find(
       (h) =>
-        (!allowMissedTargets || candidates.some((v) => v.targetId === h.targetId)) &&
+        candidates.some((v) => v.targetId === h.targetId) &&
         !layers.some((v) => v.targetId === h.targetId),
     );
     if (missed)
@@ -119,9 +161,9 @@ export function automaticPlacement(
       );
   }
   const last = Math.max(...layers.map((v) => v.offset + v.depth));
-  s = selectFastenerLength(s, last - first);
+
   const fitted = spanPlacement(
-    s,
+    { ...s, placementMode: 'range' },
     f.origin.clone().addScaledVector(f.z, first).toArray(),
     f.origin.clone().addScaledVector(f.z, last).toArray(),
   );
@@ -146,7 +188,7 @@ export function automaticPlacement(
   return resolveFastenerHoles(fitted, model);
 }
 
-/** Contact points describe the grip; shaft length remains a library dimension. */
+/** Contact points describe the grip; the requested shaft length remains unchanged. */
 export function spanPlacement(s, entry, exit) {
   const axis = new THREE.Vector3(...exit).sub(new THREE.Vector3(...entry));
   const grip = axis.length();
@@ -158,6 +200,7 @@ export function spanPlacement(s, entry, exit) {
   const start = new THREE.Vector3(...entry).addScaledVector(axis, -headWasher).toArray();
   const nutOffset = headWasher + grip + nutWasher;
   if (
+    s.placementMode !== 'range' &&
     s.spec.kind === 'bolt' &&
     s.accessories == null &&
     nutOffset + s.spec.nut.thickness > s.spec.length + 0.001
@@ -165,7 +208,12 @@ export function spanPlacement(s, entry, exit) {
     throw new Error(
       `Skruven är för kort. Förband, brickor och mutter kräver minst ${(nutOffset + s.spec.nut.thickness).toFixed(2)} mm.`,
     );
-  if (hasNut(s.spec) && headWasher + grip > s.spec.length + 0.001)
+  if (
+    s.placementMode !== 'range' &&
+    s.assembly?.bolt !== false &&
+    hasNut(s.spec) &&
+    headWasher + grip > s.spec.length + 0.001
+  )
     throw new Error('Skaftet är för kort för förbandet och valt utstick.');
   return {
     ...s,
@@ -192,6 +240,9 @@ function entryAllowance(s) {
 export function insertionPlacement(s, start, direction, depth, model) {
   if (!Number.isFinite(depth) || depth <= 0 || depth > 1e7)
     throw new Error('Ange ett borravstånd större än 0 och högst 10 000 000 mm.');
+  s = { ...s, lengthMode: 'manual' };
+  delete s.lengthOptions;
+  delete s.extraLength;
   const axisDraft = { ...s, ...axisPlacement(s.spec, start, direction) };
   const f = fastenerFrame(axisDraft),
     materialModel = model.filter((o) => !isFastener(o));

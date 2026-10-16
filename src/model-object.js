@@ -6,6 +6,7 @@ import { objectType, objectTypes } from './model/object-types/index.js';
 import { holesForPart, holesByTarget } from './fasteners/relations.js';
 import { holeGeometry, fastenerDisplayTemplate, fastenerGeometry } from './fasteners/geometry.js';
 import { geometryEdges } from './fasteners/edges.js';
+import { fastenerAccessories } from './fasteners/accessories.js';
 import { itemDisplayTemplate, itemGeometry } from './items/geometry.js';
 import {
   profileDisplayObject,
@@ -14,7 +15,11 @@ import {
 } from './profile-detail.js';
 export const isHelper = (s) => !!s && objectTypes.find(s)?.family === 'helper';
 export const isPhysical = (s) =>
-  !!s && !!objectTypes.find(s) && !isCut(s) && objectTypes.find(s).physical !== false;
+  !!s &&
+  !!objectTypes.find(s) &&
+  !isCut(s) &&
+  objectTypes.find(s).physical !== false &&
+  !(s.type === 'fastener' && s.assembly?.bolt === false && !fastenerAccessories(s).length);
 export const isCut = (s) => !!s && !!objectTypes.find(s)?.cut;
 export const isPlate = (s) => !!s && objectTypes.find(s)?.family === 'plate';
 const baseGeometry = (s) => objectType(s).geometry(s);

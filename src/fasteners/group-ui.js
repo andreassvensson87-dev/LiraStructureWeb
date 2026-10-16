@@ -1,98 +1,142 @@
-import { MAX_GROUP_FASTENERS } from './group-data.js';
+import { renderFastenerPattern } from './pattern-picture.js';
 import { alignFastenerGroup } from './groups.js';
+import { parseBoltDistances, parseBoltCoordinates, patternPositions } from './pattern.js';
+import { createAttributeRow } from '../inspector/attributes.js';
 
+/** Presentation of the shared, DOM-free pattern definition. */
 export function createFastenerGroupEditor(root) {
-  root.innerHTML = `<legend><label class="fastener-check"><input type="checkbox" name="groupEnabled">Skruvgrupp</label></legend><div data-group-fields hidden>
-    <div class="dimensions"><label class="field">Kolumner · X<input name="groupColumns" type="number" min="1" max="100" step="1" value="2" required></label><label class="field">Rader · Y<input name="groupRows" type="number" min="1" max="100" step="1" value="2" required></label></div>
-    <div class="dimensions"><label class="field">Avstånd X · mm<input name="groupSpacingX" type="number" min="0" max="100000" step="any" value="60" required></label><label class="field">Avstånd Y · mm<input name="groupSpacingY" type="number" min="0" max="100000" step="any" value="60" required></label></div>
-    <label class="field">Rotation kring skruvaxeln · °<input name="groupRotation" type="number" min="-36000" max="36000" step="any" value="0" required></label>
-    <svg class="fastener-group-layout" viewBox="0 0 180 180" role="img" aria-label="Skruvgruppens mönster sett längs skruvaxeln"></svg>
-    <p class="inspector-note" data-group-count></p><p class="inspector-note">Första punkten placerar skruven i första raden och kolumnen (grön). X och Y ligger vinkelrätt mot skruvaxeln. Klick på en skruv markerar hela gruppen.</p></div>`;
+  root.classList.add('attribute-group');
+  root.innerHTML =
+    '<legend><label class="fastener-check"><input type="checkbox" name="groupEnabled">Mönster</label></legend><div data-group-fields hidden><div data-pattern-fields></div><svg class="fastener-group-layout" viewBox="0 0 300 155" role="img" aria-label="Skruvmönster med lokala X- och Y-axlar"></svg><output data-group-count></output></div>';
+  const fieldRoot = root.querySelector('[data-pattern-fields]');
+  fieldRoot.className = 'attribute-columns';
+  const fields = [
+    [
+      'groupShape',
+      'Mönster',
+      'select',
+      [
+        ['array', 'Rutnät'],
+        ['circle', 'Cirkel'],
+        ['list', 'Fritt'],
+      ],
+    ],
+    ['groupX', 'X', 'text'],
+    ['groupY', 'Y', 'text'],
+    ['groupCount', 'Antal', 'number'],
+    ['groupDiameter', 'Diameter', 'number'],
+    ['groupRotation', 'Rotation', 'number'],
+  ];
+  for (const [key, label, type, options] of fields) {
+    const row = createAttributeRow({
+      key,
+      label,
+      type,
+      options,
+      ...(type === 'number' ? { step: 'any' } : {}),
+    });
+    fieldRoot.append(row);
+  }
   const inputs = Object.fromEntries(
-    [...root.querySelectorAll('input')].map((input) => [input.name, input]),
+    [...root.querySelectorAll('input,select')].map((input) => [input.name, input]),
   );
   let source = null,
-    groupId;
+    groupId,
+    reversed = false;
+  function definition() {
+    const shape = inputs.groupShape.value;
+    let pattern;
+    if (shape === 'array') {
+      const distancesX = parseBoltDistances(inputs.groupX.value),
+        distancesY = parseBoltDistances(inputs.groupY.value);
+      pattern = {
+        distancesX,
+        distancesY,
+        columns: distancesX.length + 1,
+        rows: distancesY.length + 1,
+      };
+    } else if (shape === 'circle')
+      pattern = {
+        rows: 1,
+        columns: Number(inputs.groupCount.value),
+        diameter: Number(inputs.groupDiameter.value),
+      };
+    else {
+      const xs = parseBoltCoordinates(inputs.groupX.value),
+        ys = parseBoltCoordinates(inputs.groupY.value);
+      if (xs.length !== ys.length) throw new Error('X och Y måste ha lika många koordinater.');
+      pattern = { rows: 1, columns: xs.length, positions: xs.map((x, i) => [x, ys[i]]) };
+    }
+    const group = {
+      id: groupId,
+      shape,
+      ...pattern,
+      reversed,
+      rotation: Number(inputs.groupRotation.value),
+      u: source?.u,
+    };
+    patternPositions(group);
+    return group;
+  }
   function render() {
     const enabled = inputs.groupEnabled.checked;
     root.querySelector('[data-group-fields]').hidden = !enabled;
     for (const input of Object.values(inputs))
       if (input !== inputs.groupEnabled) input.disabled = !enabled;
-    const rows = Number(inputs.groupRows.value),
-      columns = Number(inputs.groupColumns.value);
-    const x = Number(inputs.groupSpacingX.value),
-      y = Number(inputs.groupSpacingY.value);
-    const angle = (Number(inputs.groupRotation.value) * Math.PI) / 180;
+    const circle = inputs.groupShape.value === 'circle';
+    for (const key of ['groupX', 'groupY']) inputs[key].parentElement.hidden = circle;
+    for (const key of ['groupCount', 'groupDiameter']) inputs[key].parentElement.hidden = !circle;
     const svg = root.querySelector('svg');
     svg.replaceChildren();
-    if (
-      !Number.isInteger(rows) ||
-      !Number.isInteger(columns) ||
-      rows < 1 ||
-      columns < 1 ||
-      rows * columns > MAX_GROUP_FASTENERS ||
-      ![x, y, angle].every(Number.isFinite)
-    ) {
-      root.querySelector('[data-group-count]').textContent =
-        `Högst ${MAX_GROUP_FASTENERS} skruvar per grupp.`;
-      return;
+    const output = root.querySelector('[data-group-count]');
+    if (!enabled) return;
+    try {
+      const group = definition();
+      const count = renderFastenerPattern(svg, group);
+      output.textContent = `${count} skruvar`;
+      inputs.groupX.title = inputs.groupY.title =
+        group.shape === 'list'
+          ? 'Koordinater från mönstrets origo'
+          : 'Delningar, exempelvis 60 80 60 eller 3*60. 0 ger en position.';
+    } catch (error) {
+      output.textContent = error.message;
     }
-    root.querySelector('[data-group-count]').textContent =
-      `${columns} × ${rows} = ${columns * rows} skruvar · ${((columns - 1) * x).toLocaleString('sv')} × ${((rows - 1) * y).toLocaleString('sv')} mm`;
-    const w = (columns - 1) * x,
-      h = (rows - 1) * y;
-    const scale = 130 / Math.max(1, Math.hypot(w, h));
-    for (let row = 0; row < rows; row++)
-      for (let column = 0; column < columns; column++) {
-        const px = (column * x - w / 2) * scale,
-          py = (row * y - h / 2) * scale;
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', 90 + px * Math.cos(angle) - py * Math.sin(angle));
-        circle.setAttribute('cy', 90 - px * Math.sin(angle) - py * Math.cos(angle));
-        circle.setAttribute('r', Math.min(5, 40 / Math.max(rows, columns)));
-        circle.setAttribute('fill', row === 0 && column === 0 ? '#438d6e' : '#607e8b');
-        svg.append(circle);
-      }
   }
-  root.addEventListener('input', () => {
-    render();
-  });
+  root.addEventListener('input', render);
   root.addEventListener('change', render);
   return {
     load(nextSource, enabled = false) {
       source = nextSource?.group || null;
       groupId = source?.id || crypto.randomUUID();
+      reversed = !!source?.reversed;
       inputs.groupEnabled.checked = !!source || enabled;
       inputs.groupEnabled.disabled = !!source;
-      for (const [name, key, fallback] of [
-        ['groupRows', 'rows', 2],
-        ['groupColumns', 'columns', 2],
-        ['groupSpacingX', 'spacingX', 60],
-        ['groupSpacingY', 'spacingY', 60],
-        ['groupRotation', 'rotation', 0],
-      ])
-        inputs[name].value = source?.[key] ?? fallback;
+      inputs.groupShape.value = source?.shape || 'array';
+      inputs.groupX.value =
+        source?.shape === 'list'
+          ? source.positions.map((p) => p[0]).join(' ')
+          : (
+              source?.distancesX || Array((source?.columns || 2) - 1).fill(source?.spacingX || 60)
+            ).join(' ') || '0';
+      inputs.groupY.value =
+        source?.shape === 'list'
+          ? source.positions.map((p) => p[1]).join(' ')
+          : (
+              source?.distancesY || Array((source?.rows || 2) - 1).fill(source?.spacingY || 60)
+            ).join(' ') || '0';
+      inputs.groupCount.value = source?.columns || 6;
+      inputs.groupDiameter.value = source?.diameter || 100;
+      inputs.groupRotation.value = source?.rotation || 0;
       render();
+    },
+    reverse() {
+      reversed = !reversed;
     },
     enabled: () => inputs.groupEnabled.checked,
     apply(draft, start, direction) {
-      if (!inputs.groupEnabled.checked) return draft;
-      return alignFastenerGroup(
-        {
-          ...draft,
-          group: {
-            id: groupId,
-            rows: Number(inputs.groupRows.value),
-            columns: Number(inputs.groupColumns.value),
-            spacingX: Number(inputs.groupSpacingX.value),
-            spacingY: Number(inputs.groupSpacingY.value),
-            rotation: Number(inputs.groupRotation.value),
-            u: source?.u,
-          },
-        },
-        start,
-        direction,
-      );
+      return inputs.groupEnabled.checked
+        ? alignFastenerGroup({ ...draft, group: definition() }, start, direction)
+        : draft;
     },
   };
 }

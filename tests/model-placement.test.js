@@ -615,3 +615,17 @@ test('an invalid linear endpoint edit cannot partially change a group or add his
   assert.deepEqual(f.project.objects, before);
   assert.equal(f.history.canUndo, false);
 });
+
+test('invalid fastener settings block canvas confirmation instead of placing the last valid draft', (t) => {
+  const f = fixture(t),
+    before = structuredClone(f.project.objects);
+  const draft = { spec: { length: 70 }, placementMode: 'range' };
+  f.tools.first = [0, 0, 0];
+  f.tools.operation = { mode: 'fastenerCreate', draft, error: 'Ogiltigt skruvmönster' };
+  assert.equal(f.controller.commitPoint([0, 0, 100]), false);
+  assert.equal(f.tools.operation.draft, draft);
+  assert.deepEqual(f.tools.first, [0, 0, 0]);
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.history.canUndo, false);
+  assert.match(f.fields.get('status').textContent, /Ogiltigt skruvmönster/);
+});

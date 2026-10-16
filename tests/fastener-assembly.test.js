@@ -1,3 +1,5 @@
+import { validateFastenerSpec } from '../src/fasteners/library.js';
+import { withFastenerLength, fastenerFitWarnings } from '../src/fasteners/manual-length.js';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
@@ -41,18 +43,18 @@ const plate = {
 const draft = {
   id: 's',
   type: 'fastener',
-  spec: spec(30),
+  spec: spec(40),
   start: [0, 0, -100],
-  end: [0, 0, -70],
+  end: [0, 0, -60],
   holes: [
     { targetId: 'p', kind: 'clearance', extent: 'profile', offset: 0, depth: 20, diameter: 14 },
   ],
   assembly: { nearWasher: true, nearNut: false, farWasher: true, nut: true, extraNut: false },
-  lengthMode: 'auto',
+  lengthMode: 'manual',
   extraLength: 5,
   lengthOptions: [spec(30), spec(40), spec(50), spec(60)],
 };
-test('assembly seats selected hardware at material faces and picks shortest available length', () => {
+test('assembly seats selected hardware and retains the specified length', () => {
   const original = structuredClone(draft);
   const result = automaticPlacement(draft, [0, 0, -100], [0, 0, -99], [plate]);
   assert.equal(result.spec.length, 40);
@@ -66,14 +68,22 @@ test('assembly seats selected hardware at material faces and picks shortest avai
   assert.equal(validateFastener(result), '');
   assert.deepEqual(draft, original);
 });
-test('extra nut and projection allowance select a longer length; missing lengths are explicit errors', () => {
+test('extra nut keeps the specified length and warns; generated connections retain their length-series calculation', () => {
   const extra = { ...draft, assembly: { ...draft.assembly, extraNut: true } };
   const result = automaticPlacement(extra, [0, 0, -100], [0, 0, -99], [plate]);
-  assert.equal(result.spec.length, 50);
+  assert.equal(result.spec.length, 40);
+  assert.ok(fastenerFitWarnings(result).length);
   assert.equal(result.accessories.at(-1).offset, 35);
-  assert.equal(selectFastenerLength({ ...draft, extraLength: 10 }, 20).spec.length, 50);
+  assert.equal(
+    selectFastenerLength({ ...draft, lengthMode: 'auto', extraLength: 10 }, 20).spec.length,
+    50,
+  );
   assert.throws(
-    () => selectFastenerLength({ ...draft, lengthOptions: [spec(30)] }, 20),
+    () =>
+      selectFastenerLength(
+        { ...draft, spec: spec(30), lengthMode: 'auto', lengthOptions: [spec(30)] },
+        20,
+      ),
     /Ingen passande.*40.00/,
   );
 });
@@ -86,6 +96,7 @@ test('automatic selection keeps standard, diameter and product series and checks
   const s = {
     ...draft,
     spec: partial(50, 15),
+    lengthMode: 'auto',
     lengthOptions: [
       partial(50, 15),
       partial(60, 40),
@@ -103,7 +114,7 @@ test('rod preset puts nuts on both sides while manual hardware remains unchanged
     spec: rod,
     lengthMode: 'manual',
     assembly: { ...assemblyDefaults(rod), nearWasher: true, farWasher: true, extraNut: true },
-    startAllowance: 0,
+    startAllowance: 12.5,
   };
   const fitted = fittedAssembly(s, 20);
   assert.equal(fitted.startAllowance, 12.5);
@@ -122,18 +133,19 @@ test('rod preset puts nuts on both sides while manual hardware remains unchanged
   };
   assert.equal(fittedAssembly(manual, 10), manual);
 });
-test('automatic joints resize from stored options after plate changes and invalidate numbering', () => {
+test('joint hardware follows plate changes without changing the specified length', () => {
   const placed = automaticPlacement(draft, [0, 0, -100], [0, 0, -99], [plate]);
   const before = [plate, placed];
   const numbered = numberParts(before);
   const changed = updateAutomaticJoints(before, [{ ...plate, thickness: 30 }, placed]);
-  assert.equal(changed[1].spec.length, 50);
+  assert.equal(changed[1].spec.length, 40);
+  assert.ok(fastenerFitWarnings(changed[1]).length);
   assert.equal(changed[1].accessories.at(-1).offset, 35);
   assert.equal(partStatus(changed[1], changed, numbered).valid, false);
   assert.equal(placed.spec.length, 40);
 });
 
-test('saved assembly retains length options and resizes after project reload', () => {
+test('saved assembly keeps manual length after project reload and target changes', () => {
   const placed = automaticPlacement(draft, [0, 0, -100], [0, 0, -99], [plate]);
   const project = JSON.parse(
     readFileSync(new URL('../examples/forbandstest.lira.json', import.meta.url)),
@@ -151,7 +163,7 @@ test('saved assembly retains length options and resizes after project reload', (
     { ...loaded.objects[0], thickness: 30 },
     loaded.objects[1],
   ]);
-  assert.equal(resized[1].spec.length, 50);
+  assert.equal(resized[1].spec.length, 40);
 });
 test('series ignores dimension property order and preserves selected specification snapshot', () => {
   const selected = spec(40);
@@ -163,8 +175,67 @@ test('series ignores dimension property order and preserves selected specificati
   const s = {
     ...draft,
     spec: selected,
+    lengthMode: 'auto',
     lengthOptions: [{ ...selected, length: 100 }, reordered],
   };
   assert.equal(selectFastenerLength(s, 20).spec.length, 40);
   assert.equal(selectFastenerLength(s, 30).spec.length, 50);
+});
+
+test('manual instance lengths preserve library records and full versus partial thread information', () => {
+  const library = spec(40),
+    before = structuredClone(library);
+  const custom = withFastenerLength(library, 73.5);
+  assert.equal(custom.length, 73.5);
+  assert.equal(custom.thread.length, 73.5);
+  assert.deepEqual(library, before);
+  const rod = { ...library, kind: 'rod', standard: undefined, head: undefined };
+  assert.equal(withFastenerLength(rod, 203).thread.length, 203);
+  const partial = { ...spec(100), standard: 'ISO 4014', thread: { length: 30 } };
+  const placed = automaticPlacement(
+    { ...draft, spec: withFastenerLength(partial, 120) },
+    [0, 0, -100],
+    [0, 0, -99],
+    [plate],
+  );
+  const shorter = withFastenerLength(partial, 10);
+  assert.throws(() => validateFastenerSpec(shorter), /Muttertjocklek|Gänglängd/);
+  const shortPlaced = automaticPlacement(
+    { ...draft, spec: shorter },
+    [0, 0, -100],
+    [0, 0, -99],
+    [plate],
+  );
+  assert.equal(shortPlaced.spec.length, 10);
+  assert.equal(validateFastener(shortPlaced), '');
+  assert.ok(fastenerFitWarnings(shortPlaced).length);
+  assert.equal(placed.spec.thread.length, 30);
+  assert.ok(fastenerFitWarnings(placed).some((s) => s.includes('gängade')));
+  assert.equal(validateFastener(placed), '');
+  for (const length of [0, -1, Infinity, NaN, 10001])
+    assert.throws(() => withFastenerLength(library, length));
+});
+
+test('rod projection is exact including insufficient near-side hardware and recovers when corrected', () => {
+  const rod = { ...spec(100), kind: 'rod', standard: undefined, head: undefined };
+  const source = {
+    ...draft,
+    spec: rod,
+    assembly: { ...assemblyDefaults(rod), nearWasher: true, farWasher: true },
+    startAllowance: 5,
+  };
+  const short = automaticPlacement(source, [0, 0, -100], [0, 0, -99], [plate]);
+  assert.equal(short.startAllowance, 5);
+  assert.deepEqual(short.start, [0, 0, -5]);
+  assert.ok(fastenerFitWarnings(short).some((s) => s.includes('Utstick före')));
+  assert.equal(validateFastener(short), '');
+  const corrected = automaticPlacement(
+    { ...source, startAllowance: 20 },
+    [0, 0, -100],
+    [0, 0, -99],
+    [plate],
+  );
+  assert.equal(corrected.spec.length, 100);
+  assert.deepEqual(corrected.start, [0, 0, -20]);
+  assert.deepEqual(fastenerFitWarnings(corrected), []);
 });

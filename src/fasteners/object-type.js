@@ -8,7 +8,7 @@ import { fastenerGeometry, fastenerFrame } from './geometry.js';
 export const isFastener = (s) => s?.type === 'fastener';
 export function validateFastener(s) {
   try {
-    validateFastenerSpec(s.spec);
+    validateFastenerSpec(s.spec, { instance: s.placementMode === 'range' });
     validateAssembly(s);
     validateFastenerGroup(s.group);
     if (s.lengthOptions != null) {
@@ -27,7 +27,7 @@ export function validateFastener(s) {
       throw new Error('Ange XYZ inom ±10 000 000 mm.');
     const length = Math.hypot(...s.end.map((v, i) => v - s.start[i]));
     if (Math.abs(length - s.spec.length) > 0.001)
-      throw new Error('Skruvens axellängd måste motsvara bibliotekets längd.');
+      throw new Error('Skruvens axellängd måste motsvara den angivna längden.');
     if (
       s.radial &&
       (!Array.isArray(s.radial) ||
@@ -42,8 +42,9 @@ export function validateFastener(s) {
       s.accessories == null &&
       s.spec.kind === 'bolt' &&
       (!Number.isFinite(s.nutOffset) ||
-        s.nutOffset < 0 ||
-        s.nutOffset + s.spec.nut.thickness > length + 0.001)
+        Math.abs(s.nutOffset) > 1e7 ||
+        (s.placementMode !== 'range' &&
+          (s.nutOffset < 0 || s.nutOffset + s.spec.nut.thickness > length + 0.001)))
     )
       throw new Error('Muttern måste ligga inom skruvens längd.');
     if (!Array.isArray(s.holes) || s.holes.length > 100) throw new Error('Ogiltig hållista.');
@@ -76,7 +77,8 @@ export function validateFastener(s) {
       s.startAllowance != null &&
       (!Number.isFinite(s.startAllowance) ||
         s.startAllowance < 0 ||
-        s.startAllowance >= length ||
+        (s.placementMode !== 'range' && s.startAllowance >= length) ||
+        s.startAllowance > 1e7 ||
         s.spec.kind !== 'rod')
     )
       throw new Error('Utstick före första ytan måste ligga inom gängstångens längd.');
@@ -178,6 +180,7 @@ export const fastenerType = {
   partFrame: fastenerFrame,
   partShape: (s) => ({
     type: 'fastener',
+    ...(s.assembly?.bolt === false ? { bolt: false } : {}),
     spec: s.spec,
     ...(s.accessories == null
       ? {

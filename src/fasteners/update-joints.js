@@ -60,7 +60,6 @@ export function updateAutomaticJoints(before, after) {
         s.insertion.direction,
         material,
         s.insertion.limited ? s.insertion.depth : null,
-        !!s.group,
       );
       const error = validateFastener(result);
       if (error) throw new Error(error);

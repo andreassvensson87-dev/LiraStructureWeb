@@ -1,3 +1,4 @@
+import { fastenerFitWarnings } from '../src/fasteners/manual-length.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -181,14 +182,14 @@ test('automatic layer limits start at material and complete a wall; wall default
   );
   assert.equal(wall.layerCount, 1);
   assert.equal(wall.nutOffset, 12);
-  assert.throws(
-    () => automaticPlacement(draft, [500, 500, 160], [500, 500, 60], [tube]),
-    /träffar inte/,
-  );
-  assert.throws(
-    () => automaticPlacement({ ...draft, spec: bolt }, [500, 60, 160], [500, 60, 60], [tube]),
-    /för kort/,
-  );
+  const outside = automaticPlacement(draft, [500, 500, 160], [500, 500, 60], [tube]);
+  assert.equal(outside.layerCount, 0);
+  assert.equal(outside.holes[0].active, false);
+  assert.equal(validateFastener(outside), '');
+  const short = automaticPlacement({ ...draft, spec: bolt }, [500, 60, 160], [500, 60, 60], [tube]);
+  assert.equal(short.spec.length, bolt.length);
+  assert.ok(fastenerFitWarnings(short).length);
+  assert.equal(validateFastener(short), '');
 });
 test('automatic wood holes stop within material and the physical shaft', () => {
   const draft = { ...axialScrew(tube, 'blind', 50), spec: wood };

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { patternPositions, MAX_PATTERN_FASTENERS } from './pattern.js';
 
-export const MAX_GROUP_FASTENERS = 100;
+export const MAX_GROUP_FASTENERS = MAX_PATTERN_FASTENERS;
 const point = (p) =>
   Array.isArray(p) && p.length === 3 && p.every((v) => Number.isFinite(v) && Math.abs(v) <= 1e7);
 export function validateFastenerGroup(group) {
@@ -23,14 +24,11 @@ export function validateFastenerGroup(group) {
     throw new Error(
       `Skruvgruppen måste ha 1–${MAX_GROUP_FASTENERS} skruvar och giltiga rader och kolumner.`,
     );
-  for (const [count, spacing] of [
-    [group.columns, group.spacingX],
-    [group.rows, group.spacingY],
-  ])
-    if (!Number.isFinite(spacing) || spacing < 0 || spacing > 100000 || (count > 1 && spacing <= 0))
-      throw new Error('Ange positivt skruvavstånd där gruppen har flera skruvar.');
+  patternPositions(group);
   if (!Number.isFinite(group.rotation) || Math.abs(group.rotation) > 36000)
     throw new Error('Ange en giltig grupprotation inom ±36 000°.');
+  if (group.reversed != null && typeof group.reversed !== 'boolean')
+    throw new Error('Ogiltig skruvriktning.');
   if (![group.origin, group.direction, group.u].every(point))
     throw new Error('Ogiltigt koordinatsystem för skruvgruppen.');
   const axis = new THREE.Vector3(...group.direction).sub(new THREE.Vector3(...group.origin));
@@ -47,14 +45,20 @@ export function groupBasis(group) {
   const z = new THREE.Vector3(...group.direction)
     .sub(new THREE.Vector3(...group.origin))
     .normalize();
-  const x = new THREE.Vector3(...group.u).applyAxisAngle(z, (group.rotation * Math.PI) / 180);
-  return { x, y: new THREE.Vector3().crossVectors(z, x).normalize(), z };
+  const sign = group.reversed ? -1 : 1;
+  const x = new THREE.Vector3(...group.u).applyAxisAngle(
+    z,
+    (sign * group.rotation * Math.PI) / 180,
+  );
+  return { x, y: new THREE.Vector3().crossVectors(z, x).normalize().multiplyScalar(sign), z };
 }
 export function groupPoint(group, row, column) {
   const { x, y } = groupBasis(group);
+  const point = patternPositions(group).find((p) => p.row === row && p.column === column);
+  if (!point) throw new Error('Skruvpositionen saknas i mönstret.');
   return new THREE.Vector3(...group.origin)
-    .addScaledVector(x, column * group.spacingX)
-    .addScaledVector(y, row * group.spacingY)
+    .addScaledVector(x, point.x)
+    .addScaledVector(y, point.y)
     .toArray();
 }
 export function transformGroup(source, turn) {
@@ -104,7 +108,13 @@ export function validateFastenerGroups(objects) {
         g.columns,
         g.spacingX,
         g.spacingY,
+        g.shape,
+        g.distancesX,
+        g.distancesY,
+        g.diameter,
+        g.positions,
         g.rotation,
+        g.reversed,
         g.origin,
         g.direction,
         g.u,

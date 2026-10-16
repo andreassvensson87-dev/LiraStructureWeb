@@ -271,6 +271,7 @@ export function createPlacementController({
     if (tools.operation?.mode === 'blockCreate') return getBlock().candidate(tools.first, target);
     if (tools.operation?.mode === 'itemCreate') return [getItem().candidate(tools.first, target)];
     if (tools.operation?.mode === 'fastenerCreate') {
+      if (tools.operation.error) throw new Error(tools.operation.error);
       const draft = tools.operation.draft;
       if (draft.group)
         return fastenerGroupBatch(alignFastenerGroup(draft, tools.first, target), project.objects, {

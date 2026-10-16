@@ -1,3 +1,4 @@
+import { fastenerFitWarnings } from '../src/fasteners/manual-length.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -158,11 +159,15 @@ test('automatic rod placement preserves lower and upper hardware and linked hole
   assert.equal(result.holes[0].offset, 20);
   assert.deepEqual(result.accessories, hardware);
   assert.equal(validateFastener(result), '');
-  assert.throws(
-    () =>
-      automaticPlacement({ ...source, startAllowance: 110 }, [0, 0, -1000], [0, 0, -999], [plate]),
-    /för kort/,
+  const short = automaticPlacement(
+    { ...source, startAllowance: 110 },
+    [0, 0, -1000],
+    [0, 0, -999],
+    [plate],
   );
+  assert.equal(short.startAllowance, 110);
+  assert.ok(fastenerFitWarnings(short).length);
+  assert.equal(validateFastener(short), '');
 });
 test('legacy hardware is read without changing saved shape identity or snapshots', () => {
   const legacy = {

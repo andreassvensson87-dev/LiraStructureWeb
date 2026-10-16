@@ -48,7 +48,6 @@ export function fastenerGroupBatch(
             direction,
             model,
             draft.groupLimit ?? (draft.insertion?.limited ? draft.insertion.depth : null),
-            true,
           );
           const error = validateFastener(screw);
           if (error) throw new Error(error);

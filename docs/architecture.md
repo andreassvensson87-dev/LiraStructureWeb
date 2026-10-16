@@ -325,3 +325,15 @@ Profilens insättningsval återställs till modellens sparade värde när ett kl
 avvisas av valideringen. Polysweep-valideringen anger vilket hörn/radievärde som
 är för litet för profilens tvärsnitt och vald insättning. En profiländring får
 inte kringgå kontrollen av en kollapsad innerbåge.
+
+## Skruvinspektor och mönster
+
+`fasteners/library-controller.js` äger bibliotekets fönster, produktversioner, import/export och lagring. `fasteners/ui.js` äger placeringsutkast, punktvalets callbacks och inspektorns bekräftelse. Skapa och redigera använder samma `placement-form.js`, `product-picker.js`, `assembly-ui.js`, `group-ui.js` och `hole-settings.js`, byggda med gemensamma attributrader och sektioner. Biblioteksval beskriver tillgängliga produkter; dimensioner, klasser, ytbehandlingar och längder skapas inte av UI:t.
+
+`fasteners/pattern.js` tolkar delningar och fria koordinater samt utvärderar rutnät, cirkel och fria mönster utan DOM. `group-data.js` förankrar dem i gruppens koordinatsystem; `pattern-picture.js` ritar bara illustrationen. Vänd skruvriktning bevarar gruppens positionsplan även för roterade mönster. `hole-edit.js` behåller frigången när skruvdiametern ändras. `placement-draft.js` förbereder samma validerade, fristående förslag för förhandsvisning och bekräftelse, med befintlig materialträff och hålberäkning. Modellen och historiken ändras först i den befintliga modell-editorn. Behållna gruppceller och deras borrhål behåller identiteter; borttagna celler och deras hål tas bort i samma transaktion.
+
+Förbandets skruv kan stängas av separat från brickor och muttrar. Utan skruvdelar finns bara kopplade hål: tom skruvgeometri och ingen fysisk part för numrering/IFC, men de verkliga hålen finns kvar i delarnas geometri och ritningar. Ett förband utan både skruvdelar och hål avvisas.
+
+Automatiska skruvförband får ligga utanför valda delar. `placement.js` behåller då en flyttbar skruv med noll materiallager och inaktiva borrrelationer. Måldelarnas projicerade gränser används enbart för preliminär anliggning; de räknas aldrig som materialträffar. Ordinarie transform-/greppväg räknar om via `update-joints.js` och aktiverar endast hål som faktiskt träffar material.
+
+`fasteners/manual-length.js` bygger fristående produktögonblicksbilder med användarens längd och ger härledd förbandsåterkoppling utan DOM. Helgängad skruv och stång får motsvarande gänglängd; delgängad produkt behåller sin gänguppgift. Bibliotekets poster ändras aldrig. `automaticPlacement` beräknar material, hål och tillbehörslägen men väljer inte skruvlängd. Gängstångens `startAllowance` är exakt avstånd från stångände till första materialyta, inklusive utrymme för mutter/brickor. För kort skaft, för litet utstick och mutter utanför gängan är icke-blockerande varningar för vanliga placerade förband (`placementMode: range`); ogiltiga dimensioner, relationer och överlappande tillbehör avvisas fortfarande. Bibliotekets produktvalidering är strikt; instansvalidering skiljer strukturella fel från förbandsvarningar. Kopplingarnas egna beräknade produktserier ligger kvar i deras domänregler och återanvänder `selectFastenerLength`.
