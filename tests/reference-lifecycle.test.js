@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { edgeIndex } from '../src/references/edge-index.js';
+import { edgeIndex } from '../src/edge-index.js';
 import { ReferenceModels } from '../src/references/reference-models.js';
 import { IfcAPI } from 'web-ifc';
 import { readFileSync } from 'node:fs';

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { installViewportWheel } from '../viewport-wheel.js';
 import { orbitDamping } from '../input-device.js';
 import { installInputNavigation } from './input-navigation.js';
+import { installOverlayNavigation } from './overlay-navigation.js';
 import { ModelNavigation } from './navigation.js';
 import { createViewWidget } from './ui/view-widget.js';
 /** Owns renderer, lighting, resize and browser events; no project or editor state. */
@@ -52,6 +53,7 @@ export function createModelViewport(host, onError) {
   );
   const removeInputNavigation = installInputNavigation(host, camera, () => navigation.controls);
   const removeWheel = installViewportWheel(host, renderer.domElement);
+  const removeOverlayNavigation = installOverlayNavigation(host, renderer.domElement);
   const observer = new ResizeObserver(() => {
     const { width, height } = host.getBoundingClientRect();
     if (!width || !height) return;
@@ -70,6 +72,7 @@ export function createModelViewport(host, onError) {
       observer.disconnect();
       removeInputNavigation();
       removeWheel();
+      removeOverlayNavigation();
       navigation.controls.dispose();
       viewWidget.dispose();
       renderer.dispose();

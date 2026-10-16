@@ -1,7 +1,8 @@
+import { chooseSnap, snapType, isTrackingAnchor, SNAP_PIXELS } from './snap-priority.js';
 import { curveSnapCandidates } from './drawing-snap-curves.js';
 import { nearbySnapEntities } from './drawing-snap-geometry.js';
 import { defaultCadSettings } from './cad-statusbar.js';
-import { constrainCadPoint, polarTrackingIntersection } from './cad-tracking.js';
+import { cadDirectionSnap, polarTrackingIntersection } from './cad-tracking.js';
 import { snapFrame } from './frame-model.js';
 import { shapeSnapPoints, arcGeometry } from './drawing-shapes.js';
 
@@ -10,6 +11,7 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
   const hit = editor.adapter.locate(e, view);
   if (!hit) return null;
   const settings = editor.cad?.get() || defaultCadSettings;
+  const ortho = settings.ortho || (e.shiftKey && editor.workflow === 'shape');
   const base =
     (editor.transform?.active() && editor.transform.base) ||
     editor.draft?.points.at(-1) ||
@@ -24,9 +26,17 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
       Math.hypot(unitPixel[0] - originPixel[0], unitPixel[1] - originPixel[1]) *
         editor.adapter.pixelScale(),
     );
+  const context = JSON.stringify([hit.view, editor.mode, base || null]);
+  const previous = editor.previousPointSnap?.context === context ? editor.previousPointSnap : null;
+  const distancePixels = (candidate) => {
+    const a = editor.adapter.project(candidate, hit.view),
+      b = editor.adapter.project(rawPoint, hit.view);
+    return Math.hypot(a[0] - b[0], a[1] - b[1]) * editor.adapter.pixelScale();
+  };
+  let pointChoice = null,
+    gridChoice = null;
   if (snap && settings.snap) {
-    const p = editor.adapter.project(hit.point, hit.view);
-    let best = 10;
+    const best = SNAP_PIXELS.exact + SNAP_PIXELS.retention;
     const drawn = editor.items
       .filter(
         (item) =>
@@ -74,13 +84,14 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
         pixelSize * best,
       ),
       base,
-      tolerance: pixelSize * best,
+      tolerance: pixelSize * SNAP_PIXELS.exact,
+      previous,
       endpoints: false,
       midpoints: settings.midpoints,
       intersections: settings.intersections,
       perpendicular: settings.perpendicular,
       nearest: settings.nearest !== false,
-      ortho: settings.ortho,
+      ortho,
     });
     const candidates = editor.adapter
       .candidates(hit.view, rawPoint, pixelSize * best)
@@ -169,80 +180,110 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
         ),
     ))
       candidates.push(...curveSnapCandidates(item, rawPoint, base, settings));
-    candidates.sort((a, b) => Number(a.kind === 'Närmaste') - Number(b.kind === 'Närmaste'));
-    for (const { point: candidate, kind } of candidates) {
-      if (kind === 'Närmaste' && hit.snapped && hit.kind !== 'Närmaste') continue;
+    pointChoice = chooseSnap(
+      candidates
+        .filter(
+          ({ point }) =>
+            !ortho ||
+            !base ||
+            Math.min(Math.abs(point[0] - base[0]), Math.abs(point[1] - base[1])) <= 1e-6,
+        )
+        .map((candidate) => ({
+          ...candidate,
+          type: snapType(candidate.kind),
+          distance: distancePixels(candidate.point),
+          snapped: true,
+        })),
+      previous,
+    );
+    if (
+      (!pointChoice || snapType(pointChoice.kind) === 'nearest') &&
+      hit.view !== 'paper' &&
+      editor.adapter.gridSnap
+    ) {
+      const point = editor.adapter.gridSnap(rawPoint);
       if (
-        settings.ortho &&
-        base &&
-        Math.min(Math.abs(candidate[0] - base[0]), Math.abs(candidate[1] - base[1])) > 1e-6
-      )
-        continue;
-      const q = editor.adapter.project(candidate, hit.view),
-        distance = Math.hypot(q[0] - p[0], q[1] - p[1]) * editor.adapter.pixelScale();
-      if (distance < best) {
-        best = distance;
-        hit.point = candidate;
-        hit.reference = candidate.reference || null;
-        hit.snapped = true;
-        hit.kind = kind;
-      }
-    }
-    if (!hit.snapped && hit.view !== 'paper' && editor.adapter.gridSnap) {
-      const gridPoint = editor.adapter.gridSnap(hit.point);
-      if (
-        gridPoint &&
-        (!settings.ortho ||
+        point &&
+        (!ortho ||
           !base ||
-          Math.min(Math.abs(gridPoint[0] - base[0]), Math.abs(gridPoint[1] - base[1])) <= 1e-6)
-      ) {
-        hit.point = gridPoint;
-        hit.reference = editor.adapter.gridReference?.(gridPoint) || null;
-        hit.snapped = true;
-        hit.kind = 'Stomlinje';
-      }
+          Math.min(Math.abs(point[0] - base[0]), Math.abs(point[1] - base[1])) <= 1e-6)
+      )
+        gridChoice = {
+          point,
+          kind: 'Stomlinje',
+          type: 'tracking',
+          distance: distancePixels(point),
+          reference: editor.adapter.gridReference?.(point) || null,
+          snapped: true,
+        };
     }
   }
   editor.trackHit =
     snap && settings.snap && settings.otrack
       ? editor.tracking.locate(rawPoint, {
           view: hit.view,
-          snapped: !!hit.snapped,
-          point: hit.point,
-          tolerance: pixelSize * 8,
+          snapped: !!pointChoice && isTrackingAnchor(pointChoice.type),
+          point: pointChoice?.point || rawPoint,
+          tolerance: pixelSize * SNAP_PIXELS.tracking,
         })
       : null;
+  let trackingChoice = null,
+    directionChoice = null;
   if (editor.trackHit?.guides.length) {
     const intersection = polarTrackingIntersection(rawPoint, base, editor.trackHit, {
-      polar: settings.ortho ? 90 : settings.polar,
-      tolerance: pixelSize * 8,
+      polar: ortho ? 90 : settings.polar,
+      tolerance: pixelSize * SNAP_PIXELS.tracking,
     });
-    hit.point = intersection || editor.trackHit.point;
-    hit.reference = null;
-    hit.kind = intersection ? 'Skärning' : 'Otrack';
-    if (intersection) {
-      hit.snapped = true;
-      hit.guideBase = base;
-      editor.trackHit.point = intersection;
-    }
-  } else if (!hit.snapped && snap)
-    hit.point = constrainCadPoint(hit.point, base, {
-      ortho: settings.ortho || (e.shiftKey && editor.workflow === 'shape'),
-      polar: settings.polar,
-      tolerance: pixelSize * 8,
-    });
-  if (
-    !hit.snapped &&
-    snap &&
-    base &&
-    !editor.trackHit?.guides.length &&
-    (settings.ortho || settings.polar || e.shiftKey)
-  ) {
-    if (Math.hypot(hit.point[0] - rawPoint[0], hit.point[1] - rawPoint[1]) > 1e-9) {
-      hit.kind = settings.ortho || e.shiftKey ? 'Ortho' : 'Polar';
-      hit.guideBase = base;
-    }
+    const point = intersection || editor.trackHit.point;
+    trackingChoice = {
+      point,
+      kind: intersection ? 'Skärning' : 'Otrack',
+      type: intersection ? 'trackingIntersection' : 'tracking',
+      distance: distancePixels(point),
+      snapped: !!intersection,
+      guideBase: intersection ? base : null,
+    };
   }
+  if (snap) {
+    const direction = cadDirectionSnap(rawPoint, base, {
+      ortho,
+      polar: settings.polar,
+      tolerance: pixelSize * SNAP_PIXELS.tracking,
+    });
+    if (direction)
+      directionChoice = {
+        ...direction,
+        type: 'tracking',
+        distance: distancePixels(direction.point),
+        snapped: false,
+        guideBase: base,
+      };
+  }
+  const choices = [pointChoice, gridChoice, trackingChoice, directionChoice].filter(
+    (candidate) =>
+      candidate &&
+      (!ortho ||
+        !base ||
+        Math.min(Math.abs(candidate.point[0] - base[0]), Math.abs(candidate.point[1] - base[1])) <=
+          1e-6),
+  );
+  // Ortho is a hard constraint, even when the pointer lies far from the allowed axis.
+  const chosen =
+    chooseSnap(choices, previous) || (directionChoice?.kind === 'Ortho' ? directionChoice : null);
+  if (chosen) {
+    hit.point = chosen.point;
+    hit.kind = chosen.kind;
+    hit.snapped = chosen.snapped;
+    hit.reference = chosen.reference || chosen.point.reference || null;
+    if (chosen.guideBase) hit.guideBase = chosen.guideBase;
+    if (chosen === trackingChoice) editor.trackHit.point = chosen.point;
+  }
+  if (editor.trackHit?.guides.length && chosen !== trackingChoice)
+    editor.trackHit = { ...editor.trackHit, guides: [] };
+  editor.previousPointSnap =
+    chosen && isTrackingAnchor(chosen.type)
+      ? { point: [...chosen.point], type: chosen.type, context }
+      : null;
   editor.cad?.coordinates(hit.point);
   if (editor.dynamicInput && !editor.transform?.active())
     editor.dynamicInput.hidden = !(

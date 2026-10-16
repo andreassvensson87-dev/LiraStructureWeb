@@ -53,17 +53,21 @@ export class CadTracking {
     return { point: result, guides, anchors: this.points };
   }
 }
-export function constrainCadPoint(point, base, { ortho = false, polar = 0, tolerance = 1 } = {}) {
-  if (!base || (!ortho && !polar)) return [...point];
+export function cadDirectionSnap(point, base, { ortho = false, polar = 0, tolerance = 1 } = {}) {
+  if (!base || (!ortho && !polar)) return null;
   const dx = point[0] - base[0],
     dy = point[1] - base[1];
+  if (Math.hypot(dx, dy) < 1e-9) return null;
   const step = ((ortho ? 90 : polar) * Math.PI) / 180;
   const angle = Math.round(Math.atan2(dy, dx) / step) * step;
   const c = Math.cos(angle),
     s = Math.sin(angle),
     length = dx * c + dy * s;
-  if (!ortho && Math.abs(dx * s - dy * c) > tolerance) return [...point];
-  return [base[0] + length * c, base[1] + length * s];
+  if (!ortho && Math.abs(dx * s - dy * c) > tolerance) return null;
+  return { point: [base[0] + length * c, base[1] + length * s], kind: ortho ? 'Ortho' : 'Polar' };
+}
+export function constrainCadPoint(point, base, settings = {}) {
+  return cadDirectionSnap(point, base, settings)?.point || [...point];
 }
 
 // Intersect the acquired tracking axis with the polar ray, rather than

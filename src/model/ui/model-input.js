@@ -78,6 +78,7 @@ export function installModelInput({
     leave: () => {
       pointerQueue.pending = null;
       objectFeedback.setHover([], 'canvas');
+      if (controllers.referenceModels?.setHoverSelection(null)) objectFeedback.invalidate();
       if (
         tools.operation?.linearId ||
         tools.operation?.planeId ||
@@ -102,6 +103,7 @@ export function installModelInput({
       },
       'fit-reference': (e) => {
         objectFeedback.setHover([], 'canvas');
+        if (controllers.referenceModels?.setHoverSelection(null)) objectFeedback.invalidate();
         ray(e);
         const hit = raycaster
           .intersectObjects(
@@ -298,6 +300,8 @@ export function installModelInput({
         cancelBox();
         if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
         if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
+        if (tools.operation?.mode === 'workPlane')
+          $('status').textContent = 'Val av arbetsplan avbrutet';
         if (
           ['sweepProperties', 'plateProperties', 'componentProperties'].includes(
             tools.operation?.mode,

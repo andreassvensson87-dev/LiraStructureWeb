@@ -416,3 +416,59 @@ test('nearest finds finite native edges, yields to exact snaps and respects togg
     'Vinkelrät',
   );
 });
+
+test('IFC edge Nearest is a five-pixel fallback after Polar and uses the same priority as native geometry', async () => {
+  const { referenceSnapFixture } = await import('../scripts/reference-snap-fixture.js');
+  const { referenceCandidates } = await import('../src/references/edge-index.js');
+  const f = referenceSnapFixture({ references: 1, partsPerReference: 1 });
+  const top = new THREE.OrthographicCamera(-500, 500, 500, -500, 1, 10000);
+  top.position.set(0, 0, 5000);
+  top.lookAt(0, 0, 0);
+  top.updateMatrixWorld();
+  const query = (target, polar = 45) => {
+    const clip = new THREE.Vector3(...target).project(top),
+      caster = new THREE.Raycaster();
+    caster.setFromCamera(new THREE.Vector2(clip.x, clip.y), top);
+    const points = referenceCandidates(f.models[0].parts, {
+      camera: top,
+      ray: caster.ray,
+      pointer: [(clip.x + 1) * 500, (1 - clip.y) * 500],
+      width: 1000,
+      height: 1000,
+      corners: false,
+    });
+    return {
+      points,
+      result: run(target, {
+        camera: top,
+        start: [0, 0, 300],
+        z: 300,
+        polar,
+        axisSnap: false,
+        referencePoints: points,
+      }),
+    };
+  };
+  try {
+    const active = query([102, 99, 300]);
+    assert.ok(active.points.some((p) => p.edge));
+    assert.match(active.result.label, /Polar 45/);
+    assert.ok(Math.abs(active.result.point[0] - active.result.point[1]) < 1e-8);
+    assert.equal(query([102, 99, 300], 0).result.label, 'Närmaste');
+    assert.equal(query([106, 99, 300], 0).result.kind, 'free');
+    const native = run([102, 99, 300], {
+      camera: top,
+      start: [0, 0, 300],
+      z: 300,
+      axisSnap: false,
+      polar: 45,
+      cornerSnap: false,
+      endpoints: false,
+      sweeps: [{ type: 'helperline', start: [100, -200, 300], end: [100, 400, 300] }],
+    });
+    assert.equal(native.label, active.result.label);
+    assert.deepEqual(native.point, active.result.point);
+  } finally {
+    f.dispose();
+  }
+});

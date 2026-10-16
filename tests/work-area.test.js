@@ -20,7 +20,8 @@ import { ProjectHistory } from '../src/project/project-history.js';
 import { resolveSnap } from '../src/snap.js';
 import { enclosedSweeps } from '../src/selection.js';
 import { ReferenceModels } from '../src/references/reference-models.js';
-import { edgeIndex, referenceCandidates } from '../src/references/edge-index.js';
+import { edgeIndex } from '../src/edge-index.js';
+import { referenceCandidates } from '../src/references/edge-index.js';
 
 function camera() {
   const cam = new THREE.OrthographicCamera(-100, 100, 100, -100, 1, 10000);

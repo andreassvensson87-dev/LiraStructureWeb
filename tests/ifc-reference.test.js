@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { IfcAPI } from 'web-ifc';
 import * as THREE from 'three';
 import { ifcPlacement } from '../src/references/ifc-coordinates.js';
-import { edgeIndex, referenceCandidates } from '../src/references/edge-index.js';
+import { edgeIndex } from '../src/edge-index.js';
+import { referenceCandidates } from '../src/references/edge-index.js';
 import { resolveSnap } from '../src/snap.js';
 test('local IFC import preserves millimetres, placement, and Z-up; edges omit face diagonals', async () => {
   const api = new IfcAPI();

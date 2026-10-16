@@ -163,23 +163,24 @@ export async function createModelApplication({
     grid,
   });
   Object.assign(actions, { updateSnapOverlay });
-  const { raycaster, ray, selectionHit, point, orbitAroundHit } = createModelPicking({
-    project,
-    ui,
-    tools,
-    host,
-    camera,
-    objects,
-    navigation,
-    isVisible,
-    getRenderedById: () => renderState.renderedById,
-    getSnapIndex: () => renderState.snapIndex,
-    getReferences: () => controllers.referenceModels,
-    workPlanePrompt,
-    getWorkArea: () => controllers.workAreaUI,
-    updateSnapOverlay,
-  });
-  Object.assign(actions, { ray, selectionHit, point, orbitAroundHit });
+  const { raycaster, ray, selectionHit, referenceSelectionHit, point, orbitAroundHit } =
+    createModelPicking({
+      project,
+      ui,
+      tools,
+      host,
+      camera,
+      objects,
+      navigation,
+      isVisible,
+      getRenderedById: () => renderState.renderedById,
+      getSnapIndex: () => renderState.snapIndex,
+      getReferences: () => controllers.referenceModels,
+      workPlanePrompt,
+      getWorkArea: () => controllers.workAreaUI,
+      updateSnapOverlay,
+    });
+  Object.assign(actions, { ray, selectionHit, referenceSelectionHit, point, orbitAroundHit });
   const preview = createModelPreview({
     project,
     ui,

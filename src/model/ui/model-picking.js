@@ -1,3 +1,4 @@
+import { displayedSelectionHit, modelSelectionEntry } from '../selection-hit.js';
 import { clipSegmentToBox } from '../work-area.js';
 import * as THREE from 'three';
 import { isCut, isPhysical } from '../../model-object.js';
@@ -28,7 +29,9 @@ export function createModelPicking({
     mouse = new THREE.Vector2();
   raycaster.layers.enable(3);
 
+  let selectionResult;
   function ray(e) {
+    selectionResult = undefined;
     camera.updateMatrixWorld();
     const r = host.getBoundingClientRect();
     mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, (-(e.clientY - r.top) / r.height) * 2 + 1);
@@ -37,7 +40,7 @@ export function createModelPicking({
     raycaster.setFromCamera(mouse, camera);
   }
   // Screen-space tolerance stays constant while zooming. Only cut edges intercept picks.
-  function selectionHit() {
+  function selectionHit(extraObjects = []) {
     const cursor = new THREE.Vector2(
       ((mouse.x + 1) * host.clientWidth) / 2,
       ((1 - mouse.y) * host.clientHeight) / 2,
@@ -87,27 +90,41 @@ export function createModelPicking({
           }
         }
     }
-    return (
-      best ??
-      raycaster
-        .intersectObjects(
-          objects.children.filter(
-            (o) =>
-              o.visible &&
-              canSelectModelObject(getRenderedById().get(o.userData.id)?.source, ui) &&
-              (camera.layers.test(o.layers) || o.userData.instanced) &&
-              !o.userData.cut &&
-              (tools.operation?.mode !== 'fastenerTargets' ||
-                (isPhysical(getRenderedById().get(o.userData.id)?.source) &&
-                  getRenderedById().get(o.userData.id)?.source.type !== 'fastener')),
-          ),
-          false,
-        )
-        .find((hit) => getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true)?.object.userData
-        .id ??
-      null
+    const context = {
+      camera,
+      width: host.clientWidth,
+      height: host.clientHeight,
+      pointer: cursor.toArray(),
+      workArea: getWorkArea()?.bounds() || null,
+    };
+    const native = [...objects.children, ...extraObjects].filter(
+      (o) =>
+        o.visible &&
+        (extraObjects.includes(o) ||
+          canSelectModelObject(getRenderedById().get(o.userData.id)?.source, ui)) &&
+        (camera.layers.test(o.layers) || o.userData.instanced) &&
+        !o.userData.cut &&
+        (tools.operation?.mode !== 'fastenerTargets' ||
+          (isPhysical(getRenderedById().get(o.userData.id)?.source) &&
+            getRenderedById().get(o.userData.id)?.source.type !== 'fastener')),
     );
+    const references =
+      !tools.operation && !tools.drawing ? getReferences()?.selectionEntries(context) || [] : [];
+    const hit = best
+      ? { object: { userData: { id: best } } }
+      : displayedSelectionHit(
+          [...native.map((mesh) => modelSelectionEntry(mesh, camera)), ...references],
+          raycaster,
+          context,
+        );
+    if (!extraObjects.length) selectionResult = hit;
+    return hit?.object.userData.id ?? null;
   }
+  function referenceSelectionHit() {
+    if (selectionResult === undefined) selectionHit();
+    return getReferences()?.selectionFromHit(selectionResult) || null;
+  }
+
   function point(e) {
     camera.updateMatrixWorld();
     ray(e);
@@ -118,6 +135,7 @@ export function createModelPicking({
       project.objects
     ).filter((s) => isVisible(s.id) && (!isCut(s) || ui.selectedIds.has(s.id)));
     tools.activeSnap = resolveSnap({
+      previousSnap: tools.activeSnap,
       pointer: [e.clientX - r.left, e.clientY - r.top],
       camera,
       width: r.width,
@@ -214,14 +232,19 @@ export function createModelPicking({
         : (!modified && action === THREE.MOUSE.ROTATE) || (modified && action === THREE.MOUSE.PAN);
     if (!rotates) return;
     ray(e);
-    const hit = raycaster
+    const nativeHit = raycaster
       .intersectObjects(
         objects.children.filter((o) => o.visible && !o.userData.cut),
         false,
       )
       .find((hit) => getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true);
+    const referenceHit = getReferences()?.surfaceHit(raycaster);
+    const hit =
+      referenceHit && (!nativeHit || referenceHit.distance < nativeHit.distance)
+        ? referenceHit
+        : nativeHit;
     if (!hit) return;
     navigation.movePivot(hit.point);
   }
-  return { raycaster, ray, selectionHit, point, orbitAroundHit };
+  return { raycaster, ray, selectionHit, referenceSelectionHit, point, orbitAroundHit };
 }

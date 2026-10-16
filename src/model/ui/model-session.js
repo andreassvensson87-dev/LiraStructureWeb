@@ -134,7 +134,11 @@ export function installModelSession({
         return;
       }
     }
-    const reference = !id && controllers.referenceModels?.pickReference(raycaster);
+    const reference =
+      !id &&
+      (actions.referenceSelectionHit
+        ? actions.referenceSelectionHit()
+        : controllers.referenceModels?.pickReference(raycaster));
     if (reference) {
       setSelection([], true);
       if (reference.ifcId != null) controllers.referenceModels.selectObject(reference);

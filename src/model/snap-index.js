@@ -1,3 +1,4 @@
+import { SNAP_PIXELS } from '../snap-priority.js';
 import { nearestProjectedSegment } from './snap-projection.js';
 import * as THREE from 'three';
 import { createSnapGeometryContext, objectAnchors } from '../model-object.js';
@@ -31,14 +32,16 @@ export class SnapIndex {
     };
     return {
       holeCenters: (s) =>
-        this.context.holeCenters(s).filter((h) => near(a.fromArray(h.coords), 14)),
+        this.context
+          .holeCenters(s)
+          .filter((h) => near(a.fromArray(h.coords), SNAP_PIXELS.exact + SNAP_PIXELS.retention)),
       objectCorners: (s) => {
         const { points, matrix } = this.context.cornerFeatures(s);
         const result = [];
         for (const coords of points) {
           a.fromArray(coords);
           if (matrix) a.applyMatrix4(matrix);
-          if (near(a, 14)) result.push(a.toArray());
+          if (near(a, SNAP_PIXELS.exact + SNAP_PIXELS.retention)) result.push(a.toArray());
         }
         return result;
       },
@@ -52,12 +55,23 @@ export class SnapIndex {
             a.applyMatrix4(matrix);
             b.applyMatrix4(matrix);
           }
-          let include = midpoint && near(candidate.copy(a).add(b).multiplyScalar(0.5), 12);
+          let include =
+            midpoint &&
+            near(
+              candidate.copy(a).add(b).multiplyScalar(0.5),
+              SNAP_PIXELS.exact + SNAP_PIXELS.retention,
+            );
           if (!include && perpendicular && origin) {
             delta.copy(b).sub(a);
             const length = delta.lengthSq();
             const t = length > 1e-12 ? candidate.copy(origin).sub(a).dot(delta) / length : -1;
-            include = t >= 0 && t <= 1 && near(candidate.copy(a).addScaledVector(delta, t), 12);
+            include =
+              t >= 0 &&
+              t <= 1 &&
+              near(
+                candidate.copy(a).addScaledVector(delta, t),
+                SNAP_PIXELS.exact + SNAP_PIXELS.retention,
+              );
           }
           if (!include && nearest) {
             const point = nearestProjectedSegment(
@@ -68,7 +82,7 @@ export class SnapIndex {
               width,
               height,
             );
-            include = point && near(candidate.fromArray(point), 10);
+            include = point && near(candidate.fromArray(point), SNAP_PIXELS.nearest);
           }
           if (include) result.push([a.toArray(), b.toArray()]);
         }

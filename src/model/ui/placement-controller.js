@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { resetToolLength } from '../tool-session.js';
 import { endpointAtLength } from '../../length-input.js';
-import { drawingWorkPlane, workPlaneFromPoints } from '../../work-plane.js';
+import { drawingWorkPlane, workPlaneFromPoints, workPlaneFromTwoPoints } from '../../work-plane.js';
 import { plateNormal } from '../../plate.js';
 import { isHelper } from '../../model-object.js';
 import { componentTransformSources } from '../../components/ownership.js';
@@ -487,9 +487,12 @@ export function createPlacementController({
       const p = point(e),
         points = [...tools.operation.points, ...(p ? [p] : [])];
       let frame = null;
-      if (points.length === 3) {
+      if (points.length === (tools.operation.pointCount || 3)) {
         try {
-          frame = workPlaneFromPoints(points);
+          frame =
+            tools.operation.pointCount === 2
+              ? workPlaneFromTwoPoints(points, tools.operation.referenceFrame)
+              : workPlaneFromPoints(points);
         } catch {}
       }
       workPlaneGuide.show(points, frame);

@@ -366,3 +366,37 @@ Webbläsarkontroll 2026-10-15 i separat localhost-projekt med två plåtar och t
 Befintliga skruv-, grupp- och förbandsflöden verifierar nu bibehållen längd när muttrar, hål eller måldelars tjocklek ändras. `fastener-assembly` skyddar fristående instansmått, oförändrat bibliotek, hel-/delgängning, kort skaft, exakt stångutstick och varning som försvinner efter rättning. Bibliotekets egna ogiltiga produktmått avvisas fortsatt. `fastener-edit` kör en 103 mm grupp genom modell-editor, borridentiteter, en checkpoint, ångra/gör om och projektfil. Tester för kopplingarnas separata längdserieberäkning behålls.
 
 Browserprov i separat lokalt projekt: gruppens längd 53 med andra mutter kunde bekräftas trots varning; ångra/gör om och rättning till 103 kontrollerades. Alla åtta sparade skruvar hade längd och helgängning 103 samt båda borrrelationerna. Stångens längd 217 och utstick 5 behölls med varning; rättning till 30 tog bort varningen. Ny skruv med längd 113 skapades med vanligt punktval och Z-lås. Ordinarie panelbredd kontrollerades med gemensamma längd-/utsticksfält. Full regression, lint, formatering och produktionsbygge passerade. Ingen publicering ingick.
+
+### Orbitcentrum på IFC — 2026-10-16
+
+`model-navigation.test.js` kör verklig raycast genom modellens punktcontroller och referenshanterare: närmaste egna/referensyta, omplacerad och roterad referens, referens-/objektläge, placeringslåsning, dold del/referens/grupp, arbetsområdesklippning, tom träff, panorering och touch. Befintliga navigationstester skyddar oförändrad skärmbild när centrum flyttas.
+
+Browserprov med två balkar importerade genom den riktiga IFC-läsaren: Ctrl + mittenknapp gav referensytan som orbitcentrum i båda markeringslägena. Dold referens gav ingen träff. Tillfällig loggning av träffvalet togs bort efter kontrollen. Full `npm run check` passerade; ingen publicering ingick.
+
+### Snapprioritet i modell och ritning — 2026-10-16
+
+Befintliga snap-/ritningsscenarier kompletterades för IFC-kant mot Polar, Nearests 5 px-gräns, Otrack + Polar som exakt tänkt hörn, oförändrade Otrack-ankare efter lång Nearest-hovring, högre prioritet för verkliga punkter samt Ortho. Retentionsprov flyttar mellan närliggande ändpunkter, tar bort geometrin och kontrollerar att en högre prioritetsnivå omedelbart tar över. Hålcentrum behåller sin referens vid sammanfallande projicerad skruvaxel.
+
+`reference-snap-index.test.js` läser den befintliga IFC-fixturen med web-ifc, bygger samma transformerade mesh och featurekanter som importeraren och kör dem genom både `referenceCandidates`/`resolveSnap` och ritningens `locateDrawingPoint`. Verklig tessellerad IFC-kant ger Nearest utan spårning, Polar när den är aktiv och Otrack/Polar-skärning vid förvärvat ankare.
+
+Browserprov i separat lokalt projekt: återställd IFC med två balkar, hjälplinjens Polar 45° intill referenskant samt GA:s Polar-återkoppling med Otrack aktiverat. Ingen ny text vid snapmarkören infördes. Referensbenchmark med 20 000 syntetiska delar kontrollerade identiskt resultat för indexerad och full sökning i alla fyra kombinationer av Nearest/vinkelrät; överlappande modell med båda på gav p95 cirka 0,39 ms. Detta är CPU-sökning, inte IFC-laddning, rendering eller fysisk musfördröjning. Full `npm run check` passerade. Ingen publicering ingick.
+
+### Kantmarkering i transparent visning — 2026-10-16
+
+`model-selection-hit.test.js` ingår i kärnflödet och kör riktiga Three-meshar genom gemensam visningsträff, modellens punktcontroller, referenshanterare och hovercontroller. Det skyddar kantens 6 px-gräns i ortografisk/perspektivkamera vid två zoomnivåer, genomsläpp på transparent yta, oförändrad homogen ytmarkering, frånvaro av triangeldiagonalträffar, skärmavstånd/djup, tät ocklusion, arbetsområde, transformation, instansägarskap, cacheinvalidation och klippning vid kamerans närplan. IFC:s referens-/objektläge använder samma träff; hover återställer färg och orbit träffar fortsatt transparenta ytor. Befintliga navigations-, referenslivscykel- och snapscenarier behålls.
+
+Browserprov i separat localhost-projekt: importerad IFC med två balkar zoomades in så att yta/kant kunde skiljas. Transparent balkmitt gav ingen markering, kant gav rätt IFC-ID och aktiverad konvertering. Hela referensen kunde väljas på kanten och avmarkeras via ytan. Homogen IFC kunde väljas på ytan. Separat plåtprojekt verifierade samma mitt-/kant-/homogenbeteende för egna modellobjekt. Inga browserfel rapporterades. Hover-/orbitbeteendet verifierades i controllerintegration med verklig raycast.
+
+Syntetiskt CPU-prov med 20 referenser × 1 000 delar, 240 frågor efter uppvärmning: sökning och kantval gav p95 cirka 0,10 ms utspritt och 0,20 ms helt överlappande. Detta mäter inte import, materialhighlight, rendering eller musfördröjning. Full `npm run check` passerade. Ingen publicering ingick.
+
+### Kamerastyrning över insättningspunkter och kopplingsikoner — 2026-10-16
+
+`overlay-navigation.test.js` kör markörernas vidarebefordring tillsammans med riktig OrbitControls och modellens pointercontroller. Mitten-/högerknapp samt Ctrl/Meta/Shift verifieras med faktisk kamera- och målpunktsförändring, pointer capture/släpp, inga modell-/verktygskommandon och fortsatt funktion efter ersatta kamerakontroller. Vänsterklick, Alt, touch och andra UI-kontroller lämnas till befintliga ägare. Stationärt högerklick behåller hörnmenyn; högerdrag öppnar ingen meny. Befintliga grepprov skyddar klick/drag, commit och avbrott.
+
+Browserprov i separat projekt: plåtgrepp tog emot vanlig och Ctrl-modifierad mittenknapp med canvasens faktiska pointer capture; vanlig vänsterdragning ändrade hörnet och hörnmenyn visade Ta bort hörn. En verklig Fit-kopplingsikon tog emot samma navigeringsknappar och vanligt vänsterklick öppnade Fit-inspektorn. Tillfällig diagnostik för pointer capture togs bort efter kontrollen. Själva pan-/orbitrörelsen verifieras med riktiga kontroller i integrationstestet. Full `npm run check` passerade. Ingen publicering ingick.
+
+### Arbetsplan med två punkter — 2026-10-16
+
+`work-plane.test.js` skyddar första punkt som origo, exakt vald positiv X-riktning, tidigare Y som orienteringsreferens, ortogonalitet/högerhandsram samt fallback när nya X sammanfaller med tidigare Y. Horisontella/sneda referensramar, vänd riktning, för korta och ogiltiga punkter ingår. Den riktiga arbetsplanscontrollern verifierar två kontra tre punkter, dubblett utan bekräftelse, fristående referensram, kvarvarande aktivt plan vid avbrott och återställning. `model-placement.test.js` verifierar att preview använder samma beräkning utan att ändra aktivt plan eller projekt.
+
+Browserprov i separat projekt med två Sweeps och Fit: Två punkter i befintliga Arbetsplan-gruppen, snap till Sweep-ändpunkt, synlig 2/2-instruktion, avvisad dubblett, förhandsvisade axlar, bekräftelse efter andra punkt, Mot planet, Backspace och Esc med bevarat aktivt plan. Tre punkter krävde fortsatt tredje punkt och Återställ återgick till aktiv nivå. Inga browserfel rapporterades. Full `npm run check` passerade. Ingen publicering ingick.

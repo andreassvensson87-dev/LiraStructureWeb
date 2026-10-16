@@ -209,3 +209,139 @@ test('work plane guides keep screen size through zoom, face the camera and relea
   guide.clear();
   assert.equal(guide.group.children.length, 0);
 });
+
+test('two picked points define X and reuse previous Y with an orthonormal, right-handed frame', async () => {
+  const { workPlaneFromTwoPoints } = await import('../src/work-plane.js');
+  const previous = workPlaneFromPoints([
+    [10, 20, 30],
+    [110, 20, 130],
+    [10, 120, 30],
+  ]);
+  const origin = [300, 400, 500];
+  for (const reference of [null, previous]) {
+    for (const offset of [
+      [1000, 0, 300],
+      [0, 1000, 0],
+      [0, -1000, 0],
+      [-1000, 0, 0],
+      [300, 400, 500],
+    ]) {
+      const points = [origin, origin.map((v, i) => v + offset[i])];
+      const frame = workPlaneFromTwoPoints(points, reference);
+      const u = new THREE.Vector3(...frame.u),
+        v = new THREE.Vector3(...frame.v),
+        n = u.clone().cross(v);
+      assert.deepEqual(frame.origin, origin);
+      assert.ok(u.distanceTo(new THREE.Vector3(...offset).normalize()) < 1e-10);
+      assert.ok(Math.abs(u.dot(v)) < 1e-10);
+      assert.ok(Math.abs(u.length() - 1) < 1e-10);
+      assert.ok(Math.abs(v.length() - 1) < 1e-10);
+      assert.ok(Math.abs(n.length() - 1) < 1e-10);
+      const oldY = new THREE.Vector3(...(reference?.v || [0, 1, 0]));
+      const projectedY = oldY.clone().addScaledVector(u, -oldY.dot(u));
+      if (projectedY.length() > 1e-8) assert.ok(v.distanceTo(projectedY.normalize()) < 1e-10);
+    }
+  }
+  for (const points of [
+    [
+      [0, 0, 0],
+      [0, 0, 0],
+    ],
+    [
+      [0, 0, 0],
+      [0.9, 0, 0],
+    ],
+    [
+      [0, 0, 0],
+      [NaN, 0, 0],
+    ],
+    [[0, 0, 0]],
+  ])
+    assert.throws(() => workPlaneFromTwoPoints(points));
+});
+
+test('two-point workplane controller finishes only after two valid picks, preserves existing plane on failure/cancel and resets', async (t) => {
+  const { createWorkplaneController } = await import('../src/model/ui/workplane-controller.js');
+  const { createToolSession, resetToolInteraction } = await import('../src/model/tool-session.js');
+  const previousDocument = globalThis.document,
+    elements = [];
+  const make = () => ({ classList: { toggle() {} }, setAttribute() {}, hidden: false });
+  const status = { textContent: '' };
+  globalThis.document = {
+    createElement: () => {
+      const e = make();
+      elements.push(e);
+      return e;
+    },
+    getElementById: () => status,
+    querySelector: () => ({ prepend() {} }),
+  };
+  t.after(() => {
+    globalThis.document = previousDocument;
+  });
+  const tools = createToolSession(),
+    scene = new THREE.Scene();
+  const original = workPlaneFromPoints([
+    [0, 0, 100],
+    [100, 0, 200],
+    [0, 100, 100],
+  ]);
+  tools.temporaryPlane = original;
+  tools.workPlanePoints = [
+    [0, 0, 100],
+    [100, 0, 200],
+    [0, 100, 100],
+  ];
+  let controller;
+  controller = createWorkplaneController({
+    scene,
+    tools,
+    renderer: { domElement: { focus() {} } },
+    getInspector: () => ({ finish() {} }),
+    setDrawing: (value) => {
+      resetToolInteraction(tools, value);
+      controller?.syncWorkPlane();
+    },
+    syncOperationUI() {},
+  });
+  t.after(() => controller.workPlaneGuide.clear());
+  const two = elements.find((e) => e.id === 'work-plane-two'),
+    three = elements.find((e) => e.id === 'work-plane'),
+    reset = elements.find((e) => e.id === 'work-plane-reset');
+  two.onclick();
+  assert.equal(tools.operation.pointCount, 2);
+  assert.match(status.textContent, /1\/2/);
+  assert.notEqual(tools.operation.referenceFrame, original, 'orientation is a detached snapshot');
+  controller.pickWorkPlane([300, 400, 500]);
+  assert.match(status.textContent, /2\/2/);
+  controller.pickWorkPlane([300, 400, 500]);
+  assert.equal(tools.operation.points.length, 1);
+  assert.equal(tools.temporaryPlane, original);
+  assert.match(status.textContent, /minst 1 mm/);
+  controller.pickWorkPlane([1300, 400, 1500]);
+  assert.equal(tools.drawing, false);
+  assert.equal(tools.operation, null);
+  assert.equal(tools.workPlanePoints.length, 2);
+  assert.deepEqual(tools.temporaryPlane.origin, [300, 400, 500]);
+  const retained = tools.temporaryPlane;
+  three.onclick();
+  controller.pickWorkPlane([10, 20, 30]);
+  controller.pickWorkPlane([110, 20, 30]);
+  assert.equal(tools.drawing, true, 'three-point path still needs a third pick');
+  controller.pickWorkPlane([10, 120, 30]);
+  assert.equal(tools.drawing, false);
+  assert.equal(tools.workPlanePoints.length, 3);
+  two.onclick();
+  controller.pickWorkPlane([0, 0, 0]);
+  resetToolInteraction(tools, false);
+  controller.syncWorkPlane();
+  assert.deepEqual(
+    tools.temporaryPlane.origin,
+    [10, 20, 30],
+    'Escape/reset preserves last completed plane',
+  );
+  reset.onclick();
+  assert.equal(tools.temporaryPlane, null);
+  assert.deepEqual(tools.workPlanePoints, []);
+  assert.notEqual(retained, original);
+});

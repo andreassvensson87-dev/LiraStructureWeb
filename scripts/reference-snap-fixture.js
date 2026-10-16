@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { edgeIndex } from '../src/references/edge-index.js';
+import { edgeIndex } from '../src/edge-index.js';
 
 /** Shared synthetic CAD/IFC feature geometry; no files or user project data. */
 export function referenceSnapFixture({

@@ -1,4 +1,5 @@
-import { highlightReferenceParts } from './selection-highlight.js';
+import { displayedSelectionHit, isTransparentMesh } from '../model/selection-hit.js';
+import { highlightReferenceParts, highlightReferenceHover } from './selection-highlight.js';
 import { validateReferenceCRS } from '../coordinates/reference-frame.js';
 import { withinWorkArea } from '../model/work-area.js';
 import { ReferenceImport } from './reference-import.js';
@@ -503,27 +504,50 @@ export class ReferenceModels {
   selected() {
     return this.models.find((model) => model.id === this.selectedId);
   }
-  pickObject(raycaster) {
-    const visible = this.models.filter(
-      (model) =>
-        this.group.visible && model.group.visible && !['DXF', 'DWG'].includes(model.format),
-    );
-    const meshes = visible.flatMap((model) =>
-      model.parts.filter((part) => part.mesh.visible).map((part) => part.mesh),
-    );
-    const hit = raycaster
-      .intersectObjects(meshes, false)
-      .find(
-        (hit) => !this.workAreaBounds || withinWorkArea(this.workAreaBounds, hit.point.toArray()),
-      );
-    if (!hit) return null;
-    const model = visible.find((model) => model.parts.some((part) => part.mesh === hit.object));
-    return { modelId: model.id, ifcId: hit.object.userData.ifcId };
+  selectionEntries(context) {
+    if (!this.group.visible) return [];
+    return this.models
+      .filter((model) => model.group.visible)
+      .flatMap((model) => {
+        if (context && model.parts.every((part) => part.edges && part.index)) {
+          if (model.snapIndex?.parts !== model.parts)
+            model.snapIndex = createReferencePartSnapIndex(model.parts, model.group);
+        }
+        return (context ? model.snapIndex?.query(context) || model.parts : model.parts)
+          .filter((part) => part.mesh.visible)
+          .map((part) => ({
+            mesh: part.mesh,
+            transparent: model.transparent || isTransparentMesh(part.mesh),
+            edges: [{ resource: part }],
+          }));
+      });
   }
-  pickReference(raycaster) {
+  selectionFromHit(hit, objectOnly = false) {
+    if (!hit) return null;
+    const model = this.models.find((m) => m.parts.some((p) => p.mesh === hit.object));
+    if (!model || (objectOnly && ['DXF', 'DWG'].includes(model.format))) return null;
+    return {
+      modelId: model.id,
+      ifcId:
+        objectOnly || (this.selectionMode === 'object' && model.format === 'IFC')
+          ? hit.object.userData.ifcId
+          : null,
+    };
+  }
+  pickObject(raycaster, context) {
+    return this.selectionFromHit(
+      displayedSelectionHit(this.selectionEntries(context), raycaster, {
+        ...context,
+        workArea: this.workAreaBounds,
+      }),
+      true,
+    );
+  }
+  /** Surface hit for navigation; transparent selection uses feature edges separately. */
+  surfaceHit(raycaster) {
     if (!this.group.visible) return null;
     const models = this.models.filter((m) => m.group.visible);
-    const hit = raycaster
+    return raycaster
       .intersectObjects(
         models.flatMap((m) => m.parts.filter((p) => p.mesh.visible).map((p) => p.mesh)),
         false,
@@ -531,15 +555,33 @@ export class ReferenceModels {
       .find(
         (hit) => !this.workAreaBounds || withinWorkArea(this.workAreaBounds, hit.point.toArray()),
       );
-    if (!hit) return null;
-    const model = models.find((m) => m.parts.some((p) => p.mesh === hit.object));
-    return {
-      modelId: model.id,
-      ifcId:
-        this.selectionMode === 'object' && model.format === 'IFC'
-          ? hit.object.userData.ifcId
-          : null,
-    };
+  }
+  pickReference(raycaster, context) {
+    return this.selectionFromHit(
+      displayedSelectionHit(this.selectionEntries(context), raycaster, {
+        ...context,
+        workArea: this.workAreaBounds,
+      }),
+    );
+  }
+  setHoverSelection(selection) {
+    const model = selection && this.models.find((model) => model.id === selection.modelId);
+    const parts = model?.group.visible
+      ? model.parts.filter(
+          (part) =>
+            part.mesh.visible &&
+            (selection.ifcId == null || part.mesh.userData.ifcId === selection.ifcId),
+        )
+      : [];
+    if (
+      parts.length === (this.hoverParts?.length || 0) &&
+      parts.every((part, i) => part === this.hoverParts[i])
+    )
+      return false;
+    highlightReferenceHover(this.hoverParts || [], false);
+    this.hoverParts = parts;
+    highlightReferenceHover(parts, true);
+    return true;
   }
   setSelectionMode(mode) {
     if (!['reference', 'object'].includes(mode)) throw Error('Ogiltigt referensmarkeringsläge.');
@@ -550,6 +592,7 @@ export class ReferenceModels {
     this.onSelect?.();
   }
   clearObjectSelection() {
+    this.setHoverSelection(null);
     highlightReferenceParts(this.parts, false);
     this.selectedObject = null;
     this.selectedReferenceId = null;
@@ -649,6 +692,7 @@ export class ReferenceModels {
     this.onSelect?.(model);
   }
   setVisible(models, visible) {
+    this.setHoverSelection(null);
     if (
       !visible &&
       models.some(
@@ -694,6 +738,7 @@ export class ReferenceModels {
     return bounds;
   }
   dispose(parts) {
+    this.setHoverSelection(null);
     for (const p of parts) {
       p.mesh.geometry.dispose();
       p.mesh.material.map?.dispose();
@@ -703,6 +748,7 @@ export class ReferenceModels {
   setWorkArea(bounds, force = false) {
     const signature = JSON.stringify([bounds?.min.toArray(), bounds?.max.toArray()]);
     if (!force && signature === this.workAreaSignature) return;
+    this.setHoverSelection(null);
     this.workAreaSignature = signature;
     this.workAreaBounds = bounds;
     for (const model of this.models) {

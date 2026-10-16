@@ -21,6 +21,8 @@ const core = [
   'grips',
   'grip-interaction',
   'model-navigation',
+  'overlay-navigation',
+  'model-selection-hit',
   'model-selection-controller',
   'selection-mode',
   'snap',

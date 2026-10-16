@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { edgeIndex } from './edge-index.js';
+import { edgeIndex } from '../edge-index.js';
 import { applyReferencePlacement } from './reference-placement.js';
 export function cadReferenceParts(entities) {
   const parts = [],

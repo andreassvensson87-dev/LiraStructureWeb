@@ -4,12 +4,9 @@ import { editableSweep } from '../sweep-properties.js';
 
 export function installModelHover({
   actions,
-  camera,
   controllers,
   objectFeedback,
-  objects,
   project,
-  raycaster,
   renderState,
   renderer,
   tools,
@@ -37,24 +34,14 @@ export function installModelHover({
       (tools.operation && !fit && !propertyCopy)
     ) {
       objectFeedback.setHover([], 'canvas');
+      if (controllers.referenceModels?.setHoverSelection(null)) objectFeedback.invalidate();
       return;
     }
     ray(e);
-    const previewHit =
-      ui.componentPreview && ui.preview
-        ? raycaster
-            .intersectObjects(
-              [...objects.children, ...ui.preview.children].filter(
-                (o) =>
-                  o.visible &&
-                  !o.userData.cut &&
-                  (camera.layers.test(o.layers) || o.userData.instanced),
-              ),
-              false,
-            )
-            .find((hit) => controllers.workAreaUI?.allowsPoint(hit.point.toArray()) ?? true)
-        : null;
-    const id = previewHit?.object.userData.id ?? selectionHit();
+    const id = selectionHit(ui.componentPreview && ui.preview ? ui.preview.children : []);
+    const reference =
+      !id && !tools.operation && !tools.drawing ? actions.referenceSelectionHit?.() : null;
+    if (controllers.referenceModels?.setHoverSelection(reference)) objectFeedback.invalidate();
     const source = objectFeedback.sources.get(id) || renderState.renderedById.get(id)?.source;
     const eligible =
       isPhysical(source) &&
@@ -71,6 +58,6 @@ export function installModelHover({
       fit ? objectFeedback.referenceCount : null,
     );
     if (!tools.operation && !tools.drawing)
-      renderer.domElement.style.cursor = eligible ? 'pointer' : 'default';
+      renderer.domElement.style.cursor = eligible || reference ? 'pointer' : 'default';
   }
 }

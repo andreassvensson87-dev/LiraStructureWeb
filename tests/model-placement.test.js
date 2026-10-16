@@ -66,6 +66,7 @@ function fixture(t) {
     new THREE.LineDashedMaterial(),
   );
   t.after(() => preview.dispose(guide));
+  const workPlanePreviews = [];
   const controller = createPlacementController({
     project,
     ui,
@@ -74,6 +75,7 @@ function fixture(t) {
     scene,
     objects,
     guide,
+    workPlaneGuide: { show: (...args) => workPlanePreviews.push(args) },
     preview,
     renderer: { domElement: { focus() {} } },
     frameGate: { invalidate() {} },
@@ -91,6 +93,7 @@ function fixture(t) {
     point: () => [100, 0, 0],
   });
   return {
+    workPlanePreviews,
     controller,
     project,
     ui,
@@ -628,4 +631,28 @@ test('invalid fastener settings block canvas confirmation instead of placing the
   assert.deepEqual(f.project.objects, before);
   assert.equal(f.history.canUndo, false);
   assert.match(f.fields.get('status').textContent, /Ogiltigt skruvmönster/);
+});
+
+test('two-point workplane previews the same frame without changing the active plane or model', async (t) => {
+  const { workPlaneFromTwoPoints } = await import('../src/work-plane.js');
+  const f = fixture(t),
+    reference = { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 0, 1] };
+  f.tools.temporaryPlane = reference;
+  f.tools.drawing = true;
+  f.tools.operation = {
+    mode: 'workPlane',
+    pointCount: 2,
+    points: [[0, 0, 0]],
+    referenceFrame: reference,
+  };
+  const before = structuredClone(f.project.objects);
+  f.controller.updatePointer({ clientX: 50, clientY: 60 });
+  const [points, frame] = f.workPlanePreviews.at(-1);
+  assert.deepEqual(points, [
+    [0, 0, 0],
+    [100, 0, 0],
+  ]);
+  assert.deepEqual(frame, workPlaneFromTwoPoints(points, reference));
+  assert.equal(f.tools.temporaryPlane, reference);
+  assert.deepEqual(f.project.objects, before);
 });

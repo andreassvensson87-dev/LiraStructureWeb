@@ -138,6 +138,7 @@ export function installModelWorkspace({ root, controllers }) {
     {
       label: 'Arbetsplan',
       items: [
+        button('work-plane-two', 'large', 'Två punkter'),
         button('work-plane', 'large', 'Tre punkter'),
         {
           stack: [

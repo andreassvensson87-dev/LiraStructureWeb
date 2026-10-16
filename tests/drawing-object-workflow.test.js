@@ -372,3 +372,115 @@ test('nearest does not drag the source back onto itself during Move, and still t
   editor.mode = 'copy-shapes';
   assert.equal(locateDrawingPoint(editor, {}, 'v').kind, 'Vinkelrät');
 });
+
+test('reference edges defer to Polar and acquired Otrack, never acquire anchors from Nearest, and respect Ortho', (t) => {
+  let raw = [102, 99],
+    base = [0, 0],
+    referencePoints = [];
+  const settings = {
+    ...defaultCadSettings,
+    endpoints: false,
+    midpoints: false,
+    intersections: false,
+    perpendicular: false,
+    centers: false,
+    quadrants: false,
+    polar: 45,
+    otrack: true,
+  };
+  const editor = {
+    items: [],
+    mode: 'line',
+    workflow: 'shape',
+    cad: { get: () => settings, coordinates() {} },
+    tracking: new CadTracking(),
+    transform: {
+      active: () => !!base,
+      get base() {
+        return base;
+      },
+    },
+    adapter: {
+      locate: () => ({ view: 'v', point: [...raw] }),
+      project: (p) => p,
+      pixelScale: () => 1,
+      candidates: () => referencePoints,
+      snapEntities: () => [
+        {
+          type: 'line',
+          points: [
+            [100, -200],
+            [100, 400],
+          ],
+        },
+      ],
+    },
+  };
+  const hit = (event = {}) => locateDrawingPoint(editor, { clientX: 0, clientY: 0, ...event }, 'v');
+  assert.equal(hit().kind, 'Polar');
+  settings.polar = 0;
+  assert.equal(hit().kind, 'Närmaste');
+  const now = Date.now;
+  let time = 0;
+  Date.now = () => time;
+  t.after(() => {
+    Date.now = now;
+  });
+  for (time = 0; time <= 1000; time += 400) assert.equal(hit().kind, 'Närmaste');
+  assert.deepEqual(editor.tracking.points, [], 'Nearest cannot become an Otrack anchor');
+  editor.tracking.points = [[100, 20]];
+  assert.equal(hit().kind, 'Otrack');
+  settings.polar = 45;
+  const corner = hit();
+  assert.equal(corner.kind, 'Skärning');
+  assert.ok(Math.hypot(corner.point[0] - 100, corner.point[1] - 100) < 1e-8);
+  settings.endpoints = true;
+  referencePoints = [[108, 105]];
+  assert.equal(hit().kind, 'Ändpunkt', 'real points outrank an inferred corner');
+  assert.deepEqual(hit().point, [108, 105]);
+  referencePoints = [];
+  settings.ortho = true;
+  const ortho = hit();
+  assert.equal(ortho.kind, 'Ortho');
+  assert.ok(Math.min(Math.abs(ortho.point[0]), Math.abs(ortho.point[1])) < 1e-7);
+  settings.ortho = false;
+  settings.polar = 0;
+  settings.otrack = false;
+  base = null;
+  raw = [106, 99];
+  assert.equal(hit().snapped, undefined, 'Nearest releases outside five pixels');
+});
+
+test('point retention reduces flicker but releases stale geometry and never beats a higher priority', () => {
+  let raw = [29, 0],
+    points = [
+      [20, 0],
+      [40, 0],
+    ];
+  const settings = { ...defaultCadSettings, nearest: false, midpoints: false };
+  const editor = {
+    items: [],
+    mode: 'line',
+    cad: { get: () => settings, coordinates() {} },
+    tracking: new CadTracking(),
+    adapter: {
+      locate: () => ({ view: 'v', point: [...raw] }),
+      project: (p) => p,
+      pixelScale: () => 1,
+      candidates: () => points,
+    },
+  };
+  const hit = () => locateDrawingPoint(editor, { clientX: 0, clientY: 0 }, 'v');
+  assert.deepEqual(hit().point, [20, 0]);
+  raw = [31, 0];
+  assert.deepEqual(hit().point, [20, 0]);
+  raw = [32, 0];
+  assert.deepEqual(hit().point, [40, 0]);
+  points = [];
+  assert.equal(hit().snapped, undefined);
+  points = [Object.assign([32, 0], { snapKind: 'Mittpunkt' })];
+  settings.midpoints = true;
+  assert.equal(hit().kind, 'Mittpunkt');
+  points.push([40, 0]);
+  assert.equal(hit().kind, 'Ändpunkt');
+});

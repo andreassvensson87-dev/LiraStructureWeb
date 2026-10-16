@@ -1,3 +1,4 @@
+import { chooseSnap, snapType, SNAP_PIXELS } from './snap-priority.js';
 import { perpendicularPoint } from './snap-geometry.js';
 import { nearestProjectedSegment } from './model/snap-projection.js';
 import { withinWorkArea } from './model/work-area.js';
@@ -36,6 +37,7 @@ export function resolveSnap({
   workPlane = null,
   constrainToPlane = true,
   workArea = null,
+  previousSnap = null,
 }) {
   geometryContext ??= createSnapGeometryContext(model);
   const gridZ = grid.z ?? 0;
@@ -112,64 +114,85 @@ export function resolveSnap({
           if (point) nearestPoints.push({ coords: point, symbol: 'line', label: 'Närmaste' });
         }
       }
-  for (const [points, tolerance] of [
-    [holePoints, 14],
-    [objectPoints, 14],
-    [referencePoints.filter((p) => !p.edge && p.symbol !== 'perpendicular'), 14],
-    [
-      [
-        ...segmentPoints,
-        ...(perpendicularSnap ? referencePoints.filter((p) => p.symbol === 'perpendicular') : []),
-      ],
-      12,
-    ],
-    [
-      endpoints
-        ? gridSegments(grid).flatMap((line) =>
-            [line.start, line.end].map((p) => ({
-              coords: [...p, line.z ?? gridZ],
-              symbol: 'square',
-              label: `Ändpunkt · Stomlinje ${line.label}`,
-              gridIds: [line.pickId],
-            })),
-          )
-        : [],
-      14,
-    ],
-    [
-      gridIntersections
-        ? gridCrossings(grid).map(({ point, lines }) => ({
-            coords: [...point, lines[0].z ?? gridZ],
-            symbol: 'cross',
-            label: `Stomlinjekorsning ${lines.map((line) => line.label).join('/')}`,
-            gridIds: lines.map((line) => line.pickId),
-          }))
-        : [],
-      20,
-    ],
-    [[...nearestPoints, ...(nearestSnap ? referencePoints.filter((p) => p.edge) : [])], 10],
-  ]) {
-    let best = null,
-      distance = tolerance,
-      depth = Infinity;
-    for (const { coords, label, gridIds, symbol, featureId } of points) {
-      const p = new THREE.Vector3(...coords),
-        hitPoint = p,
-        clip = hitPoint.clone().project(camera);
-      if (Math.abs(clip.z) > 1 || !onLock(p) || !onPlane(p) || !withinWorkArea(workArea, coords))
-        continue;
-      const d = screen(hitPoint).distanceTo(cursor);
-      if (
-        d < tolerance &&
-        (d < distance - 1e-6 || (Math.abs(d - distance) <= 1e-6 && clip.z < depth))
-      ) {
-        distance = d;
-        depth = clip.z;
-        best = { point: coords, label, kind: 'point', gridIds, symbol };
-        if (featureId) best.featureId = featureId;
-      }
-    }
-    if (best) return best;
+  const pointCandidates = [];
+  const points = [
+    ...holePoints,
+    ...objectPoints,
+    ...referencePoints.filter(
+      (p) => !p.edge && (p.symbol !== 'perpendicular' || perpendicularSnap),
+    ),
+    ...segmentPoints,
+    ...(endpoints
+      ? gridSegments(grid).flatMap((line) =>
+          [line.start, line.end].map((p) => ({
+            coords: [...p, line.z ?? gridZ],
+            symbol: 'square',
+            label: `Ändpunkt · Stomlinje ${line.label}`,
+            gridIds: [line.pickId],
+          })),
+        )
+      : []),
+    ...(gridIntersections
+      ? gridCrossings(grid).map(({ point, lines }) => ({
+          coords: [...point, lines[0].z ?? gridZ],
+          symbol: 'cross',
+          label: `Stomlinjekorsning ${lines.map((line) => line.label).join('/')}`,
+          gridIds: lines.map((line) => line.pickId),
+        }))
+      : []),
+  ];
+  for (const { coords, label, gridIds, symbol, featureId } of points) {
+    const p = new THREE.Vector3(...coords),
+      clip = p.clone().project(camera);
+    if (Math.abs(clip.z) > 1 || !onLock(p) || !onPlane(p) || !withinWorkArea(workArea, coords))
+      continue;
+    pointCandidates.push({
+      point: coords,
+      label,
+      gridIds,
+      symbol,
+      featureId,
+      type: snapType(symbol === 'diamond' ? symbol : label),
+      distance: screen(p).distanceTo(cursor),
+      depth: clip.z,
+    });
+  }
+  const resultPoint = (candidate) => {
+    if (!candidate) return null;
+    const { point, label, gridIds, symbol, featureId } = candidate;
+    const result = { point, label, kind: 'point', gridIds, symbol };
+    if (featureId) result.featureId = featureId;
+    return result;
+  };
+  const exact = chooseSnap(pointCandidates, previousSnap);
+  if (exact) return resultPoint(exact);
+  function nearestHit() {
+    return resultPoint(
+      chooseSnap(
+        [...nearestPoints, ...(nearestSnap ? referencePoints.filter((p) => p.edge) : [])].flatMap(
+          ({ coords, label, symbol, featureId }) => {
+            const p = new THREE.Vector3(...coords),
+              clip = p.clone().project(camera);
+            return Math.abs(clip.z) > 1 ||
+              !onLock(p) ||
+              !onPlane(p) ||
+              !withinWorkArea(workArea, coords)
+              ? []
+              : [
+                  {
+                    point: coords,
+                    label,
+                    symbol,
+                    featureId,
+                    type: 'nearest',
+                    distance: screen(p).distanceTo(cursor),
+                    depth: clip.z,
+                  },
+                ];
+          },
+        ),
+      ),
+    );
   }
   function directionSnap(direction, label, forced = false, base = origin) {
     if (normal && Math.abs(direction.dot(normal)) > 1e-6)
@@ -185,7 +208,7 @@ export function resolveSnap({
       .clone()
       .sub(delta.clone().multiplyScalar(t / 1000))
       .length();
-    if (!forced && (distance > 10 || offset.length() < 24)) return null;
+    if (!forced && (distance > SNAP_PIXELS.tracking || offset.length() < 24)) return null;
     return {
       point: base.clone().addScaledVector(direction, quantize(t)).toArray(),
       label,
@@ -198,7 +221,7 @@ export function resolveSnap({
   function gridLineSnap(tracking = null) {
     if (!gridLines) return null;
     let best = null,
-      bestDistance = 12;
+      bestDistance = SNAP_PIXELS.tracking;
     const direction =
       tracking?.point && origin
         ? new THREE.Vector3(...tracking.point).sub(origin).normalize()
@@ -353,7 +376,7 @@ export function resolveSnap({
   }
   if (origin && lock) {
     const tracking = directionSnap(new THREE.Vector3(...axes[lock]), `${lock} låst`, true);
-    return (tracking?.point ? gridLineSnap(tracking) : null) || gridLineSnap() || tracking;
+    return (tracking?.point ? gridLineSnap(tracking) : null) || tracking;
   }
   const candidates = [];
   if (origin && axisSnap)
@@ -381,6 +404,8 @@ export function resolveSnap({
   const lineHit = gridLineSnap(tracking) || (tracking ? gridLineSnap() : null);
   if (lineHit) return lineHit;
   if (tracking) return tracking;
+  const nearest = nearestHit();
+  if (nearest) return nearest;
   if (workPlane) {
     const planeOrigin =
       !constrainToPlane && origin ? origin : new THREE.Vector3(...workPlane.origin);

@@ -19,7 +19,8 @@ import {
   rotateReferencePlacement,
 } from '../src/references/reference-placement.js';
 import { ReferenceModels } from '../src/references/reference-models.js';
-import { edgeIndex, referenceCandidates } from '../src/references/edge-index.js';
+import { edgeIndex } from '../src/edge-index.js';
+import { referenceCandidates } from '../src/references/edge-index.js';
 import { createProject } from '../src/project/project-state.js';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
 import { ProjectHistory } from '../src/project/project-history.js';

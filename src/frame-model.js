@@ -1,3 +1,4 @@
+import { chooseSnap, snapType, SNAP_PIXELS } from './snap-priority.js';
 import { nearestSegmentPoint, perpendicularPoint } from './snap-geometry.js';
 import { nearestFrameIntersection } from './frame-snap-intersections.js';
 export { intersection } from './frame-snap-intersections.js';
@@ -38,6 +39,7 @@ export function snapFrame(
     grid = false,
     step = 5,
     bounds = null,
+    previous = null,
   },
 ) {
   const border = bounds
@@ -68,41 +70,16 @@ export function snapFrame(
       const point = perpendicularPoint(base, a, b);
       if (point) candidates.push({ point, kind: 'Vinkelrät' });
     }
-  let closest = null,
-    best = tolerance;
-  for (const candidate of candidates) {
-    if (
-      ortho &&
-      base &&
-      Math.min(Math.abs(candidate.point[0] - base[0]), Math.abs(candidate.point[1] - base[1])) >
-        1e-7
-    )
-      continue;
-    const d = distance(raw, candidate.point);
-    if (d < best) {
-      best = d;
-      closest = candidate;
-    }
-  }
-  if (closest) return closest;
-  if (nearest) {
-    for (const [a, b] of lines) {
-      const point = nearestSegmentPoint(raw, a, b);
-      if (
-        !point ||
-        (ortho &&
-          base &&
-          Math.min(Math.abs(point[0] - base[0]), Math.abs(point[1] - base[1])) > 1e-7)
-      )
-        continue;
-      const d = distance(raw, point);
-      if (d < best) {
-        best = d;
-        closest = { point, kind: 'Närmaste' };
-      }
-    }
-    if (closest) return closest;
-  }
+  const eligible = (point) =>
+    !ortho || !base || Math.min(Math.abs(point[0] - base[0]), Math.abs(point[1] - base[1])) <= 1e-7;
+  const scale = SNAP_PIXELS.exact / tolerance;
+  const closest = chooseSnap(
+    candidates
+      .filter((c) => eligible(c.point))
+      .map((c) => ({ ...c, type: snapType(c.kind), distance: distance(raw, c.point) * scale })),
+    previous,
+  );
+  if (closest) return { point: closest.point, kind: closest.kind };
   let point = [...raw],
     kind = 'Fritt';
   if (base && (ortho || polar)) {
@@ -151,6 +128,17 @@ export function snapFrame(
       }
     }
     if (edge) return { point: edge, kind: 'Arbetsytans kant' };
+  }
+  if (kind === 'Fritt' && nearest) {
+    const closest = chooseSnap(
+      lines.flatMap(([a, b]) => {
+        const point = nearestSegmentPoint(raw, a, b);
+        return point && eligible(point)
+          ? [{ point, kind: 'Närmaste', type: 'nearest', distance: distance(raw, point) * scale }]
+          : [];
+      }),
+    );
+    if (closest) return { point: closest.point, kind: closest.kind };
   }
   if (grid && kind === 'Fritt') {
     point = point.map((v) => Math.round(v / step) * step);
