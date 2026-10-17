@@ -175,7 +175,7 @@ export default [
       'src/components/parameter-edit.js',
       'src/components/parameter-fields.js',
       'src/components/definitions.js',
-      'src/fasteners/{pattern,hole-edit,manual-length,placement-draft,placement-frame,material-reach,group-data,group-grips}.js',
+      'src/fasteners/{pattern,hole-edit,manual-length,placement-draft,placement-frame,placement-feedback,material-reach,group-data,group-grips}.js',
       'src/model/geometry/**/*.js',
       'src/geometry/**/*.js',
       'src/model/measurements.js',

@@ -2,6 +2,7 @@ import { createEditorSection } from '../ui/editor-surface.js';
 import { hasNut } from './library.js';
 
 import { holeExtent } from './placement.js';
+import { fastenerPlacementFeedback } from './placement-feedback.js';
 
 const numeric = (name, label, value, min = 0) =>
   `<label class="field">${label}<input name="${name}" type="number" step="any" min="${min}" value="${value}" required></label>`;
@@ -66,18 +67,36 @@ export function renderFastenerHoles({
   placeForm,
   holeRows,
   getObjects,
+  getPartMark = () => '',
   anchor,
   removeHole,
   selectAnchor,
 }) {
   const root = placeForm.querySelector('[data-holes]');
   root.replaceChildren();
+  const targets = placeForm.querySelector('[data-target-list]');
+  targets.replaceChildren();
   placeForm.querySelector('[data-hole-count]').textContent = holeRows.length
     ? `(${holeRows.length})`
     : '';
   placeForm.querySelector('[data-target-empty]').hidden = holeRows.length > 0;
   placeForm.querySelector('[data-hole-tools]').hidden = !holeRows.length;
   holeRows.forEach((h, i) => {
+    const part = getObjects().find((s) => s.id === h.targetId);
+    const name = part?.name || 'Saknad del';
+    const mark = getPartMark(h.targetId);
+    const target = document.createElement('div');
+    target.className = 'fastener-target-row';
+    target.dataset.targetId = h.targetId;
+    target.toggleAttribute('data-anchor', h.targetId === anchor);
+    target.title = h.targetId === anchor ? 'Referensdel' : name;
+    const caption = document.createElement('span');
+    caption.textContent = mark ? `${mark} · ${name}` : name;
+    const remove = button('×', () => removeHole(i, h.targetId));
+    remove.title = `Ta bort ${name} från förbandet`;
+    remove.setAttribute('aria-label', remove.title);
+    target.append(caption, remove);
+    targets.append(target);
     const row = document.createElement('details');
     row.dataset.hole = i;
     row.dataset.boreId = h.id;
@@ -126,6 +145,54 @@ export function renderFastenerHoles({
   );
   select.value = anchor;
   select.onchange = () => selectAnchor(select.value);
+}
+
+/** Present the already-resolved batch in both the compact list and the optional hole details. */
+export function renderFastenerPlacementFeedback(placeForm, batch, objects) {
+  const output = placeForm.querySelector('[data-placement-feedback]');
+  if (!batch?.length) {
+    output.textContent = '';
+    output.removeAttribute('data-status');
+    for (const row of placeForm.querySelectorAll('[data-target-id]')) {
+      delete row.dataset.reached;
+      row.querySelector('span').removeAttribute('title');
+    }
+    return;
+  }
+  const feedback = fastenerPlacementFeedback(batch);
+  const range = ({ min, max }) => (min === max ? String(min) : `${min}–${max}`);
+  const ready =
+    !feedback.warnings.length &&
+    feedback.layers.min > 0 &&
+    feedback.targets.every(
+      (t) =>
+        t.reached === batch.length ||
+        batch[0].holes.find((h) => h.targetId === t.id)?.kind === 'none',
+    );
+  output.dataset.status = ready ? 'ready' : 'warning';
+  output.textContent = `${ready ? '✓ ' : ''}${feedback.count} ${feedback.count === 1 ? 'skruv' : 'skruvar'} · ${range(feedback.layers)} lager`;
+  output.title =
+    feedback.warnings.join(' ') || (ready ? '' : 'Alla valda delar träffas inte av skruvarna.');
+  placeForm.querySelector('[data-hole-overview]').textContent =
+    `${feedback.targets.filter((t) => t.reached).length}/${feedback.targets.length} delar`;
+  const names = new Map(objects.map((o) => [o.id, o.name || 'Del']));
+  for (const [i, hole] of batch[0].holes.entries()) {
+    const info = feedback.targets.find((t) => t.id === hole.targetId);
+    const row = [...placeForm.querySelectorAll('[data-target-id]')].find(
+      (r) => r.dataset.targetId === hole.targetId,
+    );
+    if (row) {
+      row.dataset.reached =
+        hole.kind === 'none' ? 'none' : info.reached === batch.length ? 'all' : 'partial';
+      row.querySelector('span').title =
+        hole.kind === 'none'
+          ? 'Inga hål'
+          : `${info.reached}/${batch.length} skruvar · ${range(info)} lager`;
+    }
+    const summary = placeForm.querySelector(`[data-hole="${i}"] > summary`);
+    if (summary)
+      summary.textContent = `${names.get(hole.targetId) || 'Del'} · ${hole.kind === 'none' ? 'Inga hål' : `Ø${hole.diameter} · ${range(info)} lager`}`;
+  }
 }
 
 /** Adopt existing metadata controls; their owners, IDs and events stay unchanged. */

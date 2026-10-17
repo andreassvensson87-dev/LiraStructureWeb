@@ -25,9 +25,11 @@ export function installModelFasteners({
   const setSelection = (...args) => actions.setSelection(...args);
   const syncOperationUI = (...args) => actions.syncOperationUI(...args);
   const validateSweep = (...args) => actions.validateSweep(...args);
+  let placementReturn = null;
   Object.assign(actions, { commitFastener });
   controllers.fastenerUI = new FastenerUI({
     getObjects: () => project.objects,
+    getPartMark: (id) => project.parts.assignments[id]?.mark || '',
     getWorkPlane: () =>
       structuredClone(
         tools.temporaryPlane || {
@@ -38,7 +40,11 @@ export function installModelFasteners({
       ),
     getSelection: () =>
       [...ui.selectedIds].map((id) => project.objects.find((s) => s.id === id)).filter(Boolean),
-    selectSource: (id) => setSelection(id ? [id] : []),
+    selectSource: (id) => {
+      const returning = id && tools.operation?.mode === 'fastenerTargets';
+      setSelection(id ? [id] : []);
+      if (returning) $('status').textContent = 'Skruvgrupp · Tillämpa bekräftar ändringarna';
+    },
     getOperation: () => tools.operation,
     previewPlacement: (draft) => {
       clearPreview();
@@ -48,6 +54,14 @@ export function installModelFasteners({
     },
     showInspector: () => controllers.inspector.show('properties'),
     beginTargets: (targetIds) => {
+      placementReturn =
+        tools.operation?.mode === 'fastenerCreate'
+          ? {
+              first: tools.first && [...tools.first],
+              frame: structuredClone(tools.operation.frame),
+              previewPoints: tools.operation.previewPoints,
+            }
+          : null;
       select(null);
       setDrawing(true);
       tools.operation = { mode: 'fastenerTargets', targetIds };
@@ -57,23 +71,35 @@ export function installModelFasteners({
         'Skruvgrupp · Klicka på delar, Enter/skrollklick bekräftar, Escape avbryter';
       renderer.domElement.focus({ preventScroll: true });
     },
+    targetsChanged: (targetIds) => {
+      if (tools.operation?.mode !== 'fastenerTargets') return;
+      tools.operation.targetIds = targetIds;
+      render({ selectionOnly: true });
+    },
     finish: () => {
       controllers.inspector?.finish();
       setDrawing(false);
     },
     beginPlacement: (draft) => {
+      const resume = placementReturn;
+      placementReturn = null;
       select(null);
       setDrawing(true);
       tools.operation = {
         mode: 'fastenerCreate',
         draft,
-        frame: structuredClone(draft.layout.frame),
+        frame: resume?.frame || structuredClone(draft.layout.frame),
+        ...(resume?.previewPoints ? { previewPoints: resume.previewPoints } : {}),
       };
+      if (resume?.first) tools.first = resume.first;
       syncOperationUI();
       controllers.fastenerUI.sync([], tools.operation);
       controllers.inspector.show('properties');
+      if (resume?.previewPoints) controllers.fastenerUI.previewRange();
       const label = draft.group ? 'Skruvgrupp' : 'Skruv';
-      $('status').textContent = `${label} · Välj origo, därefter X-riktning i arbetsplanet`;
+      $('status').textContent = resume?.first
+        ? `${label} · Välj X-riktning i arbetsplanet`
+        : `${label} · Välj origo, därefter X-riktning i arbetsplanet`;
       renderer.domElement.focus({ preventScroll: true });
     },
     commit: commitFastener,

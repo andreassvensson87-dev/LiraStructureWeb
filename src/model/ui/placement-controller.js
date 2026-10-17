@@ -444,6 +444,8 @@ export function createPlacementController({
       batch = candidates(p);
     } catch (error) {
       $('draw-length-error').textContent = error.message;
+      if (tools.operation?.mode === 'fastenerCreate')
+        getFasteners()?.showPickedError?.(error.message);
       return;
     }
     const s = batch[0];

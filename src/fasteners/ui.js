@@ -8,6 +8,7 @@ import { createFastenerProductPicker } from './product-picker.js';
 import {
   renderFastenerAccessories,
   renderFastenerHoles,
+  renderFastenerPlacementFeedback,
   createFastenerMetadata,
 } from './placement-inspector.js';
 import { FastenerLibraryController } from './library-controller.js';
@@ -35,6 +36,7 @@ const button = (text, action) => {
 export class FastenerUI {
   constructor({
     getObjects,
+    getPartMark,
     getWorkPlane,
     getSelection,
     commit,
@@ -45,9 +47,11 @@ export class FastenerUI {
     getOperation,
     beginTargets,
     previewPlacement,
+    targetsChanged,
   }) {
     Object.assign(this, {
       getObjects,
+      getPartMark,
       getWorkPlane,
       getSelection,
       commit,
@@ -58,6 +62,7 @@ export class FastenerUI {
       getOperation,
       beginTargets,
       previewPlacement,
+      targetsChanged,
     });
     this.catalog = new FastenerLibraryController({
       useSpec: (spec) => {
@@ -175,6 +180,7 @@ export class FastenerUI {
     this.placeForm.querySelector('[data-apply-hole-defaults]').onclick = () => {
       this.holeRows = this.holeRows.map((h) => this.defaultHole(h.targetId));
       this.renderHoles();
+      this.previewRange();
     };
     this.fieldDraft = createInspectorDraft(this.placeForm);
     this.placeForm.onsubmit = (e) => {
@@ -218,7 +224,12 @@ export class FastenerUI {
   }
   pickTargets() {
     this.readHoles();
-    this.beginTargets(this.holeRows.map((h) => h.targetId));
+    this.keepPlacementDraft = true;
+    try {
+      this.beginTargets(this.holeRows.map((h) => h.targetId));
+    } finally {
+      this.keepPlacementDraft = false;
+    }
   }
   setTargets(ids) {
     this.readHoles();
@@ -226,13 +237,19 @@ export class FastenerUI {
     this.holeRows = ids.map((id) => existing.get(id) || this.defaultHole(id));
     if (!ids.includes(this.anchor)) this.anchor = ids[0] || '';
     this.renderHoles();
+    this.previewRange();
   }
   confirmTargets() {
     this.run(this.placeForm, () => {
       const draft = this.readPlacement();
       if (this.editingObject) {
-        this.finish();
-        this.commit(draft);
+        this.keepPlacementDraft = true;
+        try {
+          this.selectSource(this.editingObject.id);
+        } finally {
+          this.keepPlacementDraft = false;
+        }
+        this.previewRange();
       } else this.beginPlacement(draft);
     });
   }
@@ -357,6 +374,7 @@ export class FastenerUI {
           reversed: false,
         };
     this.layoutReversed = this.layoutReference.reversed;
+    this.assemblyPicker.preview(null, this.layoutReversed);
     this.placeForm
       .querySelector('[data-reverse]')
       .setAttribute('aria-pressed', String(this.layoutReversed));
@@ -420,6 +438,7 @@ export class FastenerUI {
     this.placeForm.querySelector('[data-manual-hardware]').open = false;
     this.renderAccessories();
     this.renderHoles();
+    if (source) this.showPickedFeedback(warningSources);
     this.placeForm.querySelector('[data-delete]').hidden = !source;
     this.placeForm.querySelector('[type=submit]').textContent = source ? 'Tillämpa' : 'Skapa';
     this.productPicker.set(this.specOptions, this.currentSpec());
@@ -442,15 +461,21 @@ export class FastenerUI {
       placeForm: this.placeForm,
       holeRows: this.holeRows,
       getObjects: this.getObjects,
+      getPartMark: this.getPartMark,
       anchor: this.anchor,
       removeHole: (i, targetId) => {
         this.readHoles();
         this.holeRows.splice(i, 1);
         if (this.anchor === targetId) this.anchor = this.holeRows[0]?.targetId || '';
         this.renderHoles();
+        this.targetsChanged?.(this.holeRows.map((h) => h.targetId));
+        this.previewRange();
       },
       selectAnchor: (value) => {
+        this.readHoles();
         this.anchor = value;
+        this.renderHoles();
+        this.previewRange();
       },
     });
   }
@@ -537,32 +562,21 @@ export class FastenerUI {
     return draft;
   }
   showPickedFeedback(batch) {
-    if (this.editingObject)
+    if (this.getOperation()?.mode !== 'fastenerTargets')
       document.getElementById('object-heading').textContent =
         `Skruvgrupp · ${batch.length} ${batch.length === 1 ? 'skruv' : 'skruvar'}`;
     this.placeForm.querySelector('[data-length-result]').textContent = [
       ...new Set(batch.flatMap(fastenerFitWarnings)),
     ].join(' ');
-    const objects = new Map(this.getObjects().map((s) => [s.id, s]));
-    for (const [i, hole] of this.holeRows.entries()) {
-      const counts = batch
-        .map((s) => s.holes.find((h) => h.targetId === hole.targetId))
-        .map((h) => (h?.active === false ? 0 : h?.layers?.length || 0));
-      const min = Math.min(...counts),
-        max = Math.max(...counts);
-      const summary = this.placeForm.querySelector(`[data-hole="${i}"] > summary`);
-      if (summary)
-        summary.textContent = `${objects.get(hole.targetId)?.name || 'Del'} · ${hole.kind === 'none' ? 'Inga hål' : `Ø${hole.diameter} · ${min === max ? min : `${min}–${max}`} lager`}`;
-    }
-    const reached = new Set(
-      batch.flatMap((s) =>
-        s.holes
-          .filter((h) => h.active !== false && h.kind !== 'none' && h.layers?.length)
-          .map((h) => h.targetId),
-      ),
-    );
-    this.placeForm.querySelector('[data-hole-overview]').textContent =
-      `${reached.size}/${this.holeRows.length} delar`;
+    renderFastenerPlacementFeedback(this.placeForm, batch, this.getObjects());
+    this.assemblyPicker.preview(batch[0]);
+    this.placeForm.querySelector('[data-error]').textContent = '';
+  }
+  showPickedError(message) {
+    renderFastenerPlacementFeedback(this.placeForm, null, []);
+    this.assemblyPicker.preview(null, this.layoutReversed);
+    this.placeForm.querySelector('[data-length-result]').textContent = '';
+    this.placeForm.querySelector('[data-error]').textContent = message;
   }
   commitPicked(draft) {
     this.commit(draft);
@@ -584,7 +598,7 @@ export class FastenerUI {
         delete operation.error;
       }
       let feedback = null;
-      if (!preparing) {
+      if (!preparing || (operation?.mode === 'fastenerTargets' && this.editingObject)) {
         feedback = this.previewBatch || [draft];
         this.previewPlacement(feedback);
       } else if (operation?.mode === 'fastenerCreate' && operation.previewPoints) {
@@ -607,6 +621,10 @@ export class FastenerUI {
       this.placeForm.querySelector('[data-layer-info]').textContent =
         `${draft.layerCount} materiallager i förbandet`;
       if (feedback) this.showPickedFeedback(feedback);
+      else {
+        renderFastenerPlacementFeedback(this.placeForm, null, []);
+        this.assemblyPicker.preview(null, this.layoutReversed);
+      }
       this.placeForm.querySelector('[data-error]').textContent = '';
       this.placeForm.querySelector('[type=submit]').disabled =
         !preparing && !this.fieldDraft.sync();
@@ -614,6 +632,8 @@ export class FastenerUI {
       if (operation?.mode === 'fastenerCreate') operation.error = e.message;
       this.placeForm.querySelector('[type=submit]').disabled = true;
       this.previewPlacement(null);
+      renderFastenerPlacementFeedback(this.placeForm, null, []);
+      this.assemblyPicker.preview(null, this.layoutReversed);
       this.placeForm.querySelector('[data-length-result]').textContent = '';
       this.placeForm.querySelector('[data-error]').textContent = e.message;
       this.placeForm.querySelector('[data-hole-overview]').textContent =
@@ -645,6 +665,7 @@ export class FastenerUI {
     }
     const choosing = operation?.mode === 'fastenerTargets';
     const creating = operation?.mode === 'fastenerCreate';
+    if (this.keepPlacementDraft && !choosing && !creating && !selected.length) return;
     document.getElementById('fastener').setAttribute('aria-pressed', String(creating || choosing));
     if (choosing) {
       this.panel.hidden = false;
@@ -652,13 +673,14 @@ export class FastenerUI {
       if (this.placeForm.parentElement !== this.panel) this.panel.replaceChildren(this.placeForm);
       document.getElementById('form').hidden = document.getElementById('plate-form').hidden = true;
       document.getElementById('object-heading').textContent = 'Skruvgrupp · Välj delar';
-      this.placeForm.querySelector('[data-connections]').open = true;
       document.getElementById('mode-label').textContent = '';
       this.placeForm.querySelector('[data-select-targets]').hidden = true;
       this.placeForm.querySelector('[data-position]').hidden = true;
       this.placeForm.querySelector('[data-delete]').hidden = true;
       this.placeForm.querySelector('[type=submit]').hidden = false;
-      this.placeForm.querySelector('[type=submit]').textContent = 'Placera ↵';
+      this.placeForm.querySelector('[type=submit]').textContent = this.editingObject
+        ? 'Klar ↵'
+        : 'Placera ↵';
       this.placeForm.querySelector('[data-target-empty]').textContent = '';
       this.panel.inert = false;
       return;
@@ -697,6 +719,7 @@ export class FastenerUI {
       document.getElementById('object-heading').textContent =
         `Skruvgrupp · ${count} ${count === 1 ? 'skruv' : 'skruvar'}`;
       if (source.group) document.getElementById('multi-selection').hidden = true;
+      this.placeForm.querySelector('[type=submit]').textContent = 'Tillämpa';
     } else {
       this.loadedSource = null;
       this.panel.replaceChildren();

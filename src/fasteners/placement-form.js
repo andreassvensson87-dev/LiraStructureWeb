@@ -39,6 +39,21 @@ export function createFastenerPlacementForm() {
   form.querySelector('[data-connections]').open = false;
   form.querySelector('[data-hole-tools] > summary').textContent = 'Referensdel och hålstandard';
   form.querySelector('.fastener-assembly-section').before(lengthSection);
+  const targets = document.createElement('section');
+  targets.className = 'fastener-targets attribute-group';
+  targets.dataset.targets = '';
+  targets.append(
+    form.querySelector('.fastener-connections-heading'),
+    form.querySelector('[data-target-empty]'),
+  );
+  const targetList = document.createElement('div');
+  targetList.dataset.targetList = '';
+  const feedback = document.createElement('output');
+  feedback.dataset.placementFeedback = '';
+  feedback.setAttribute('aria-live', 'polite');
+  targets.append(targetList, feedback);
+  form.querySelector('[data-connections]').before(targets);
+  form.querySelector('[data-select-targets]').textContent = 'Välj…';
   const position = form.querySelector('[data-position]');
   const points = document.createElement('details');
   points.innerHTML = '<summary>Punkter</summary>';
@@ -60,7 +75,7 @@ export function createFastenerPlacementForm() {
   reverse.title = 'Vänd skruvriktning';
   reverse.setAttribute('aria-label', reverse.title);
   reverse.append(commandIcon('rotate'), 'Vänd');
-  placementFields.prepend(reverse);
+  form.querySelector('[data-start-allowance]').before(reverse);
   form.querySelectorAll('label.field').forEach(adoptAttributeLabel);
   form.querySelectorAll('details').forEach((node) => node.classList.add('attribute-section'));
   form.querySelectorAll('fieldset').forEach((node) => node.classList.add('attribute-group'));

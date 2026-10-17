@@ -17,6 +17,9 @@ import { createProject } from '../src/project/project-state.js';
 import { ProjectHistory } from '../src/project/project-history.js';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
 import { fastenerPreviewOverlay } from '../src/fasteners/preview.js';
+import { fastenerPlacementFeedback } from '../src/fasteners/placement-feedback.js';
+import { replaceFastenerGroup } from '../src/fasteners/groups.js';
+import { holesForPart } from '../src/fasteners/relations.js';
 
 const frame = { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] };
 const plate = {
@@ -187,4 +190,80 @@ test('preview marks only reached layer surfaces and frees its independent graphi
       child.geometry?.dispose();
       child.material?.dispose();
     });
+});
+
+test('reversal and target changes share placement, preserve existing bores and commit only on apply', () => {
+  const f = fixture();
+  const second = {
+    ...structuredClone(plate),
+    id: 'second',
+    frame: { ...frame, origin: [0, 0, -12] },
+    thickness: 12,
+  };
+  f.project.objects.unshift(second);
+  const before = structuredClone(f.project.objects);
+  const draft = {
+    ...f.batch[0],
+    layout: { ...f.batch[0].layout, reversed: true },
+    holes: [...f.batch[0].holes, defaultHoleForSpec(spec, 'second')],
+  };
+  const edited = prepareFastenerPlacement(draft, { model: f.project.objects }).batch;
+  const picked = preparePickedFasteners(draft, {
+    start: draft.layout.frame.origin,
+    xPoint: fastenerLayoutAnchors(draft)[1],
+    frame: draft.layout.frame,
+    model: f.project.objects,
+  });
+  const geometry = (batch) =>
+    batch.map((s) => ({ ...s, holes: s.holes.map(({ id, ...hole }) => hole) }));
+  assert.deepEqual(
+    geometry(edited),
+    geometry(picked),
+    'same geometry; new bores receive their own IDs',
+  );
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.history.canUndo, false);
+  for (let i = 0; i < edited.length; i++) {
+    close(fastenerFrame(edited[i]).z.toArray(), [0, 0, 1]);
+    assert.equal(edited[i].id, f.batch[i].id);
+    assert.equal(edited[i].holes[0].id, f.batch[i].holes[0].id);
+    assert.equal(edited[i].layerCount, 2);
+    assert.equal(edited[i].spec.length, spec.length);
+  }
+  f.editor.replace(replaceFastenerGroup(f.project.objects, edited));
+  assert.equal(holesForPart(second, f.project.objects).length, 6);
+  const removed = prepareFastenerPlacement(
+    { ...edited[0], anchorId: 'second', holes: [edited[0].holes[1]] },
+    { model: f.project.objects },
+  ).batch;
+  f.editor.replace(replaceFastenerGroup(f.project.objects, removed));
+  assert.equal(holesForPart(plate, f.project.objects).length, 0);
+  assert.equal(holesForPart(second, f.project.objects).length, 6);
+  assert.deepEqual(
+    removed.map((s) => [s.id, s.holes[0].id]),
+    edited.map((s) => [s.id, s.holes[1].id]),
+  );
+  assert.deepEqual(f.history.undo(f.project).objects, [second, plate, ...edited]);
+});
+
+test('placement feedback reports ranges and misses, clears reach warnings, and never counts inactive or disabled holes', () => {
+  const f = fixture();
+  const snapshot = structuredClone(f.batch);
+  const feedback = fastenerPlacementFeedback(f.batch);
+  assert.equal(feedback.count, 6);
+  assert.deepEqual(feedback.layers, { min: 1, max: 1 });
+  assert.deepEqual(feedback.targets, [{ id: 'p', reached: 6, min: 1, max: 1 }]);
+  assert.deepEqual(feedback.warnings, []);
+  const mixed = structuredClone(f.batch);
+  mixed[0].holes[0].active = false;
+  mixed[1].holes[0].kind = 'none';
+  mixed[2].holes[0].layers.push({ offset: 60, depth: 10 });
+  mixed[0].insertion.reachWarning = 'hardware';
+  const result = fastenerPlacementFeedback(mixed);
+  assert.deepEqual(result.layers, { min: 0, max: 2 });
+  assert.deepEqual(result.targets, [{ id: 'p', reached: 4, min: 0, max: 2 }]);
+  assert.equal(result.warnings.length, 1);
+  assert.deepEqual(fastenerPlacementFeedback(f.batch).warnings, []);
+  assert.deepEqual(fastenerPlacementFeedback([]).layers, { min: 0, max: 0 });
+  assert.deepEqual(f.batch, snapshot);
 });

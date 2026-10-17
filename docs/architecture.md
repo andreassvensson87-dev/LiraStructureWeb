@@ -1,5 +1,11 @@
 # Kodens ansvar och gränser
 
+## Skruvplaceringens återkoppling
+
+`fasteners/placement-feedback.js` sammanfattar det redan upplösta skruvförslaget: nådda delar, lagerintervall och längdvarningar. Modulen söker inte material eller ändrar objekt. `placement-inspector.js` visar sammanfattningen och den kompakta dellistan; `assembly-preview-inspector.js` visar första skruvens verkliga lager och tillbehörslägen i den befintliga förbandsväljaren. Övriga skruvars varierande träffar visas som intervall i gruppens återkoppling.
+
+`FastenerUI` behåller fältutkastet när delar väljs om. En sparad grupp uppdateras först med Tillämpa genom befintlig modell-editor; delvalets bekräftelse skapar ingen historik. App-adaptern `app/model-fasteners.js` behåller pågående placeringsplan och första punkt vid tillfälligt delval. Verktygets vanliga andra punkt bekräftar fortfarande placeringen, utan ytterligare granskningssteg. Både preview och bekräftelse använder `preparePickedFasteners` och de befintliga placeringsreglerna.
+
 ## Parametriska block
 
 `src/blocks/definition.js` utvärderar parametrar, uttryck, lokala referensplan/-linjer, punktlåsningar, egenskapskopplingar och namngivna insättningspunkter utan UI. `session.js` äger det fristående definitionsutkastets testvärden och ångring. `placement.js` äger instansens lokala koordinatsystem och förankring. `grip.js` löser direktkopplade parametergrepp; kopplade uttryck kräver inspektorändring. `library-data.js` äger versions- och importregler; `library-store.js` är den separata lagringsgränsen.

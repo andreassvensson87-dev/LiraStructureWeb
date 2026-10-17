@@ -1,5 +1,11 @@
 # Teststrategi
 
+## Skruvplacering, vändning och delurval
+
+`fastener-group-grips.test.js` verifierar vändning och tillagda/borttagna måldelar genom samma placeringsberäkning, oförändrade sparade objekt före Tillämpa, bibehållna befintliga skruv-/hålidentiteter, borttagna hål på bortvalda delar och ångring. Återkopplingens intervall kontrolleras med blandade träffar, inaktiva hål, Inga hål och längdvarningar. `fastener-placement-ui.test.js` skyddar att bekräftat delurval återgår till ett väntande inspektorutkast och att ogiltigt urval inte skapar eller uppdaterar gruppen.
+
+Webbläsarprov 2026-10-17 på separat localhost-origin: två plåtar valda med modellträffar, skrollklick till placering, sex skruvar, origo följt av ändrat delurval och bibehållen origo/vändning efter återgång. Nästa punkt skapade exakt en grupp. Sparad grupp provades med Vänd, borttagen och återvald del, skrollklick, Tillämpa och Ångra. UI-export före Tillämpa behöll originalets delkopplingar och riktning; efter Tillämpa var samtliga sex vända med bevarade befintliga skruv-/hål-ID:n. Längd 5 gav noll nådda lager och varning; återgång till 80 rensade varningen och visade två lager. Ett 30° snett förband vändes med bibehållna ID:n, längd 80, axel cirka (0,5, 0, 0,8660254) och aktiva hål i båda delarna. Ingen separat snap eller hålberäkning används för återkopplingen. Inga browserfel rapporterades. Full `npm run check` passerade.
+
 Testantalet är inget kvalitetsmått. Vi kontrollerar beteenden och felrisker, inte hur många gröna rader körningen ger.
 
 - `npm test`: ett mindre urval centrala modellflöden — objekt, verktyg, snap, inspektor, historik, projektåterställning och numrering. Lämpligt för löpande modelleringsarbete.

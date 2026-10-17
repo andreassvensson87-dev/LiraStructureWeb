@@ -1,4 +1,5 @@
 import { assemblyDefaults } from './assembly.js';
+import { paintFastenerAssemblyPreview } from './assembly-preview-inspector.js';
 
 const choices = [
   ['bolt', 'Skruv', 'Skruv', 20],
@@ -24,6 +25,12 @@ export function createAssemblyPicker(root, changed) {
     <path d="M5 57h295" class="assembly-axis"/>
     ${choices.map(([key, , , x]) => `<path data-assembly-leader="${key}" d="M${x} 6v20" class="assembly-leader"/>`).join('')}
     </svg>`;
+  const diagram = root.querySelector('svg');
+  const preview = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  preview.dataset.assemblyPreview = '';
+  preview.setAttribute('role', 'img');
+  preview.style.display = 'none';
+  root.append(preview);
   let value = {},
     spec = null;
   function render() {
@@ -67,5 +74,11 @@ export function createAssemblyPicker(root, changed) {
       render();
     },
     get: () => ({ ...value }),
+    preview(source, reversed = false) {
+      diagram.style.display = source ? 'none' : '';
+      diagram.style.transform = reversed ? 'scaleX(-1)' : '';
+      preview.style.display = source ? '' : 'none';
+      if (source) paintFastenerAssemblyPreview(preview, source);
+    },
   };
 }
