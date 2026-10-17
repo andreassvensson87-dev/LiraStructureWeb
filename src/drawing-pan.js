@@ -1,11 +1,18 @@
+import { createPointerCompletion } from './pointer-completion.js';
+
 // Secondary click-drag (including a trackpad's two-finger click) moves the sheet workspace.
-export function installDrawingPan(workspace, { blocked = () => false } = {}) {
+export function installDrawingPan(workspace, { blocked = () => false, completion } = {}) {
   let gesture = null;
+  const middle = createPointerCompletion({
+    getCommand: () => !blocked() && completion?.getCommand(),
+    complete: (command) => completion.complete(command),
+  });
   const stop = (e) => {
     e.preventDefault();
     e.stopImmediatePropagation();
   };
   const cancel = () => {
+    middle.cancel();
     const previous = gesture;
     gesture = null;
     workspace.classList.remove('drawing-panning');
@@ -23,7 +30,12 @@ export function installDrawingPan(workspace, { blocked = () => false } = {}) {
         )
       )
         return;
-      if (gesture || blocked() || !(e.button === 1 || e.button === 2)) return;
+      if (gesture) {
+        middle.cancel();
+        return;
+      }
+      if (blocked() || !(e.button === 1 || e.button === 2)) return;
+      middle.down(e);
       stop(e);
       gesture = {
         id: e.pointerId,
@@ -41,6 +53,7 @@ export function installDrawingPan(workspace, { blocked = () => false } = {}) {
     'pointermove',
     (e) => {
       if (!gesture || e.pointerId !== gesture.id) return;
+      middle.move(e);
       stop(e);
       workspace.scrollLeft = gesture.left - (e.clientX - gesture.x);
       workspace.scrollTop = gesture.top - (e.clientY - gesture.y);
@@ -53,6 +66,7 @@ export function installDrawingPan(workspace, { blocked = () => false } = {}) {
       (e) => {
         if (!gesture || e.pointerId !== gesture.id) return;
         stop(e);
+        if (type === 'pointerup') middle.up(e);
         cancel();
       },
       true,

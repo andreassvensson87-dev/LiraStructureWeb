@@ -1,3 +1,4 @@
+import { setInspectorFieldState } from '../inspector/field-state.js';
 import { componentInspectorSchema } from '../inspector/component-schemas.js';
 import {
   createAttributeRow,
@@ -64,6 +65,12 @@ export function createComponentInspector({
       if (parameter.type === 'checkbox') input.checked = staged[parameter.key];
       else if (parameter.type === 'fastener') refreshSpecs(input);
       else input.value = staged[parameter.key];
+      const fieldChanged =
+        JSON.stringify(source[parameter.key]) !== JSON.stringify(staged[parameter.key]);
+      setInspectorFieldState(input, {
+        changed: fieldChanged,
+        invalid: input.validity?.valid === false || (fieldChanged && !valid),
+      });
     }
     attributeLayout?.sync({
       compact: true,
@@ -79,7 +86,11 @@ export function createComponentInspector({
       productNote.textContent = (def.notices?.(staged) || []).join('. ');
       productNote.hidden = !valid || !productNote.textContent;
     }
-    staged.references.forEach((id, i) => (form.elements.namedItem(`reference-${i}`).value = id));
+    staged.references.forEach((id, i) => {
+      const input = form.elements.namedItem(`reference-${i}`);
+      input.value = id;
+      setInspectorFieldState(input, { changed: source.references[i] !== id });
+    });
     const isChanged = componentDraftChanged(source, staged);
     form.querySelector('[type=submit]').disabled = (!isChanged && !creation?.ready) || !valid;
     form.querySelector('[type=submit]').textContent = creation?.ready

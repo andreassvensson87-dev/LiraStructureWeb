@@ -1,3 +1,4 @@
+import { bindInspectorField, setInspectorFieldState } from './inspector/field-state.js';
 import { buildPlanObjects, buildSectionObjects } from './plan-view-geometry.js';
 import { paintPlanView, paintSectionGrid, paintSectionLevels } from './plan-view-renderer.js';
 import { updateScreenGrips } from './ui/grip.js';
@@ -81,11 +82,15 @@ export class PlanView {
     this.$('level').onchange = () => this.rebuild();
     for (const key of ['lower', 'cut', 'upper'])
       this.$(key).oninput = () => {
+        for (const name of ['lower', 'cut', 'upper']) this.$(name).setCustomValidity('');
         clearTimeout(this.pending);
         this.pending = setTimeout(() => {
           if (this.dialog.open) this.rebuild();
         }, 120);
       };
+    this.heightFieldStates = ['lower', 'cut', 'upper'].map((key) =>
+      bindInspectorField(this.$(key), () => this.record?.settings[key] ?? this.$(key).value),
+    );
     this.$('fit').onclick = () => this.navigation.fit(true);
     const hatchLabel = document.createElement('label');
     hatchLabel.textContent = 'Visa materialhatchning';
@@ -133,6 +138,10 @@ export class PlanView {
       this.refreshPaper();
       this.views.list();
     };
+    bindInspectorField(this.paperScale, () => {
+      const views = this.views?.selectedViews() || [];
+      return views.length && views.every((v) => v.scale === views[0].scale) ? views[0].scale : '';
+    });
     const hiddenLabel = document.createElement('label');
     hiddenLabel.className = 'drawing-check';
     hiddenLabel.innerHTML = '<input id=plan-hidden-lines type=checkbox>Visa skymda kanter';
@@ -321,6 +330,10 @@ export class PlanView {
       annotations: () => this.annotations,
     });
     this.navigation = new DrawingWorkspace({
+      completion: {
+        getCommand: () => this.annotations.completionCommand(),
+        complete: () => this.annotations.complete(),
+      },
       workspace: this.paperWorkspace,
       stage: this.stage,
       paper: this.page,
@@ -752,10 +765,18 @@ export class PlanView {
       );
     } catch (e) {
       this.$('error').textContent = e.message;
+      for (const key of ['lower', 'cut', 'upper']) {
+        const input = this.$(key);
+        if (Number(input.value) !== this.record.settings[key] || !input.value.trim()) {
+          input.setCustomValidity(e.message);
+          setInspectorFieldState(input, { changed: true, invalid: true });
+        }
+      }
       return;
     }
     this.$('error').textContent = '';
     this.captureSettings();
+    this.heightFieldStates.forEach((sync) => sync());
     this.heights = h;
     this.clear();
     this.bounds = new THREE.Box3();

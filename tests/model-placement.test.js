@@ -2,6 +2,7 @@ import { defaultFasteners } from '../src/fasteners/default-catalog.js';
 import { defaultHoleForSpec } from '../src/fasteners/library.js';
 import { fastenerGroupBatch } from '../src/fasteners/groups.js';
 import { fastenerFrame } from '../src/fasteners/geometry.js';
+import { preparePickedFasteners } from '../src/fasteners/placement-draft.js';
 import { createPlaneTransformController } from '../src/model/ui/plane-transform-controller.js';
 import { planeTransformCandidates } from '../src/model/tools/plane-transform.js';
 import { createLinearTransformController } from '../src/model/ui/linear-transform-controller.js';
@@ -896,6 +897,7 @@ test('canvas fastener preview and second click use the picked plane and commit o
   const before = structuredClone(f.project.objects);
   f.controller.updatePointer({ clientX: 80, clientY: 60 });
   assert.ok(f.ui.preview);
+  assert.ok(f.ui.preview.getObjectByName('Skruvgrupp · riktning och materiallager'));
   assert.deepEqual(f.project.objects, before);
   assert.equal(f.fastenerCommits.length, 0);
   assert.equal(f.history.canUndo, false);
@@ -908,4 +910,85 @@ test('canvas fastener preview and second click use the picked plane and commit o
   assert.equal(new Set(bolts.map((s) => s.id)).size, 4);
   assert.equal(new Set(bolts.flatMap((s) => s.holes.map((h) => h.id))).size, 4);
   assert.deepEqual(f.history.undo(f.project).objects, before);
+});
+
+test('group X grips use Move and linear Move while origin grips translate the entire group atomically', (t) => {
+  const f = linearFixture(t);
+  const plane = { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] };
+  const part = {
+    id: 'plate',
+    type: 'plate',
+    frame: plane,
+    polygon: [
+      [-300, -300],
+      [300, -300],
+      [300, 300],
+      [-300, 300],
+    ],
+    thickness: 20,
+    side: 'positive',
+  };
+  const spec = defaultFasteners().find((s) => s.standard === 'ISO 4017' && s.diameter === 12);
+  const batch = preparePickedFasteners(
+    {
+      type: 'fastener',
+      spec,
+      assembly: { bolt: true, nut: true },
+      holes: [defaultHoleForSpec(spec, part.id)],
+      group: {
+        id: 'g',
+        shape: 'array',
+        rows: 2,
+        columns: 2,
+        distancesX: [60],
+        distancesY: [60],
+        rotation: 0,
+      },
+    },
+    { start: [0, 0, 20], xPoint: [100, 0, 20], frame: plane, model: [part] },
+  );
+  f.project.objects = [part, ...batch];
+  f.ui.selectedIds = new Set(batch.map((s) => s.id));
+  f.gripSelection.push(...batch.map((s) => ({ id: s.id, kind: 'end' })));
+  const before = structuredClone(f.project.objects);
+  f.controller.startTransform('move');
+  assert.equal(f.tools.operation.gripRefs.length, 4);
+  f.tools.first = [0, 0, 0];
+  assert.equal(f.controller.commitPoint([-100, 100, 0]), true);
+  assert.equal(f.history.past.length, 1);
+  assert.ok(Math.abs(f.project.objects[1].layout.frame.u[1] - 1) < 1e-6);
+  f.linear.open('move');
+  const row = f.rows.at(-1);
+  const rotated = structuredClone(f.project.objects);
+  row.callbacks.change(0, '10');
+  assert.deepEqual(f.project.objects, rotated, 'linear group grip preview is detached');
+  row.callbacks.confirm();
+  assert.equal(f.history.past.length, 2);
+  assert.ok(f.project.objects[1].layout.frame.u[0] > 0);
+  f.gripSelection.splice(
+    0,
+    f.gripSelection.length,
+    ...batch.map((s) => ({ id: s.id, kind: 'start' })),
+  );
+  f.linear.open('move');
+  const originRow = f.rows.at(-1);
+  originRow.callbacks.change(0, '25');
+  originRow.callbacks.change(1, '-10');
+  originRow.callbacks.confirm();
+  assert.equal(f.history.past.length, 3);
+  assert.deepEqual(f.project.objects[1].layout.frame.origin, [25, -10, 20]);
+  for (const [i, s] of f.project.objects.slice(1).entries()) {
+    assert.equal(s.id, batch[i].id);
+    assert.equal(s.spec.length, spec.length);
+    assert.deepEqual(
+      s.holes.map((h) => h.id),
+      batch[i].holes.map((h) => h.id),
+    );
+    assert.equal(s.holes[0].active, true);
+  }
+  assert.deepEqual(f.history.undo(f.project).objects[1].layout.frame.origin, [0, 0, 20]);
+  assert.deepEqual(
+    before.slice(1).map((s) => s.spec.length),
+    batch.map((s) => s.spec.length),
+  );
 });

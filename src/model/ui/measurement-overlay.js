@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { modelFeedbackMeasures } from '../measurements.js';
 import { paintMeasurements } from '../../ui/measurement-overlay.js';
+import { paintFastenerDirections } from '../../fasteners/preview-directions.js';
 export function createModelMeasurementOverlay({
   host,
   camera,
@@ -9,6 +10,7 @@ export function createModelMeasurementOverlay({
   tools,
   visible,
   getBatch,
+  getFastenerBatch = () => [],
   allowsPoint = () => true,
 }) {
   const root = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -35,8 +37,10 @@ export function createModelMeasurementOverlay({
       root.setAttribute('viewBox', `0 0 ${host.clientWidth} ${host.clientHeight}`);
       root.replaceChildren();
       const measures = modelFeedbackMeasures({ project, ui, tools, visible, batch: getBatch() });
-      root.hidden = !measures.length;
+      const fasteners = getFastenerBatch() || [];
+      root.hidden = !measures.length && !fasteners.length;
       paintMeasurements(root, measures, projectPoint);
+      paintFastenerDirections(root, fasteners, projectPoint);
     },
   };
 }

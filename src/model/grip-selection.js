@@ -1,4 +1,4 @@
-import { objectAnchors } from '../model-object.js';
+import { objectGripPoints } from '../model-object.js';
 export const gripRefKey = (ref) => JSON.stringify([ref.id, ref.kind]);
 export function gripPoint(object, ref) {
   const index =
@@ -9,7 +9,7 @@ export function gripPoint(object, ref) {
         : ref.kind === 'end'
           ? 1
           : -1;
-  return object && index >= 0 ? objectAnchors(object)[index] : null;
+  return object && index >= 0 ? objectGripPoints(object)[index] : null;
 }
 export function validGripRefs(objects, refs, selectedIds) {
   const byId = new Map(objects.map((o) => [o.id, o])),

@@ -1,3 +1,4 @@
+import { bindInspectorField } from './field-state.js';
 import { createMarkChangeButton } from '../ui/mark-change-dialog.js';
 import './assembly-panel.css';
 import { assemblySeries, modelAssemblies } from '../assembly-series.js';
@@ -96,13 +97,18 @@ export function installAssemblyPanel({ getState, commit, selectPart, changeMark 
         ...series,
         scope: 'Assembly',
       });
-      for (const input of Object.values(inputs)) {
+      for (const [key, input] of Object.entries(inputs)) {
         input.setAttribute('data-independent-editor', '');
         input.onchange = () =>
           edit(assembly, {
             series: { prefix: inputs.prefix.value.trim(), start: Number(inputs.start.value) },
           });
         input.onblur = input.onchange;
+        bindInspectorField(input, () => {
+          const current = getState();
+          const source = modelAssemblies(current).find((a) => a.id === assembly.id);
+          return assemblySeries(source || assembly, current.objects)[key];
+        });
         input.onkeydown = (event) => {
           if (event.key === 'Enter') {
             event.preventDefault();

@@ -6,6 +6,9 @@ export const cadFeedback = Object.freeze({
   rubberBand: '#a6b3ba',
   tracking: '#16815e',
   polar: '#bc873b',
+  axisX: '#bb534d',
+  axisY: '#328975',
+  axisZ: '#397dc5',
   markerPixels: 10,
   dashPixels: [5, 4],
 });

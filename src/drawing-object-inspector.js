@@ -1,9 +1,10 @@
+import { bindInspectorField } from './inspector/field-state.js';
 import { installInsulationInspector } from './drawing-insulation-inspector.js';
 import { createEditorSection } from './ui/editor-surface.js';
 import { createHatchControl } from './hatch-control.js';
 import { validateShape } from './drawing-shapes.js';
 
-export function installDrawingOrder(editor, item) {
+export function installDrawingOrder(editor, item, source = item) {
   const label = document.createElement('label'),
     select = document.createElement('select');
   label.textContent = 'Placering';
@@ -15,6 +16,7 @@ export function installDrawingOrder(editor, item) {
     editor.ui();
     editor.adapter.redraw();
   };
+  bindInspectorField(select, () => (source.drawOrder === 'back' ? 'back' : 'front'));
   label.append(select);
   editor.panel.append(createEditorSection('Ritordning', [label]));
 }

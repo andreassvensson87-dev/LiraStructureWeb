@@ -128,6 +128,7 @@ export function validateFastenerGroups(objects) {
               s.layout.rotation,
               s.layout.reversed,
               s.layout.searchLength,
+              s.layout.xLength,
             ]
           : null,
       );

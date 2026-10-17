@@ -18,7 +18,7 @@ export function installPolysweepTools({
     actions.syncOperationUI();
     $('form').inert = false;
     sync();
-    $('status').textContent = 'Polysweep · Välj punkter · Enter avslutar';
+    $('status').textContent = 'Polysweep · Välj punkter · Enter/skrollklick avslutar';
     renderer.domElement.focus({ preventScroll: true });
   }
   function candidate(target) {
@@ -43,7 +43,7 @@ export function installPolysweepTools({
     actions.syncLocks();
     sync();
     $('draw-length-form').hidden = false;
-    $('status').textContent = `Polysweep · ${points.length} punkter · Enter avslutar`;
+    $('status').textContent = `Polysweep · ${points.length} punkter · Enter/skrollklick avslutar`;
     return true;
   }
   function finish() {
@@ -75,7 +75,7 @@ export function installPolysweepTools({
     actions.syncLocks();
     sync();
     $('status').textContent =
-      `Polysweep · ${tools.operation.points.length} punkter · Enter avslutar`;
+      `Polysweep · ${tools.operation.points.length} punkter · Enter/skrollklick avslutar`;
   }
   function editPoint(index, remove) {
     try {

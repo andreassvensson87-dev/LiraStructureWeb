@@ -39,7 +39,14 @@ export function prepareFastenerPlacement(
 /** Same domain preparation for pointer preview and confirmation. */
 export function preparePickedFasteners(draft, { start, xPoint, frame, model }) {
   const picked = fastenerLayoutFromPoints(start, xPoint, frame);
-  const layout = { ...picked, ...draft.layout, frame: picked.frame };
+  const layout = {
+    ...draft.layout,
+    ...picked,
+    offset: draft.layout?.offset || picked.offset,
+    rotation: draft.layout?.rotation || 0,
+    reversed: !!draft.layout?.reversed,
+    searchLength: draft.layout?.searchLength ?? null,
+  };
   const result = prepareFastenerPlacement(
     { ...draft, layout },
     {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cadFeedback } from '../ui/cad-feedback.js';
 
 const glyphs = {
   X: [
@@ -74,9 +75,9 @@ export class WorkPlaneGuide {
     const u = new THREE.Vector3(...frame.u),
       v = new THREE.Vector3(...frame.v);
     for (const [name, direction, color] of [
-      ['X', u, 0xbb534d],
-      ['Y', v, 0x328975],
-      ['Z', u.clone().cross(v).normalize(), 0x397dc5],
+      ['X', u, cadFeedback.axisX],
+      ['Y', v, cadFeedback.axisY],
+      ['Z', u.clone().cross(v).normalize(), cadFeedback.axisZ],
     ]) {
       const shaft = new THREE.Line(geometry(2), material(color));
       const head = new THREE.Mesh(

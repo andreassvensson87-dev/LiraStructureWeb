@@ -1,9 +1,11 @@
+import { bindInspectorField } from './inspector/field-state.js';
 export function renderRichTextInspector({
   item,
   panel,
   hint,
   dialog,
   draft,
+  original,
   content,
   history,
   future,
@@ -40,6 +42,10 @@ export function renderRichTextInspector({
       if (input.value && Number.isFinite(value) && value >= min && value <= max) change(key, value);
       else input.value = Math.round(item[key] * 1000) / 1000;
     };
+    bindInspectorField(
+      input,
+      () => Math.round(((draft ? original : item)?.[key] ?? item[key]) * 1000) / 1000,
+    );
     label.append(input);
     panel.append(label);
   }
@@ -50,6 +56,7 @@ export function renderRichTextInspector({
     font.append(new Option(family, family));
   font.value = item.font;
   font.onchange = () => change('font', font.value);
+  bindInspectorField(font, () => (draft ? original : item)?.font ?? item.font);
   fontLabel.append(font);
   panel.append(fontLabel);
   const alignmentLabel = document.createElement('label');
@@ -74,6 +81,10 @@ export function renderRichTextInspector({
       item.paragraphs.map((p) => ({ ...p, align: alignment.value })),
     );
   };
+  bindInspectorField(alignment, () => {
+    const paragraphs = (draft ? original : item)?.paragraphs || item.paragraphs;
+    return paragraphs.every((p) => p.align === paragraphs[0].align) ? paragraphs[0].align : 'mixed';
+  });
   alignmentLabel.append(alignment);
   panel.append(alignmentLabel);
   for (const [key, text] of [
@@ -86,6 +97,7 @@ export function renderRichTextInspector({
     input.type = 'checkbox';
     input.checked = item[key];
     input.onchange = () => change(key, input.checked);
+    bindInspectorField(input, () => (draft ? original : item)?.[key] ?? item[key]);
     label.append(input, text);
     panel.append(label);
   }
@@ -103,6 +115,12 @@ export function renderRichTextInspector({
       if (input.value && Number.isFinite(+input.value))
         change('points', [[...item.points[0].map((n, i) => (i === axis ? +input.value : n))]]);
     };
+    bindInspectorField(
+      input,
+      () =>
+        Math.round(((draft ? original : item)?.points[0][axis] ?? item.points[0][axis]) * 1000) /
+        1000,
+    );
     label.append(input);
     panel.append(label);
   }

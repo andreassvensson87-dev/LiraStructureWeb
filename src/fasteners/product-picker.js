@@ -17,6 +17,8 @@ export function createFastenerProductPicker(form, { openLibrary, changed }) {
         : spec[key] || '—';
   const grid = document.createElement('div');
   grid.className = 'fastener-product-grid attribute-columns';
+  const secondary = document.createElement('div');
+  secondary.className = 'attribute-columns';
   for (const [key, label] of [
     ['standard', 'Standard'],
     ['diameter', 'Dimension'],
@@ -25,7 +27,7 @@ export function createFastenerProductPicker(form, { openLibrary, changed }) {
   ]) {
     const row = createAttributeRow({ key: `product-${key}`, label, type: 'select' });
     controls[key] = row.querySelector('select');
-    grid.append(row);
+    (key === 'grade' || key === 'coating' ? secondary : grid).append(row);
   }
   const library = document.createElement('button');
   library.type = 'button';
@@ -35,6 +37,7 @@ export function createFastenerProductPicker(form, { openLibrary, changed }) {
   library.onclick = openLibrary;
   grid.querySelector('label').append(library);
   host.append(grid);
+  form.querySelector('[data-advanced]').append(secondary);
   let records = [],
     selected = null;
   const length = form.elements.manualLength;

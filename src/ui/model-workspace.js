@@ -107,7 +107,7 @@ export function installModelWorkspace({ root, controllers }) {
       label: 'Bearbeta',
       items: [
         { label: 'Skärning', size: 'large', menu: [button('polygoncut'), button('linecut')] },
-        { stack: [button('fastener'), button('fastener-group')] },
+        { stack: [button('fastener')] },
       ],
     },
     {

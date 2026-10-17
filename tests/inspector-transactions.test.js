@@ -249,3 +249,30 @@ test('grid dimensions and labels use the ordinary inspector preview, commit and 
   inspector.rollback();
   assert.ok(Math.abs(Math.hypot(...object.end) - 1000) < 1e-8);
 });
+
+test('failed inspector confirmation retains its editable draft and only accepts fields after a successful retry', () => {
+  const h = harness('plate');
+  let accepted = 0;
+  h.inspector.fieldDraft = { accept: () => accepted++, sync() {} };
+  h.inspector.stage((s) => ({ ...s, thickness: 18 }));
+  const session = h.inspector.session;
+  session.error = 'Ogiltigt värde';
+  h.inspector.finish();
+  assert.equal(h.inspector.session, session);
+  assert.equal(h.objects()[1].thickness, 10);
+  assert.equal(accepted, 0);
+  session.error = '';
+  const commit = h.inspector.commit;
+  h.inspector.commit = () => {
+    throw Error('Commit avvisad');
+  };
+  h.inspector.finish();
+  assert.equal(h.inspector.session, session);
+  assert.equal(accepted, 0);
+  assert.equal(h.objects()[1].thickness, 10);
+  h.inspector.commit = commit;
+  h.inspector.finish();
+  assert.equal(h.objects()[1].thickness, 18);
+  assert.equal(accepted, 1);
+  assert.equal(h.inspector.session, null);
+});

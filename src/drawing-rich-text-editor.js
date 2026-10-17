@@ -326,6 +326,7 @@ export class DrawingRichTextEditor {
   }
   edit(item, create = false) {
     this.original = create ? null : item;
+    this.fieldSource = structuredClone(item);
     this.draft = structuredClone(item);
     this.e.selected = item.id;
     this.e.mode = 'richtext';
@@ -422,6 +423,7 @@ export class DrawingRichTextEditor {
       hint: this.e.hint,
       dialog: this.e.dialog,
       draft: this.draft,
+      original: this.draft ? this.fieldSource : null,
       content: this.content,
       history: this.e.history,
       future: this.e.future,
@@ -442,7 +444,8 @@ export class DrawingRichTextEditor {
         this.e.adapter.redraw();
       },
       undo: (redo) => this.e.undo(redo),
-      installOrder: (item) => installDrawingOrder(this.e, item),
+      installOrder: (item) =>
+        installDrawingOrder(this.e, item, this.draft ? this.fieldSource : item),
     });
   }
   paint(root) {

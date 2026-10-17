@@ -1,5 +1,5 @@
 import { REACH_WARNINGS } from './material-reach.js';
-import { validateFastenerLayout } from './placement-frame.js';
+import { validateFastenerLayout, fastenerLayoutAnchors } from './placement-frame.js';
 import { transformSpan } from './holes.js';
 import * as THREE from 'three';
 import { fastenerAccessories, validateAccessories } from './accessories.js';
@@ -180,6 +180,9 @@ export const fastenerType = {
   geometry: fastenerGeometry,
   validate: validateFastener,
   anchors: (s) => [s.start, s.end],
+  gripAnchors: fastenerLayoutAnchors,
+  gripLabels: (s) =>
+    s.group ? ['Flytta skruvgruppens origo', 'Ändra skruvgruppens X-riktning'] : null,
   corners: (s) => [s.start, s.end],
   snapSegments: (s) => ({ segments: [[s.start, s.end]], includeEdges: false }),
   partFrame: fastenerFrame,

@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { installOverlayNavigation } from '../src/model/overlay-navigation.js';
 import { installModelPointer } from '../src/model/pointer-controller.js';
 
-function fixture() {
+function fixture(mode) {
   let captured = null;
   const captures = new Map();
   const root = new EventTarget();
@@ -63,11 +63,16 @@ function fixture() {
   const dispose = installOverlayNavigation(host, canvas);
   const log = [];
   const removePointer = installModelPointer(canvas, {
-    getState: () => ({}),
+    getState: () => ({ mode }),
     beginBox: () => log.push('box'),
     orbit: (e) => log.push(['orbit', e.clientX, e.clientY, e.ctrlKey, e.metaKey, e.shiftKey]),
     point: () => log.push('point'),
-    actions: { select: () => log.push('select') },
+    actions: {
+      select: () => log.push('select'),
+      'confirm-fastener-targets': () => log.push('confirm'),
+      'finish-polysweep': () => log.push('confirm'),
+      'finish-plate': () => log.push('confirm'),
+    },
     move: () => {},
     leave: () => {},
   });
@@ -228,3 +233,24 @@ test('stationary right click preserves the vertex menu, while right drag does no
     f.dispose();
   }
 });
+
+for (const mode of ['fastenerTargets', 'polysweepCreate', 'plateCreate'])
+  test(`${mode}: middle confirmation coexists with actual OrbitControls pan and orbit`, () => {
+    const f = fixture(mode);
+    try {
+      f.send(f.canvas, 'pointerdown');
+      f.send(f.canvas, 'pointerup', { buttons: 0 });
+      assert.equal(f.log.filter((x) => x === 'confirm').length, 1);
+      for (const extra of [{}, { ctrlKey: true }, { metaKey: true }]) {
+        const before = f.camera.position.clone();
+        f.send(f.canvas, 'pointerdown', extra);
+        f.send(f.canvas, 'pointermove', { ...extra, clientX: 380, clientY: 290 });
+        f.send(f.canvas, 'pointerup', { ...extra, buttons: 0, clientX: 380, clientY: 290 });
+        assert.ok(f.camera.position.distanceTo(before) > 1);
+        assert.equal(f.captured, null);
+        assert.equal(f.log.filter((x) => x === 'confirm').length, 1);
+      }
+    } finally {
+      f.dispose();
+    }
+  });

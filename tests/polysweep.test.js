@@ -285,6 +285,11 @@ test('point selection retains a group for dragging without requiring double-clic
       this.children.push(...children);
     },
     setAttribute() {},
+    removeAttribute() {},
+    toggleAttribute() {},
+    hasAttribute() {
+      return false;
+    },
     addEventListener(name, callback) {
       this.handlers[name] = callback;
     },
@@ -552,6 +557,11 @@ test('point inspector previews and commits multiple corner radii even with endpo
       this.children.push(...nodes);
     },
     setAttribute() {},
+    removeAttribute() {},
+    toggleAttribute() {},
+    hasAttribute() {
+      return false;
+    },
     addEventListener(name, fn) {
       this.handlers[name] = fn;
     },

@@ -72,3 +72,9 @@ export function modelKeyboardCommand(
   if (modifier && e.key.toLowerCase() === 'z') return e.shiftKey ? 'redo' : 'undo';
   return ['Delete', 'Backspace'].includes(e.key) ? 'delete' : null;
 }
+
+/** Canvas completion shares Enter's tool policy, without dispatching keyboard events. */
+export function modelCompletionCommand(state) {
+  const command = modelKeyboardCommand({ key: 'Enter' }, state);
+  return command?.startsWith('confirm-') || command?.startsWith('finish-') ? command : null;
+}

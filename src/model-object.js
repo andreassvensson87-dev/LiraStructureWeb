@@ -28,6 +28,7 @@ export const cutsForModel = (s, model) => [
   ...holesForPart(s, model),
 ];
 export const objectAnchors = (s) => objectType(s).anchors(s);
+export const objectGripPoints = (s) => objectType(s).gripAnchors?.(s) || objectAnchors(s);
 export function validateObject(s) {
   if (s?.ifcClass !== undefined) {
     try {

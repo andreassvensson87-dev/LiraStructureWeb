@@ -1,3 +1,4 @@
+import { createInspectorDraft } from './inspector/field-state.js';
 import { renderFrameProperties, renderFrameInstances } from './frame-editor-inspector.js';
 import { paintFrameEditor } from './frame-editor-renderer.js';
 
@@ -145,7 +146,10 @@ export class FrameEditor {
     this.toolbox = createFrameToolbox(this.dialog);
     installFrameWorkspace(this.dialog, this.toolbox);
     this.fileDialog = new FrameFileDialog(this.dialog);
-    this.updatePalette = paletteControl(this.$('color'), () => this.changedProperties.add('color'));
+    this.updatePalette = paletteControl(this.$('color'), () => {
+      this.changedProperties.add('color');
+      this.fieldDraft.sync();
+    });
     const button = document.createElement('button');
     button.id = 'frame-editor-open';
     button.textContent = 'Ram-editor';
@@ -180,6 +184,10 @@ export class FrameEditor {
       this.$(key).addEventListener('change', () =>
         this.cad.update(key, key === 'polar' ? +this.$(key).value : this.$(key).checked),
       );
+    this.fieldDraft = createInspectorDraft(this.dialog.querySelector('aside'), {
+      selector:
+        '.fe-entity-properties input,.fe-entity-properties select,.fe-block-placement input,.fe-block-placement select,.fe-origin-fields input',
+    });
     this.changedProperties = new Set();
     this.lineWeightControl = installLineWeights(this.$('stroke'));
     for (const key of new Set(Object.values(propertyFields).flat()))
@@ -958,6 +966,7 @@ export class FrameEditor {
       mode: this.mode,
       tool: this.tool,
       changedProperties: this.changedProperties,
+      fieldDraft: this.fieldDraft,
       dialog: this.dialog,
       reportControls: this.reportControls,
       $: this.$.bind(this),

@@ -171,7 +171,7 @@ export class DrawingShapeTransform {
     a.hint.textContent =
       message ||
       (this.phase === 'select'
-        ? 'Klicka på ritobjekt för flerval · klick igen tar bort valet · Enter fortsätter'
+        ? 'Klicka på ritobjekt för flerval · klick igen tar bort valet · Enter/skrollklick fortsätter'
         : this.phase === 'base'
           ? rotate
             ? 'Klicka rotationscentrum · snappning till hörn och ändpunkter'

@@ -91,6 +91,7 @@ export function paletteControl(input, onPick) {
     palette = document.createElement('div');
   button.type = 'button';
   button.className = 'fe-color-trigger';
+  button.dataset.inspectorValue = '';
   button.setAttribute('aria-label', 'Välj färg');
   button.setAttribute('aria-expanded', 'false');
   palette.className = 'fe-color-palette';

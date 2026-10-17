@@ -1,3 +1,4 @@
+import { bindInspectorField } from '../inspector/field-state.js';
 import { createAttributeRow } from '../inspector/attributes.js';
 export function blockField(label, value, change, { type = 'text', options } = {}) {
   const row = createAttributeRow(
@@ -24,6 +25,7 @@ export function blockField(label, value, change, { type = 'text', options } = {}
     control.dataset.blockPending = '';
   };
   control.onchange = control.onblur = () => control.blockCommit();
+  bindInspectorField(control, () => previous);
   return row;
 }
 export function flushBlockFields(root) {

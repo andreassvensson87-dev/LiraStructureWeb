@@ -1,3 +1,4 @@
+import { bindInspectorField } from './inspector/field-state.js';
 import { appendVectorDrawing, appendModelFaces } from './drawing-vector.js';
 import { appendMaterialHatch } from './drawing-hatch.js';
 import { geometryEdges } from './fasteners/edges.js';
@@ -54,6 +55,10 @@ export class PartSections {
         editor.syncInspector();
       }
     };
+    bindInspectorField(this.scale, () => {
+      const views = editor.config ? editor.selectedViews() : [];
+      return views.length && views.every((v) => v.scale === views[0].scale) ? views[0].scale : '';
+    });
   }
   get items() {
     return (this.e.config.views || []).filter((v) => v.section || v.detail || v.standard);

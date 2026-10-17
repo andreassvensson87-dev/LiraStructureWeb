@@ -1,3 +1,4 @@
+import { createInspectorDraft } from '../inspector/field-state.js';
 import { createPreviewSelect } from './preview-select.js';
 import { createEditorSection } from './editor-surface.js';
 
@@ -47,6 +48,7 @@ export function createHatchControl({
   row.append(angle.node, spacing.node);
   const advanced = createEditorSection('Avancerat', [width.node], { open: false });
   group.append(heading, pattern, row, advanced);
+  const fieldDraft = createInspectorDraft(group);
   for (const { input } of [angle, spacing, width]) input.onchange = changed;
   function get() {
     return {
@@ -60,7 +62,7 @@ export function createHatchControl({
     try {
       for (const { input } of [angle, spacing, width]) if (!input.reportValidity()) return;
       validate(get());
-      onChange(get());
+      if (onChange(get()) !== false) fieldDraft.accept();
     } catch {
       for (const { input } of [angle, spacing, width])
         if (!input.checkValidity()) {
@@ -83,6 +85,7 @@ export function createHatchControl({
       spacing.input.value = h.spacing;
       width.input.value = h.lineWidth;
       sync();
+      fieldDraft.accept();
     },
     get,
   };

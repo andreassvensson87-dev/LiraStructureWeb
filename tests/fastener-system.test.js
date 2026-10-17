@@ -49,6 +49,44 @@ const placed = {
   startAllowance: 20,
 };
 
+test('round fastener walls shade smoothly and expose only rim edges; hex corners remain sharp', () => {
+  const s = {
+    ...placed,
+    accessories: [
+      { kind: 'washer', offset: 10 },
+      { kind: 'nut', offset: 50 },
+    ],
+  };
+  const { geometry, edges } = fastenerDisplayTemplate(s);
+  const p = geometry.attributes.position,
+    n = geometry.attributes.normal;
+  let roundWallVertices = 0,
+    flatFaceVertices = 0;
+  for (let i = 0; i < p.count; i++) {
+    const radius = Math.hypot(p.getX(i), p.getY(i));
+    if (Math.abs(radius - rod.washer.outerDiameter / 2) > 1e-4) continue;
+    if (Math.abs(n.getZ(i)) > 0.99) {
+      flatFaceVertices++;
+      continue;
+    }
+    roundWallVertices++;
+    assert.ok(Math.abs(p.getX(i) * n.getY(i) - p.getY(i) * n.getX(i)) < 1e-5);
+    assert.ok(p.getX(i) * n.getX(i) + p.getY(i) * n.getY(i) > 0);
+  }
+  assert.ok(roundWallVertices > 0 && flatFaceVertices > 0);
+  const lines = edges.attributes.position;
+  let sharpEdges = 0;
+  for (let i = 0; i < lines.count; i += 2) {
+    if (Math.abs(lines.getZ(i) - lines.getZ(i + 1)) < 0.001) continue;
+    sharpEdges++;
+    assert.ok(
+      Math.abs(Math.hypot(lines.getX(i), lines.getY(i)) - rod.nut.acrossFlats / Math.sqrt(3)) <
+        1e-4,
+    );
+  }
+  assert.equal(sharpEdges, 6, 'only the six nut corners have longitudinal edges');
+});
+
 test('standard specifications validate thread rules and product metadata', () => {
   assert.equal(validateFastenerSpec(bolt), bolt);
   assert.throws(() => validateFastenerSpec({ ...bolt, thread: [1] }), /gänguppgifter/);

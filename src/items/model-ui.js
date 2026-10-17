@@ -1,3 +1,4 @@
+import { createInspectorDraft } from '../inspector/field-state.js';
 import * as THREE from 'three';
 import { ItemLibrary } from './library-ui.js';
 import { placeItem, moveItemAnchor, setItemRoll, validateItemObject } from './geometry.js';
@@ -55,6 +56,7 @@ export function createItemController({
       input.step = 'any';
       input.required = true;
       input.dataset.itemCoord = `${key}:${i}`;
+      input.dataset.inspectorKey = `${key}:${i}`;
       input.setAttribute('aria-label', `Item ${key === 'start' ? 'start' : 'slut'} ${axis}`);
       label.append(input);
       row.append(label);
@@ -63,6 +65,7 @@ export function createItemController({
     form.querySelector('[data-item-coords]').append(group);
   }
   $('form').after(form);
+  const fieldDraft = createInspectorDraft(form);
   for (const event of ['input', 'change']) form.addEventListener(event, (e) => e.stopPropagation());
   const coords = (key, source) =>
     [...form.querySelectorAll(`[data-item-coord^="${key}:"]`)].map((input, i) => {
@@ -180,6 +183,7 @@ export function createItemController({
       input.value = Math.round(source[key][i] * 1000) / 1000;
     }
     form.elements.rotation.value = source.rotation;
+    fieldDraft.accept();
   }
   function sync() {
     const source = selected(),

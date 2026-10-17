@@ -50,6 +50,7 @@ export function renderFastenerAccessories({
     input.min = '0';
     input.step = 'any';
     input.value = item.offset;
+    input.dataset.inspectorKey = `accessory-${index}-offset`;
     input.setAttribute('aria-label', label.textContent);
     label.append(input);
     row.append(
@@ -85,6 +86,8 @@ export function renderFastenerHoles({
     row.append(legend);
     const fields = document.createElement('div');
     fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="span">Automatiskt förband</option><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
+    for (const control of fields.querySelectorAll('input,select'))
+      control.dataset.inspectorKey = `${h.targetId}-${control.name}`;
     const kind = fields.querySelector('[name=holeKind]');
     kind.value = h.kind;
     const extent = fields.querySelector('[name=extent]');
@@ -132,7 +135,11 @@ export function createFastenerMetadata(inspector, panel) {
   let homes = [];
   return {
     show() {
-      if (homes.length) return;
+      if (homes.length) {
+        for (const { node } of homes) if (node.parentElement !== section) section.append(node);
+        if (section.parentElement !== panel) panel.append(section);
+        return;
+      }
       const nodes = [
         inspector.querySelector('#inspector-identity'),
         inspector.querySelector('#inspector-ifc-class')?.closest('label'),

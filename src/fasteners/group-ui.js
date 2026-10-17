@@ -4,10 +4,10 @@ import { parseBoltDistances, parseBoltCoordinates, patternPositions } from './pa
 import { createAttributeRow } from '../inspector/attributes.js';
 
 /** Presentation of the shared, DOM-free pattern definition. */
-export function createFastenerGroupEditor(root) {
+export function createFastenerGroupEditor(root, { position = null } = {}) {
   root.classList.add('attribute-group');
   root.innerHTML =
-    '<legend><label class="fastener-check"><input type="checkbox" name="groupEnabled">Mönster</label></legend><div data-group-fields hidden><div data-pattern-fields></div><svg class="fastener-group-layout" viewBox="0 0 300 155" role="img" aria-label="Skruvmönster med lokala X- och Y-axlar"></svg><output data-group-count></output></div>';
+    '<legend>Mönster</legend><div data-group-fields><div data-pattern-fields></div><svg class="fastener-group-layout" viewBox="0 0 300 155" role="img" aria-label="Skruvmönster med lokala X- och Y-axlar"></svg><output data-group-count></output></div>';
   const fieldRoot = root.querySelector('[data-pattern-fields]');
   fieldRoot.className = 'attribute-columns';
   const fields = [
@@ -16,6 +16,7 @@ export function createFastenerGroupEditor(root) {
       'Mönster',
       'select',
       [
+        ['single', 'En skruv'],
         ['array', 'Rutnät'],
         ['circle', 'Cirkel'],
         ['list', 'Fritt'],
@@ -27,6 +28,7 @@ export function createFastenerGroupEditor(root) {
     ['groupDiameter', 'Diameter', 'number'],
     ['groupRotation', 'Mönstervinkel', 'number'],
   ];
+  const inputs = {};
   for (const [key, label, type, options] of fields) {
     const row = createAttributeRow({
       key,
@@ -35,18 +37,18 @@ export function createFastenerGroupEditor(root) {
       options,
       ...(type === 'number' ? { step: 'any' } : {}),
     });
-    fieldRoot.append(row);
+    inputs[key] = row.querySelector('input,select');
+    (key === 'groupRotation' && position ? position : fieldRoot).append(row);
   }
-  const inputs = Object.fromEntries(
-    [...root.querySelectorAll('input,select')].map((input) => [input.name, input]),
-  );
+  fieldRoot.querySelector('.attribute-caption').hidden = true;
   let source = null,
     groupId,
     reversed = false;
   function definition() {
     const shape = inputs.groupShape.value;
     let pattern;
-    if (shape === 'array') {
+    if (shape === 'single') pattern = { rows: 1, columns: 1, distancesX: [], distancesY: [] };
+    else if (shape === 'array') {
       const distancesX = parseBoltDistances(inputs.groupX.value),
         distancesY = parseBoltDistances(inputs.groupY.value);
       pattern = {
@@ -69,7 +71,7 @@ export function createFastenerGroupEditor(root) {
     }
     const group = {
       id: groupId,
-      shape,
+      shape: shape === 'single' ? 'array' : shape,
       ...pattern,
       reversed,
       rotation: Number(inputs.groupRotation.value),
@@ -79,21 +81,20 @@ export function createFastenerGroupEditor(root) {
     return group;
   }
   function render() {
-    const enabled = inputs.groupEnabled.checked;
-    root.querySelector('[data-group-fields]').hidden = !enabled;
-    for (const input of Object.values(inputs))
-      if (input !== inputs.groupEnabled) input.disabled = !enabled;
+    const single = inputs.groupShape.value === 'single';
     const circle = inputs.groupShape.value === 'circle';
-    for (const key of ['groupX', 'groupY']) inputs[key].parentElement.hidden = circle;
+    for (const key of ['groupX', 'groupY']) inputs[key].parentElement.hidden = circle || single;
     for (const key of ['groupCount', 'groupDiameter']) inputs[key].parentElement.hidden = !circle;
+    inputs.groupRotation.parentElement.hidden = single;
     const svg = root.querySelector('svg');
+    svg.toggleAttribute('hidden', single);
     svg.replaceChildren();
     const output = root.querySelector('[data-group-count]');
-    if (!enabled) return;
+    output.hidden = single;
     try {
       const group = definition();
       const count = renderFastenerPattern(svg, group);
-      output.textContent = `${count} skruvar`;
+      output.textContent = count === 1 ? '1 skruv' : `${count} skruvar`;
       inputs.groupX.title = inputs.groupY.title =
         group.shape === 'list'
           ? 'Koordinater från mönstrets origo'
@@ -104,14 +105,14 @@ export function createFastenerGroupEditor(root) {
   }
   root.addEventListener('input', render);
   root.addEventListener('change', render);
+  if (position) inputs.groupRotation.addEventListener('input', render);
   return {
-    load(nextSource, enabled = false) {
+    load(nextSource) {
       source = nextSource?.group || null;
       groupId = source?.id || crypto.randomUUID();
       reversed = !!source?.reversed;
-      inputs.groupEnabled.checked = !!source || enabled;
-      inputs.groupEnabled.disabled = !!source;
-      inputs.groupShape.value = source?.shape || 'array';
+      inputs.groupShape.value =
+        !source || source.rows * source.columns === 1 ? 'single' : source.shape || 'array';
       inputs.groupX.value =
         source?.shape === 'list'
           ? source.positions.map((p) => p[0]).join(' ')
@@ -131,11 +132,8 @@ export function createFastenerGroupEditor(root) {
     },
     renewIdentity() {
       groupId = crypto.randomUUID();
-      inputs.groupEnabled.disabled = false;
     },
-    enabled: () => inputs.groupEnabled.checked,
     apply(draft, start, direction) {
-      if (!inputs.groupEnabled.checked) return draft;
       const result = { ...draft, group: definition() };
       return draft.layout ? result : alignFastenerGroup(result, start, direction);
     },

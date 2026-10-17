@@ -1,3 +1,4 @@
+import { createPointerCompletion } from './pointer-completion.js';
 import { renderProfileDimensions, renderProfileBindings } from './section-editor-inspector.js';
 import { paintSectionEditor } from './section-editor-renderer.js';
 
@@ -141,11 +142,25 @@ export class SectionEditor {
         this.action('length');
       }
     };
+    this.completion = createPointerCompletion({
+      getCommand: () =>
+        ['poly', 'hole'].includes(this.mode) && this.draft.length ? this.draft : null,
+      complete: () => this.action('finish'),
+    });
+    this.canvas.onlostpointercapture = () => {
+      this.completion.cancel();
+      this.drag = null;
+    };
+    this.dialog.addEventListener('close', () => {
+      this.completion.cancel();
+      this.drag = null;
+    });
     this.canvas.oncontextmenu = (e) => e.preventDefault();
     this.canvas.onpointerdown = (e) => this.down(e);
     this.canvas.onpointermove = (e) => this.move(e);
     this.canvas.onpointerup = (e) => this.up(e);
     this.canvas.onpointercancel = () => {
+      this.completion.cancel();
       this.drag = null;
       this.draw();
     };
@@ -292,7 +307,9 @@ export class SectionEditor {
     this.$('feedback').textContent =
       this.error ||
       validation ||
-      (this.draft.length ? `${this.draft.length} punkter · Enter sluter konturen` : 'Redo');
+      (this.draft.length
+        ? `${this.draft.length} punkter · Enter/skrollklick sluter konturen`
+        : 'Redo');
     this.dialog
       .querySelectorAll('[data-mode]')
       .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === this.mode)));
@@ -555,6 +572,7 @@ export class SectionEditor {
     return p.map((v) => Math.round(v * 1000) / 1000);
   }
   down(e) {
+    this.completion.down(e);
     if (e.button === 1 || e.button === 2) {
       this.drag = { pan: true, p: this.local(e), center: [...this.center] };
       this.canvas.setPointerCapture(e.pointerId);
@@ -605,6 +623,7 @@ export class SectionEditor {
     this.run(() => this.add(p));
   }
   move(e) {
+    this.completion.move(e);
     const local = this.local(e);
     if (this.drag?.pan) {
       this.center = [
@@ -625,6 +644,7 @@ export class SectionEditor {
     if (!this.drag) return;
     const drag = this.drag;
     this.drag = null;
+    this.completion.up(e);
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     if (drag.move && Math.hypot(...drag.offset) * this.scale > 3) {
       this.checkpoint();

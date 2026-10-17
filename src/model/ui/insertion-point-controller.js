@@ -88,7 +88,11 @@ export function installInsertionPointEditor({
   }
   function sync() {
     refs = editor.selected();
-    const visible = refs.length > 0 && !tools.drawing && !tools.operation;
+    const groupIds = new Set(
+      project.objects.filter((s) => s.type === 'fastener' && s.group).map((s) => s.id),
+    );
+    const groupPoints = refs.length > 0 && refs.every((ref) => groupIds.has(ref.id));
+    const visible = refs.length > 0 && !groupPoints && !tools.drawing && !tools.operation;
     root.classList.toggle('point-context', visible);
     inspector.panel.hidden = !visible;
     if (!visible) {

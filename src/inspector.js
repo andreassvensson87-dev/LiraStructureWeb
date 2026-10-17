@@ -1,3 +1,4 @@
+import { createInspectorDraft, setInspectorFieldState } from './inspector/field-state.js';
 import { objectType } from './model/object-types/index.js';
 import { SelectionScope } from './inspector/selection-scope.js';
 import { installSelectionDock } from './inspector/selection-dock.js';
@@ -42,6 +43,12 @@ export class Inspector {
     const $ = (id) => document.getElementById(id);
     this.$ = $;
     $('inspector-properties').querySelectorAll('label.field').forEach(adoptAttributeLabel);
+    this.fieldDraft = createInspectorDraft($('inspector-properties'), {
+      filter: (control) =>
+        !control.closest(
+          '[data-independent-editor],#identity-fields,#inspector-identity,#insertion-point-inspector,#assembly-inspector,#inspector-ifc-class,.numbering-series-fields',
+        ),
+    });
     this.dock = installSelectionDock(this);
     const note = document.createElement('p');
     note.id = 'inspector-scope-note';
@@ -351,6 +358,8 @@ export class Inspector {
     $('plate-geometry').hidden =
       !selected.some((s) => objectType(s).cut) && !operation?.cutTargets && !operation?.lineCut;
     this.show(this.tab);
+    if (!this.session) this.fieldDraft.accept();
+    else this.fieldDraft.sync();
   }
   buildCommon(selected, force = false) {
     const root = this.$('common-fields');
@@ -583,6 +592,9 @@ export class Inspector {
         this.cancel();
       }
     }
+    this.fieldDraft?.sync();
+    if (this.fieldDraft && session.error)
+      setInspectorFieldState(input, { changed: true, invalid: true });
     if (this.multiEditing) {
       if (!session.error) this.fillStandardFields();
       this.actions.querySelector('.primary').disabled = !session.batch || !!session.error;
@@ -592,22 +604,21 @@ export class Inspector {
   finish() {
     if (!this.session || this.busy) return;
     const session = this.session;
-    this.session = null;
+    // Failed confirmation must keep the user's draft and its error visible.
+    if (session.error || !session.batch) return;
     this.busy = true;
-    if (session.error) {
-      this.cancel();
-      this.fill(session.sources);
-      this.$('inspector-error').textContent = session.error;
-    } else if (JSON.stringify(session.sources) !== JSON.stringify(session.batch)) {
-      this.cancel();
-      try {
+    this.cancel();
+    this.session = null;
+    try {
+      if (JSON.stringify(session.sources) !== JSON.stringify(session.batch))
         this.commit(session.batch);
-        this.$('inspector-error').textContent = '';
-      } catch (error) {
-        this.fill(session.sources);
-        this.$('inspector-error').textContent = error.message;
-      }
-    } else this.cancel();
+      this.$('inspector-error').textContent = '';
+      this.fieldDraft?.accept();
+    } catch (error) {
+      this.session = session;
+      this.$('inspector-error').textContent = error.message;
+      this.fieldDraft?.sync();
+    }
     this.busy = false;
     this.sync();
     this.scopeChanged(true);
@@ -621,6 +632,7 @@ export class Inspector {
     this.fill(session.sources);
     this.$('inspector-error').textContent = '';
     this.busy = false;
+    this.fieldDraft?.accept();
     this.sync();
     this.scopeChanged(true);
   }

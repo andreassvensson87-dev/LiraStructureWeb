@@ -64,10 +64,11 @@ export class DrawingWorkspace {
     getBounds,
     blocked = () => false,
     onScale = () => {},
+    completion,
   }) {
     Object.assign(this, { workspace, stage, paper, getPaper, getBounds, blocked, onScale });
     this.scale = 1;
-    this.pan = installDrawingPan(workspace, { blocked });
+    this.pan = installDrawingPan(workspace, { blocked, completion });
     workspace.addEventListener(
       'wheel',
       (e) => {

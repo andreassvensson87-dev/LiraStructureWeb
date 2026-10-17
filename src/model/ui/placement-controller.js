@@ -235,10 +235,8 @@ export function createPlacementController({
       ).values(),
     ].map(cloneTransformSource);
     setDrawing(true, { keepPoints: true });
-    tools.operation = sources.some(
-      (s) =>
-        s.group ||
-        ['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind),
+    tools.operation = sources.some((s) =>
+      ['baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice'].includes(s.kind),
     )
       ? { mode: 'move', sources }
       : {
@@ -279,7 +277,13 @@ export function createPlacementController({
       });
     }
     if (tools.operation?.gripRefs || tools.operation?.mode === 'grip')
-      return moveGripPoints(tools.operation.sources, tools.operation.refs, target, tools.first);
+      return moveGripPoints(
+        tools.operation.sources,
+        tools.operation.refs,
+        target,
+        tools.first,
+        project.objects,
+      );
     if (['helperline', 'gridline'].includes(tools.operation?.mode))
       return [
         {

@@ -145,7 +145,7 @@ export function createPlateController({
         ? tools.operation.planeMode === 'three'
           ? `Välj planpunkt ${tools.operation.planePoints.length + 1} av 3`
           : 'Välj första hörnet – arbetsplanet går genom punkten'
-        : `${tools.operation.polygon.length} hörn · Klicka första hörnet eller Enter för att sluta`;
+        : `${tools.operation.polygon.length} hörn · Klicka första hörnet eller Enter/skrollklick för att sluta`;
       $('mode-label').textContent = line ? 'Ny Linecut' : cut ? 'Ny Polygoncut' : 'Ny Plate';
     }
     if (line && creating && tools.operation.frame)
@@ -153,7 +153,7 @@ export function createPlateController({
         tools.operation.polygon.length < 2
           ? 'Välj snittlinjens andra punkt'
           : tools.operation.sidePicked
-            ? 'Enter bekräftar · Pilen visar sidan som tas bort'
+            ? 'Enter/skrollklick bekräftar · Pilen visar sidan som tas bort'
             : 'Klicka sidan som ska tas bort, eller välj skärsida';
     else if (editing)
       $('plate-stage').textContent = `Flytta hörn ${tools.operation.index + 1} i arbetsplanet`;

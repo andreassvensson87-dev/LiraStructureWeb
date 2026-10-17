@@ -238,3 +238,18 @@ body:has(#inspector-properties.point-context) .selection-type-dock {
 #inspector-properties .attribute-columns > label.attribute-row > :is(input, select) {
   width: 100%;
 }
+
+/* Shared pending state: no size/position changes; errors take precedence over pending. */
+[data-inspector-pending] {
+  background-color: #fff3ad !important;
+  border-color: #bf941e !important;
+}
+:is(input[type='checkbox'], input[type='radio'])[data-inspector-pending] {
+  outline: 2px solid #d4ae37;
+  outline-offset: 2px;
+}
+[data-inspector-invalid] {
+  border-color: #ba3939 !important;
+  outline: 1px solid #ba3939;
+  outline-offset: 0;
+}

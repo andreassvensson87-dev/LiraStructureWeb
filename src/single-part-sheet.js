@@ -1,3 +1,4 @@
+import { bindInspectorField } from './inspector/field-state.js';
 import { resolvePartDrawingGeometry } from './part-sheet-geometry.js';
 import {
   composePartSheet,
@@ -217,6 +218,12 @@ export class SinglePartSheet {
         }
         this.compose();
       };
+      bindInspectorField(input, () => {
+        const settings = this.config?.partMaterialSchedule;
+        return key === 'visible'
+          ? !!settings?.visible
+          : (settings?.position?.[key === 'x' ? 0 : 1] ?? input.value);
+      });
       label.append(input);
       this.partMaterialPanel.append(label);
     }
@@ -363,6 +370,10 @@ export class SinglePartSheet {
     this.$('review').onclick = () => this.review(this.record);
     this.$('library').onclick = () => this.openLibrary();
     this.navigation = new DrawingWorkspace({
+      completion: {
+        getCommand: () => this.annotations.completionCommand(),
+        complete: () => this.annotations.complete(),
+      },
       workspace: this.workspace,
       stage: this.stage,
       paper: this.svg,
@@ -446,6 +457,10 @@ export class SinglePartSheet {
         this.compose();
       }
     };
+    bindInspectorField(
+      this.viewName,
+      () => this.config?.views?.find((v) => v.id === this.selectedView)?.name || '',
+    );
     this.extraSections = new PartSections(this);
     this.viewPlacement = createDrawingViewInspector(this.dialog.querySelector('.view-properties'), {
       selected: () => this.config?.views.find((v) => v.id === this.selectedView),

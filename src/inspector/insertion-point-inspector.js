@@ -1,3 +1,4 @@
+import { setInspectorFieldState, inspectorFieldValue } from './field-state.js';
 import { createAttributeRow } from './attributes.js';
 /** Compact point context; transactions and selection belong to its model controller. */
 export function createInsertionPointInspector(root, { preview, commit, reset, cancel }) {
@@ -43,6 +44,7 @@ export function createInsertionPointInspector(root, { preview, commit, reset, ca
   buttons.append(apply, rollback);
   panel.append(title, count, row, buttons, error);
   root.append(panel);
+  let original = '';
   return {
     panel,
     input,
@@ -52,7 +54,10 @@ export function createInsertionPointInspector(root, { preview, commit, reset, ca
       if (document.activeElement !== input || !dirty)
         input.value = value == null ? '' : String(value);
       input.disabled = disabled;
-      apply.disabled = disabled || !dirty || !valid;
+      if (!dirty) original = inspectorFieldValue(input);
+      const changed = dirty && inspectorFieldValue(input) !== original;
+      setInspectorFieldState(input, { changed, invalid: !valid });
+      apply.disabled = disabled || !changed || !valid;
       rollback.disabled = !dirty;
     },
   };

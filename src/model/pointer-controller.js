@@ -1,3 +1,6 @@
+import { createPointerCompletion } from '../pointer-completion.js';
+import { modelCompletionCommand } from './keyboard-command.js';
+
 /** Routes completed clicks to the active tool. Pointer capture/box selection stays in its adapter. */
 export function pointerCommand({
   mode,
@@ -33,9 +36,19 @@ export function installModelPointer(
   { getState, beginBox, orbit, point, actions, move, leave },
 ) {
   let down = null;
+  const completion = createPointerCompletion({
+    getCommand: () => modelCompletionCommand(getState()),
+    complete: (command) => actions[command](),
+  });
+  const middleEnd = (e) => completion.up(e);
+  const pointerMove = (e) => {
+    completion.move(e);
+    move(e);
+  };
   const start = (e) => {
     down = { id: e.pointerId, x: e.clientX, y: e.clientY };
     const s = getState();
+    completion.down(e);
     if (
       e.button === 0 &&
       e.pointerType !== 'touch' &&
@@ -86,19 +99,23 @@ export function installModelPointer(
   };
   const cancel = () => {
     down = null;
+    completion.cancel();
   };
-  surface.addEventListener('pointerdown', start, true);
+  surface.addEventListener('pointerdown', start, { capture: true });
+  // Confirm before navigation releases pointer capture; keep navigation's gesture intact.
+  surface.addEventListener('pointerup', middleEnd, { capture: true });
   surface.addEventListener('pointerup', end);
   surface.addEventListener('pointercancel', cancel);
   surface.addEventListener('lostpointercapture', cancel);
-  surface.addEventListener('pointermove', move);
+  surface.addEventListener('pointermove', pointerMove);
   surface.addEventListener('pointerleave', leave);
   return () => {
-    surface.removeEventListener('pointerdown', start, true);
+    surface.removeEventListener('pointerdown', start, { capture: true });
+    surface.removeEventListener('pointerup', middleEnd, { capture: true });
     surface.removeEventListener('pointerup', end);
     surface.removeEventListener('pointercancel', cancel);
     surface.removeEventListener('lostpointercapture', cancel);
-    surface.removeEventListener('pointermove', move);
+    surface.removeEventListener('pointermove', pointerMove);
     surface.removeEventListener('pointerleave', leave);
   };
 }

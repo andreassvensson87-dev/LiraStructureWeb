@@ -6,6 +6,7 @@ import { validateFastenerTargets } from '../../fasteners/relations.js';
 import { replaceFastenerGroup } from '../../fasteners/groups.js';
 import { updateAutomaticJoints } from '../../fasteners/update-joints.js';
 import { applyObjectBatch } from '../tools/transform-tool.js';
+import { fastenerPreviewOverlay } from '../../fasteners/preview.js';
 
 // Owns temporary geometry and validation against the proposed model. No commits.
 export function createModelPreview({
@@ -91,6 +92,16 @@ export function createModelPreview({
     }
   }
   function previewModelBatch(batch, ghost = true) {
+    const fastenerPreview = batch.length > 0 && batch.every(isFastener);
+    const contacted = new Set(
+      batch
+        .filter(isFastener)
+        .flatMap((s) =>
+          s.holes
+            .filter((h) => h.kind !== 'none' && h.active !== false && h.layers?.length)
+            .map((h) => h.targetId),
+        ),
+    );
     const previous = new Map(project.objects.map((s) => [s.id, s]));
     const batchIds = new Set(batch.map((s) => s.id));
     const groupId = batch[0]?.group?.id;
@@ -142,8 +153,25 @@ export function createModelPreview({
     const group = new THREE.Group();
     try {
       for (const s of model)
-        if (affected.has(s.id))
-          group.add(mesh(s, isCut(s) || (ghost && !batch.some(isCut)), model));
+        if (affected.has(s.id)) {
+          const child = mesh(
+            s,
+            isCut(s) ||
+              (ghost &&
+                !batch.some(isCut) &&
+                (!fastenerPreview || isFastener(s) || contacted.has(s.id))),
+            model,
+          );
+          if (ghost && fastenerPreview && contacted.has(s.id) && !isFastener(s)) {
+            child.material.opacity = 0.16;
+            child.material.depthWrite = false;
+          }
+          group.add(child);
+        }
+      if (fastenerPreview) {
+        group.userData.fastenerBatch = batch;
+        group.add(fastenerPreviewOverlay(batch));
+      }
     } catch (error) {
       dispose(group);
       throw error;

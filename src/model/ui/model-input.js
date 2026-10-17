@@ -56,12 +56,25 @@ export function installModelInput({
   const updateForm = (...args) => actions.updateForm(...args);
   const updateTypedLength = (...args) => actions.updateTypedLength(...args);
   const workPlanePrompt = (...args) => actions.workPlanePrompt(...args);
+  const completionActions = {
+    'finish-polysweep': () => controllers.polysweepUI.finish(),
+    'finish-plate': () => finishPlate(),
+    'finish-rotation': () => controllers.rotationHandle.form.requestSubmit(),
+    'confirm-fastener-targets': () => controllers.fastenerUI.confirmTargets(),
+    'confirm-work-area': () => controllers.workAreaUI.confirm(),
+    'confirm-plane-transform': () => controllers.planeTransformUI.confirmActive(),
+    'confirm-linear': () => controllers.linearUI.confirmActive(),
+    'confirm-component-properties': () => controllers.componentUI.confirmCopy(),
+    'confirm-plate-properties': () => controllers.platePropertyUI.confirm(),
+    'confirm-sweep-properties': () => controllers.sweepPropertyUI.confirm(),
+    'confirm-fit': () => controllers.componentUI.confirm(),
+  };
   installModelPointer(renderer.domElement, {
     getState: () => ({
       linear: !!tools.operation?.linearId,
       planeTransform: !!tools.operation?.planeId,
       mode: tools.operation?.mode,
-      picking: tools.operation?.picking,
+      picking: tools.operation?.linearPicking || tools.operation?.picking,
       drawing: tools.drawing,
       hasStart: !!tools.first,
       boxMode: ui.boxMode,
@@ -95,6 +108,7 @@ export function installModelInput({
       clearPreview();
     },
     actions: {
+      ...completionActions,
       linear: (p) => controllers.linearUI.pickPoint(p),
       'plane-transform': (p) => controllers.planeTransformUI.pickPoint(p),
       'component-property-target': (e) => {
@@ -156,7 +170,7 @@ export function installModelInput({
         controllers.fastenerUI.setTargets(tools.operation.targetIds);
         render({ selectionOnly: true });
         $('status').textContent =
-          `${controllers.fastenerUI.groupEditor.enabled() ? 'Skruvgrupp' : 'Skruv'} · ${ids.size} delar valda · Klicka fler, Enter bekräftar`;
+          `Skruvgrupp · ${ids.size} delar valda · Klicka fler, Enter/skrollklick bekräftar`;
         renderer.domElement.focus({ preventScroll: true });
       },
       helperpoint: (p) => save({ type: 'helperpoint', start: p }),
@@ -223,6 +237,10 @@ export function installModelInput({
     });
     if (!command) return;
     e.preventDefault();
+    if (completionActions[command]) {
+      completionActions[command]();
+      return;
+    }
     switch (command) {
       case 'sweep-placement':
       case 'sweep-profile-rotation':
@@ -236,37 +254,13 @@ export function installModelInput({
             fillForm(inspectorSelection()[0]);
         }
         break;
-      case 'confirm-work-area':
-        controllers.workAreaUI.confirm();
-        break;
-      case 'confirm-plane-transform':
-        controllers.planeTransformUI.confirmActive();
-        break;
       case 'remove-plane-transform-point':
         controllers.planeTransformUI.removePoint();
-        break;
-      case 'confirm-linear':
-        controllers.linearUI.confirmActive();
-        break;
-      case 'confirm-component-properties':
-        controllers.componentUI.confirmCopy();
         break;
       case 'move':
       case 'copy':
       case 'rotate':
         $(command).click();
-        break;
-      case 'confirm-plate-properties':
-        controllers.platePropertyUI.confirm();
-        break;
-      case 'confirm-sweep-properties':
-        controllers.sweepPropertyUI.confirm();
-        break;
-      case 'confirm-fit':
-        controllers.componentUI.confirm();
-        break;
-      case 'confirm-fastener-targets':
-        controllers.fastenerUI.confirmTargets();
         break;
       case 'cancel':
         if (ui.marquee) {
@@ -325,14 +319,8 @@ export function installModelInput({
         $('draw-length').focus({ preventScroll: true });
         updateTypedLength();
         break;
-      case 'finish-polysweep':
-        controllers.polysweepUI.finish();
-        break;
       case 'remove-polysweep-point':
         controllers.polysweepUI.removePoint();
-        break;
-      case 'finish-plate':
-        finishPlate();
         break;
       case 'axis':
         toggleLock(e.key.toUpperCase());
@@ -351,9 +339,6 @@ export function installModelInput({
         controllers.rotationHandle.input.value = e.key;
         controllers.rotationHandle.input.focus({ preventScroll: true });
         controllers.rotationHandle.input.dispatchEvent(new Event('input'));
-        break;
-      case 'finish-rotation':
-        controllers.rotationHandle.form.requestSubmit();
         break;
       case 'undo':
       case 'redo':

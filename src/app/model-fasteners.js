@@ -47,14 +47,14 @@ export function installModelFasteners({
       scene.add(ui.preview);
     },
     showInspector: () => controllers.inspector.show('properties'),
-    beginTargets: (targetIds, group = false) => {
+    beginTargets: (targetIds) => {
       select(null);
       setDrawing(true);
       tools.operation = { mode: 'fastenerTargets', targetIds };
       render();
       controllers.inspector.show('properties');
       $('status').textContent =
-        `${group ? 'Skruvgrupp' : 'Skruv'} · Klicka på delar, Enter bekräftar, Escape avbryter`;
+        'Skruvgrupp · Klicka på delar, Enter/skrollklick bekräftar, Escape avbryter';
       renderer.domElement.focus({ preventScroll: true });
     },
     finish: () => {
@@ -101,7 +101,8 @@ export function installModelFasteners({
       );
       modelEditor.replace(next);
       setSelection(identified.map((s) => s.id));
-      $('status').textContent = `Skruvgrupp sparad · ${identified.length} skruvar med kopplade hål`;
+      $('status').textContent =
+        `Skruvgrupp sparad · ${identified.length} ${identified.length === 1 ? 'skruv' : 'skruvar'} med kopplade hål`;
       return;
     }
     const error = interactionTimings.measure('validationMs', () => validateSweep(draft));

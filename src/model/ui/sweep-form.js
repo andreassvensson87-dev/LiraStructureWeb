@@ -54,6 +54,9 @@ export function createSweepForm({
     }
     return result;
   }
+  document.querySelectorAll('[data-placement-h]').forEach((b) => {
+    b.dataset.inspectorChoice = '';
+  });
   function fillForm(s) {
     if (s.type === 'component' || s.type === 'item' || isHelper(s) || isFastener(s)) return;
     ui.libraryMode = s.profile === 'custom';

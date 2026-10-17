@@ -29,11 +29,15 @@ export function createFastenerPlacementForm() {
   advanced.append(
     mode,
     manual,
+    form.querySelector('[data-hole-tools]'),
     form.querySelector('[data-search-settings]'),
     form.querySelector('[data-delete]'),
   );
   form.querySelector('.fastener-actions').prepend(form.querySelector('[data-cancel]'));
   const lengthSection = form.querySelector('[data-length-section]');
+  lengthSection.querySelector('legend').remove();
+  form.querySelector('[data-connections]').open = false;
+  form.querySelector('[data-hole-tools] > summary').textContent = 'Referensdel och hålstandard';
   form.querySelector('.fastener-assembly-section').before(lengthSection);
   const position = form.querySelector('[data-position]');
   const points = document.createElement('details');

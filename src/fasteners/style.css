@@ -645,7 +645,13 @@
   max-height: 76px;
 }
 .fastener-editor .fastener-group-layout {
-  max-height: 100px;
+  max-height: 72px;
+}
+.fastener-editor .fastener-group-layout[hidden] {
+  display: none;
+}
+#inspector-properties:has(#fastener-panel:not([hidden])) #mode-label {
+  display: none;
 }
 .fastener-editor [data-hole-settings] {
   margin: 8px 0;

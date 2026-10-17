@@ -1,3 +1,4 @@
+import { bindInspectorField } from './inspector/field-state.js';
 import { createEditorSection } from './ui/editor-surface.js';
 import { insulationFrame, insulationSettings } from './drawing-insulation.js';
 
@@ -55,6 +56,7 @@ export function installInsulationInspector(editor, item) {
       input.setCustomValidity('');
     }
   };
+  bindInspectorField(input, () => insulationSettings(item).thickness);
   label.append(input);
   fields.push(label);
   select('Sida från start till slut', 'side', [

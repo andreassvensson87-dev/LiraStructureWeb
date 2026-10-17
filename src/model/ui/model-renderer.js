@@ -5,6 +5,7 @@ import { displayGeometryIdentityReader, createDisplayGeometryContext } from '../
 import { holesByTarget } from '../../fasteners/relations.js';
 import { reconcileChildren } from '../reconcile-children.js';
 import { SnapIndex } from '../snap-index.js';
+import * as THREE from 'three';
 
 export function installModelRenderer({
   $,
@@ -106,6 +107,11 @@ export function installModelRenderer({
     controllers.workAreaUI?.sync();
     controllers.referenceModels?.setWorkArea(controllers.workAreaUI?.bounds() || null);
     for (const child of objects.children) if (!isVisible(child.userData.id)) child.visible = false;
+    if (!selectionOnly)
+      renderState.depthBounds = new THREE.Box3()
+        .setFromObject(objects)
+        .union(grid.bounds)
+        .union(controllers.referenceModels?.bounds() || new THREE.Box3());
     renderedSelection = new Set(selectedIds);
     $('count').textContent = project.objects.length;
     interactionTimings.measure('modelTreeMs', () => {

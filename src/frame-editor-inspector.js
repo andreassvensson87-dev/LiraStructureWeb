@@ -8,6 +8,7 @@ export function renderFrameProperties({
   mode,
   tool,
   changedProperties,
+  fieldDraft,
   dialog,
   reportControls,
   $,
@@ -63,6 +64,7 @@ export function renderFrameProperties({
   $('originX').value = frame.origin?.[0] || 0;
   $('originY').value = frame.origin?.[1] || 0;
   for (const key of ['originX', 'originY']) $(key).parentElement.hidden = mode !== 'block';
+  fieldDraft.accept();
   dialog.querySelector('[data-action="originApply"]').hidden = mode !== 'block';
 }
 export function renderFrameInstances({

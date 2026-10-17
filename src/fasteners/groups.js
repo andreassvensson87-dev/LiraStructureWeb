@@ -18,6 +18,10 @@ export function fastenerGroupBatch(
       .filter((s) => s.group?.id === group.id)
       .map((s) => [`${s.group.row}:${s.group.column}`, s]),
   );
+  if (!previous.size && draft.id) {
+    const source = model.find((s) => s.id === draft.id && !s.group);
+    if (source) previous.set('0:0', source);
+  }
   const basis = groupBasis(group);
   const axis = new THREE.Vector3(...group.direction).sub(new THREE.Vector3(...group.origin));
   const batch = [];

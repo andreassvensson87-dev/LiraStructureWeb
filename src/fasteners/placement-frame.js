@@ -9,6 +9,11 @@ export function validateFastenerLayout(layout) {
   if (!layout) return;
   const { frame, offset, rotation, reversed } = layout;
   if (
+    layout.xLength != null &&
+    (!Number.isFinite(layout.xLength) || layout.xLength < 0.001 || layout.xLength > 1e7)
+  )
+    throw new Error('Ange en giltig längd för X-riktningen.');
+  if (
     layout.searchLength != null &&
     (!Number.isFinite(layout.searchLength) || layout.searchLength <= 0 || layout.searchLength > 1e7)
   )
@@ -40,8 +45,10 @@ export function fastenerLayoutFromPoints(origin, xPoint, reference) {
   x.addScaledVector(normal, -x.dot(normal));
   if (normal.length() < 0.999 || x.length() < 0.001)
     throw new Error('Välj X-riktning längs arbetsplanet, minst 0,001 mm från origo.');
+  const xLength = x.length();
   x.normalize();
   const layout = {
+    xLength,
     frame: { origin: [...origin], u: x.toArray(), v: normal.cross(x).normalize().toArray() },
     offset: [0, 0, 0],
     rotation: 0,
@@ -67,6 +74,13 @@ export function layoutForFastener(source) {
     rotation: 0,
     reversed,
   };
+}
+/** Editing points belong to the pattern plane, never to the fitted shaft. */
+export function fastenerLayoutAnchors(source) {
+  if (!source.group) return [source.start, source.end];
+  const layout = layoutForFastener(source);
+  const { origin, u } = layout.frame;
+  return [[...origin], origin.map((v, i) => v + u[i] * (layout.xLength || 100))];
 }
 export function applyFastenerLayout(draft) {
   validateFastenerLayout(draft.layout);

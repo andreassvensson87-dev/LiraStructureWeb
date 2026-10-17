@@ -117,7 +117,7 @@ function fixture(t) {
     instanceBatches,
     host: { classList: { remove: noop }, clientWidth: 800, clientHeight: 600 },
     camera: new THREE.PerspectiveCamera(),
-    grid: { set: noop },
+    grid: { set: noop, bounds: new THREE.Box3() },
     guide: { visible: false },
     frameGate: { invalidate: noop },
     renderer: { domElement: { style: {} } },

@@ -37,6 +37,21 @@ function cylinder(top, bottom, length, offset, segments = 48) {
   g.translate(0, 0, offset + length / 2);
   return g.toNonIndexed();
 }
+/** ExtrudeGeometry facets curved walls; keep end faces and hex corners sharp. */
+function smoothRoundWalls(geometry, radii) {
+  const p = geometry.attributes.position,
+    n = geometry.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    if (Math.abs(n.getZ(i)) > 1e-6) continue;
+    const x = p.getX(i),
+      y = p.getY(i),
+      radius = Math.hypot(x, y);
+    if (!radii.some((r) => Math.abs(radius - r) < 1e-4)) continue;
+    const sign = Math.sign(x * n.getX(i) + y * n.getY(i));
+    n.setXYZ(i, (sign * x) / radius, (sign * y) / radius, 0);
+  }
+  return geometry;
+}
 function localFastenerGeometry(s) {
   const spec = s.spec,
     r = spec.diameter / 2;
@@ -80,6 +95,7 @@ function localFastenerGeometry(s) {
       bevelEnabled: false,
       curveSegments: 24,
     });
+    smoothRoundWalls(nut, [r]);
     nut.translate(0, 0, accessory.offset);
     pieces.push(nut);
   }
@@ -95,6 +111,7 @@ function localFastenerGeometry(s) {
       bevelEnabled: false,
       curveSegments: 24,
     });
+    smoothRoundWalls(ring, [washer.innerDiameter / 2, washer.outerDiameter / 2]);
     ring.translate(0, 0, offset);
     pieces.push(ring);
   }

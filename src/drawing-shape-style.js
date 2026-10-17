@@ -1,3 +1,4 @@
+import { bindInspectorField } from './inspector/field-state.js';
 import { insulationDefaults } from './drawing-insulation.js';
 import { installDrawingHatch } from './drawing-object-inspector.js';
 import { createEditorSection } from './ui/editor-surface.js';
@@ -60,7 +61,7 @@ export function installShapeStyle(editor, item) {
     if (type === 'number') {
       field.min = 0.05;
       field.max = 5;
-      field.step = 0.05;
+      field.step = 'any';
     }
     let recorded = false;
     field.onfocus = () => {
@@ -87,6 +88,7 @@ export function installShapeStyle(editor, item) {
         field.setCustomValidity('');
       }
     };
+    bindInspectorField(field, () => item[key] ?? value);
     label.append(field);
     panel.append(label);
     return field;

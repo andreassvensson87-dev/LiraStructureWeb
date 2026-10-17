@@ -472,6 +472,30 @@ export class DrawingAnnotations {
       Math.max(0, Math.min(e.clientY - box.top, box.height - 100)) + 'px';
     this.contextMenu.querySelector('button').focus();
   }
+  completionCommand() {
+    if (this.drag || this.grips?.session || this.richText?.draft) return null;
+    if (this.transform?.active())
+      return this.transform.phase === 'select' ? `${this.mode}:select` : null;
+    if (this.mode === 'assistant')
+      return this.assistant.phase === 'select' ? 'assistant:select' : null;
+    if (this.workflow === 'shape')
+      return ['polyline', 'polygon'].includes(this.mode) && this.draft ? this.draft : null;
+    return this.mode && this.phase === 'points' && this.draft?.type === 'dimension'
+      ? this.draft
+      : null;
+  }
+  complete() {
+    if (this.transform?.active()) this.transform.finishSelection();
+    else if (this.mode === 'assistant') {
+      if (this.assistant.phase === 'select' && this.assistant.sources.length) {
+        this.assistant.phase = 'place';
+        this.assistant.ui();
+      }
+    } else if (this.mode === 'line' && this.draft?.points.length === 1) this.cancel();
+    else if (this.workflow === 'shape') this.finishShape();
+    else this.finishPoints();
+    this.adapter.redraw();
+  }
   key(e) {
     if (e.key === 'Escape') {
       const menu = e.target?.closest?.('.cad-status-menu[open], .ui-command-menu');
@@ -563,16 +587,7 @@ export class DrawingAnnotations {
     if (e.key === 'Enter' && this.mode) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (this.transform?.active()) this.transform.finishSelection();
-      else if (this.mode === 'assistant') {
-        if (this.assistant.phase === 'select' && this.assistant.sources.length) {
-          this.assistant.phase = 'place';
-          this.assistant.ui();
-        }
-      } else if (this.mode === 'line' && this.draft?.points.length === 1) this.cancel();
-      else if (this.workflow === 'shape') this.finishShape();
-      else this.finishPoints();
-      this.adapter.redraw();
+      this.complete();
     } else if (e.key.toLowerCase() === 'c' && ['polyline', 'polygon'].includes(this.mode)) {
       e.preventDefault();
       e.stopImmediatePropagation();

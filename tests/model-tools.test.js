@@ -212,3 +212,103 @@ test('HUD pickers receive native snap points and never commit through ordinary f
     'plane-transform',
   );
 });
+
+test('middle click confirms bolt targets, but navigation, cancellation and other tools do not', () => {
+  const surface = new EventTarget();
+  let mode = 'fastenerTargets',
+    confirmed = 0;
+  const dispose = installModelPointer(surface, {
+    getState: () => ({ mode, drawing: true }),
+    beginBox() {},
+    orbit() {},
+    point() {
+      assert.fail('middle click must not place geometry');
+    },
+    actions: { 'confirm-fastener-targets': () => confirmed++ },
+    move() {},
+    leave() {},
+  });
+  const send = (type, extra = {}) => {
+    const event = new Event(type);
+    Object.assign(event, { button: 1, pointerId: 1, clientX: 10, clientY: 20, ...extra });
+    surface.dispatchEvent(event);
+  };
+  send('pointerdown');
+  send('pointerup');
+  assert.equal(confirmed, 1);
+  for (const key of ['ctrlKey', 'metaKey', 'shiftKey', 'altKey']) {
+    send('pointerdown', { [key]: true });
+    send('pointerup');
+    send('pointerdown');
+    send('pointerup', { [key]: true });
+  }
+  send('pointerdown');
+  send('pointermove', { clientX: 40 });
+  send('pointermove');
+  send('pointerup'); // A pan returning to its origin is still a pan.
+  send('pointerdown');
+  send('pointerup', { clientX: 40 });
+  for (const type of ['pointercancel', 'lostpointercapture']) {
+    send('pointerdown');
+    send(type);
+    send('pointerup');
+  }
+  send('pointerdown');
+  mode = 'fastenerCreate';
+  send('pointerup');
+  send('pointerdown');
+  mode = 'fastenerTargets';
+  send('pointerup');
+  assert.equal(confirmed, 1);
+  dispose();
+  send('pointerdown');
+  send('pointerup');
+  assert.equal(confirmed, 1);
+});
+
+test('middle completion follows each active tool and never adds a point or completes a different phase', () => {
+  for (const [initial, command, interrupted] of [
+    [{ mode: 'polysweepCreate', drawing: true }, 'finish-polysweep', { mode: 'plateCreate' }],
+    [{ mode: 'plateCreate', drawing: true }, 'finish-plate', { mode: 'plateVertex' }],
+    [{ mode: 'fit', picking: false }, 'confirm-fit', { mode: 'fit', picking: true }],
+    [{ mode: 'sweepProperties' }, 'confirm-sweep-properties', {}],
+    [{ mode: 'plateProperties' }, 'confirm-plate-properties', {}],
+    [{ mode: 'componentProperties' }, 'confirm-component-properties', {}],
+    [{ mode: 'workArea' }, 'confirm-work-area', { mode: 'workPlane' }],
+    [{ linear: true, picking: false }, 'confirm-linear', { linear: true, picking: true }],
+    [{ planeTransform: true }, 'confirm-plane-transform', {}],
+    [{ mode: 'rotate', picking: false }, 'finish-rotation', { mode: 'rotate', picking: true }],
+  ]) {
+    let state = initial,
+      count = 0;
+    const surface = new EventTarget();
+    const dispose = installModelPointer(surface, {
+      getState: () => state,
+      beginBox() {},
+      orbit() {},
+      move() {},
+      leave() {},
+      point() {
+        assert.fail('completion must not choose another point');
+      },
+      actions: { [command]: () => count++ },
+    });
+    const send = (type, extra = {}) => {
+      const event = new Event(type);
+      Object.assign(event, { button: 1, pointerId: 1, clientX: 10, clientY: 20, ...extra });
+      surface.dispatchEvent(event);
+    };
+    send('pointerdown');
+    send('pointerup');
+    assert.equal(count, 1, command);
+    send('pointerdown');
+    send('pointermove', { clientX: 50 });
+    send('pointerup');
+    assert.equal(count, 1, 'returning to the start after panning must not confirm');
+    send('pointerdown');
+    state = interrupted;
+    send('pointerup');
+    assert.equal(count, 1, 'release must belong to the original completion phase');
+    dispose();
+  }
+});

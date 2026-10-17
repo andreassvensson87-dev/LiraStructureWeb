@@ -147,7 +147,7 @@ export function createWorkAreaController({
     status(
       points.length === 1
         ? 'Välj motstående hörn i XY'
-        : 'Kontrollera arbetsområdet · Enter bekräftar',
+        : 'Kontrollera arbetsområdet · Enter/skrollklick bekräftar',
     );
   }
   function confirm() {

@@ -1,5 +1,5 @@
 import { gripPoint } from './grip-selection.js';
-import { isPlate, objectAnchors } from '../model-object.js';
+import { isPlate, objectGripPoints } from '../model-object.js';
 import { plateLocal, platePoint, plateNormal } from '../plate.js';
 import { isFastener } from '../fasteners/object-type.js';
 import { objectType } from './object-types/index.js';
@@ -7,6 +7,7 @@ import { selectedBlock } from '../blocks/placement.js';
 import { blockGripValues } from '../blocks/grip.js';
 import { updateModelBlock } from '../blocks/model-adapter.js';
 import { cloneTransformSource } from './tools/transform-tool.js';
+import { moveFastenerGroupGrips, fastenerGripPlane } from '../fasteners/group-grips.js';
 /** Group only selected, coincident world points; never merge by screen position. */
 export function selectionGrips(objects, selectedIds, drawing = false) {
   if (drawing || !selectedIds.size) return [];
@@ -16,7 +17,7 @@ export function selectionGrips(objects, selectedIds, drawing = false) {
   for (const object of objects.filter(
     (s) => selectedIds.has(s.id) && s.type !== 'component' && !s.generatedBy,
   )) {
-    objectAnchors(object).forEach((point, index) => {
+    objectGripPoints(object).forEach((point, index) => {
       const ref = {
         id: object.id,
         kind:
@@ -31,7 +32,11 @@ export function selectionGrips(objects, selectedIds, drawing = false) {
               .get(cellKey([cell[0] + x, cell[1] + y, cell[2] + z]))
               ?.find((g) => Math.hypot(...point.map((v, i) => v - g.point[i])) < 1e-6);
       if (!group) {
-        group = { point: [...point], refs: [] };
+        group = {
+          point: [...point],
+          refs: [],
+          label: objectType(object).gripLabels?.(object)?.[index],
+        };
         groups.push(group);
         const key = cellKey(cell);
         if (!cells.has(key)) cells.set(key, []);
@@ -49,7 +54,7 @@ export function wholeGripObjects(sources, refs) {
       .filter(
         (source) =>
           !source.parametricBlock &&
-          objectAnchors(source).every((_, i) =>
+          objectGripPoints(source).every((_, i) =>
             refs.some(
               (ref) =>
                 ref.id === source.id &&
@@ -60,7 +65,7 @@ export function wholeGripObjects(sources, refs) {
       .map((s) => s.id),
   );
 }
-export function moveGripPoints(sources, refs, target, base) {
+export function moveGripPoints(sources, refs, target, base, model = sources) {
   if (sources.some((s) => s.parametricBlock)) {
     const members = selectedBlock(sources, new Set(sources.map((s) => s.id)));
     if (!members.length || refs.length !== 1)
@@ -80,7 +85,9 @@ export function moveGripPoints(sources, refs, target, base) {
   }
   const whole = wholeGripObjects(sources, refs);
   const delta = base ? target.map((v, i) => v - base[i]) : null;
+  const groupUpdates = moveFastenerGroupGrips(sources, refs, target, base, model);
   return sources.map((source) => {
+    if (groupUpdates.has(source.id)) return groupUpdates.get(source.id);
     if (
       delta &&
       (whole.has(source.id) ||
@@ -112,6 +119,8 @@ export function moveGripPoints(sources, refs, target, base) {
 
 /** Parallel plate grips constrain the displacement in their shared plane directions. */
 export function gripWorkPlane(sources, refs, base) {
+  const fastenerPlane = fastenerGripPlane(sources, refs, base);
+  if (fastenerPlane) return fastenerPlane;
   const whole = wholeGripObjects(sources, refs);
   const plates = sources.filter(
     (source) =>

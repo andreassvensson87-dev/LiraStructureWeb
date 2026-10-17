@@ -1,3 +1,8 @@
+import {
+  bindInspectorField,
+  createInspectorDraft,
+  setInspectorFieldState,
+} from './inspector/field-state.js';
 export function createDrawingViewInspector(
   parent,
   { selected, changed, selectedViews = () => (selected() ? [selected()] : []), move },
@@ -31,6 +36,9 @@ export function createDrawingViewInspector(
       changed(view, key, axis, value);
       sync();
     };
+    bindInspectorField(input, () =>
+      selected()?.[key]?.[axis] == null ? '' : Math.round(selected()[key][axis] * 1000) / 1000,
+    );
     label.append(input);
     fields.append(label);
     inputs.push({ input, key, axis });
@@ -48,6 +56,7 @@ export function createDrawingViewInspector(
     batch.append(label);
     return input;
   });
+  const fieldDraft = createInspectorDraft(batch);
   const apply = document.createElement('button');
   apply.type = 'button';
   apply.textContent = 'Flytta markerade vyer';
@@ -56,6 +65,7 @@ export function createDrawingViewInspector(
     if (values.every(Number.isFinite)) {
       move?.(...values);
       offsets.forEach((input) => (input.value = '0'));
+      fieldDraft.accept();
       sync();
     }
   };
@@ -73,8 +83,10 @@ export function createDrawingViewInspector(
     fields.hidden = multiple;
     batch.hidden = !multiple;
     if (!view) return;
-    for (const { input, key, axis } of inputs)
+    for (const { input, key, axis } of inputs) {
       input.value = String(Math.round(view[key][axis] * 1000) / 1000);
+      setInspectorFieldState(input);
+    }
   }
   return { sync };
 }

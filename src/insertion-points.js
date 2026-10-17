@@ -129,8 +129,8 @@ export class InsertionPoints {
         this.markers.set(key, marker);
       }
       marker.grip = grip;
-      if (grip?.refs.length > 1) {
-        marker.title = 'Flytta gemensamma insättningspunkter';
+      if (grip?.label || grip?.refs.length > 1) {
+        marker.title = grip.label || 'Flytta gemensamma insättningspunkter';
         marker.setAttribute('aria-label', marker.title);
       }
       const edge = String(kind).startsWith('edge:');

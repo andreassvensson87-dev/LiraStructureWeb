@@ -1,3 +1,4 @@
+import { bindInspectorField } from './inspector/field-state.js';
 import { installInsulationInspector } from './drawing-insulation-inspector.js';
 import { installDrawingOrder, installDrawingGeometry } from './drawing-object-inspector.js';
 import {
@@ -155,6 +156,7 @@ export function renderAnnotationInspector(
           input.setCustomValidity('');
         }
       };
+      bindInspectorField(input, () => item[key] ?? value);
       label.append(input);
       panel.append(label);
     };
@@ -255,6 +257,9 @@ export function renderAnnotationInspector(
           );
         }
       };
+      bindInspectorField(offset, () =>
+        Number(dimensionPaperOffset(item, project, adapter.unit()).value.toFixed(2)),
+      );
       label.append(offset);
       panel.append(label);
       button('Lägg till måttpunkt', () => commands.addDimensionPoint());
@@ -374,7 +379,7 @@ export function renderAnnotationInspector(
                 ? 'Välj isoleringens slutpunkt · ange tjocklek i inspektorn.'
                 : 'Välj isoleringens startpunkt.'
               : ['polyline', 'polygon'].includes(state.mode)
-                ? 'Välj hörnpunkter · klicka första punkten eller C för att stänga · Enter avslutar · Esc avbryter.'
+                ? 'Välj hörnpunkter · klicka första punkten eller C för att stänga · Enter/skrollklick avslutar · Esc avbryter.'
                 : state.draft
                   ? 'Välj linjens slutpunkt.'
                   : 'Välj linjens startpunkt.'
@@ -397,7 +402,7 @@ export function renderAnnotationInspector(
                     ? state.draft
                       ? 'Välj andra måttpunkten.'
                       : 'Välj första måttpunkten.'
-                    : `Välj måttpunkter · Enter placerar kedjan · Esc avbryter`
+                    : `Välj måttpunkter · Enter/skrollklick placerar kedjan · Esc avbryter`
               : '';
   hint.textContent =
     message ||

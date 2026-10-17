@@ -1,3 +1,4 @@
+import { createInspectorDraft, setInspectorFieldState } from '../inspector/field-state.js';
 import { createEditorSection } from '../ui/editor-surface.js';
 import { createAttributeRow } from '../inspector/attributes.js';
 import { blockButton } from './editor-fields.js';
@@ -28,8 +29,13 @@ export function renderBlockInstance(
       try {
         preview(values);
         message.textContent = '';
+        input.setCustomValidity('');
+        fieldDraft.sync();
       } catch (error) {
         message.textContent = error.message;
+        input.setCustomValidity(error.message);
+        setInspectorFieldState(input, { changed: true, invalid: true });
+        apply.disabled = true;
       }
     };
     return row;
@@ -40,6 +46,7 @@ export function renderBlockInstance(
   const apply = blockButton('Uppdatera block', () => {
     try {
       commit(values);
+      fieldDraft.accept();
     } catch (error) {
       message.textContent = error.message;
     }
@@ -64,4 +71,9 @@ export function renderBlockInstance(
       message,
     ]),
   );
+  const fieldDraft = createInspectorDraft(root, {
+    onChange: (changed) => {
+      apply.disabled = !changed || !!message.textContent;
+    },
+  });
 }

@@ -1,3 +1,4 @@
+import { bindInspectorField } from './field-state.js';
 import { createMarkChangeButton } from '../ui/mark-change-dialog.js';
 import { isPhysical } from '../model-object.js';
 import { identityError } from '../object-identity.js';
@@ -159,6 +160,18 @@ export function installModelIdentity({ $, actions, controllers, modelEditor, pro
   identityFields.addEventListener('input', (e) => {
     if (context().mode === 'create') commitIdentity(e);
   });
+  bindInspectorField(nameInput, () => context().object?.name ?? nameInput.value);
+  bindInspectorField(
+    ifcInput,
+    () =>
+      context().object?.ifcClass ||
+      (context().object && objectType(context().object).ifcClass) ||
+      '',
+  );
+  for (const key of ['prefix', 'start'])
+    bindInspectorField($(`part-series-${key}`), () =>
+      context().object ? objectSeries(context().object)[key] : $(`part-series-${key}`).value,
+    );
   const openPartDrawing = document.createElement('button');
   openPartDrawing.id = 'inspector-open-drawing';
   openPartDrawing.type = 'button';

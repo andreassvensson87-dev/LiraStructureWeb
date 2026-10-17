@@ -369,3 +369,29 @@ Arbetsplanets tvåpunktsval delar controller, punktflöde, snap och `WorkPlaneGu
 Skruvinspektorn använder befintliga fält för produkt, manuell längd, förbandsbild, mönster, hål och placering. `placement-inspector.js` adopterar de befintliga metadata-kontrollerna till en gemensam, stängd Objekt-sektion under skruvinställningarna; händelseägare och ID:n behålls. Vid byte till annat objekt återställs samma DOM-noder till sina ursprungliga platser. Ingen separat snapmotor, modellista eller historik har införts.
 
 `fasteners/material-reach.js` äger tillgänglig materiallängd utifrån skaftlängd, brickor, muttrar och gängstångens utstick före. Luft mellan flänsar räknas med; genomgående hål kräver att hela lagret och valda tillbehör ryms. Blindhål behåller uttryckligt valt djup. `automaticPlacement` använder samma beräkning vid preview, skapande, inspektorsredigering och ompassning efter modelländringar. Ett lager utom räckhåll blir inaktivt utan att vald måldel eller hålidentitet försvinner. Beräknad passningsvarning ersätts vid varje ompassning. Manuellt håldjup kan inte kringgå längdgränsen i automatisk placering. Inga nya UI-fält införs.
+
+## Modellens djupnoggrannhet
+
+`model/camera-depth.js` anpassar kamerans när-/fjärrplan till innehållets bounds utan att ändra inramning, zoom eller orbitcentrum. Modellrenderaren samlar modell-, stomlinje- och referensbounds vid omrendering; bildloopen projicerar endast boxens åtta hörn och inkluderar aktuell preview. Ingen genomgång av referensdelar görs per kamerabild. Därmed delar inte små hålmarkeringar och materialytor samma grova djupsteg från ett fast 100 km-intervall. Hålgrafik, snap och exakt borrgeometri behåller sina ägare. Skruvgeometrin jämnar endast ut normalerna på cirkulära brickväggar och mutterhål; ändytor och sexkanter behåller skarpa normaler och konturer.
+
+## Ett skruvverktyg och gruppgrepp
+
+Modellens enda skruvkommando heter Skruvgrupp och behåller kontrollernas befintliga kommandoägare. En skruv är ett rutnät med en position; samma produkt-, förbands-, mönster- och hålfält används vid skapande och redigering. Klass, yta, egna tillbehörslägen och sökområde ligger under Avancerat, mönstervinkel under Placering. Metadata adopteras till samma Objekt-sektion även efter uppdatering av markeringens vanliga attribut.
+
+Objektdefinitionens valfria `gripAnchors` skiljer redigeringspunkter från fysiska ankare, snap och mått. Skruvgruppens två redigeringspunkter ligger i layoutens plan: origo och X-punkt med sparad `xLength`. `fasteners/group-grips.js` äger DOM-fria gruppförslag. Origo flyttar gruppen; X ändrar dess riktning och behåller delningar och manuell skruvlängd. Befintliga grip-, Move- och linjära transformcontrollerer använder dessa förslag genom modell-editorn. Oförändrade celler behåller skruv- och hålidentiteter.
+
+`fasteners/preview.js` visar nådda lagerytor i modellens vanliga previewgrupp. Ouppnådda måldelar behåller normal visning. `preview-directions.js` projicerar X- och skruvriktning till det befintliga SVG-lagret för modellens måttåterkoppling; pilarna håller fast skärmstorlek och använder samma färgkälla som arbetsplansguiden. Ingen separat editor, snapmotor, historik eller permanent canvas-kontroll införs. Previewdata är tillfälliga och försvinner vid bekräftelse eller avbrott.
+
+## Gemensam slutföring av modellverktyg
+
+`modelCompletionCommand` återanvänder tangentbordsroutningens Enter-policy som en ren kommandofråga. Modellens pointercontroller använder den vid stationärt, omodifierat skrollklick; inga syntetiska tangentbordshändelser skickas. `model-input.js` kopplar båda inmatningsvägarna till samma lokala `completionActions`. Respektive verktygscontroller äger fortfarande punktantal, geometri, validering och transaktion.
+
+Detta omfattar Polysweep, Plate/Polygoncut/Linecut, skruvgruppens delval, färdigvalda kopplingar, egenskapskopiering, arbetsområde, linjär flytt/kopiering, flytt/kopiering mellan plan och färdigvald rotationsaxel. Verktyg där Enter inte bekräftar en fas får ingen ny skrollklicksåtgärd. Släpp måste ha samma slutföringskommando som knapptryckningen. Rörelse över 5 px under gesten, modifierare och avbruten capture förhindrar bekräftelse; befintliga OrbitControls behåller panorering och orbit.
+
+### Skrollklick i ritningar och profil
+
+`pointer-completion.js` äger den DOM-fria gesten för stationärt, omodifierat skrollklick. Modellens pointercontroller, ritningarnas befintliga pan-adapter och profileditorn använder samma press-/rörelse-/släpp-/avbrottsregler. Gesten tar inte över pointer capture och flyttar inte kamera eller blad.
+
+`DrawingAnnotations.completionCommand()` väljer enbart punktkedjor för polylinje/polygon, måttpunkter och urvalsfaser för transformverktyg/måttassistent. `complete()` är gemensam ägare för Enter och skrollklick; måttlinjens placering och transformernas från-/tillpunkter kräver fortsatt punktval. `DrawingWorkspace` tar uttryckliga completion-callbackar och lämnar dem till `drawing-pan.js`, eftersom panoreringens capture annars stoppar händelser före ritobjektens yta. Samma koppling gäller GA, Single Part och Assembly. Skrollklick sparar inte rich text eller andra inspektorutkast.
+
+Profileditorns befintliga pointermetoder matar samma gest med händelser och slutför genom befintliga `action('finish')`, som validerar kontur och historik. Polylinje och hålkontur stöds; rektangel och insättningspunkt behåller sina punktflöden. Avbrott, förlorad capture och stängd editor rensar en väntande bekräftelse.

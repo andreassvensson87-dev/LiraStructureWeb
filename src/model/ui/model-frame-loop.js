@@ -3,6 +3,7 @@ import { updateFastenerDetail } from '../fastener-detail.js';
 import { updateDisplayDetail } from '../display-detail.js';
 import { platePoint } from '../../plate.js';
 import { createModelMeasurementOverlay } from './measurement-overlay.js';
+import { updateCameraDepth } from '../camera-depth.js';
 
 export function installModelFrameLoop({
   actions,
@@ -21,6 +22,7 @@ export function installModelFrameLoop({
   pointerQueue,
   project,
   renderer,
+  renderState,
   scene,
   tools,
   ui,
@@ -42,6 +44,7 @@ export function installModelFrameLoop({
     allowsPoint: (p) => controllers.workAreaUI?.allowsPoint(p) ?? true,
     getBatch: () =>
       controllers.inspector?.session?.error ? null : controllers.inspector?.session?.batch,
+    getFastenerBatch: () => ui.preview?.userData.fastenerBatch,
   });
   for (const event of ['click', 'input', 'change', 'keydown', 'pointerup', 'pointercancel'])
     document.addEventListener(event, () => frameGate.invalidate(), { capture: true });
@@ -66,6 +69,7 @@ export function installModelFrameLoop({
     // Project labels with the same camera transform used to render this frame.
     camera.updateMatrixWorld();
     if (!frameGate.consume(camera)) return;
+    updateCameraDepth(camera, renderState.depthBounds, ui.preview);
     if (controllers.modelFilter?.filter.inView) {
       const previous = [...controllers.modelFilter.matches].join('|');
       controllers.modelFilter.sync(project);
