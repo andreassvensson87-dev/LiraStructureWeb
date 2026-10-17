@@ -5,7 +5,11 @@ import * as THREE from 'three';
 import { createObjectMesh } from '../src/model/object-mesh.js';
 import { InstanceBatches } from '../src/model/instance-batches.js';
 import { updateFastenerDetail } from '../src/model/fastener-detail.js';
-import { fastenerGeometry, fastenerDisplayTemplate } from '../src/fasteners/geometry.js';
+import {
+  fastenerGeometry,
+  fastenerDisplayTemplate,
+  fastenerDisplayGeometry,
+} from '../src/fasteners/geometry.js';
 import {
   createDisplayGeometryContext,
   displayGeometryIdentityReader,
@@ -71,7 +75,10 @@ test('rotated screw display and snap bounds use shared templates while world geo
   }
   const exact = fastenerGeometry(screw),
     world = reader(screw);
-  assert.deepEqual(world.attributes.position.array, exact.attributes.position.array);
+  const expectedDisplay = fastenerDisplayGeometry(screw);
+  assert.deepEqual(world.attributes.position.array, expectedDisplay.attributes.position.array);
+  assert.ok(world.attributes.position.count < exact.attributes.position.count);
+  expectedDisplay.dispose();
   const point = new THREE.Vector3();
   for (let i = 0; i < world.attributes.position.count; i++) {
     point.fromBufferAttribute(world.attributes.position, i);
@@ -182,7 +189,7 @@ test('instanced hardware keeps picking, selection and detail visibility when zoo
   );
   const batches = new InstanceBatches(new THREE.Scene(), { minimumObjects: 0 });
   batches.rebuild(objects);
-  assert.equal(batches.batches.length, 1);
+  assert.equal(batches.batches.length, 2);
   const camera = new THREE.OrthographicCamera(-50000, 50000, 50000, -50000, 1, 1000000);
   const matrix = new THREE.Matrix4();
   updateFastenerDetail(objects, camera, 600, new Set());
@@ -223,11 +230,22 @@ test('instanced hardware keeps picking, selection and detail visibility when zoo
   updateFastenerDetail(objects, camera, 600, new Set());
   batches.rebuild(objects);
   batches.sync();
-  batches.batches[0].mesh.getMatrixAt(
-    batches.batches[0].entries.find((entry) => entry.object.userData.id === 'copy').index,
+  const coarse = batches.batches.find((batch) => batch.entries[0].object.userData.overviewProxy);
+  coarse.mesh.getMatrixAt(
+    coarse.entries.find((entry) => entry.object.userData.id === 'copy').index,
     matrix,
   );
   assert.ok(matrix.determinant() > 0.99);
+  assert.equal(
+    batches.batches[0].mesh.count,
+    0,
+    'small hardware uses only its coarse representation',
+  );
+  camera.zoom = 100;
+  updateFastenerDetail(objects, camera, 600, new Set());
+  batches.sync();
+  assert.equal(batches.batches[0].mesh.count, 2);
+  assert.equal(coarse.mesh.count, 0);
   cleanup(objects, batches);
 });
 

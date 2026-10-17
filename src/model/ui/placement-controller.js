@@ -133,7 +133,8 @@ export function createPlacementController({
     if (!tools.drawing || !tools.first) return;
     updateTypedLength();
     if (tools.typedPoint && plateLengthActive()) {
-      pickPlatePoint(tools.typedPoint, true);
+      if (pickPlatePoint(tools.typedPoint, true) !== false) tools.nextPointSnap = null;
+      updateSnapOverlay();
       renderer.domElement.focus({ preventScroll: true });
     } else if (tools.typedPoint && commitPoint(tools.typedPoint)) {
       renderer.domElement.focus({ preventScroll: true });
@@ -334,6 +335,11 @@ export function createPlacementController({
     }
   }
   function commitPoint(target) {
+    const accepted = commitPickedPoint(target);
+    if (accepted) tools.nextPointSnap = null;
+    return accepted;
+  }
+  function commitPickedPoint(target) {
     if (tools.operation?.linearId && !tools.operation.referenceId) {
       try {
         const result = prepareLinear(target),

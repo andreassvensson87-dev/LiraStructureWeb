@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { displayGeometry, isPhysical } from '../model-object.js';
+import {
+  displayGeometry,
+  displayFastenerTemplate,
+  edgesForModel,
+  isPhysical,
+} from '../model-object.js';
+import { sharedGeometryView } from '../fasteners/geometry.js';
 
 export const FEEDBACK_COLORS = {
   first: 0x297fc4,
@@ -108,7 +114,11 @@ export class ObjectFeedback {
         entry = null;
       }
       if (!entry) {
-        const geometry = displayGeometry(source, this.model);
+        const template =
+          source.type === 'fastener' ? displayFastenerTemplate(source, this.model) : null;
+        const geometry = template
+          ? sharedGeometryView(template.geometry)
+          : displayGeometry(source, this.model);
         const mesh = new THREE.Mesh(
           geometry,
           new THREE.MeshBasicMaterial({
@@ -121,10 +131,18 @@ export class ObjectFeedback {
           }),
         );
         const edges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geometry),
+          template
+            ? sharedGeometryView(template.edges)
+            : source.type === 'fastener'
+              ? edgesForModel(source, this.model, 10, true)
+              : new THREE.EdgesGeometry(geometry),
           new THREE.LineBasicMaterial({ transparent: true, depthWrite: false, depthTest: false }),
         );
         mesh.raycast = edges.raycast = () => {};
+        if (template) {
+          mesh.matrix.copy(template.matrix);
+          mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
+        }
         mesh.renderOrder = 25;
         edges.renderOrder = 26;
         mesh.add(edges);

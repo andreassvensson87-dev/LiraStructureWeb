@@ -1,5 +1,6 @@
 import { cadFeedback } from '../ui/cad-feedback.js';
 import { addOverviewMesh } from './display-detail.js';
+import { addFastenerOverviewMesh } from './fastener-detail.js';
 import { helperMesh } from './helper-mesh.js';
 import { isHelper } from '../model-object.js';
 import * as THREE from 'three';
@@ -206,6 +207,7 @@ export function createObjectMesh(
       geometryContext?.instanceDescriptor?.(s) ||
       objectInstanceDescriptor(s, true, profileDetail);
   m.add(lines);
+  if (!ghost && isFastener(s) && template) addFastenerOverviewMesh(m, s);
   const holes = cut || isFastener(s) ? [] : geometryContext?.holes(s) || holesForPart(s, model);
   m.userData.holes = holes;
   const holeMesh = holeDisplayMesh(s, model, holes, transparentView, ghost, geometryContext);
@@ -241,6 +243,15 @@ export function createObjectMesh(
     );
     reference.renderOrder = 21;
     m.add(reference);
+  }
+  if (!ghost && isFastener(s)) {
+    // Fastener wrappers already contain world placement and are replaced after
+    // model edits. Orbit must not recompute thousands of static local/world matrices.
+    m.updateMatrixWorld(true);
+    m.traverse((part) => {
+      part.matrixAutoUpdate = false;
+      part.matrixWorldAutoUpdate = false;
+    });
   }
   return m;
 }

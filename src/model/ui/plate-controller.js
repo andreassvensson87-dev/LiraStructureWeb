@@ -339,13 +339,13 @@ export function createPlateController({
       result = advancePlatePoint(tools.operation, p, { exact, closesPolygon });
     } catch (error) {
       $('plate-error').textContent = error.message;
-      return;
+      return false;
     }
     if (result.kind === 'vertex') {
       const error = validateSweep(result.object);
       if (error) {
         $('plate-error').textContent = error;
-        return;
+        return false;
       }
       modelEditor.update([result.object]);
       setDrawing(false);
@@ -354,8 +354,7 @@ export function createPlateController({
       return;
     }
     if (result.kind === 'finish') {
-      finishPlate();
-      return;
+      return finishPlate();
     }
     tools.operation = result.operation;
     if (result.kind === 'side') {
@@ -378,18 +377,18 @@ export function createPlateController({
   }
 
   function finishPlate() {
-    if (tools.operation?.mode !== 'plateCreate' || !tools.operation.frame) return;
+    if (tools.operation?.mode !== 'plateCreate' || !tools.operation.frame) return false;
     let s;
     try {
       s = applyCreationAttributes(draftPlate());
     } catch (error) {
       $('plate-error').textContent = error.message;
-      return;
+      return false;
     }
     const error = validateSweep(s);
     if (error) {
       $('plate-error').textContent = error;
-      return;
+      return false;
     }
     s.id = crypto.randomUUID();
     s.name ||= `${isLineCut(s) ? 'Linecut' : isCut(s) ? 'Polygoncut' : 'Plate'} ${String(++ui.sequence).padStart(2, '0')}`;

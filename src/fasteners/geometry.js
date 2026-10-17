@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { fastenerAccessories } from './accessories.js';
-import { geometryEdges } from './edges.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { localFastenerDisplay } from './display-geometry.js';
 
 export function fastenerFrame(s) {
   const origin = new THREE.Vector3(...s.start);
@@ -125,25 +125,27 @@ function localFastenerGeometry(s) {
 // Bounded templates contain modelling dimensions only; placement and hole edits
 // never change the screw shape. Render wrappers own their GPU attributes.
 const templates = new Map();
-export function fastenerDisplayTemplate(s) {
+function fastenerMatrix(s) {
+  const f = fastenerFrame(s);
+  return new THREE.Matrix4().makeBasis(f.x, f.y, f.z).setPosition(f.origin);
+}
+export function fastenerDisplayTemplate(s, overview = false) {
+  return { ...localFastenerDisplay(s, overview), local: true, matrix: fastenerMatrix(s) };
+}
+export function fastenerDisplayGeometry(s) {
+  const template = fastenerDisplayTemplate(s);
+  return template.geometry.clone().applyMatrix4(template.matrix);
+}
+export function fastenerGeometry(s) {
   const key = JSON.stringify([s.spec, s.assembly?.bolt !== false, fastenerAccessories(s)]);
   let template = templates.get(key);
   if (!template) {
     const geometry = localFastenerGeometry(s);
-    template = { geometry, edges: geometryEdges(geometry, 10), key: 'fastener:' + key };
+    template = { geometry };
     templates.set(key, template);
     if (templates.size > 128) templates.delete(templates.keys().next().value);
   }
-  const f = fastenerFrame(s);
-  return {
-    ...template,
-    local: true,
-    matrix: new THREE.Matrix4().makeBasis(f.x, f.y, f.z).setPosition(f.origin),
-  };
-}
-export function fastenerGeometry(s) {
-  const template = fastenerDisplayTemplate(s);
-  return template.geometry.clone().applyMatrix4(template.matrix);
+  return template.geometry.clone().applyMatrix4(fastenerMatrix(s));
 }
 /** Independent geometry/attribute lifetimes, with shared immutable CPU arrays. */
 export function sharedGeometryView(source) {

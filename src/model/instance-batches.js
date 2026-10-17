@@ -46,6 +46,9 @@ export class InstanceBatches {
     invalidateDisplayDetail(this.objects);
     for (const batch of this.batches)
       for (const entry of batch.entries) {
+        const object = entry.object;
+        if (object.userData.overviewProxy && object.userData.detailDiameter && !object.parent)
+          object.userData.lodOwner.add(object);
         entry.object.traverse((part) => part.layers.set(0));
         delete entry.object.userData.instanced;
       }
@@ -119,6 +122,10 @@ export class InstanceBatches {
       // Bounds of the small template cannot bound all the transformed copies.
       lines.frustumCulled = false;
       const entries = copies.map(({ object, descriptor }, index) => {
+        // The proxy remains available for picking/detail policy, but a batched
+        // fastener needs no duplicate hidden render subtree in the scene graph.
+        if (object.userData.overviewProxy && object.userData.detailDiameter)
+          object.removeFromParent();
         mesh.setMatrixAt(index, descriptor.matrix);
         object.traverse((part) => part.layers.set(3));
         // Bore markers have their own small geometry and remain visible beside
@@ -189,6 +196,8 @@ export class InstanceBatches {
       let placementChanged = false;
       for (const entry of batch.entries) {
         entry.object = copies.get(entry.object.userData.id);
+        if (entry.object.userData.overviewProxy && entry.object.userData.detailDiameter)
+          entry.object.removeFromParent();
         const matrix = entry.object.userData.instanceDescriptor.matrix;
         if (!entry.matrix.equals(matrix)) {
           entry.matrix = matrix;

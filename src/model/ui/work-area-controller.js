@@ -131,14 +131,14 @@ export function createWorkAreaController({
     sync();
   }
   function pickPoint(point) {
-    if (!active || points.length === 2) return;
+    if (!active || points.length === 2) return false;
     const p = [point[0], point[1], tools.operation.elevation];
     if (points.length === 1) {
       try {
         workAreaFromCorners(project.workArea || defaultWorkArea(), points[0], p);
       } catch (error) {
         status(error.message);
-        return;
+        return false;
       }
     }
     points.push(p);
@@ -213,6 +213,7 @@ export function createWorkAreaController({
     pickPoint,
     pointerPreview: preview,
     confirm,
+    canConfirm: () => !!active && points.length === 2 && !!draft,
     aroundSelection,
     objectBounds,
     bounds,

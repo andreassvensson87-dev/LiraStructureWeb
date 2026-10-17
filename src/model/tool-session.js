@@ -6,6 +6,7 @@ export function createToolSession() {
     first: null,
     axisLock: null,
     activeSnap: null,
+    nextPointSnap: null,
     lastPointer: null,
     lastDirection: null,
     typedDirection: null,
@@ -27,5 +28,6 @@ export function resetToolInteraction(session, drawing = false) {
   session.first = null;
   session.axisLock = null;
   session.activeSnap = null;
+  session.nextPointSnap = null;
   resetToolLength(session);
 }

@@ -169,9 +169,7 @@ Browserkontrollen kördes på separat port 5174 med sju testprofiler och ett imp
 
 Centrala modellflöden (160 scenarier) och samtliga berörda kopplingsspecialister (86 scenarier) passerade. Inspektorns kopplingsflöde ingår nu i det centrala urvalet. Lint och formatering passerade. Ingen publicering ingår.
 
-
 Planöverföring skyddas i `model-placement.test.js`: sexpunktsval och hoverpreview utan commit, degenererade/icke-finita plan, omval/Backspace/Esc, rigid rotation plus translation utan skalning, kopieidentitet, plåtradier och blockram samt en transaktion och ångring. Webbläsarkontroll i separat localhost-testprojekt verifierar snappade hjälppunkter på både XY- och vertikalt målplan, bibehållen balklängd, Flytta/Enter, Kopiera/bock, ångring och gemensam HUD-stapel.
-
 
 `work-area.test.js` verifierar motstående XY-hörn med ignorerad klickhöjd, absoluta och signerade plushöjder, degenererad rektangel, tvåpunkts-preview utan commit, en checkpoint/ångring, sparad filvalidering, expansionsunion, klippt snap och rektangelmarkering, referensdelars gallring med bevarad full utbredning/CAD-lager samt kompletta assembly- och blockurval. Befintliga referens-, snap-, markerings- och modellflöden behålls.
 
@@ -244,7 +242,6 @@ Separat browserprojekt med P100 och A200: en Single Part-post med SP-001/avvikan
 `mark-change.test.js` ingår i det centrala urvalet. Det skyddar fristående förhandsgranskning, hela typens förekomster, upptagna/ogiltiga märken, inaktuell projektstämpel och no-op utan transaktion. Partbyte för över assemblynycklar och medlemstokens utan att ändra assemblynummer, ritnings-ID, vyer, annoteringar eller revisioner. Manuell reservation följer normal och full omnumrering, även när andra part marks ändras, samt projektfil och Ångra/Gör om. En annan typ får inte ta en manuell reservation från en oförändrad ägare. PDF-filnamnet följer ritningsnumret.
 
 Separat browserprojekt med tre balkar och fyra ritningar: Byt partmark visade två förekomster; P101 blockerades som upptagen och P100→P150 bekräftades. Ångra/Gör om, assemblyns bibehållna giltighet, A200→A250 för två assemblies samt Esc utan commit kontrollerades. Vanlig och full numreringspreview behöll de manuella märkena. Ritningslistan följde båda bytena och assemblybladet visade A250, P150 i stycklistan och totalantal 2. Spara som och återöppning behöll båda märkena. Inga browserfel. Full `npm run check` passerade. Ingen publicering ingick.
-
 
 ## Bevarad numrering efter bearbetning — 2026-10-15
 
@@ -470,3 +467,25 @@ Browserkontroll i separat localhost-projekt: Polysweep med tre klickade punkter,
 Ritningens pan-test kör den riktiga pan-adaptern med `DrawingAnnotations` slutföring: polygon med tre hörn/en historikpost, måttpunkter till placering utan commit, transformernas urvalsfas och måttassistentens urval. Modifierare, panorering tillbaka till startpunkten, avbrott och förlorad capture får inte slutföra. Rich text och måttlinjens placering undantas. `section-completion.test.js` kör profileditorns verkliga pointer-/pan-/finish-/historikmetoder: bibehållen kameraförskjutning, oförändrat utkast vid drag, precis ett avslut, Ångra och otillräcklig/reparerad kontur. Modellens befintliga OrbitControls-tester körs efter flytten till den gemensamma gesten.
 
 Browserkontroll i separat localhost-projekt: GA-polygon från tre hörn, Ctrl + skrollklick utan avslut och vanligt skrollklick med exakt tre hörn i den renderade banan; Flytta-urval bekräftat till från-punkt utan faktisk flytt; måttpunkter bekräftade till placering av måttlinjen utan att lägga ut den. I profileditorn verifierades ytterkontur och hålkontur med tre punkter vardera, skrollklick utanför konturen, korrekt area och bibehållen Polylinje efter Ctrl + skrollklick. Inga browserfel rapporterades. Kontrollen fångade också att giltig standardlinjetjocklek 0,22 fick native stepMismatch av ett steg på 0,05; fältet tillåter nu fria giltiga linjetjocklekar enligt dess befintliga min/max och validerare.
+
+## Högerklick under modellverktyg
+
+`next-point-snap.test.js` verifierar exklusiv mittpunkt genom verklig `resolveSnap`, oförändrade projektinställningar, fri punkt med bibehållet axellås, filtrering av referenskandidater samt att preview, missat punktval, högerklick och avbruten pointergest inte förbrukar valet. Ett vanligt punktval konsumerar det och verktygsbyte rensar det. Befintliga placeringsscenarier skyddar att linjär flytt/kopiering och plantransformer bara rapporterar bekräftelseklara utkast efter giltig preview.
+
+Webbläsarprov 2026-10-17 på separat localhost-origin: Polysweep med inaktiv Bekräfta före punktval, tillfällig Mittpunkt, missad träff, snapp till befintlig balks mittpunkt, återgång till vanlig snap för nästa punkt och avslut genom menyn. Flytt bekräftades vid den frysta målpositionen och ångrades i ett steg. Linjär kopiering provades med inaktiv Bekräfta under punktval och aktiv efter numerisk vektor; menybekräftelse skapade kopian och Avbryt lämnade verktyget.
+
+## Ritningar från modellens högerklicksmeny
+
+`drawing-selection.test.js` skyddar gemensamma ritningar för lika delar, assemblykoppling via sekundärdel, deduplicerat flerval, inaktuell numrering, återkoppling efter detaljsplittring, bevarat urval under numrering, avbruten tilldelning och spärr mot att tomt urval blir hela modellen. Domänläsningen muterar varken projekt eller ritningar.
+
+Webbläsarprov 2026-10-17 på separat localhost-origin: onumrerad del → Skapa partritningar → Avbryt utan ritning, därefter Tilldela nummer → skapandelista med Single Part och Markerade objekt → skapa och öppna från menyn. Skapa assemblyritningar numrerade även den fristående delens assembly och återgick till rätt typ/urval. Båda ritningstyperna visades och öppnades från objektmenyn. Ändrad profilbredd markerade båda ritningarna med numrering krävs; assemblyritningens öppningskommando fortsatte efter ny tilldelning.
+
+## Förenklad skruvvisning — 2026-10-17
+
+`fastener-display.test.js` skyddar gemensamma konturer för modell/hover/preview, korrekta världsbounds, separat exakt solid/IFC, öppningar i tillbehör utan skruv, delade mallar, detaljväxling, markering i homogen och transparent översikt samt proxyernas återanslutning. Befintliga tester för skruvlängdens räckvidd genom H/I/U/RHS, kopplade hål, export och centrala modellflöden passerade. `npm run check` passerade.
+
+Återanvändbart belastningsprov: `scripts/benchmark-render.html?fasteners=10000`, även `&zoom=8` för närbild. `fastener-performance.js` bygger 100 kompletta förband med totalt 10 000 M12-skruvar, två brickor och en mutter per skruv, 200 plåtar och 20 000 aktiva kopplade hål. Samma verkliga mesh-, instans- och detaljkod som appen används. Mätning: Chromium 155 på denna Mac, 1200 × 800, pixelRatio 1, 10 uppvärmningsbilder och 120 mätbilder per visningsläge, roterande kamera.
+
+Översikt före → efter: 12 002 400 → 2 042 400 inskickade trianglar och 6 122 400 → 762 400 linjesegment, med sex renderingsanrop. Median bildintervall homogen 16,7 → 16,7 ms, transparent 33,3 → 16,7 ms. CPU-inlämning homogen 5,4 → 7,3 ms och transparent 8,1 → 10,0 ms: färre GPU-primitiver innebär inte lägre CPU-kostnad för detaljpolicyn. Efter ändringen var p95 bildintervall 17,6/16,8 ms. Delade geometribuffertar cirka 133,7 MiB, huvudsakligen plåtar och hål; detta är inte processens eller GPU:ns totala minne. Närbild efter: median 16,7 ms i båda lägen, p95 17,9/18,1 ms; transparent CPU hade enstaka toppar (p95 27,5 ms). Provets bildintervall påverkas av skärm och browser; appöverlägg, snap och händelsehanterare ingår inte. Detta är ingen generell FPS-garanti.
+
+Browserkontroll i separat produktionspreview: sex skruvar genom två plåtar med rena konturer i närbild, transparent markering och ändrad längd 80 → 90 genom samma inspektor; kopplade hål kvar i båda lagren efter Tillämpa. Projektet med samtliga 10 200 objekt öppnades också i vanliga appen, zoomades och växlades mellan transparent/homogen visning. Skruv SK-001 hittades i modellträdet och dess grupp öppnades i inspektorn. Inläsningen av det stora projektet blockerade tillfälligt interaktion; renderingsprovet mäter inte den tiden. Inga konsolfel rapporterades.

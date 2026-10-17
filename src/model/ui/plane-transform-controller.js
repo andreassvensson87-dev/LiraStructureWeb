@@ -93,7 +93,7 @@ export function createPlaneTransformController({
       row.error = error.message;
       status(row.error);
       sync();
-      return;
+      return false;
     }
     points.push([...point]);
     row.error = '';
@@ -208,6 +208,7 @@ export function createPlaneTransformController({
     pickPoint,
     pointerPreview,
     removePoint,
+    canConfirm: () => !!active && active.ready && !active.picking,
     confirmActive: () => {
       if (active) confirm(active);
     },

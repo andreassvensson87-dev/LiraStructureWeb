@@ -6,6 +6,33 @@ const viewStates = new WeakMap();
 export const invalidateDisplayDetail = (objects) => objects && viewStates.delete(objects);
 const individuallySelected = (object, ids) => ids.size < 5 && ids.has(object.userData.id);
 
+/** Shared render proxy lifecycle; detail policies stay with the object family. */
+export function addDisplayProxy(object, descriptor) {
+  const mesh = new THREE.Mesh(sharedGeometryView(descriptor.geometry), object.material.clone());
+  mesh.matrix.copy(object.matrix).invert().multiply(descriptor.matrix);
+  mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
+  mesh.add(
+    new THREE.LineSegments(
+      sharedGeometryView(descriptor.edges),
+      object.children[0].material.clone(),
+    ),
+  );
+  mesh.userData = {
+    id: object.userData.id,
+    overviewProxy: true,
+    lodOwner: object,
+    detailVisible: false,
+    instanceDescriptor: descriptor,
+  };
+  mesh.layers.set(2);
+  mesh.children[0].layers.set(2);
+  mesh.raycast = () => {};
+  mesh.children[0].raycast = () => {};
+  object.userData.overviewMesh = mesh;
+  object.add(mesh);
+  return mesh;
+}
+
 /** A local envelope keeps placement and overall dimensions in a distant view. */
 export function addOverviewMesh(object, descriptor) {
   const triangles =
@@ -35,26 +62,8 @@ export function addOverviewMesh(object, descriptor) {
     templates.set(key, template);
     if (templates.size > 128) templates.delete(templates.keys().next().value);
   }
-  const mesh = new THREE.Mesh(sharedGeometryView(template.geometry), object.material.clone());
-  mesh.matrix.copy(descriptor.matrix);
-  mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-  mesh.add(
-    new THREE.LineSegments(sharedGeometryView(template.edges), object.children[0].material.clone()),
-  );
-  mesh.userData = {
-    id: object.userData.id,
-    overviewProxy: true,
-    lodOwner: object,
-    detailVisible: false,
-    instanceDescriptor: { key, ...template, matrix: descriptor.matrix, local: true },
-  };
-  mesh.layers.set(2);
-  mesh.children[0].layers.set(2);
-  mesh.raycast = () => {};
-  mesh.children[0].raycast = () => {};
-  object.userData.overviewMesh = mesh;
+  addDisplayProxy(object, { key, ...template, matrix: descriptor.matrix, local: true });
   object.userData.sectionSize = Math.max(exactSize.y, exactSize.z);
-  object.add(mesh);
 }
 
 /** Pixel thresholds have hysteresis so small zoom changes do not flicker. */
@@ -67,6 +76,7 @@ export function updateDisplayDetail(objects, camera, height, selectedIds) {
   viewStates.set(objects, { pixelsPerUnit, signature });
   for (const object of objects) {
     if (object.userData.ghost) continue;
+    if (object.userData.detailDiameter) continue; // Fasteners own their diameter-based detail policy.
     const proxy = object.userData.overviewMesh;
     const marker = object.userData.holeMesh;
     if (!proxy && !marker) continue;

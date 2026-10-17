@@ -1,0 +1,52 @@
+.ui-context-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  min-width: 230px;
+  max-width: calc(100vw - 12px);
+  max-height: calc(100vh - 12px);
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ui-ink);
+  box-shadow: 0 8px 28px #162d3826;
+  font:
+    13px system-ui,
+    sans-serif;
+}
+.ui-context-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.ui-context-menu > button:is(:hover, :focus-visible):not(:disabled) {
+  background: #e9f2ef;
+  outline: 1px solid var(--ui-accent);
+  outline-offset: -1px;
+}
+.ui-context-menu > button:disabled {
+  opacity: 0.45;
+}
+.ui-context-menu-caption {
+  padding: 6px 10px;
+  color: #61717a;
+  font-size: 11px;
+}
+.ui-context-menu > [role='separator'] {
+  height: 1px;
+  margin: 5px;
+  background: var(--ui-border);
+}

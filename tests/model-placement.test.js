@@ -479,10 +479,13 @@ test('invalid plane points preserve picking, backspace and repicking clear previ
   f.plane.pickPoint([2000, 0, 0]);
   assert.equal(row.state.start, 2);
   assert.equal(row.state.ready, false);
+  assert.equal(f.plane.canConfirm(), false);
   f.plane.pickPoint(sourcePlane[2]);
   targetPlane.forEach((p) => f.plane.pickPoint(p));
   assert.equal(row.state.ready, true);
+  assert.equal(f.plane.canConfirm(), true);
   f.plane.removePoint();
+  assert.equal(f.plane.canConfirm(), false);
   assert.equal(row.state.target, 2);
   assert.equal(f.ui.preview, null);
   f.plane.confirmActive();
@@ -783,10 +786,12 @@ test('linear Copy rejects invalid counts and expressions without replacing an ea
   row.callbacks.change(0, '100');
   row.callbacks.count('2');
   assert.equal(row.state.ready, true);
+  assert.equal(f.linear.canConfirm(), true);
   for (const count of ['0', '-1', '1.5', '1001', 'bad', '']) {
     row.callbacks.count(count);
     row.callbacks.confirm();
     assert.equal(row.state.ready, false);
+    assert.equal(f.linear.canConfirm(), false);
     assert.equal(f.ui.preview, null);
     assert.equal(f.history.canUndo, false);
     assert.deepEqual(f.project.objects, before);
@@ -796,11 +801,14 @@ test('linear Copy rejects invalid counts and expressions without replacing an ea
     row.callbacks.change(0, text);
     row.callbacks.confirm();
     assert.equal(row.state.ready, false);
+    assert.equal(f.linear.canConfirm(), false);
     assert.equal(f.history.canUndo, false);
   }
   row.callbacks.change(0, '2*(30+20)');
   assert.equal(row.state.ready, true);
+  assert.equal(f.linear.canConfirm(), true);
   row.callbacks.cancel();
+  assert.equal(f.linear.canConfirm(), false);
   assert.equal(f.ui.preview, null);
   assert.equal(row.state.active, false);
   assert.equal(row.draft.values[0], '2*(30+20)');

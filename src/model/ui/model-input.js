@@ -1,7 +1,9 @@
+import { pointerCommand } from '../pointer-controller.js';
+import { consumeNextPointSnap } from '../next-point-snap.js';
 import { installModelPointer } from '../pointer-controller.js';
 import { addToAssembly } from '../../project/assemblies.js';
 import { isPhysical } from '../../model-object.js';
-import { modelKeyboardCommand } from '../keyboard-command.js';
+import { modelKeyboardCommand, modelCompletionCommand } from '../keyboard-command.js';
 import { editableSweep } from '../sweep-properties.js';
 import { stepSweepPlacement, quarterTurnSweep } from '../sweep-shortcuts.js';
 import { platePoint } from '../../plate.js';
@@ -69,8 +71,8 @@ export function installModelInput({
     'confirm-sweep-properties': () => controllers.sweepPropertyUI.confirm(),
     'confirm-fit': () => controllers.componentUI.confirm(),
   };
-  installModelPointer(renderer.domElement, {
-    getState: () => ({
+  function toolState() {
+    return {
       linear: !!tools.operation?.linearId,
       planeTransform: !!tools.operation?.planeId,
       mode: tools.operation?.mode,
@@ -80,16 +82,136 @@ export function installModelInput({
       boxMode: ui.boxMode,
       plateLength: plateLengthActive(),
       hasLength: !!$('draw-length').value.trim(),
-    }),
+    };
+  }
+  function cancelModelTool() {
+    consumeNextPointSnap(tools);
+    if (ui.marquee) {
+      cancelBox();
+      render({ selectionOnly: true });
+      return;
+    }
+    if (tools.operation?.gripRefs && !tools.operation?.linearId) {
+      setDrawing(false, { keepPoints: true });
+      render({ selectionOnly: true });
+      $('status').textContent = 'Förflyttning avbruten';
+      return;
+    }
+    if (tools.operation?.mode === 'coordinatePoint') {
+      controllers.coordinatePicker.cancel();
+      return;
+    }
+    if (tools.operation?.mode === 'workArea') {
+      controllers.workAreaUI.cancel();
+      return;
+    }
+    if (tools.operation?.planeId) {
+      controllers.planeTransformUI.cancel();
+      return;
+    }
+    if (tools.operation?.linearId) {
+      controllers.linearUI.cancel();
+      return;
+    }
+    if (controllers.pointUI?.selected().length && !tools.operation) {
+      controllers.pointUI.clear();
+      render();
+      return;
+    }
+    cancelBox();
+    if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
+    if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
+    if (tools.operation?.mode === 'workPlane')
+      $('status').textContent = 'Val av arbetsplan avbrutet';
+    if (
+      ['sweepProperties', 'plateProperties', 'componentProperties'].includes(tools.operation?.mode)
+    )
+      $('status').textContent = 'Egenskapskopiering avbruten';
+    controllers.modelContextMenu.close();
+    select(null);
+    return;
+  }
+  function modelToolMenuState() {
+    const state = toolState();
+    const completion = modelCompletionCommand(state);
+    const pointCommand = pointerCommand(state);
+    const pointPicking =
+      ![
+        null,
+        'select',
+        'component-property-target',
+        'sweep-property-target',
+        'plate-property-target',
+        'fit-reference',
+        'fastener-target',
+        'assembly-main',
+      ].includes(pointCommand) &&
+      (!state.linear || state.picking) &&
+      (!state.planeTransform || state.picking) &&
+      (state.mode !== 'workArea' || !controllers.workAreaUI.canConfirm());
+    const ready = {
+      'confirm-linear': () => controllers.linearUI.canConfirm(),
+      'confirm-plane-transform': () => controllers.planeTransformUI.canConfirm(),
+      'confirm-work-area': () => controllers.workAreaUI.canConfirm(),
+      'finish-polysweep': () => controllers.polysweepUI.canConfirm(),
+      'finish-plate': () => !$('plate-apply').disabled,
+      'finish-rotation': () => !controllers.rotationHandle.error.textContent,
+      'confirm-fit': () => controllers.componentUI.canConfirm(),
+      'confirm-component-properties': () => controllers.componentUI.canConfirmCopy(),
+      'confirm-plate-properties': () => controllers.platePropertyUI.canConfirm(),
+      'confirm-sweep-properties': () => controllers.sweepPropertyUI.canConfirm(),
+      'confirm-fastener-targets': () =>
+        !controllers.fastenerUI.placeForm.querySelector('[type=submit]').disabled,
+    };
+    const target = tools.typedPoint || tools.activeSnap?.point;
+    const pointReady =
+      pointPicking &&
+      !!tools.first &&
+      !!target &&
+      ![
+        'plateCreate',
+        'plateVertex',
+        'polysweepCreate',
+        'workPlane',
+        'workArea',
+        'coordinatePoint',
+      ].includes(state.mode) &&
+      (!!ui.preview || !!tools.operation?.referenceId) &&
+      !$('draw-length-error').textContent;
+    return {
+      pointPicking,
+      completion: completion || (pointReady ? 'confirm-point' : null),
+      canConfirm: completion ? (ready[completion]?.() ?? true) : pointReady,
+      target: target && [...target],
+    };
+  }
+  Object.assign(actions, {
+    cancelModelTool,
+    modelToolMenuState,
+    confirmModelTool: () => {
+      const state = modelToolMenuState();
+      if (!state.canConfirm) return;
+      if (state.completion === 'confirm-point') commitPoint(state.target);
+      else completionActions[state.completion]?.();
+    },
+  });
+  installModelPointer(renderer.domElement, {
+    getState: toolState,
+    consumePoint: () => {
+      consumeNextPointSnap(tools);
+      actions.updateSnapOverlay();
+    },
     beginBox,
     orbit: orbitAroundHit,
     point,
     move: (e) => {
+      if (controllers.modelContextMenu.isOpen()) return;
       pointerQueue.pending = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
       if (tools.drawing || tools.operation) frameGate.invalidate();
     },
     leave: () => {
       pointerQueue.pending = null;
+      if (controllers.modelContextMenu.isOpen()) return;
       objectFeedback.setHover([], 'canvas');
       if (controllers.referenceModels?.setHoverSelection(null)) objectFeedback.invalidate();
       if (
@@ -181,7 +303,10 @@ export function installModelInput({
       rotation: pickRotationAxis,
       'plate-length': () => {
         updateTypedLength();
-        if (tools.typedPoint) pickPlatePoint(tools.typedPoint, true);
+        if (tools.typedPoint) {
+          if (pickPlatePoint(tools.typedPoint, true) !== false) consumeNextPointSnap(tools);
+          actions.updateSnapOverlay();
+        }
       },
       length: () => {
         updateTypedLength();
@@ -194,8 +319,7 @@ export function installModelInput({
       finish: commitPoint,
       start: (p) => {
         if (tools.operation?.mode === 'polysweepCreate') {
-          controllers.polysweepUI.pick(p);
-          return;
+          return controllers.polysweepUI.pick(p);
         }
         tools.first = p;
         if (tools.operation?.mode === 'fastenerCreate') tools.operation.frame.origin = [...p];
@@ -263,51 +387,7 @@ export function installModelInput({
         $(command).click();
         break;
       case 'cancel':
-        if (ui.marquee) {
-          cancelBox();
-          render({ selectionOnly: true });
-          break;
-        }
-        if (tools.operation?.gripRefs && !tools.operation?.linearId) {
-          setDrawing(false, { keepPoints: true });
-          render({ selectionOnly: true });
-          $('status').textContent = 'Förflyttning avbruten';
-          break;
-        }
-        if (tools.operation?.mode === 'coordinatePoint') {
-          controllers.coordinatePicker.cancel();
-          break;
-        }
-        if (tools.operation?.mode === 'workArea') {
-          controllers.workAreaUI.cancel();
-          break;
-        }
-        if (tools.operation?.planeId) {
-          controllers.planeTransformUI.cancel();
-          break;
-        }
-        if (tools.operation?.linearId) {
-          controllers.linearUI.cancel();
-          break;
-        }
-        if (controllers.pointUI?.selected().length && !tools.operation) {
-          controllers.pointUI.clear();
-          render();
-          break;
-        }
-        cancelBox();
-        if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
-        if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
-        if (tools.operation?.mode === 'workPlane')
-          $('status').textContent = 'Val av arbetsplan avbrutet';
-        if (
-          ['sweepProperties', 'plateProperties', 'componentProperties'].includes(
-            tools.operation?.mode,
-          )
-        )
-          $('status').textContent = 'Egenskapskopiering avbruten';
-        controllers.assemblyMenu.hidden = true;
-        select(null);
+        cancelModelTool();
         break;
       case 'remove-workplane-point':
         tools.operation.points.pop();

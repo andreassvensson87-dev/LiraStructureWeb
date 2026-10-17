@@ -91,7 +91,7 @@ export function createWorkplaneController({
       new THREE.Vector3(...p).distanceTo(new THREE.Vector3(...points[0])) < 1
     ) {
       $('status').textContent = 'Välj en punkt minst 1 mm från origo.';
-      return;
+      return false;
     }
     if (points.length === (tools.operation.pointCount || 3)) {
       try {
@@ -104,6 +104,7 @@ export function createWorkplaneController({
         $('status').textContent = 'Temporärt arbetsplan aktivt · Sweep och Plate ritas i planet';
       } catch (error) {
         $('status').textContent = error.message;
+        return false;
       }
       return;
     }

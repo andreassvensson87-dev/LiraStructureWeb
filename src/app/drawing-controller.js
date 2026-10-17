@@ -4,6 +4,8 @@ import { PlanView } from '../plan-view.js';
 import { SinglePartSheet } from '../single-part-sheet.js';
 import { mergeDrawingEdit } from '../project/drawing-edits.js';
 import { resolveAssemblyDrawing } from '../assembly-numbering.js';
+import { createSelectionDrawingActions } from './selection-drawings.js';
+import { showDrawingBatch } from '../drawing-workflows.js';
 /** Connects drawing workspaces to the project; editors do not own application state. */
 export function createDrawingController({
   project,
@@ -14,6 +16,7 @@ export function createDrawingController({
   highlight,
   onChange,
   onIdentityChange,
+  onMessage = () => {},
   getReferenceModels = () => [],
 }) {
   const getSnapSettings = () => project.snap;
@@ -125,5 +128,17 @@ export function createDrawingController({
       });
     },
   });
-  return { manager, planView, singleSheet };
+  const selectionDrawings = createSelectionDrawingActions({
+    getState: () => project,
+    prepare: () => {
+      finishEditing();
+      stopTool();
+    },
+    number: (kinds) => manager.openNumbering(kinds),
+    restoreSelection: highlight,
+    openDrawing: (record) => manager.openDrawing(record),
+    showBatch: (type, ids) => showDrawingBatch(manager, type, ids),
+    message: onMessage,
+  });
+  return { manager, planView, singleSheet, ...selectionDrawings };
 }

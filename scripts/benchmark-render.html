@@ -31,13 +31,20 @@
   <script type="module">
     import * as THREE from 'three';
     import { buildExample, summarize } from './model-performance.js';
+    import { fastenerPerformanceModel } from './fastener-performance.js';
     const status = document.getElementById('status');
     const result = document.getElementById('result');
     const frame = () => new Promise(requestAnimationFrame);
     const run = async () => {
       await frame();
       const size = new URLSearchParams(location.search).get('size') || 'large';
-      const example = buildExample(size);
+      const count = Number(new URLSearchParams(location.search).get('fasteners') || 0);
+      const example = count
+        ? buildExample(`fasteners-${count}`, () => fastenerPerformanceModel(count))
+        : buildExample(size);
+      const zoom = Number(new URLSearchParams(location.search).get('zoom') || 1);
+      example.camera.zoom = zoom;
+      example.camera.updateProjectionMatrix();
       const renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById('model'),
         antialias: true,
@@ -66,8 +73,11 @@
         }
         const intervals = [],
           cpu = [],
+          updateCpu = [],
+          renderCpu = [],
           calls = [],
-          triangles = [];
+          triangles = [],
+          lines = [];
         let previous = await frame();
         for (let i = 0; i < 120; i++) {
           const timestamp = await frame();
@@ -75,17 +85,24 @@
           previous = timestamp;
           const started = performance.now();
           example.frame(Math.PI / 4 + i * 0.005);
+          const updated = performance.now();
+          updateCpu.push(updated - started);
           renderer.render(example.scene, example.camera);
+          renderCpu.push(performance.now() - updated);
           cpu.push(performance.now() - started);
           calls.push(renderer.info.render.calls);
           triangles.push(renderer.info.render.triangles);
+          lines.push(renderer.info.render.lines);
         }
         return {
           transparent,
           frameIntervalMs: summarize(intervals),
           submissionCpuMs: summarize(cpu),
+          updateCpuMs: summarize(updateCpu),
+          renderCpuMs: summarize(renderCpu),
           drawCalls: summarize(calls),
           triangles: summarize(triangles),
+          lines: summarize(lines),
         };
       };
       status.textContent = `Mäter kamerarörelse · ${example.load.objects} objekt · ${example.load.holes} hål`;
@@ -96,6 +113,7 @@
         userAgent: navigator.userAgent,
         viewport: [1200, 800],
         pixelRatio: 1,
+        zoom,
         load: example.load,
         firstFrameWithGpuMs,
         opaque,

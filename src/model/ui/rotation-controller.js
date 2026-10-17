@@ -158,7 +158,7 @@ export function createRotationController({
       const delta = p.map((v, i) => v - tools.operation.pivot[i]);
       if (Math.hypot(...delta) < 1) {
         $('status').textContent = 'Referenslinjen måste vara minst 1 mm lång';
-        return;
+        return false;
       }
       tools.operation.axis = delta;
       tools.operation.axisEnd = [...p];

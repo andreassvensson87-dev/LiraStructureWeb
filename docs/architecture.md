@@ -65,6 +65,8 @@ Sweep och Plate har gemensamma attributscheman och layout-/kopieringsadapter. St
 
 `drawing/ui/` bygger GA- och Single Part-editorernas grundläggande DOM. Controllererna tillför projektdata och beteende via argument och callbacks. `app/drawing-controller.js` kopplar ritningseditorerna till projektets historik. Modell, ritning, rapport, ram-, profil- och Item-editorer använder de gemensamma UI-fabrikerna i `src/ui/`. Arbetsytornas adaptrar beskriver grupper och placering; befintliga controllerer behåller kommandon, data, snap och historik. Biblioteken använder gemensamma flyttbara fönster. En aktiv arbetsyta med tydlig återgång används utan dokumentflikar. Se `docs/ui.md` för kontrakten och navigeringen.
 
+`drawing-selection.js` härleder urvalets befintliga ritningar och numreringsbehov via de vanliga tillverkningstyperna och assemblyreglerna, utan mutation. `app/selection-drawings.js` äger fortsättningen efter numreringsdialogen: sparat urval återställs och aktuella ritningskopplingar läses om efter tilldelning/splittring. `drawing-controller.js` kopplar flödet till befintlig ritningshanterare, skapandelista och editorer. Menyn beskriver enbart kommandona. Numreringen ändrar hela modellen i sin uttryckliga transaktion; inga nummer tilldelas automatiskt av menyn.
+
 ## Gränser som koden kontrollerar
 
 ESLint förbjuder DOM/storage och UI-importer i projektmoduler, objekttyper och verktygsregler. Ritningarnas UI-fabriker får inte importera projekt eller controllerer. Modell-UI, inspektorns adaptrar och de nya app-adaptrarna får inte tilldela eller mutera `project.objects` direkt: commit sker genom modell-editorn. `main.js` får enbart importera stilar och de två uppstartsmodulerna; händelsehantering och modellbeteende är förbjudet där. App-kopplingen får inte registrera UI-händelser. Oanvända beroenden kontrolleras i dessa controllerer.
@@ -208,9 +210,7 @@ Plåthörns flytt genom det vanliga gripflödet använder `gripWorkPlane` i `mod
 
 `components/inspector.js` bygger fält, referensknappar och sektionspresentation med befintliga `createAttributeRow`, `createAttributeSection` och attributlayout. Den tar data och callbacks; den äger inte utkast eller modelländringar. `components/ui.js` samordnar kommandon, aktuellt utkast, validering, återställning och egenskapskopiering. Modelladaptern i `app/model-components.js` behåller preview och modell-editorcommit, inklusive beroende plåtar, skruvar och hål. Placeringsflaggor sparas inte på modellobjekten. ESLint skyddar de DOM-fria placerings-/parametermodulerna och inspektorns beroendegräns.
 
-
 Planflytt och plankopiering delar `ui/tool-hud.js` och samma stapel som de linjära kommandona. `model/tools/plane-transform.js` beräknar en rigid transformation mellan två trepunktsramar genom objekttypernas befintliga rotation och translation, inklusive blockmetadata. `model/ui/plane-transform-controller.js` äger endast sexpunktsutkast, omval, avbrott och bekräftelse. Punktval går genom vanlig modellinput/resolveSnap; guider återanvänder WorkPlaneGuide. Placement-controllern visar samma modellpreview och bekräftar via modell-editorn med en checkpoint. Referensmodeller ingår inte i detta modellobjektkommando.
-
 
 Arbetsområdet är en sparad visningsinställning i `project.workArea`, inte ett modellobjekt. `model/work-area.js` äger XY-rektangel, absoluta Z-gränser, validering, expansionsunion och tillfällig geometri-klippning för markering. `model/work-area-display.js` äger boxkontur och rendererklippning; instanskanternas gemensamma shader stöder samma klippplan. `model/ui/work-area-controller.js` äger tvåpunktsutkast och den befintliga HUD-stapeln. `app/workspace-work-area.js` äger checkpoint/ändring av inställningen och köar expansionsbeslut efter referensoperationer. Inga objektgeometrier ändras och ingen separat snapmotor införs.
 
@@ -273,7 +273,6 @@ Geometrins läsning/topologi, extrusionsanalys, ändplansanalys, objektadapter o
 `numbering/mark-change.js` planerar ett byte för hela den numrerade typen och kontrollerar giltighet, kollisioner och projektstämpel utan DOM eller mutationer. `numbering/assembly-identity.js` för över markändringar till assemblynycklar och medlemstokens; geometrin, assemblynumret och ritningsinnehållet behålls. Samma överföring används när vanlig numrering ändrar en parts mark utan att typen ändras. Manuella registerposter reserveras även vid återanvändning och full omnumrering; en annan typ får inte ärva reservationen.
 
 `ui/mark-change-dialog.js` använder gemensamma attributrader, dialogpresentation och knapprad för båda typerna. `app/workspace-mark-change.js` äger projekttransaktionen med en checkpoint för register, tilldelningar, assemblies och ritningar. Inspektorerna rapporterar typ och identitet via callbacks. Ingen modellgeometri ändras och `main.js` har inga nya beteenden.
-
 
 ## Bevara tillverkningsmark vid ändring
 
@@ -401,3 +400,9 @@ Detta omfattar Polysweep, Plate/Polygoncut/Linecut, skruvgruppens delval, färdi
 `DrawingAnnotations.completionCommand()` väljer enbart punktkedjor för polylinje/polygon, måttpunkter och urvalsfaser för transformverktyg/måttassistent. `complete()` är gemensam ägare för Enter och skrollklick; måttlinjens placering och transformernas från-/tillpunkter kräver fortsatt punktval. `DrawingWorkspace` tar uttryckliga completion-callbackar och lämnar dem till `drawing-pan.js`, eftersom panoreringens capture annars stoppar händelser före ritobjektens yta. Samma koppling gäller GA, Single Part och Assembly. Skrollklick sparar inte rich text eller andra inspektorutkast.
 
 Profileditorns befintliga pointermetoder matar samma gest med händelser och slutför genom befintliga `action('finish')`, som validerar kontur och historik. Polylinje och hålkontur stöds; rektangel och insättningspunkt behåller sina punktflöden. Avbrott, förlorad capture och stängd editor rensar en väntande bekräftelse.
+
+## Skruvarnas visningsgeometri
+
+`fasteners/display-geometry.js` äger återanvändbara visningsmallar: släta cirkulära väggar, uttryckliga ytterkonturer och skarpa sexkanter. Normal modell, hover och preview använder samma mall. Närbild använder 24 cirkelsegment och översikt 8. Endast mallens visuella mått normaliseras till 0,0001 mm för delning mellan likadana skruvar; modell, borrning och exakt geometri ändras inte. `fasteners/geometry.js` behåller separat fullständig solid för `objectGeometry`, håloperationer och export.
+
+`fastener-detail.js` väljer närbild, översiktsproxy eller subpixel-döljning genom befintlig detaljhantering, med hysteresis och prioritet för enstaka markerade skruvar. `display-detail.js` äger den gemensamma proxyn och dess lokala transform relativt objektet. Befintliga instansbatcher delar visningsmallar. Batchade skruvproxyer kopplas ur scengrafen men behålls av objektet för detaljpolicy och kantträff; `prepareRebuild` återansluter dem före ersättning/disponering. Färdiga skruvmeshars världsmatriser är statiska tills modellrenderaren ersätter dem; tillfällig preview förblir dynamisk. Ingen separat markering, snap eller projektmutation införs.

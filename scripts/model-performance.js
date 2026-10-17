@@ -32,9 +32,12 @@ export function disposeMesh(mesh) {
   });
 }
 
-export function buildExample(size) {
+export function buildExample(
+  size,
+  createModel = (size) => createFrameExample(size, { prepareGeometry: true }).objects,
+) {
   const started = performance.now();
-  let model = createFrameExample(size, { prepareGeometry: true }).objects;
+  let model = createModel(size);
   const generated = performance.now();
   const selectedIds = new Set();
   const scene = new THREE.Scene();

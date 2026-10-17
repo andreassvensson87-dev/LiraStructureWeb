@@ -1,3 +1,9 @@
+import {
+  nextPointSnapSettings,
+  nextPointReferenceCandidates,
+  acceptsNextPointSnap,
+  nextPointSnapLabel,
+} from '../next-point-snap.js';
 import { displayedSelectionHit, modelSelectionEntry } from '../selection-hit.js';
 import { clipSegmentToBox } from '../work-area.js';
 import * as THREE from 'three';
@@ -102,7 +108,9 @@ export function createModelPicking({
         o.visible &&
         (extraObjects.includes(o) ||
           canSelectModelObject(getRenderedById().get(o.userData.id)?.source, ui)) &&
-        (camera.layers.test(o.layers) || o.userData.instanced) &&
+        (camera.layers.test(o.layers) ||
+          o.userData.instanced ||
+          o.userData.overviewMesh?.userData.detailVisible) &&
         !o.userData.cut &&
         (tools.operation?.mode !== 'fastenerTargets' ||
           (isPhysical(getRenderedById().get(o.userData.id)?.source) &&
@@ -130,6 +138,7 @@ export function createModelPicking({
     ray(e);
     const r = host.getBoundingClientRect();
     const snapStarted = performance.now();
+    const snap = nextPointSnapSettings(project.snap, tools.nextPointSnap);
     const snapObjects = (
       getSnapIndex()?.query(camera, r.width, r.height, [e.clientX - r.left, e.clientY - r.top]) ??
       project.objects
@@ -155,35 +164,37 @@ export function createModelPicking({
         r.height,
         [e.clientX - r.left, e.clientY - r.top],
         tools.first,
-        project.snap.midpoints,
-        project.snap.perpendicular,
-        project.snap.nearest !== false,
+        snap.midpoints,
+        snap.perpendicular,
+        snap.nearest !== false,
       ),
       sweeps: snapObjects,
       grid: { ...project.grid, z: levelElevation(project.levels) },
-      referencePoints:
+      referencePoints: nextPointReferenceCandidates(
         getReferences()?.candidates({
           ray: raycaster.ray,
           start: tools.first,
-          perpendicular: project.snap.perpendicular,
-          nearest: project.snap.nearest !== false,
+          perpendicular: snap.perpendicular,
+          nearest: snap.nearest !== false,
           camera,
           pointer: [e.clientX - r.left, e.clientY - r.top],
           width: r.width,
           height: r.height,
         }) || [],
-      endpoints: project.snap.endpoints,
-      cornerSnap: project.snap.corners,
-      quadrantSnap: project.snap.quadrants,
-      midpointSnap: project.snap.midpoints,
-      perpendicularSnap: project.snap.perpendicular,
-      nearestSnap: project.snap.nearest !== false,
-      gridLines: project.snap.gridLines,
-      gridIntersections: project.snap.gridIntersections,
-      gridStepEnabled: project.snap.gridStepEnabled,
-      gridStep: project.snap.gridStep,
-      axisSnap: project.snap.axes,
-      polar: +project.snap.polar,
+        tools.nextPointSnap,
+      ),
+      endpoints: snap.endpoints,
+      cornerSnap: snap.corners,
+      quadrantSnap: snap.quadrants,
+      midpointSnap: snap.midpoints,
+      perpendicularSnap: snap.perpendicular,
+      nearestSnap: snap.nearest !== false,
+      gridLines: snap.gridLines,
+      gridIntersections: snap.gridIntersections,
+      gridStepEnabled: snap.gridStepEnabled,
+      gridStep: snap.gridStep,
+      axisSnap: snap.axes,
+      polar: +snap.polar,
       lock: tools.axisLock,
       workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
       constrainToPlane:
@@ -196,6 +207,7 @@ export function createModelPicking({
       host.dataset.snapMs = (performance.now() - snapStarted).toFixed(1);
     }
     if (
+      !tools.nextPointSnap &&
       (tools.operation?.mode === 'workPlane' || tools.operation?.planeId) &&
       tools.activeSnap.kind === 'free'
     ) {
@@ -212,6 +224,13 @@ export function createModelPicking({
           symbol: 'cross',
           label: 'Objektyta',
         };
+    }
+    if (!acceptsNextPointSnap(tools.activeSnap, tools.nextPointSnap)) {
+      tools.activeSnap = {
+        kind: 'free',
+        point: null,
+        label: `Nästa punkt: ${nextPointSnapLabel(tools.nextPointSnap)} · ingen träff`,
+      };
     }
     $('status').textContent =
       tools.operation?.mode === 'workPlane' ? workPlanePrompt() : tools.activeSnap.label;

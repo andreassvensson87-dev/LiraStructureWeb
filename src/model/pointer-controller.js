@@ -33,7 +33,7 @@ export function pointerCommand({
 }
 export function installModelPointer(
   surface,
-  { getState, beginBox, orbit, point, actions, move, leave },
+  { getState, beginBox, orbit, point, actions, move, leave, consumePoint = () => {} },
 ) {
   let down = null;
   const completion = createPointerCompletion({
@@ -95,7 +95,10 @@ export function installModelPointer(
       return;
     }
     const p = point(e);
-    if (p) actions[command](p, e);
+    if (p) {
+      const accepted = actions[command](p, e);
+      if (accepted !== false) consumePoint();
+    }
   };
   const cancel = () => {
     down = null;

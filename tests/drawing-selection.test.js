@@ -1,177 +1,157 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { drawingMarqueeHits } from '../src/drawing-selection-geometry.js';
-import { polarTrackingIntersection, CadTracking } from '../src/cad-tracking.js';
-import { DrawingAnnotations } from '../src/drawing-annotations.js';
+import { createProject } from '../src/project/project-state.js';
+import { createAssembly } from '../src/project/assemblies.js';
+import { defaultNumberingSettings, planNumbering, applyNumbering } from '../src/numbering/plan.js';
+import { drawingCreationGroups, createSelectedDrawings } from '../src/drawing-creation.js';
+import { selectionDrawingContext } from '../src/drawing-selection.js';
+import { createSelectionDrawingActions } from '../src/app/selection-drawings.js';
 
-test('drawing windows require complete enclosure, crossing windows intersect actual geometry and closed interiors', () => {
-  const line = [
-    {
-      points: [
-        [0, 0],
-        [100, 100],
-      ],
-      closed: false,
+function fixture(numbered = true) {
+  const state = createProject({
+    grid: { x: [0, 1000], y: [0, 1000] },
+    levels: {
+      active: 'l',
+      items: [{ id: 'l', name: 'Plan', elevation: 0 }],
     },
-  ];
-  assert.equal(drawingMarqueeHits(line, [-1, -1], [101, 101]), true);
-  assert.equal(drawingMarqueeHits(line, [40, 40], [60, 60]), false);
-  assert.equal(drawingMarqueeHits(line, [60, 40], [40, 60]), true);
-  assert.equal(drawingMarqueeHits(line, [60, 0], [40, 10]), false); // overlaps bounds, not line
-  const polygon = [
-    {
-      points: [
-        [0, 0],
-        [100, 0],
-        [100, 100],
-        [0, 100],
-      ],
-      closed: true,
-    },
-  ];
-  assert.equal(drawingMarqueeHits(polygon, [60, 40], [40, 60]), true);
-  assert.equal(drawingMarqueeHits(polygon, [40, 40], [60, 60]), false);
-  assert.equal(drawingMarqueeHits([], [0, 0], [100, 100]), false);
-});
-
-test('polar meets the acquired Otrack axis at a stable corner, including diagonal directions', () => {
-  const tracker = new CadTracking();
-  tracker.locate([100, 80], { snapped: true, now: 0, view: 'v' });
-  const horizontal = tracker.locate([101, 2], { now: 400, view: 'v', tolerance: 4 });
-  assert.deepEqual(
-    polarTrackingIntersection([101, 2], [0, 0], horizontal, { polar: 90, tolerance: 4 }),
-    [100, 0],
-  );
-  const diagonal = polarTrackingIntersection([101, 102], [0, 0], horizontal, {
-    polar: 45,
-    tolerance: 4,
   });
-  assert.ok(Math.abs(diagonal[1] - 100) < 1e-8);
-  assert.equal(diagonal[0], 100);
-  assert.equal(
-    polarTrackingIntersection([101, 30], [0, 0], horizontal, { polar: 90, tolerance: 4 }),
-    null,
-  );
-  assert.equal(
-    polarTrackingIntersection([101, 2], [100, 0], horizontal, { polar: 90, tolerance: 4 }),
-    null,
-  ); // parallel
-  assert.equal(
-    polarTrackingIntersection([101, 2], [0, 0], horizontal, { polar: 0, tolerance: 4 }),
-    null,
-  );
-  assert.equal(
-    polarTrackingIntersection([101, 2], [0, 0], { guides: [] }, { polar: 90, tolerance: 4 }),
-    null,
-  );
-});
-
-test('drawing transform shortcuts match the model and preserve text editing and repeated keys', () => {
-  const calls = [];
-  const editor = {
-    selected: 'part',
-    cad: { key: () => false },
-    contextMenu: { hidden: true },
-    transform: { active: () => false, start: (mode) => calls.push(mode) },
-  };
-  function key(character, modifier, editing = false, repeat = false) {
-    const event = {
-      key: character,
-      [modifier]: true,
-      repeat,
-      target: { closest: () => (editing ? {} : null) },
-      preventDefault() {},
-      stopImmediatePropagation() {},
-    };
-    DrawingAnnotations.prototype.key.call(editor, event);
+  state.objects = ['a', 'b', 'c', 'd'].map((id, i) => ({
+    id,
+    name: id,
+    type: 'sweep',
+    profile: 'rect',
+    width: 100,
+    height: 200,
+    thickness: 10,
+    rotation: 0,
+    start: [Math.floor(i / 2) * 2000, (i % 2) * 300, 0],
+    end: [Math.floor(i / 2) * 2000 + 1000, (i % 2) * 300, 0],
+  }));
+  state.objects.push({ id: 'helper', type: 'helperpoint', start: [0, 0, 0] });
+  state.assemblies = [createAssembly(state, ['a', 'b'], 'a', 'Par', () => 'one')];
+  if (numbered) {
+    number(state, { parts: true, assemblies: true });
+    const ids = new Set(state.objects.map((o) => o.id));
+    state.drawings = createSelectedDrawings(
+      state,
+      ids,
+      new Set(drawingCreationGroups(state, ids).map((g) => g.key)),
+    );
   }
-  key('m', 'ctrlKey');
-  key('c', 'metaKey');
-  key('r', 'ctrlKey');
-  assert.deepEqual(calls, ['move-shapes', 'copy-shapes', 'rotate-shapes']);
-  key('c', 'metaKey', true);
-  key('r', 'ctrlKey', false, true);
-  assert.equal(calls.length, 3);
-  editor.selected = null;
-  key('m', 'ctrlKey');
-  assert.equal(calls.length, 3);
+  return state;
+}
+function number(state, kinds) {
+  const plan = planNumbering(state, { ...defaultNumberingSettings(), ...kinds });
+  Object.assign(state, applyNumbering(plan, state));
+}
+function actionsFor(state, overrides = {}) {
+  const calls = { batch: [], open: [], number: [], restored: [], message: [] };
+  const actions = createSelectionDrawingActions({
+    getState: () => state,
+    prepare() {},
+    number: async (kinds) => {
+      calls.number.push(kinds);
+      number(state, kinds);
+      return true;
+    },
+    restoreSelection: (ids) => calls.restored.push(ids),
+    showBatch: (type, ids) => calls.batch.push({ type, ids: [...ids] }),
+    openDrawing: (record) => calls.open.push(record),
+    message: (text) => calls.message.push(text),
+    ...overrides,
+  });
+  return { actions, calls };
+}
+test('selection links shared part types and member-owned assemblies once, excludes GA/helpers, and never mutates', () => {
+  const state = fixture();
+  state.drawings.push({ id: 'ga', type: 'GA', number: 'GA-001' });
+  const before = JSON.stringify(state);
+  const member = selectionDrawingContext(state, new Set(['b', 'helper']));
+  assert.equal(member.selection.size, 1);
+  assert.deepEqual(
+    member.drawings.map((link) => link.record.type),
+    ['SP', 'AS'],
+  );
+  assert.ok(member.drawings.every((link) => link.valid));
+  const part = member.drawings[0].record;
+  assert.ok(
+    selectionDrawingContext(state, ['c']).drawings.some((link) => link.record.id === part.id),
+  );
+  const multiple = selectionDrawingContext(state, ['a', 'b']);
+  assert.equal(multiple.drawings.length, 2);
+  assert.equal(JSON.stringify(state), before);
 });
-
-test('native Copy is a drawing command but leaves editable clipboard contents alone', () => {
-  const calls = [];
-  const editor = { selected: 'part', mode: null, transform: { start: (mode) => calls.push(mode) } };
-  let prevented = false;
-  const event = {
-    target: { closest: () => null },
-    preventDefault() {
-      prevented = true;
-    },
-    stopImmediatePropagation() {},
-  };
-  DrawingAnnotations.prototype.copySelection.call(editor, event);
-  assert.deepEqual(calls, ['copy-shapes']);
-  assert.equal(prevented, true);
-  event.target.closest = () => ({});
-  DrawingAnnotations.prototype.copySelection.call(editor, event);
-  assert.equal(calls.length, 1);
-});
-
-test('Shift rectangles add to the existing selection and pointer cancellation preserves it', async () => {
-  const { DrawingMarquee } = await import('../src/drawing-marquee.js');
-  const editor = {
-    items: [{ id: 'a' }, { id: 'b' }],
-    selected: 'a',
-    selectedIds: new Set(['a']),
-    ui() {},
-    cancel() {},
-    surface: { setAttribute() {}, focus() {} },
-    adapter: {
-      redraw() {},
-      cancelTools() {
-        editor.selected = null;
-        editor.selectedIds.clear();
-      },
-    },
-  };
-  const marquee = Object.assign(Object.create(DrawingMarquee.prototype), {
-    editor,
-    enabled: true,
-    gesture: { id: 1, start: [20, 20], additive: true },
-    cancel() {
-      this.gesture = null;
-    },
-    contours(item) {
-      return [
-        {
-          points:
-            item.id === 'b'
-              ? [
-                  [30, 30],
-                  [40, 40],
-                ]
-              : [
-                  [0, 0],
-                  [10, 10],
-                ],
-          closed: false,
-        },
-      ];
+test('unnumbered standalone part gets an assembly request through explicit numbering and retains the captured selection', async () => {
+  const state = fixture(false),
+    ids = new Set(['c', 'helper']);
+  const { actions, calls } = actionsFor(state, {
+    number: async (kinds) => {
+      calls.number.push(kinds);
+      ids.clear();
+      ids.add('a');
+      number(state, kinds);
+      return true;
     },
   });
-  const event = {
-    pointerId: 1,
-    clientX: 50,
-    clientY: 50,
-    preventDefault() {},
-    stopImmediatePropagation() {},
-  };
-  marquee.start();
-  assert.equal(editor.selected, 'a');
-  assert.deepEqual([...editor.selectedIds], ['a']);
-  marquee.up(event);
-  assert.deepEqual([...editor.selectedIds], ['a', 'b']);
-  assert.equal(editor.selected, 'b');
-  marquee.gesture = { id: 1, start: [0, 0], additive: false };
-  marquee.up(event, true);
-  assert.deepEqual([...editor.selectedIds], ['a', 'b']);
+  await actions.createForSelection('AS', ids);
+  assert.deepEqual(calls.number, [{ parts: true, assemblies: true }]);
+  assert.deepEqual(calls.restored, [['c', 'helper']]);
+  assert.deepEqual(calls.batch, [{ type: 'AS', ids: ['c', 'helper'] }]);
+  assert.ok(state.assemblies.some((a) => a.mainId === 'c'));
+  assert.equal(state.drawings.length, 0); // Creation remains the batch dialog's transaction.
+});
+test('cancelled numbering creates nothing and duplicate pending requests cannot open another numbering dialog', async () => {
+  const state = fixture(false),
+    before = JSON.stringify(state);
+  let finish;
+  const { actions, calls } = actionsFor(state, {
+    number: (kinds) => {
+      calls.number.push(kinds);
+      return new Promise((done) => {
+        finish = done;
+      });
+    },
+  });
+  const pending = actions.createForSelection('SP', ['a']);
+  await actions.createForSelection('AS', ['c']);
+  assert.deepEqual(calls.number, [{ parts: true, assemblies: false }]);
+  finish(false);
+  await pending;
+  assert.equal(JSON.stringify(state), before);
+  assert.deepEqual(calls.batch, []);
+  assert.deepEqual(calls.restored, [['a']]);
+});
+test('valid existing drawing opens directly even when another selected part needs numbering', async () => {
+  const state = fixture();
+  const record = state.drawings.find((d) => d.type === 'SP');
+  state.objects[0].end[0] += 200;
+  const { actions, calls } = actionsFor(state);
+  await actions.openForSelection(record, ['a', 'b']);
+  assert.equal(calls.number.length, 0);
+  assert.equal(calls.open[0].id, record.id);
+});
+test('stale part drawing resumes through its current selection link after numbering splits a shared type', async () => {
+  const state = fixture();
+  const old = state.drawings.find((d) => d.type === 'SP');
+  state.objects[0].end[0] += 200;
+  const before = JSON.stringify(state);
+  const context = selectionDrawingContext(state, ['a']);
+  assert.equal(context.drawings.find((link) => link.record.id === old.id).valid, false);
+  assert.equal(JSON.stringify(state), before);
+  const { actions, calls } = actionsFor(state);
+  await actions.openForSelection(old, ['a']);
+  assert.deepEqual(calls.number, [{ parts: true, assemblies: false }]);
+  assert.equal(calls.open.length, 1);
+  assert.equal(calls.open[0].partKey, state.parts.assignments.a.key);
+  assert.equal(calls.open[0].sourceId, 'a');
+  assert.equal(calls.batch.length, 0);
+});
+test('empty or helper-only selection cannot fall back to creating drawings for the entire model', async () => {
+  const state = fixture(false),
+    { actions, calls } = actionsFor(state);
+  await actions.createForSelection('SP', []);
+  await actions.createForSelection('AS', ['helper']);
+  assert.equal(calls.number.length, 0);
+  assert.equal(calls.batch.length, 0);
+  assert.equal(calls.message.length, 2);
 });

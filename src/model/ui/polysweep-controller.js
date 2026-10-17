@@ -113,5 +113,20 @@ export function installPolysweepTools({
         length.toLocaleString('sv-SE', { maximumFractionDigits: 3 }) + ' mm';
     }
   }
-  controllers.polysweepUI = { start, candidate, pick, finish, removePoint, editPoint, sync };
+  controllers.polysweepUI = {
+    canConfirm: () => {
+      try {
+        return !validatePolysweep(candidate(null));
+      } catch {
+        return false;
+      }
+    },
+    start,
+    candidate,
+    pick,
+    finish,
+    removePoint,
+    editPoint,
+    sync,
+  };
 }

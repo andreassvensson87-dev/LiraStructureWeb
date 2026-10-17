@@ -367,7 +367,11 @@ export function showDrawingBatch(manager, initialType = 'all', initialSelection 
   number.onclick = async () => {
     number.disabled = true;
     try {
-      if ((await numberWithDrawings(manager)) && (await numberAssembliesWithDrawings(manager))) {
+      const numbered = manager.openNumbering
+        ? await manager.openNumbering({ parts: true, assemblies: typeSelect.value !== 'SP' })
+        : (await numberWithDrawings(manager)) && (await numberAssembliesWithDrawings(manager));
+      if (!d.open) return;
+      if (numbered) {
         checked = availableKeys();
         render();
         message.textContent = 'Numrering klar. Granska typerna och skapa valda ritningar.';

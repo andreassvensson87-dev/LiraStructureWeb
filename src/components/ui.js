@@ -380,6 +380,9 @@ export function createComponentUI({
   return {
     pickCopy,
     confirmCopy,
+    canConfirmCopy: () => !!copying && !copyBar.querySelector('[data-apply]').disabled,
+    canConfirm: () =>
+      !!source && valid && (!!creation?.ready || componentDraftChanged(source, staged)),
     confirm,
     cancel,
     sync,

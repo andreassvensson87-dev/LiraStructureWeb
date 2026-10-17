@@ -195,6 +195,7 @@ export function createLinearTransformController({
     cancel,
     pickPoint,
     pointerPreview,
+    canConfirm: () => !!active && active.ready && !tools.operation?.linearPicking,
     confirmActive: () => {
       if (active) confirm(active);
     },

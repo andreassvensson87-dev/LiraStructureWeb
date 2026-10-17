@@ -20,7 +20,13 @@ export function installModelBrowser({
   const setDrawing = (...args) => actions.setDrawing(...args);
   const setSelection = (...args) => actions.setSelection(...args);
   const userSelection = (...args) => actions.userSelection(...args);
-  Object.assign(actions, { changeVisibility });
+  Object.assign(actions, {
+    changeVisibility,
+    hideSelected: () => {
+      const ids = [...ui.selectedIds];
+      changeVisibility(() => ids.forEach((id) => hiddenObjects.add(id)));
+    },
+  });
   function changeVisibility(action) {
     controllers.inspector?.finish();
     setDrawing(false);

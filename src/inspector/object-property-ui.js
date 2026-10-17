@@ -107,5 +107,5 @@ export function createObjectPropertyUI({
       error(e.message);
     }
   }
-  return { sync, pick, confirm };
+  return { sync, pick, confirm, canConfirm: () => !root.querySelector('[data-apply]').disabled };
 }
