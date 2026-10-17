@@ -98,8 +98,8 @@ export function installModelFasteners({
       if (resume?.previewPoints) controllers.fastenerUI.previewRange();
       const label = draft.group ? 'Skruvgrupp' : 'Skruv';
       $('status').textContent = resume?.first
-        ? `${label} · Välj X-riktning i arbetsplanet`
-        : `${label} · Välj origo, därefter X-riktning i arbetsplanet`;
+        ? `${label} · Välj X-riktning i placeringsplanet`
+        : `${label} · Välj origo på en del eller i arbetsplanet, därefter X-riktning`;
       renderer.domElement.focus({ preventScroll: true });
     },
     commit: commitFastener,

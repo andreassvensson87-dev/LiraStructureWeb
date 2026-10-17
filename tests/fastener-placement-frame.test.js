@@ -1,10 +1,14 @@
 import test from 'node:test';
+import * as THREE from 'three';
+import { createModelPicking } from '../src/model/ui/model-picking.js';
+import { createObjectMesh } from '../src/model/object-mesh.js';
 import assert from 'node:assert/strict';
 import { defaultFasteners } from '../src/fasteners/default-catalog.js';
 import { defaultHoleForSpec } from '../src/fasteners/library.js';
 import { assemblyDefaults } from '../src/fasteners/assembly.js';
 import {
   fastenerLayoutFromPoints,
+  fastenerPlaneFromSurface,
   applyFastenerLayout,
   layoutForFastener,
 } from '../src/fasteners/placement-frame.js';
@@ -197,4 +201,93 @@ test('invalid plane directions, layout edits and patterns reject without mutatin
       .length,
     6,
   );
+});
+
+test('picked vertical material face places the group and bores in that face without changing the workplane', (t) => {
+  const prior = globalThis.document;
+  globalThis.document = { getElementById: () => ({ textContent: '' }) };
+  t.after(() => {
+    globalThis.document = prior;
+  });
+  const standing = { ...plate, frame: { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 0, 1] } };
+  const project = createProject({
+    grid: { x: [], y: [] },
+    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
+  });
+  project.objects = [standing];
+  for (const key of Object.keys(project.snap)) project.snap[key] = false;
+  const sourceFrame = structuredClone(frame);
+  const tools = { first: null, operation: { mode: 'fastenerCreate', draft, frame: sourceFrame } };
+  const root = new THREE.Group();
+  const mesh = createObjectMesh(standing, { model: [standing], selectedIds: new Set() });
+  root.add(mesh);
+  root.updateMatrixWorld(true);
+  t.after(() =>
+    mesh.traverse((o) => {
+      o.geometry?.dispose();
+      o.material?.dispose();
+    }),
+  );
+  const camera = new THREE.OrthographicCamera(-300, 300, 300, -300, 0.1, 3000);
+  camera.up.set(0, 0, 1);
+  camera.position.set(100, -1000, 100);
+  camera.lookAt(100, 0, 100);
+  camera.updateMatrixWorld();
+  const picking = createModelPicking({
+    project,
+    tools,
+    ui: { selectedIds: new Set() },
+    camera,
+    objects: root,
+    host: {
+      clientWidth: 600,
+      clientHeight: 600,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 600, height: 600 }),
+    },
+    isVisible: () => true,
+    getSnapIndex: () => null,
+    getReferences: () => null,
+    updateSnapOverlay() {},
+  });
+  const start = picking.point({ clientX: 300, clientY: 300 });
+  close(start, [100, -20, 100]);
+  const picked = tools.operation.surfaceFrame;
+  close(picked.u, [1, 0, 0]);
+  close(picked.v, [0, 0, 1]);
+  assert.deepEqual(sourceFrame, frame, 'hover cannot modify the active workplane');
+  const batch = preparePickedFasteners(
+    { ...draft, group: grid },
+    {
+      start,
+      xPoint: [200, -20, 100],
+      frame: picked,
+      model: [standing],
+    },
+  );
+  assert.equal(batch.length, 6);
+  for (const screw of batch) {
+    close(fastenerFrame(screw).z, [0, 1, 0]);
+    assert.equal(screw.holes[0].active, true);
+    assert.equal(validateFastener(screw), '');
+  }
+  validateFastenerGroups(batch);
+  tools.operation.draft = { ...draft, holes: [{ ...draft.holes[0], targetId: 'other' }] };
+  picking.point({ clientX: 300, clientY: 300 });
+  assert.equal(tools.operation.surfaceFrame, undefined);
+});
+
+test('surface plane keeps a valid axis for end faces and inclined faces', () => {
+  for (const normal of [
+    [1, 0, 0],
+    [0, 0, 1],
+    [0.6, 0.8, 0],
+  ]) {
+    const surface = fastenerPlaneFromSurface([10, 20, 30], normal, frame);
+    const layout = fastenerLayoutFromPoints(
+      surface.origin,
+      surface.origin.map((v, i) => v + surface.u[i] * 100),
+      surface,
+    );
+    close(new THREE.Vector3(...layout.frame.u).cross(new THREE.Vector3(...layout.frame.v)), normal);
+  }
 });

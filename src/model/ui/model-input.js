@@ -322,7 +322,13 @@ export function installModelInput({
           return controllers.polysweepUI.pick(p);
         }
         tools.first = p;
-        if (tools.operation?.mode === 'fastenerCreate') tools.operation.frame.origin = [...p];
+        if (tools.operation?.mode === 'fastenerCreate') {
+          tools.operation.frame = {
+            ...(tools.operation.surfaceFrame || tools.operation.frame),
+            origin: [...p],
+          };
+          delete tools.operation.surfaceFrame;
+        }
         if (tools.operation?.gripPlane)
           tools.operation.frame = { ...tools.operation.gripPlane, origin: [...p] };
         if (!tools.operation) {
@@ -331,7 +337,7 @@ export function installModelInput({
         }
         $('status').textContent =
           tools.operation?.mode === 'fastenerCreate'
-            ? 'Skruv · Välj mönstrets X-riktning i arbetsplanet'
+            ? 'Skruvgrupp · Välj mönstrets X-riktning i placeringsplanet'
             : tools.operation
               ? 'Välj målpunkt eller ange avstånd'
               : 'Välj slutpunkt';

@@ -4,6 +4,19 @@ import { axisPlacement, fastenerFrame } from './geometry.js';
 const point = (p) =>
   Array.isArray(p) && p.length === 3 && p.every((v) => Number.isFinite(v) && Math.abs(v) <= 1e7);
 
+/** A picked material face defines the pattern plane; retain the workplane X when possible. */
+export function fastenerPlaneFromSurface(origin, normal, reference) {
+  const n = new THREE.Vector3(...normal).normalize();
+  const u = new THREE.Vector3(...reference.u);
+  u.addScaledVector(n, -u.dot(n));
+  if (u.lengthSq() < 1e-8) {
+    u.set(...reference.v);
+    u.addScaledVector(n, -u.dot(n));
+  }
+  u.normalize();
+  return { origin: [...origin], u: u.toArray(), v: n.cross(u).normalize().toArray() };
+}
+
 /** Layout points describe the pattern plane, independently of the fitted shaft endpoints. */
 export function validateFastenerLayout(layout) {
   if (!layout) return;

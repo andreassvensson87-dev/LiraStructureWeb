@@ -12,6 +12,7 @@ import { levelElevation } from '../../levels.js';
 import { resolveSnap } from '../../snap.js';
 import { canSelectModelObject } from '../selection-mode.js';
 import { drawingWorkPlane } from '../../work-plane.js';
+import { fastenerPlaneFromSurface } from '../../fasteners/placement-frame.js';
 
 // Converts viewport input into model hits and points using the shared snap engine.
 export function createModelPicking({
@@ -136,6 +137,18 @@ export function createModelPicking({
   function point(e) {
     camera.updateMatrixWorld();
     ray(e);
+    const placingFastener = tools.operation?.mode === 'fastenerCreate' && !tools.first;
+    let fastenerSurface = null;
+    if (placingFastener) {
+      delete tools.operation.surfaceFrame;
+      const targets = new Set(tools.operation.draft.holes.map((h) => h.targetId));
+      fastenerSurface = raycaster
+        .intersectObjects(
+          objects.children.filter((o) => o.visible && targets.has(o.userData.id)),
+          false,
+        )
+        .find((hit) => hit.face && (getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true));
+    }
     const r = host.getBoundingClientRect();
     const snapStarted = performance.now();
     const snap = nextPointSnapSettings(project.snap, tools.nextPointSnap);
@@ -202,7 +215,7 @@ export function createModelPicking({
         (tools.operation?.mode === 'fastenerCreate' && !!tools.first) ||
         (!!tools.operation?.gripRefs && !!tools.operation.frame),
     });
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       host.dataset.snapObjects = snapObjects.length;
       host.dataset.snapMs = (performance.now() - snapStarted).toFixed(1);
     }
@@ -231,6 +244,29 @@ export function createModelPicking({
         point: null,
         label: `Nästa punkt: ${nextPointSnapLabel(tools.nextPointSnap)} · ingen träff`,
       };
+    }
+    if (fastenerSurface) {
+      const normal = fastenerSurface.face.normal
+        .clone()
+        .applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(fastenerSurface.object.matrixWorld));
+      if (normal.dot(raycaster.ray.direction) > 0) normal.negate();
+      if (!tools.nextPointSnap && (!tools.activeSnap.point || tools.activeSnap.kind === 'free'))
+        tools.activeSnap = {
+          point: fastenerSurface.point.toArray(),
+          kind: 'point',
+          symbol: 'cross',
+          label: 'Objektyta',
+        };
+      // A snap on another face/object must not silently acquire this surface's plane.
+      const offset =
+        tools.activeSnap.point &&
+        new THREE.Vector3(...tools.activeSnap.point).sub(fastenerSurface.point);
+      if (offset && Math.abs(offset.dot(normal)) < 0.001)
+        tools.operation.surfaceFrame = fastenerPlaneFromSurface(
+          tools.activeSnap.point,
+          normal.toArray(),
+          tools.operation.frame,
+        );
     }
     $('status').textContent =
       tools.operation?.mode === 'workPlane' ? workPlanePrompt() : tools.activeSnap.label;
