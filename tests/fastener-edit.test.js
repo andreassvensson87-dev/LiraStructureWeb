@@ -168,7 +168,12 @@ test('pattern and hardware commits are atomic, undoable and recalculate after ta
     updateAutomaticJoints(project.objects, replaceFastenerGroup(project.objects, batch)),
   );
   assert.equal(project.objects.length, 8);
-  assert.equal(holesForPart(a, project.objects).length, 6);
+  assert.equal(
+    holesForPart(a, project.objects).length,
+    0,
+    'second nut leaves insufficient length for the lower plate',
+  );
+  assert.ok(project.objects.slice(2).every((s) => s.layerCount === 1));
   assert.ok(project.objects.slice(2).every((s) => s.spec.length === 80));
   const edited = structuredClone(project.objects);
   Object.assign(project, history.undo(project));
@@ -181,7 +186,7 @@ test('pattern and hardware commits are atomic, undoable and recalculate after ta
   ]);
   assert.ok(project.objects.slice(2).every((s) => s.spec.length === 80));
   assert.ok(
-    project.objects.slice(2).every((s) => s.holes.find((h) => h.targetId === 'a').depth === 35),
+    project.objects.slice(2).every((s) => s.holes.find((h) => h.targetId === 'a').active === false),
   );
   const stable = structuredClone(project.objects),
     checkpoints = history.past.length;

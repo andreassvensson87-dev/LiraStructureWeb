@@ -119,7 +119,20 @@ export function validateFastenerGroups(objects) {
         g.direction,
         g.u,
       ]);
+    const layoutSignature = (s) =>
+      JSON.stringify(
+        s.layout
+          ? [
+              [s.layout.frame.origin, s.layout.frame.u, s.layout.frame.v],
+              s.layout.offset,
+              s.layout.rotation,
+              s.layout.reversed,
+              s.layout.searchLength,
+            ]
+          : null,
+      );
     if (
+      members.some((s) => layoutSignature(s) !== layoutSignature(members[0])) ||
       members.length !== first.rows * first.columns ||
       new Set(members.map((s) => `${s.group.row}:${s.group.column}`)).size !== members.length ||
       members.some((s) => signature(s.group) !== signature(first))

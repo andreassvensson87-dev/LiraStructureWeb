@@ -26,6 +26,7 @@ export function workPlaneFromTwoPoints(points, reference = null) {
 }
 export function drawingWorkPlane(operation, temporaryPlane) {
   if (operation?.planeId) return null;
+  if (operation?.mode === 'fastenerCreate') return operation.frame;
   if (operation?.mode === 'plateCreate') return operation.frame;
   if (operation?.mode === 'plateVertex') return operation.source.frame;
   if (operation?.gripRefs || operation?.mode === 'grip')

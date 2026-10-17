@@ -628,3 +628,28 @@
 .fastener-editor [data-length-result]:empty {
   display: none;
 }
+
+.fastener-editor .fastener-position-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fastener-editor .fastener-position-fields [data-reverse] {
+  align-self: end;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+.fastener-editor .fastener-assembly-picker > svg {
+  max-height: 76px;
+}
+.fastener-editor .fastener-group-layout {
+  max-height: 100px;
+}
+.fastener-editor [data-hole-settings] {
+  margin: 8px 0;
+}
+.fastener-editor [data-connections] > .fastener-connections-heading {
+  margin-top: 8px;
+}

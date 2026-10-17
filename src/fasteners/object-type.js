@@ -1,3 +1,5 @@
+import { REACH_WARNINGS } from './material-reach.js';
+import { validateFastenerLayout } from './placement-frame.js';
 import { transformSpan } from './holes.js';
 import * as THREE from 'three';
 import { fastenerAccessories, validateAccessories } from './accessories.js';
@@ -10,6 +12,7 @@ export function validateFastener(s) {
   try {
     validateFastenerSpec(s.spec, { instance: s.placementMode === 'range' });
     validateAssembly(s);
+    validateFastenerLayout(s.layout);
     validateFastenerGroup(s.group);
     if (s.lengthOptions != null) {
       if (!Array.isArray(s.lengthOptions) || s.lengthOptions.length > 1000)
@@ -95,6 +98,8 @@ export function validateFastener(s) {
         s.insertion.depth > 1e7)
     )
       throw new Error('Ogiltiga insättningspunkter eller borravstånd.');
+    if (s.insertion?.reachWarning != null && !REACH_WARNINGS.includes(s.insertion.reachWarning))
+      throw new Error('Ogiltig återkoppling för skruvens räckvidd.');
     if (s.span) {
       const f = fastenerFrame(s);
       const coordinates = [s.span.start, s.span.end];

@@ -1,3 +1,4 @@
+import { createEditorSection } from '../ui/editor-surface.js';
 import { hasNut } from './library.js';
 
 import { holeExtent } from './placement.js';
@@ -80,10 +81,10 @@ export function renderFastenerHoles({
     row.dataset.hole = i;
     row.dataset.boreId = h.id;
     const legend = document.createElement('summary');
-    legend.textContent = `${getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del'} · ${h.kind === 'none' ? 'Ingen borrning' : `Ø${h.diameter} · ${h.kind === 'pilot' ? 'Förborrning' : 'Genomgående'}`}${h.layers ? ` · ${h.layers.length} lager` : ''}`;
+    legend.textContent = `${getObjects().find((s) => s.id === h.targetId)?.name || 'Saknad del'}${h.targetId === anchor ? ' · Referensdel' : ''} · ${h.kind === 'none' ? 'Ingen borrning' : `Ø${h.diameter} · ${h.kind === 'pilot' ? 'Förborrning' : 'Genomgående'}`}${h.layers ? ` · ${h.layers.length} lager` : ''}`;
     row.append(legend);
     const fields = document.createElement('div');
-    fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="span">Automatiskt förband</option><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><p class="inspector-note">Automatiska lägen beräknas vid placering och sparande. Välj manuellt för egna start- och djupmått.</p><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
+    fields.innerHTML = `<label class="field">Håltyp<select name="holeKind"><option value="none">Ingen borrning</option><option value="pilot">Förborrning / blindhål</option><option value="clearance">Frigång / genomgående</option></select></label><label class="field" data-extent>Omfattning<select name="extent"><option value="span">Automatiskt förband</option><option value="wall">Närmaste vägg / fläns</option><option value="profile">Hela profilen</option><option value="blind">Blindhål från ingångsytan</option><option value="manual">Manuellt startläge och djup</option></select></label><details data-hole-dimensions><summary>Hålmått · mm</summary><div class="coordinates">${numeric('offset', 'Start · mm', h.offset, -1e7)}${numeric('diameter', 'Diameter · mm', h.diameter, 0.001)}${numeric('depth', 'Djup · mm', h.depth, 0.001)}</div><details><summary>Försänkning</summary><div class="dimensions">${numeric('csDiameter', 'Diameter · mm (0 = av)', h.countersink?.diameter || 0)}${numeric('csDepth', 'Djup · mm', h.countersink?.depth || 0)}</div></details></details>`;
     const kind = fields.querySelector('[name=holeKind]');
     kind.value = h.kind;
     const extent = fields.querySelector('[name=extent]');
@@ -122,4 +123,36 @@ export function renderFastenerHoles({
   );
   select.value = anchor;
   select.onchange = () => selectAnchor(select.value);
+}
+
+/** Adopt existing metadata controls; their owners, IDs and events stay unchanged. */
+export function createFastenerMetadata(inspector, panel) {
+  const section = createEditorSection('Objekt', [], { open: false });
+  section.classList.add('attribute-section');
+  let homes = [];
+  return {
+    show() {
+      if (homes.length) return;
+      const nodes = [
+        inspector.querySelector('#inspector-identity'),
+        inspector.querySelector('#inspector-ifc-class')?.closest('label'),
+        inspector.querySelector('#sweep-identity-details'),
+        inspector.querySelector('.material-quick-row'),
+      ].filter(Boolean);
+      homes = nodes.map((node) => {
+        const marker = document.createComment('fastener-metadata-home');
+        node.before(marker);
+        section.append(node);
+        return { node, marker };
+      });
+      panel.append(section);
+    },
+    restore() {
+      for (const { node, marker } of homes) {
+        marker.replaceWith(node);
+      }
+      homes = [];
+      section.remove();
+    },
+  };
 }

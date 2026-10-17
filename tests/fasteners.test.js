@@ -188,7 +188,12 @@ test('automatic layer limits start at material and complete a wall; wall default
   assert.equal(validateFastener(outside), '');
   const short = automaticPlacement({ ...draft, spec: bolt }, [500, 60, 160], [500, 60, 60], [tube]);
   assert.equal(short.spec.length, bolt.length);
-  assert.ok(fastenerFitWarnings(short).length);
+  assert.equal(short.layerCount, 1);
+  assert.equal(
+    fastenerFitWarnings(short).length,
+    0,
+    'short shaft ends in the cavity after the near wall',
+  );
   assert.equal(validateFastener(short), '');
 });
 test('automatic wood holes stop within material and the physical shaft', () => {

@@ -184,15 +184,19 @@ export function installModelInput({
           return;
         }
         tools.first = p;
+        if (tools.operation?.mode === 'fastenerCreate') tools.operation.frame.origin = [...p];
         if (tools.operation?.gripPlane)
           tools.operation.frame = { ...tools.operation.gripPlane, origin: [...p] };
         if (!tools.operation) {
           ['sx', 'sy', 'sz'].forEach((k, i) => ($(k).value = p[i]));
           updateForm();
         }
-        $('status').textContent = tools.operation
-          ? 'Välj målpunkt eller ange avstånd'
-          : 'Välj slutpunkt';
+        $('status').textContent =
+          tools.operation?.mode === 'fastenerCreate'
+            ? 'Skruv · Välj mönstrets X-riktning i arbetsplanet'
+            : tools.operation
+              ? 'Välj målpunkt eller ange avstånd'
+              : 'Välj slutpunkt';
         syncLocks();
         $('draw-length-form').hidden = false;
         renderer.domElement.focus({ preventScroll: true });

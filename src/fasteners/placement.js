@@ -4,7 +4,8 @@ import { boreFeature } from './holes.js';
 import { axisPlacement, fastenerFrame } from './geometry.js';
 import { isFastener } from './object-type.js';
 import { hasNut } from './library.js';
-import { assemblyAllowance, fittedAssembly } from './assembly.js';
+import { fittedAssembly } from './assembly.js';
+import { entryAllowance, reachableMaterialLayers } from './material-reach.js';
 
 class AxisMiss extends Error {
   constructor(part, bounds, frame) {
@@ -132,35 +133,11 @@ export function automaticPlacement(s, start, direction, model, limit = null) {
     throw new Error('Välj minst ett objekt i förbandet.');
   }
   const first = Math.min(...candidates.map((v) => v.offset));
-  const reach = !hasNut(s.spec) ? first + s.spec.length - entryAllowance(s) : Infinity;
-  // A search limit selects complete layers from the first material surface.
-  const layers = candidates
-    .filter((v) => v.offset < first + (limit ?? Infinity) - 0.001)
-    .map((v) => ({ ...v, depth: Math.min(v.depth, reach - v.offset) }))
-    .filter((v) => v.depth > 0.001);
-  if (
-    !hasNut(s.spec) &&
-    layers.some((v) => {
-      const h = s.holes.find((h) => h.targetId === v.targetId);
-      const original = candidates.find((c) => c.targetId === v.targetId && c.offset === v.offset);
-      return h.kind === 'clearance' && v.depth < original.depth - 0.001;
-    })
-  )
-    throw new Error(
-      'Skruven är för kort för genomgående hål. Välj en längre skruv eller förborrning.',
-    );
-  if (limit == null) {
-    const missed = s.holes.find(
-      (h) =>
-        candidates.some((v) => v.targetId === h.targetId) &&
-        !layers.some((v) => v.targetId === h.targetId),
-    );
-    if (missed)
-      throw new Error(
-        `Skruven är för kort för att nå ${materialModel.find((o) => o.id === missed.targetId)?.name || missed.targetId}. Välj en längre skruv.`,
-      );
-  }
-  const last = Math.max(...layers.map((v) => v.offset + v.depth));
+  const { layers, warning } = reachableMaterialLayers(s, candidates, first, limit);
+  // A too-short first layer stays movable, with no machining and existing fit feedback.
+  const last = layers.length
+    ? Math.max(...layers.map((v) => v.offset + v.depth))
+    : Math.min(...candidates.map((v) => v.offset + v.depth));
 
   const fitted = spanPlacement(
     { ...s, placementMode: 'range' },
@@ -174,6 +151,7 @@ export function automaticPlacement(s, start, direction, model, limit = null) {
     depth: limit ?? last - first,
     automatic: true,
     limited: limit != null,
+    reachWarning: warning,
   };
   fitted.layerCount = layers.length;
   fitted.holes = fitted.holes.map((h) => ({
@@ -224,18 +202,6 @@ export function spanPlacement(s, entry, exit) {
       : {}),
   };
 }
-function entryAllowance(s) {
-  const assembly = assemblyAllowance(s);
-  if (assembly != null) return assembly;
-  if (s.spec.kind === 'rod') return s.startAllowance || 0;
-  if (s.accessories != null) {
-    return s.accessories.find((item) => item.kind === 'washer' && Math.abs(item.offset) < 0.001)
-      ? s.spec.washer?.thickness || 0
-      : 0;
-  }
-  return s.washers?.head ? s.spec.washer?.thickness || 0 : 0;
-}
-
 /** Insertion points define an axis; a separate forward range selects material layers. */
 export function insertionPlacement(s, start, direction, depth, model) {
   if (!Number.isFinite(depth) || depth <= 0 || depth > 1e7)
@@ -334,8 +300,22 @@ export function resolveFastenerHoles(s, model) {
     holes: s.holes.map((h) => {
       h = boreFeature({ ...h, id: h.id || `bore-${h.targetId}` });
       const extent = holeExtent(h);
-      if (h.kind === 'none' || extent === 'manual') return { ...h };
+      if (h.kind === 'none') return { ...h, active: false };
       if (s.insertion && !h.layers?.length) return { ...h, active: false };
+      if (extent === 'manual') {
+        if (!s.insertion?.automatic) return { ...h };
+        const from = Math.max(h.offset, Math.min(...h.layers.map((v) => v.offset)));
+        const to = Math.min(
+          h.offset + h.depth,
+          Math.max(...h.layers.map((v) => v.offset + v.depth)),
+        );
+        return {
+          ...h,
+          offset: millimeters(from),
+          depth: millimeters(Math.max(0.001, to - from)),
+          active: to - from > 0.001,
+        };
+      }
       h.active = true;
       const part = materialModel.find((o) => o.id === h.targetId);
       if (!part) throw new Error('Hålets måldel saknas.');

@@ -37,7 +37,6 @@ export function modelKeyboardCommand(
     const transform = { m: 'move', c: 'copy', r: 'rotate' }[e.key.toLowerCase()];
     if (transform) return e.repeat ? 'consume' : transform;
   }
-  if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return e.key === 'Enter' ? 'confirm-fastener-targets' : null;
   if (mode === 'workArea') return e.key === 'Enter' ? 'confirm-work-area' : null;
   if (mode === 'workPlane') return e.key === 'Backspace' ? 'remove-workplane-point' : null;

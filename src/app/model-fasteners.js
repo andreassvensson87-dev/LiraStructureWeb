@@ -1,3 +1,4 @@
+import { levelElevation } from '../levels.js';
 import { FastenerUI } from '../fasteners/ui.js';
 import { fastenerGroupBatch, replaceFastenerGroup } from '../fasteners/groups.js';
 import { nextIdentity } from '../object-identity.js';
@@ -27,7 +28,16 @@ export function installModelFasteners({
   Object.assign(actions, { commitFastener });
   controllers.fastenerUI = new FastenerUI({
     getObjects: () => project.objects,
-    getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
+    getWorkPlane: () =>
+      structuredClone(
+        tools.temporaryPlane || {
+          origin: [0, 0, levelElevation(project.levels)],
+          u: [1, 0, 0],
+          v: [0, 1, 0],
+        },
+      ),
+    getSelection: () =>
+      [...ui.selectedIds].map((id) => project.objects.find((s) => s.id === id)).filter(Boolean),
     selectSource: (id) => setSelection(id ? [id] : []),
     getOperation: () => tools.operation,
     previewPlacement: (draft) => {
@@ -54,15 +64,16 @@ export function installModelFasteners({
     beginPlacement: (draft) => {
       select(null);
       setDrawing(true);
-      tools.operation = { mode: 'fastenerCreate', draft };
+      tools.operation = {
+        mode: 'fastenerCreate',
+        draft,
+        frame: structuredClone(draft.layout.frame),
+      };
       syncOperationUI();
       controllers.fastenerUI.sync([], tools.operation);
       controllers.inspector.show('properties');
       const label = draft.group ? 'Skruvgrupp' : 'Skruv';
-      $('status').textContent =
-        draft.placementMode === 'range'
-          ? `${label} · Välj första insättningspunkten, därefter riktning`
-          : `${label} · Välj punkt under huvud, därefter riktning`;
+      $('status').textContent = `${label} · Välj origo, därefter X-riktning i arbetsplanet`;
       renderer.domElement.focus({ preventScroll: true });
     },
     commit: commitFastener,

@@ -21,6 +21,10 @@ export function withFastenerLength(spec, length) {
 export function fastenerFitWarnings(s) {
   if (!s?.spec) return [];
   const warnings = new Set();
+  if (s.insertion?.reachWarning === 'incomplete-layer')
+    warnings.add('Skruven slutar inne i ett materiallager. Lagret får inget genomgående hål.');
+  if (s.insertion?.reachWarning === 'hardware')
+    warnings.add('Längden räcker inte för nästa lager med valda brickor och muttrar.');
   const length = s.spec.length;
   if (s.spec.thread?.length > length) warnings.add('Längden är kortare än produktens gänglängd.');
   if (s.assembly?.bolt !== false && s.span) {

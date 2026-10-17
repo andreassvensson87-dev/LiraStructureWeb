@@ -21,11 +21,11 @@ export function createFastenerGroupEditor(root) {
         ['list', 'Fritt'],
       ],
     ],
-    ['groupX', 'X', 'text'],
-    ['groupY', 'Y', 'text'],
+    ['groupX', 'Delning X', 'text'],
+    ['groupY', 'Delning Y', 'text'],
     ['groupCount', 'Antal', 'number'],
     ['groupDiameter', 'Diameter', 'number'],
-    ['groupRotation', 'Rotation', 'number'],
+    ['groupRotation', 'Mönstervinkel', 'number'],
   ];
   for (const [key, label, type, options] of fields) {
     const row = createAttributeRow({
@@ -129,14 +129,15 @@ export function createFastenerGroupEditor(root) {
       inputs.groupRotation.value = source?.rotation || 0;
       render();
     },
-    reverse() {
-      reversed = !reversed;
+    renewIdentity() {
+      groupId = crypto.randomUUID();
+      inputs.groupEnabled.disabled = false;
     },
     enabled: () => inputs.groupEnabled.checked,
     apply(draft, start, direction) {
-      return inputs.groupEnabled.checked
-        ? alignFastenerGroup({ ...draft, group: definition() }, start, direction)
-        : draft;
+      if (!inputs.groupEnabled.checked) return draft;
+      const result = { ...draft, group: definition() };
+      return draft.layout ? result : alignFastenerGroup(result, start, direction);
     },
   };
 }

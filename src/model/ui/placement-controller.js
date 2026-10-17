@@ -10,9 +10,7 @@ import { groupSelection } from '../../fasteners/group-data.js';
 import { blockSelection } from '../../blocks/placement.js';
 import { gripPoint, validGripRefs } from '../grip-selection.js';
 import { moveGripPoints, gripWorkPlane, wholeGripObjects } from '../grips.js';
-import { alignFastenerGroup, fastenerGroupBatch } from '../../fasteners/groups.js';
-import { axisPlacement } from '../../fasteners/geometry.js';
-import { resolveFastenerHoles } from '../../fasteners/placement.js';
+import { preparePickedFasteners } from '../../fasteners/placement-draft.js';
 import { moveReferencePlacement } from '../../references/reference-placement.js';
 import { transformCandidates, cloneTransformSource } from '../tools/transform-tool.js';
 
@@ -272,26 +270,13 @@ export function createPlacementController({
     if (tools.operation?.mode === 'itemCreate') return [getItem().candidate(tools.first, target)];
     if (tools.operation?.mode === 'fastenerCreate') {
       if (tools.operation.error) throw new Error(tools.operation.error);
-      const draft = tools.operation.draft;
-      if (draft.group)
-        return fastenerGroupBatch(alignFastenerGroup(draft, tools.first, target), project.objects, {
-          fit: false,
-        });
-      return [
-        {
-          ...draft,
-          ...axisPlacement(draft.spec, tools.first, target),
-          ...(draft.placementMode === 'range'
-            ? {
-                insertion: {
-                  start: [...tools.first],
-                  direction: [...target],
-                  depth: draft.drillDepth,
-                },
-              }
-            : {}),
-        },
-      ];
+      tools.operation.previewPoints = [[...tools.first], [...target]];
+      return preparePickedFasteners(tools.operation.draft, {
+        start: tools.first,
+        xPoint: target,
+        frame: tools.operation.frame,
+        model: project.objects,
+      });
     }
     if (tools.operation?.gripRefs || tools.operation?.mode === 'grip')
       return moveGripPoints(tools.operation.sources, tools.operation.refs, target, tools.first);
@@ -373,24 +358,10 @@ export function createPlacementController({
     let batch;
     try {
       batch = candidates(target);
-      if (
-        tools.operation?.mode === 'fastenerCreate' &&
-        tools.operation.draft.placementMode === 'range'
-      ) {
-        clearPreview();
-        tools.first = null;
-        tools.operation = { mode: 'fastenerDepth', draft: batch[0] };
-        $('draw-length-form').hidden = true;
-        getFasteners().sync([], tools.operation);
-        getInspector().show('properties');
-        $('status').textContent = batch[0].group
-          ? 'Kontrollera skruvgruppen · Enter skapar gruppen och dess hål'
-          : 'Kontrollera förbandet · Enter skapar skruv och hål';
-        getFasteners().placeForm.querySelector('[type=submit]').focus();
+      if (tools.operation?.mode === 'fastenerCreate') {
+        getFasteners().commitPicked(batch[0]);
         return true;
       }
-      if (tools.operation?.mode === 'fastenerCreate')
-        batch = batch.map((s) => resolveFastenerHoles(s, project.objects));
     } catch (error) {
       $('draw-length-error').textContent = error.message;
       $('status').textContent = error.message;
@@ -472,9 +443,13 @@ export function createPlacementController({
       return;
     }
     const s = batch[0];
+    if (tools.operation?.mode === 'fastenerCreate') getFasteners()?.showPickedFeedback(batch);
     getItem()?.preview(s);
-    if (showForm) {
-      if (tools.operation && !['blockCreate', 'polysweepCreate'].includes(tools.operation.mode))
+    if (showForm && tools.operation?.mode !== 'fastenerCreate') {
+      if (
+        tools.operation &&
+        !['blockCreate', 'polysweepCreate', 'fastenerCreate'].includes(tools.operation.mode)
+      )
         fillForm(s);
       else {
         ['ex', 'ey', 'ez'].forEach((k, i) => ($(k).value = p[i]));
@@ -528,7 +503,7 @@ export function createPlacementController({
       return;
     }
     if (tools.operation?.linearId && !tools.operation.linearPicking) return;
-    if (['fastenerTargets', 'fastenerDepth', 'fit'].includes(tools.operation?.mode)) return;
+    if (['fastenerTargets', 'fit'].includes(tools.operation?.mode)) return;
     if (tools.operation?.mode === 'workPlane') {
       const p = point(e),
         points = [...tools.operation.points, ...(p ? [p] : [])];

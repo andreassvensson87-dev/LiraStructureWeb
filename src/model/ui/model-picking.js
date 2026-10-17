@@ -188,6 +188,7 @@ export function createModelPicking({
       workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
       constrainToPlane:
         ['plateCreate', 'plateVertex'].includes(tools.operation?.mode) ||
+        (tools.operation?.mode === 'fastenerCreate' && !!tools.first) ||
         (!!tools.operation?.gripRefs && !!tools.operation.frame),
     });
     if (import.meta.env.DEV) {

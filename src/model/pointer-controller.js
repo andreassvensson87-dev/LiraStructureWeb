@@ -15,7 +15,6 @@ export function pointerCommand({
   if (mode === 'plateProperties') return 'plate-property-target';
   if (mode === 'sweepProperties') return 'sweep-property-target';
   if (mode === 'fit') return picking ? 'fit-reference' : null;
-  if (mode === 'fastenerDepth') return null;
   if (mode === 'fastenerTargets') return 'fastener-target';
   if (mode === 'assemblyMain') return 'assembly-main';
   if (mode === 'helperpoint') return 'helperpoint';

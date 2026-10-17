@@ -1,3 +1,7 @@
+import { defaultFasteners } from '../src/fasteners/default-catalog.js';
+import { defaultHoleForSpec } from '../src/fasteners/library.js';
+import { fastenerGroupBatch } from '../src/fasteners/groups.js';
+import { fastenerFrame } from '../src/fasteners/geometry.js';
 import { createPlaneTransformController } from '../src/model/ui/plane-transform-controller.js';
 import { planeTransformCandidates } from '../src/model/tools/plane-transform.js';
 import { createLinearTransformController } from '../src/model/ui/linear-transform-controller.js';
@@ -66,7 +70,19 @@ function fixture(t) {
     new THREE.LineDashedMaterial(),
   );
   t.after(() => preview.dispose(guide));
-  const workPlanePreviews = [];
+  const workPlanePreviews = [],
+    fastenerCommits = [];
+  const fasteners = {
+    showPickedFeedback() {},
+    commitPicked(draft) {
+      fastenerCommits.push(draft);
+      const batch = draft.group
+        ? fastenerGroupBatch(draft, project.objects)
+        : [{ ...draft, id: crypto.randomUUID() }];
+      modelEditor.add(batch);
+      resetToolInteraction(tools, false);
+    },
+  };
   const controller = createPlacementController({
     project,
     ui,
@@ -87,6 +103,7 @@ function fixture(t) {
     getReferences: () => null,
     getPointSelection: () => gripSelection,
     getItem: () => null,
+    getFasteners: () => fasteners,
     getInspector: () => ({ focusGeometry() {} }),
     fillForm() {},
     updateForm() {},
@@ -94,6 +111,7 @@ function fixture(t) {
   });
   return {
     workPlanePreviews,
+    fastenerCommits,
     controller,
     project,
     ui,
@@ -829,4 +847,65 @@ test('linear series copies block instances independently and Copy ignores partia
     ],
   );
   assert.equal(f.history.past.length, 1);
+});
+
+test('canvas fastener preview and second click use the picked plane and commit one atomic group', (t) => {
+  const f = fixture(t);
+  const frame = { origin: [0, 0, 0], u: [0.8, 0, 0.6], v: [0, 1, 0] };
+  const plate = {
+    id: 'plate',
+    type: 'plate',
+    frame,
+    polygon: [
+      [-200, -200],
+      [400, -200],
+      [400, 400],
+      [-200, 400],
+    ],
+    thickness: 20,
+    side: 'positive',
+  };
+  f.project.objects = [plate];
+  const spec = defaultFasteners().find((s) => s.standard === 'ISO 4017' && s.diameter === 12);
+  f.tools.drawing = true;
+  f.tools.first = [0, 0, 0];
+  f.tools.activeSnap = { kind: 'free', label: 'Punkt' };
+  f.tools.operation = {
+    mode: 'fastenerCreate',
+    frame,
+    draft: {
+      type: 'fastener',
+      spec,
+      placementMode: 'range',
+      lengthMode: 'manual',
+      nutOffset: 80,
+      holes: [defaultHoleForSpec(spec, plate.id)],
+      anchorId: plate.id,
+      group: {
+        id: 'new-grid',
+        shape: 'array',
+        columns: 2,
+        rows: 2,
+        distancesX: [80],
+        distancesY: [60],
+        rotation: 0,
+      },
+      assembly: { bolt: true, nut: true },
+    },
+  };
+  const before = structuredClone(f.project.objects);
+  f.controller.updatePointer({ clientX: 80, clientY: 60 });
+  assert.ok(f.ui.preview);
+  assert.deepEqual(f.project.objects, before);
+  assert.equal(f.fastenerCommits.length, 0);
+  assert.equal(f.history.canUndo, false);
+  assert.equal(f.controller.commitPoint([80, 0, 60]), true);
+  assert.equal(f.fastenerCommits.length, 1, 'no additional review phase after the second pick');
+  const bolts = f.project.objects.filter((s) => s.type === 'fastener');
+  assert.equal(bolts.length, 4);
+  const axis = fastenerFrame(bolts[0]).z.toArray();
+  assert.ok(Math.abs(axis[0] - 0.6) < 1e-6 && Math.abs(axis[2] + 0.8) < 1e-6);
+  assert.equal(new Set(bolts.map((s) => s.id)).size, 4);
+  assert.equal(new Set(bolts.flatMap((s) => s.holes.map((h) => h.id))).size, 4);
+  assert.deepEqual(f.history.undo(f.project).objects, before);
 });

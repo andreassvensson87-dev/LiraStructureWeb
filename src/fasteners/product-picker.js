@@ -49,6 +49,8 @@ export function createFastenerProductPicker(form, { openLibrary, changed }) {
         ...[...values].map(([value, label]) => new Option(label, value)),
       );
       controls[key].disabled = !records.length;
+      if (key === 'grade' || key === 'coating')
+        controls[key].parentElement.hidden = !selected?.[key];
       if (selected) controls[key].value = get(selected, key);
     }
     if (!length.value && selected) length.value = selected.length;

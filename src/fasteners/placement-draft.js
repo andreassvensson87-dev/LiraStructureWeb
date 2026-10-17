@@ -1,3 +1,4 @@
+import { applyFastenerLayout, fastenerLayoutFromPoints } from './placement-frame.js';
 import { fastenerGroupBatch } from './groups.js';
 import { automaticPlacement } from './placement.js';
 import { validateFastener } from './object-type.js';
@@ -9,6 +10,12 @@ export function prepareFastenerPlacement(
   { model, start, direction, limit = null, fit = true },
 ) {
   let draft = structuredClone(input);
+  if (draft.layout) {
+    draft = applyFastenerLayout(draft);
+    limit = draft.layout.searchLength ?? null;
+    start = draft.group?.origin || draft.start;
+    direction = draft.group?.direction || draft.end;
+  }
   if (!draft.holes.length) throw new Error('Välj minst ett objekt som ska ingå i förbandet.');
   delete draft.span;
   delete draft.insertion;
@@ -27,4 +34,20 @@ export function prepareFastenerPlacement(
   if (error) throw new Error(error);
   validateFastenerTargets(draft, model);
   return { draft, batch };
+}
+
+/** Same domain preparation for pointer preview and confirmation. */
+export function preparePickedFasteners(draft, { start, xPoint, frame, model }) {
+  const picked = fastenerLayoutFromPoints(start, xPoint, frame);
+  const layout = { ...picked, ...draft.layout, frame: picked.frame };
+  const result = prepareFastenerPlacement(
+    { ...draft, layout },
+    {
+      model,
+      start,
+      direction: xPoint,
+      limit: layout.searchLength ?? null,
+    },
+  );
+  return result.batch || [result.draft];
 }

@@ -16,7 +16,7 @@ export function createHoleSettings(root, changed) {
         ['none', 'Inga hål'],
       ],
     ],
-    ['clearance', 'Spel', 'number'],
+    ['clearance', 'Tolerans', 'number'],
     ['depth', 'Djup', 'number'],
   ]) {
     const row = createAttributeRow({ key: `hole-${key}`, label, type, options, step: 'any' });
