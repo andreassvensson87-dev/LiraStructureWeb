@@ -1,4 +1,8 @@
-import { applyFastenerLayout, fastenerLayoutFromPoints } from './placement-frame.js';
+import {
+  applyFastenerLayout,
+  fastenerLayoutFromPoints,
+  fastenerLayoutFromThreePoints,
+} from './placement-frame.js';
 import { fastenerGroupBatch } from './groups.js';
 import { automaticPlacement } from './placement.js';
 import { validateFastener } from './object-type.js';
@@ -37,8 +41,10 @@ export function prepareFastenerPlacement(
 }
 
 /** Same domain preparation for pointer preview and confirmation. */
-export function preparePickedFasteners(draft, { start, xPoint, frame, model }) {
-  const picked = fastenerLayoutFromPoints(start, xPoint, frame);
+export function preparePickedFasteners(draft, { start, xPoint, yPoint, frame, model }) {
+  const picked = yPoint
+    ? fastenerLayoutFromThreePoints(start, xPoint, yPoint)
+    : fastenerLayoutFromPoints(start, xPoint, frame);
   const layout = {
     ...draft.layout,
     ...picked,

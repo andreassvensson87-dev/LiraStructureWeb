@@ -120,6 +120,7 @@ export function installModelGripInteraction({
   host,
   insertionPoints,
   tools,
+  ui,
   actions,
   controllers,
   navigation,
@@ -127,7 +128,7 @@ export function installModelGripInteraction({
   controllers.gripInteraction = createGripInteraction({
     host,
     getGrip: (target) => insertionPoints.gripAtTarget(target),
-    canStart: () => !tools.operation && !tools.drawing,
+    canStart: () => !ui.boxMode && !tools.operation && !tools.drawing,
     select: (grip, event) => controllers.pointUI.activate(grip, event),
     beginBox: (event) => actions.beginBox(event),
     begin: (grip) => actions.startGrip(controllers.pointUI.moving(grip)),

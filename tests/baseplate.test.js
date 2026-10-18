@@ -230,7 +230,7 @@ test('project reload regenerates physical members and rejects missing references
   assert.throws(() => parseProjectFile(JSON.stringify(orphan)), /saknar sin koppling/);
 });
 
-test('separately placed fasteners follow generated plate movement and lose bores when the owner disappears', () => {
+test('separately placed fasteners stay independent of generated plate movement and lose bores when the owner disappears', () => {
   const before = model();
   const extra = {
     id: 'extra',
@@ -257,7 +257,7 @@ test('separately placed fasteners follow generated plate movement and lose bores
   const moved = applyObjectBatch(before, [
     transformObject(column, 'move', [0, 0, 0], [1000, 0, 100]),
   ]).objects;
-  assert.deepEqual(moved.find((s) => s.id === 'extra').start, [1120, 0, 130]);
+  assert.deepEqual(moved.find((s) => s.id === 'extra').start, extra.start);
   const removed = updateAutomaticJoints(
     before,
     before.filter((s) => s.id !== 'column'),

@@ -5,6 +5,29 @@ import { nearestProjectedSegment } from './snap-projection.js';
 
 export const EDGE_PICK_PIXELS = 6;
 const edgeCache = new WeakMap();
+const apertureCache = new WeakMap();
+
+/** CPU-only picking caps reuse the displayed material rings; they are never rendered or exported. */
+function holeApertureMesh(mesh) {
+  const outline = mesh.children[0]?.geometry;
+  const positions = outline?.userData.holeApertures;
+  if (!positions?.count) return null;
+  let aperture = apertureCache.get(outline);
+  if (!aperture) {
+    const geometry = new THREE.BufferGeometry().setAttribute('position', positions);
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    aperture = new THREE.Mesh(geometry, mesh.material);
+    aperture.userData.holeAperture = true;
+    apertureCache.set(outline, aperture);
+  }
+  mesh.updateWorldMatrix(true, false);
+  aperture.matrixWorld.copy(mesh.matrixWorld);
+  aperture.layers.mask = mesh.layers.mask;
+  aperture.material = mesh.material;
+  aperture.userData.id = mesh.userData.id;
+  return aperture;
+}
 
 /** Geometry resources own the cache lifetime; no project or UI state is retained. */
 function geometryEdges(geometry) {
@@ -118,11 +141,19 @@ export function featureEdgeHit(mesh, resource, raycaster, context) {
 /** Native objects and references share edge tolerance, depth ordering and face pass-through. */
 export function displayedSelectionHit(entries, raycaster, context) {
   const opaque = entries.filter((entry) => !entry.transparent);
-  const opaqueMeshes = opaque.map((entry) => entry.mesh);
+  const opaqueMeshes = opaque.flatMap((entry) =>
+    entry.aperture ? [entry.aperture, entry.mesh] : [entry.mesh],
+  );
   let edgeRaycaster;
-  const surface = raycaster
+  const surfaces = raycaster
     .intersectObjects(opaqueMeshes, false)
-    .find((hit) => !context?.workArea || withinWorkArea(context.workArea, hit.point.toArray()));
+    .filter((hit) => !context?.workArea || withinWorkArea(context.workArea, hit.point.toArray()));
+  // Display bodies are unperforated for performance. A coincident opening belongs
+  // to its hole group, while actual material in front still occludes it.
+  const surface =
+    surfaces.find(
+      (hit) => hit.object.userData.holeAperture && hit.distance <= surfaces[0].distance + 1e-4,
+    ) || surfaces[0];
   let best = null;
   for (const entry of entries) {
     if (!entry.transparent && !entry.edgeSelection) continue;
@@ -188,6 +219,7 @@ export function modelSelectionEntry(mesh, camera) {
     mesh,
     transparent: isTransparentMesh(mesh),
     edgeSelection: mesh.userData.edgeSelection,
+    aperture: mesh.userData.edgeSelection ? holeApertureMesh(mesh) : null,
     edges,
   };
 }

@@ -858,7 +858,7 @@ test('linear series copies block instances independently and Copy ignores partia
   assert.equal(f.history.past.length, 1);
 });
 
-test('canvas fastener preview and second click use the picked plane and commit one atomic group', (t) => {
+test('canvas fastener preview and three clicks define the picked plane and commit one atomic group', (t) => {
   const f = fixture(t);
   const frame = { origin: [0, 0, 0], u: [0.8, 0, 0.6], v: [0, 1, 0] };
   const plate = {
@@ -910,7 +910,12 @@ test('canvas fastener preview and second click use the picked plane and commit o
   assert.equal(f.fastenerCommits.length, 0);
   assert.equal(f.history.canUndo, false);
   assert.equal(f.controller.commitPoint([80, 0, 60]), true);
-  assert.equal(f.fastenerCommits.length, 1, 'no additional review phase after the second pick');
+  assert.equal(f.fastenerCommits.length, 0, 'X pick does not commit');
+  assert.equal(f.history.canUndo, false);
+  assert.equal(f.controller.commitPoint([160, 0, 120]), false, 'collinear Y rejected');
+  assert.equal(f.fastenerCommits.length, 0);
+  assert.equal(f.controller.commitPoint([0, 100, 0]), true);
+  assert.equal(f.fastenerCommits.length, 1, 'third pick commits one group');
   const bolts = f.project.objects.filter((s) => s.type === 'fastener');
   assert.equal(bolts.length, 4);
   const axis = fastenerFrame(bolts[0]).z.toArray();

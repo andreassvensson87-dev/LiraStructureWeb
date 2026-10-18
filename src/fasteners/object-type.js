@@ -182,7 +182,13 @@ export const fastenerType = {
   anchors: (s) => [s.start, s.end],
   gripAnchors: fastenerLayoutAnchors,
   gripLabels: (s) =>
-    s.group ? ['Flytta skruvgruppens origo', 'Ändra skruvgruppens X-riktning'] : null,
+    s.group
+      ? [
+          'Flytta skruvgruppens origo',
+          'Ändra skruvgruppens X-riktning',
+          'Ändra skruvgruppens Y-riktning',
+        ]
+      : null,
   corners: (s) => [s.start, s.end],
   snapSegments: (s) => ({ segments: [[s.start, s.end]], includeEdges: false }),
   partFrame: fastenerFrame,

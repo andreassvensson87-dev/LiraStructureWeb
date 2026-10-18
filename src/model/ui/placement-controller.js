@@ -269,10 +269,15 @@ export function createPlacementController({
     if (tools.operation?.mode === 'itemCreate') return [getItem().candidate(tools.first, target)];
     if (tools.operation?.mode === 'fastenerCreate') {
       if (tools.operation.error) throw new Error(tools.operation.error);
-      tools.operation.previewPoints = [[...tools.first], [...target]];
+      tools.operation.previewPoints = [
+        [...tools.first],
+        [...(tools.operation.xPoint || target)],
+        ...(tools.operation.xPoint ? [[...target]] : []),
+      ];
       return preparePickedFasteners(tools.operation.draft, {
         start: tools.first,
-        xPoint: target,
+        xPoint: tools.operation.xPoint || target,
+        yPoint: tools.operation.xPoint ? target : null,
         frame: tools.operation.frame,
         model: project.objects,
       });
@@ -363,6 +368,21 @@ export function createPlacementController({
       setDrawing(false);
       render();
       $('status').textContent = 'Referensen flyttad';
+      return true;
+    }
+    if (tools.operation?.mode === 'fastenerCreate' && tools.operation.error) {
+      $('status').textContent = tools.operation.error;
+      return false;
+    }
+    if (tools.operation?.mode === 'fastenerCreate' && !tools.operation.xPoint) {
+      if (Math.hypot(...target.map((v, i) => v - tools.first[i])) < 0.001) {
+        $('status').textContent = 'Välj X-riktning minst 0,001 mm från origo.';
+        return false;
+      }
+      tools.operation.xPoint = [...target];
+      delete tools.operation.previewPoints;
+      clearPreview();
+      $('status').textContent = 'Skruvgrupp · Välj Y-riktning i placeringsplanet';
       return true;
     }
     let batch;

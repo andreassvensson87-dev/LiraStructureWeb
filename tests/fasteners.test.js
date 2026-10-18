@@ -278,15 +278,15 @@ test('hole changes invalidate manufacturing marks and produce singlepart vector 
   const noHole = { ...screw, holes: screw.holes.map((h) => ({ ...h, kind: 'none' })) };
   assert.equal(partKey(plate, [plate, noHole]), partKey(plate, [plate]));
 });
-test('reference part transformations carry screws and holes once; joint copies remap their targets', () => {
+test('reference part transformations leave manual screws stationary; joint copies remap their targets', () => {
   const model = [plate, lower, screw],
     moved = transformObject(plate, 'move', [0, 0, 0], [300, 20, 0]);
   const result = applyObjectBatch(model, [moved]).objects;
-  assert.deepEqual(result[2].start, [400, 120, 20]);
-  assert.equal(partKey(plate, model), partKey(moved, result));
+  assert.deepEqual(result[2].start, screw.start);
+  assert.notEqual(partKey(plate, model), partKey(moved, result));
   const turn = applyObjectBatch(model, [rotateObject(plate, [0, 0, 0], 'Y', 30)]).objects;
   objectAnchors(turn[2]).forEach((p, i) => {
-    const expected = objectAnchors(rotateObject(screw, [0, 0, 0], 'Y', 30))[i];
+    const expected = objectAnchors(screw)[i];
     assert.ok(Math.hypot(...p.map((v, j) => v - expected[j])) < 1e-6);
   });
   let id = 0;
@@ -637,7 +637,7 @@ test('contact spans follow translation, rotation, reference movement, history an
   );
   const movedTube = transformObject(tube, 'move', [0, 0, 0], [10, 20, 30]);
   const followed = applyObjectBatch([tube, source], [movedTube]).objects[1];
-  assert.deepEqual(followed.span, moved.span);
+  assert.deepEqual(followed.span, source.span);
   const copy = applyObjectBatch([tube, source], [tube, source], { copy: true }).objects[3];
   assert.notEqual(copy.holes[0].id, source.holes[0].id);
   assert.notEqual(copy.holes[0].targetId, source.holes[0].targetId);

@@ -1,5 +1,5 @@
 import { createInspectorDraft } from '../inspector/field-state.js';
-import { fastenerLayoutFromPoints, layoutForFastener } from './placement-frame.js';
+import { fastenerLayoutFromThreePoints, layoutForFastener } from './placement-frame.js';
 import { withFastenerLength, fastenerFitWarnings } from './manual-length.js';
 import { createHoleSettings } from './hole-settings.js';
 import { changeHoleSettings, resizeFastenerHoles } from './hole-edit.js';
@@ -401,6 +401,10 @@ export class FastenerUI {
     const end = start.map(
       (v, i) => v + (this.layoutReference.xLength || 100) * this.layoutReference.frame.u[i],
     );
+    this.layoutReference.frame.origin.forEach((value, i) => {
+      f[`yPoint${i}`].value =
+        value + (this.layoutReference.yLength || 100) * this.layoutReference.frame.v[i];
+    });
     f.layoutRotation.value = this.layoutReference.rotation;
     this.layoutReference.offset.forEach((v, i) => (f[`layoutOffset${i}`].value = v));
     start.forEach((v, i) => (f[`start${i}`].value = v));
@@ -508,7 +512,8 @@ export class FastenerUI {
     const f = this.placeForm.elements;
     const start = [0, 1, 2].map((i) => Number(f[`start${i}`].value));
     const direction = [0, 1, 2].map((i) => Number(f[`direction${i}`].value));
-    const pickedLayout = fastenerLayoutFromPoints(start, direction, this.layoutReference.frame);
+    const yPoint = [0, 1, 2].map((i) => Number(f[`yPoint${i}`].value));
+    const pickedLayout = fastenerLayoutFromThreePoints(start, direction, yPoint);
     const layout = {
       ...pickedLayout,
       offset: [0, 1, 2].map((i) => Number(f[`layoutOffset${i}`].value)),
@@ -602,10 +607,11 @@ export class FastenerUI {
         feedback = this.previewBatch || [draft];
         this.previewPlacement(feedback);
       } else if (operation?.mode === 'fastenerCreate' && operation.previewPoints) {
-        const [start, xPoint] = operation.previewPoints;
+        const [start, xPoint, yPoint] = operation.previewPoints;
         feedback = preparePickedFasteners(draft, {
           start,
           xPoint,
+          yPoint,
           frame: operation.frame,
           model: this.getObjects(),
         });

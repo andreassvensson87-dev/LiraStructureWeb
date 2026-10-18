@@ -6,7 +6,13 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const segments = 24;
 
 /** Small closed bore volumes follow the material layers without boolean subtraction. */
-export function simplifiedHoleGeometry(part, model, holes, geometryContext = null, rims = null) {
+export function simplifiedHoleGeometry(
+  part,
+  model,
+  holes,
+  geometryContext = null,
+  selection = null,
+) {
   const points = [];
   const triangle = (a, b, c) => points.push(...a.toArray(), ...b.toArray(), ...c.toArray());
   for (const hole of holes) {
@@ -61,9 +67,9 @@ export function simplifiedHoleGeometry(part, model, holes, geometryContext = nul
           const correction = Math.abs(slope) > 1e-6 ? -normal.dot(radial) / slope : 0;
           return center.clone().add(radial).addScaledVector(axis, correction);
         });
-        if (rims)
+        if (selection)
           for (let i = 0; i < segments; i++)
-            rims.push(...ring[i].toArray(), ...ring[(i + 1) % segments].toArray());
+            selection.rims.push(...ring[i].toArray(), ...ring[(i + 1) % segments].toArray());
         return { center, ring };
       });
       for (let j = 0; j < rings.length - 1; j++)
@@ -77,6 +83,15 @@ export function simplifiedHoleGeometry(part, model, holes, geometryContext = nul
         triangle(rings[0].center, rings[0].ring[next], rings[0].ring[i]);
         const last = rings.at(-1);
         triangle(last.center, last.ring[i], last.ring[next]);
+        if (selection)
+          selection.apertures.push(
+            ...rings[0].center.toArray(),
+            ...rings[0].ring[next].toArray(),
+            ...rings[0].ring[i].toArray(),
+            ...last.center.toArray(),
+            ...last.ring[i].toArray(),
+            ...last.ring[next].toArray(),
+          );
       }
     }
   }
@@ -87,23 +102,45 @@ export function simplifiedHoleGeometry(part, model, holes, geometryContext = nul
   return geometry;
 }
 
-/** Hole rims remain owned by the group when its bolt is disabled. Exact solids stay untouched. */
-export function fastenerDisplayEdges(source, model, edges, matrix, geometryContext = null) {
-  if (source.assembly?.bolt !== false) return edges;
-  const rims = [];
+/** The same visible material layers provide both window/crossing selection and hole rims. */
+export function fastenerHoleDisplayGeometry(
+  source,
+  model,
+  geometryContext = null,
+  selection = null,
+) {
+  const pieces = [];
   for (const hole of holesForFastener(source)) {
     const part = model.find((s) => s.id === hole.targetId);
     if (!part) continue;
-    const geometry = simplifiedHoleGeometry(part, model, [hole], geometryContext, rims);
-    geometry.dispose();
+    const geometry = simplifiedHoleGeometry(part, model, [hole], geometryContext, selection);
+    pieces.push(geometry);
   }
-  if (!rims.length) return edges;
+  const geometry = pieces.length
+    ? mergeGeometries(pieces)
+    : new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+  pieces.forEach((piece) => piece.dispose());
+  return geometry;
+}
+
+/** Hole rims remain owned by the group when its bolt is disabled. Exact solids stay untouched. */
+export function fastenerDisplayEdges(source, model, edges, matrix, geometryContext = null) {
+  if (source.assembly?.bolt !== false) return edges;
+  const selection = { rims: [], apertures: [] };
+  fastenerHoleDisplayGeometry(source, model, geometryContext, selection).dispose();
+  if (!selection.rims.length) return edges;
   const holes = new THREE.BufferGeometry().setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(rims, 3),
+    new THREE.Float32BufferAttribute(selection.rims, 3),
   );
-  if (matrix) holes.applyMatrix4(matrix.clone().invert());
+  const apertures = new THREE.Float32BufferAttribute(selection.apertures, 3);
+  if (matrix) {
+    const inverse = matrix.clone().invert();
+    holes.applyMatrix4(inverse);
+    apertures.applyMatrix4(inverse);
+  }
   const combined = mergeGeometries([edges, holes]);
+  combined.userData.holeApertures = apertures;
   edges.dispose();
   holes.dispose();
   return combined;
@@ -126,7 +163,7 @@ export function holeDisplayMesh(
   const mesh = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({
-      color: 0x101820,
+      color: 0x617783,
       side: THREE.DoubleSide,
       polygonOffset: true,
       polygonOffsetFactor: -1,

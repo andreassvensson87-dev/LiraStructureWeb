@@ -60,6 +60,7 @@ export class InsertionPoints {
     placed = [],
     selectedPoints = [],
     retainSelectionGrips = false,
+    passive = false,
   ) {
     if (drawing || this.selection !== selected) this.menu.hidden = true;
     this.selection = selected;
@@ -71,7 +72,7 @@ export class InsertionPoints {
       if (!point || this.allowsPoint?.(point) === false) return;
       visible.add(key);
       let marker = this.markers.get(key);
-      const interactive = emphasis && !drawing;
+      const interactive = emphasis && !drawing && !passive;
       if (marker && (marker.tagName === 'BUTTON') !== interactive) {
         marker.remove();
         this.markers.delete(key);
@@ -140,7 +141,7 @@ export class InsertionPoints {
       marker.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
       marker.style.left = `${((p.x + 1) * width) / 2}px`;
       marker.style.top = `${((1 - p.y) * height) / 2}px`;
-      if (grip && interactive && !marker.hidden)
+      if (grip && (interactive || passive) && !marker.hidden)
         this.screenGrips.push({ grip, x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2 });
     };
     const grips = selectionGrips(sweeps, selectedIds, drawing && !retainSelectionGrips);
@@ -152,7 +153,7 @@ export class InsertionPoints {
       const ref = grip.refs[0];
       show(grip.refs.map((r) => `${r.id}:${r.kind}`).join('|'), grip.point, ref.kind, true, grip);
     }
-    if (!drawing && selectedIds.size === 1) {
+    if (!drawing && !passive && selectedIds.size === 1) {
       const sweep = sweeps.find((s) => selectedIds.has(s.id));
       if (
         ['plate', 'polysweep'].includes(sweep?.type) &&

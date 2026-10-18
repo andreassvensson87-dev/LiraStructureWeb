@@ -73,12 +73,12 @@ const close = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-6,
 const identities = (batch) =>
   batch.map((s) => [s.id, s.prefix, s.number, s.holes.map((h) => h.id)]);
 
-test('one and many screws expose two shared pattern grips and retain identity through direction, move and history', () => {
+test('one and many screws expose three shared pattern grips and retain identity through direction, move and history', () => {
   for (const single of [true, false]) {
     const f = fixture(single),
       before = structuredClone(f.project.objects);
     const grips = selectionGrips(f.project.objects, new Set(f.batch.map((s) => s.id)));
-    assert.equal(grips.length, 2);
+    assert.equal(grips.length, 3);
     assert.equal(grips[0].refs.length, f.batch.length);
     close(grips[0].point, [0, 0, 20]);
     close(grips[1].point, [200, 0, 20]);
@@ -266,4 +266,73 @@ test('placement feedback reports ranges and misses, clears reach warnings, and n
   assert.deepEqual(fastenerPlacementFeedback(f.batch).warnings, []);
   assert.deepEqual(fastenerPlacementFeedback([]).layers, { min: 0, max: 0 });
   assert.deepEqual(f.batch, snapshot);
+});
+
+test('three points define a free orthogonal plane; Y grip tilts it without changing pitch, length or identities', async () => {
+  const { fastenerLayoutFromThreePoints } = await import('../src/fasteners/placement-frame.js');
+  const layout = fastenerLayoutFromThreePoints([10, 20, 30], [110, 20, 30], [60, 20, 130]);
+  close(layout.frame.u, [1, 0, 0]);
+  close(layout.frame.v, [0, 0, 1]);
+  assert.equal(layout.yLength, 100);
+  assert.throws(() => fastenerLayoutFromThreePoints([0, 0, 0], [0, 0, 0], [0, 1, 0]), /X-riktning/);
+  assert.throws(
+    () => fastenerLayoutFromThreePoints([0, 0, 0], [100, 0, 0], [-200, 0, 0]),
+    /Y-riktning/,
+  );
+  const f = fixture();
+  const grips = selectionGrips(f.project.objects, new Set(f.batch.map((s) => s.id)));
+  const y = grips[2];
+  assert.ok(y.refs.every((r) => r.kind === 'y'));
+  assert.equal(gripWorkPlane(f.batch, y.refs, y.point), null, 'Y can leave the previous plane');
+  const tilted = moveGripPoints(f.batch, y.refs, [0, 0, 120], y.point, f.project.objects);
+  close(tilted[0].layout.frame.v, [0, 0, 1]);
+  close(fastenerFrame(tilted[0]).z.toArray(), [0, 1, 0]);
+  assert.deepEqual(identities(tilted), identities(f.batch));
+  assert.deepEqual(tilted[0].group.distancesX, [60, 80]);
+  assert.deepEqual(tilted[0].group.distancesY, [50]);
+  assert.equal(tilted[0].spec.length, spec.length);
+  f.editor.update(tilted);
+  assert.deepEqual(parseProjectFile(serializeProject(f.project)).objects, f.project.objects);
+  assert.deepEqual(f.history.undo(f.project).objects, [plate, ...f.batch]);
+});
+
+test('manual group stays stationary for transverse and axial target moves, restores holes, and transforms exactly once with parts', async () => {
+  const { transformObject } = await import('../src/transform.js');
+  const f = fixture();
+  const original = structuredClone(f.project.objects);
+  const state = (s) => ({
+    start: s.start,
+    end: s.end,
+    layout: s.layout,
+    group: s.group,
+    accessories: s.accessories,
+  });
+  for (const delta of [
+    [1000, 0, 0],
+    [0, 0, -1000],
+  ]) {
+    f.editor.update([transformObject(plate, 'move', [0, 0, 0], delta)]);
+    const current = f.project.objects.filter((s) => s.type === 'fastener');
+    current.forEach((s, i) => {
+      assert.deepEqual(state(s), state(f.batch[i]));
+      assert.equal(s.holes[0].active, false);
+      assert.equal(s.holes[0].targetId, plate.id);
+      assert.equal(s.holes[0].id, f.batch[i].holes[0].id);
+    });
+    f.editor.update([plate]);
+    assert.ok(f.project.objects.slice(1).every((s) => s.holes[0].active));
+  }
+  const beforeTogether = structuredClone(f.project.objects);
+  f.editor.update(
+    f.project.objects.map((s) => transformObject(s, 'move', [0, 0, 0], [10, 20, 30])),
+  );
+  f.project.objects.slice(1).forEach((s, i) => {
+    close(
+      s.start,
+      f.batch[i].start.map((v, j) => v + [10, 20, 30][j]),
+    );
+    assert.equal(s.holes[0].active, true);
+  });
+  assert.deepEqual(f.history.undo(f.project).objects, beforeTogether);
+  assert.deepEqual(identities(f.project.objects.slice(1)), identities(original.slice(1)));
 });

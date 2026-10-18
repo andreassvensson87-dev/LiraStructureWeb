@@ -27,6 +27,11 @@ export function validateFastenerLayout(layout) {
   )
     throw new Error('Ange en giltig längd för X-riktningen.');
   if (
+    layout.yLength != null &&
+    (!Number.isFinite(layout.yLength) || layout.yLength < 0.001 || layout.yLength > 1e7)
+  )
+    throw new Error('Ange en giltig längd för Y-riktningen.');
+  if (
     layout.searchLength != null &&
     (!Number.isFinite(layout.searchLength) || layout.searchLength <= 0 || layout.searchLength > 1e7)
   )
@@ -62,7 +67,31 @@ export function fastenerLayoutFromPoints(origin, xPoint, reference) {
   x.normalize();
   const layout = {
     xLength,
+    yLength: 100,
     frame: { origin: [...origin], u: x.toArray(), v: normal.cross(x).normalize().toArray() },
+    offset: [0, 0, 0],
+    rotation: 0,
+    reversed: false,
+  };
+  validateFastenerLayout(layout);
+  return layout;
+}
+/** Origo, X and a point on the Y side define a free 3D placement plane. */
+export function fastenerLayoutFromThreePoints(origin, xPoint, yPoint) {
+  if (![origin, xPoint, yPoint].every(point))
+    throw new Error('Välj giltiga punkter för origo, X och Y.');
+  const x = new THREE.Vector3(...xPoint).sub(new THREE.Vector3(...origin));
+  const y = new THREE.Vector3(...yPoint).sub(new THREE.Vector3(...origin));
+  const xLength = x.length();
+  if (xLength < 0.001) throw new Error('Välj X-riktning minst 0,001 mm från origo.');
+  x.normalize();
+  y.addScaledVector(x, -y.dot(x));
+  const yLength = y.length();
+  if (yLength < 0.001) throw new Error('Välj Y-riktning utanför linjen mellan origo och X.');
+  const layout = {
+    frame: { origin: [...origin], u: x.toArray(), v: y.normalize().toArray() },
+    xLength,
+    yLength,
     offset: [0, 0, 0],
     rotation: 0,
     reversed: false,
@@ -92,8 +121,12 @@ export function layoutForFastener(source) {
 export function fastenerLayoutAnchors(source) {
   if (!source.group) return [source.start, source.end];
   const layout = layoutForFastener(source);
-  const { origin, u } = layout.frame;
-  return [[...origin], origin.map((v, i) => v + u[i] * (layout.xLength || 100))];
+  const { origin, u, v } = layout.frame;
+  return [
+    [...origin],
+    origin.map((value, i) => value + u[i] * (layout.xLength || 100)),
+    origin.map((value, i) => value + v[i] * (layout.yLength || 100)),
+  ];
 }
 export function applyFastenerLayout(draft) {
   validateFastenerLayout(draft.layout);

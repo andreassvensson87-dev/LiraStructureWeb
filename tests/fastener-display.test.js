@@ -1,6 +1,7 @@
 import test from 'node:test';
 import { preparePickedFasteners } from '../src/fasteners/placement-draft.js';
 import { defaultHoleForSpec } from '../src/fasteners/library.js';
+import { enclosedSweeps } from '../src/selection.js';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { defaultFasteners } from '../src/fasteners/default-catalog.js';
@@ -330,7 +331,42 @@ test('holes without hardware keep owner picking, hover and selected contours wit
       batch[0].id,
       'the visible bore rim selects its group owner',
     );
+    if (!transparent) {
+      picking.ray({ clientX: 300, clientY: 300 });
+      assert.equal(
+        picking.selectionHit(),
+        batch[0].id,
+        'the visible hole opening also selects its owner',
+      );
+      picking.ray({ clientX: 304, clientY: 300 });
+      assert.equal(picking.selectionHit(), batch[0].id);
+      picking.ray({ clientX: 325, clientY: 300 });
+      assert.equal(picking.selectionHit(), part.id, 'material beside the hole remains the part');
+    }
   }
+  assert.deepEqual(
+    enclosedSweeps(batch, camera, 600, 600, { x: 285, y: 285 }, { x: 315, y: 315 }, model),
+    [batch[0].id],
+    'window selects the complete hole feature',
+  );
+  assert.deepEqual(
+    enclosedSweeps(batch, camera, 600, 600, { x: 305, y: 305 }, { x: 295, y: 295 }, model),
+    [batch[0].id],
+    'crossing selects the hole opening',
+  );
+  const inactive = {
+    ...batch[0],
+    id: 'inactive',
+    holes: batch[0].holes.map((h) => ({ ...h, active: false })),
+  };
+  assert.deepEqual(
+    enclosedSweeps([inactive], camera, 600, 600, { x: 0, y: 0 }, { x: 600, y: 600 }, [
+      part,
+      inactive,
+    ]),
+    [],
+    'inactive holes cannot select an empty owner',
+  );
   camera.position.set(600, -500, 800);
   camera.lookAt(100, 200, 20);
   camera.updateMatrixWorld();
@@ -348,6 +384,15 @@ test('holes without hardware keep owner picking, hover and selected contours wit
         picking.selectionHit(),
         batch[0].id,
         'an oblique face does not occlude its own rim',
+      );
+    }
+    if (!transparent) {
+      const opening = new THREE.Vector3(100, 200, 20).project(camera);
+      picking.ray({ clientX: (opening.x + 1) * 300, clientY: (1 - opening.y) * 300 });
+      assert.equal(
+        picking.selectionHit(),
+        batch[0].id,
+        'the opening follows its inclined material face',
       );
     }
   }
@@ -383,6 +428,9 @@ test('holes without hardware keep owner picking, hover and selected contours wit
   cover.updateMatrixWorld(true);
   picking.ray({ clientX: 313, clientY: 300 });
   assert.equal(picking.selectionHit([cover]), 'cover', 'opaque material still occludes bore rims');
+  const coveredOpening = new THREE.Vector3(100, 200, 20).project(camera);
+  picking.ray({ clientX: (coveredOpening.x + 1) * 300, clientY: (1 - coveredOpening.y) * 300 });
+  assert.equal(picking.selectionHit([cover]), 'cover', 'another part occludes the opening too');
   dispose(cover);
   solid.dispose();
   feedback.dispose();

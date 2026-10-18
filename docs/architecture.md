@@ -4,7 +4,7 @@
 
 `fasteners/placement-feedback.js` sammanfattar det redan upplösta skruvförslaget: nådda delar, lagerintervall och längdvarningar. Modulen söker inte material eller ändrar objekt. `placement-inspector.js` visar sammanfattningen och den kompakta dellistan; `assembly-preview-inspector.js` visar första skruvens verkliga lager och tillbehörslägen i den befintliga förbandsväljaren. Övriga skruvars varierande träffar visas som intervall i gruppens återkoppling.
 
-`FastenerUI` behåller fältutkastet när delar väljs om. En sparad grupp uppdateras först med Tillämpa genom befintlig modell-editor; delvalets bekräftelse skapar ingen historik. App-adaptern `app/model-fasteners.js` behåller pågående placeringsplan och första punkt vid tillfälligt delval. Verktygets vanliga andra punkt bekräftar fortfarande placeringen, utan ytterligare granskningssteg. Både preview och bekräftelse använder `preparePickedFasteners` och de befintliga placeringsreglerna.
+`FastenerUI` behåller fältutkastet när delar väljs om. En sparad grupp uppdateras först med Tillämpa genom befintlig modell-editor; delvalets bekräftelse skapar ingen historik. App-adaptern `app/model-fasteners.js` behåller pågående placeringsplan och första punkt vid tillfälligt delval. Placeringen använder tre vanliga modellpunkter: origo, X-riktning och Y-sida. Först tredje punkten bekräftar gruppen. `placement-frame.js` ortogonaliserar planet och avvisar sammanfallande/kollineära punkter; punktavstånden ändrar inte mönstrets delningar eller skruvlängden. Både preview och bekräftelse använder `preparePickedFasteners` och de befintliga placeringsreglerna.
 
 ## Parametriska block
 
@@ -422,3 +422,17 @@ Den gemensamma `modelSelectionEntry` tillåter extra kantträff även för en op
 `model/grips.js` äger `retainsSelectionGrips` och `transformGripSnapPoints`. Modellens bildloop behåller samma `selectionGrips` under Move/Copy, inklusive linjära verktyg, plantransformer och markerade grepp. `InsertionPoints` visar dem som passiva spans under kommandot; hörntillägg, hörnmeny, greppval och dragning aktiveras först i vanligt markeringsläge. Markörernas befintliga pointer-events lämnar kommandots canvas och kameran som inmatningsägare.
 
 Picking-adaptern matar de synliga markerade objektens befintliga greppankare till `resolveSnap` som punktkandidater när ändpunktssnap är aktiv. Därmed går också ett gruppankare utanför den fysiska meshens bounds att snappa till. Samma nästa-punkt-filter, prioritering, lås och arbetsområdeskontroll gäller. Ingen parallell snapmotor, ny objektspecifik regel eller modellmutation införs.
+
+### Hålöppning och rektangelmarkering
+
+`fastenerHoleDisplayGeometry` samlar samma materiallager som hålmarkörerna. `selectionGeometryReader` kompletterar skruvgrupper med avstängd skruv med dessa volymer; bounds och trianglar för omslutande/korsande rektangelmarkering omfattar därmed de verkliga hålen även när all hårdvara är borttagen. Ordinarie urvalscontroller äger fortfarande synlighet, arbetsområde, riktning och grupputvidgning. Urvalsgeometrin är tillfällig CPU-data och ändrar varken fysisk solid eller export.
+
+Den gruppägda konturen behåller också hålöppningarnas trianglar som CPU-attribut. `modelSelectionEntry` återanvänder dessa för opak klickträff i öppningen. En sammanfallande öppning prioriteras framför den förenklade, obrutna måldelsytan; verkligt framförliggande material fortsätter att skymma den. Transparent visning använder fortsatt kantträff.
+
+När markeringsrutan är aktiv är insättningspunkterna passiva även utanför Move/Copy. Greppcontroller får då inte fånga dragningen, men projicerade greppreferenser finns kvar för uttrycklig Alt-rektangelmarkering.
+
+### Fristående skruvgrupper och placeringsplan
+
+Manuella skruvgruppers delkopplingar bestämmer borrningen, inte transformägarskapet. `fixed-placement.js` räknar om materiallager och räckvidd mot skruvens befintliga axel och hårdvarulägen; missade eller otillräckligt nådda lager behåller relation och hål-ID utan aktiv borrning. `update-joints.js` använder detta vid modelländringar, medan komponentskapad hårdvara fortsatt ägs av komponenten. `groups.js` behåller befintliga huvudlägen när samma placeringsplan återanvänds i inspektorn, så en längdändring efter en delflytt inte passar om gruppen mot delen.
+
+Origo-, X- och Y-grepp går genom gemensam greppmarkering, Move, linjär Move och modell-editorn. Y-greppet kan vrida planet ut ur dess tidigare läge. Modellens befintliga picking använder valda delars materialytor även när förhandsvisningen tillfälligt ersätter deras renderingsmeshar; faktisk användarsynlighet gäller fortfarande. `preview.js` och `preview-directions.js` äger enbart planets tillfälliga kontur och axelvisning. Hålmarkörernas ljusare färg i `display.js` påverkar inte exakt borrgeometri, ritningar eller IFC.

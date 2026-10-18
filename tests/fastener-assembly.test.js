@@ -133,15 +133,15 @@ test('rod preset puts nuts on both sides while manual hardware remains unchanged
   };
   assert.equal(fittedAssembly(manual, 10), manual);
 });
-test('joint hardware follows plate changes without changing the specified length', () => {
+test('joint hardware stays stationary after plate changes without changing the specified length', () => {
   const placed = automaticPlacement(draft, [0, 0, -100], [0, 0, -99], [plate]);
   const before = [plate, placed];
   const numbered = numberParts(before);
   const changed = updateAutomaticJoints(before, [{ ...plate, thickness: 30 }, placed]);
   assert.equal(changed[1].spec.length, 40);
   assert.ok(fastenerFitWarnings(changed[1]).length);
-  assert.equal(changed[1].accessories.at(-1).offset, 35);
-  assert.equal(partStatus(changed[1], changed, numbered).valid, false);
+  assert.deepEqual(changed[1].accessories, placed.accessories);
+  assert.equal(partStatus(changed[1], changed, numbered).valid, true);
   assert.equal(placed.spec.length, 40);
 });
 

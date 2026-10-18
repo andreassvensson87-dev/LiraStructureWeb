@@ -138,14 +138,22 @@ export function createModelPicking({
   function point(e) {
     camera.updateMatrixWorld();
     ray(e);
-    const placingFastener = tools.operation?.mode === 'fastenerCreate' && !tools.first;
+    const placingFastener = tools.operation?.mode === 'fastenerCreate';
+    const editingFastenerPlane =
+      tools.operation?.gripRefs?.some((ref) => ref.kind === 'y') &&
+      tools.operation.sources?.every((source) => source.type === 'fastener');
     let fastenerSurface = null;
-    if (placingFastener) {
+    if (placingFastener || editingFastenerPlane) {
       delete tools.operation.surfaceFrame;
-      const targets = new Set(tools.operation.draft.holes.map((h) => h.targetId));
+      const targets = new Set(
+        (placingFastener
+          ? tools.operation.draft.holes
+          : tools.operation.sources.flatMap((source) => source.holes)
+        ).map((h) => h.targetId),
+      );
       fastenerSurface = raycaster
         .intersectObjects(
-          objects.children.filter((o) => o.visible && targets.has(o.userData.id)),
+          objects.children.filter((o) => isVisible(o.userData.id) && targets.has(o.userData.id)),
           false,
         )
         .find((hit) => hit.face && (getWorkArea()?.allowsPoint(hit.point.toArray()) ?? true));
@@ -222,7 +230,6 @@ export function createModelPicking({
       workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
       constrainToPlane:
         ['plateCreate', 'plateVertex'].includes(tools.operation?.mode) ||
-        (tools.operation?.mode === 'fastenerCreate' && !!tools.first) ||
         (!!tools.operation?.gripRefs && !!tools.operation.frame),
     });
     if (import.meta.env?.DEV) {
@@ -271,7 +278,7 @@ export function createModelPicking({
       const offset =
         tools.activeSnap.point &&
         new THREE.Vector3(...tools.activeSnap.point).sub(fastenerSurface.point);
-      if (offset && Math.abs(offset.dot(normal)) < 0.001)
+      if (placingFastener && offset && Math.abs(offset.dot(normal)) < 0.001)
         tools.operation.surfaceFrame = fastenerPlaneFromSurface(
           tools.activeSnap.point,
           normal.toArray(),

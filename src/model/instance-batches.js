@@ -115,7 +115,7 @@ export class InstanceBatches {
           vertexShader: lineVertex,
           fragmentShader: lineFragment,
           uniforms: { opacity: { value: first.object.material.transparent ? 0.35 : 1 } },
-          transparent: first.object.material.transparent,
+          transparent: true,
           depthWrite: !first.object.material.transparent,
         }),
       );
@@ -234,7 +234,7 @@ export class InstanceBatches {
       batch.mesh.material.opacity = transparentView ? 0.3 : 1;
       batch.mesh.material.depthWrite = !transparentView;
       batch.mesh.material.needsUpdate = true;
-      batch.lines.material.transparent = transparentView;
+      batch.lines.material.transparent = true;
       batch.lines.material.depthWrite = !transparentView;
       batch.lines.material.uniforms.opacity.value = transparentView ? 0.35 : 1;
       batch.lines.material.needsUpdate = true;

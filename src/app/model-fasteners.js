@@ -59,6 +59,7 @@ export function installModelFasteners({
           ? {
               first: tools.first && [...tools.first],
               frame: structuredClone(tools.operation.frame),
+              xPoint: tools.operation.xPoint && [...tools.operation.xPoint],
               previewPoints: tools.operation.previewPoints,
             }
           : null;
@@ -90,6 +91,7 @@ export function installModelFasteners({
         draft,
         frame: resume?.frame || structuredClone(draft.layout.frame),
         ...(resume?.previewPoints ? { previewPoints: resume.previewPoints } : {}),
+        ...(resume?.xPoint ? { xPoint: resume.xPoint } : {}),
       };
       if (resume?.first) tools.first = resume.first;
       syncOperationUI();
@@ -98,8 +100,8 @@ export function installModelFasteners({
       if (resume?.previewPoints) controllers.fastenerUI.previewRange();
       const label = draft.group ? 'Skruvgrupp' : 'Skruv';
       $('status').textContent = resume?.first
-        ? `${label} · Välj X-riktning i placeringsplanet`
-        : `${label} · Välj origo på en del eller i arbetsplanet, därefter X-riktning`;
+        ? `${label} · Välj ${resume?.xPoint ? 'Y' : 'X'}-riktning i placeringsplanet`
+        : `${label} · Välj origo på en del eller i arbetsplanet, därefter X- och Y-riktning`;
       renderer.domElement.focus({ preventScroll: true });
     },
     commit: commitFastener,

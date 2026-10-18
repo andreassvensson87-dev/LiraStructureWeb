@@ -1,5 +1,6 @@
 import { updateComponents } from '../components/fit.js';
 import { followFasteners, removeFastenerRelations } from './relations.js';
+import { refreshIndependentFastener } from './fixed-placement.js';
 import { automaticPlacement } from './placement.js';
 import { isFastener, validateFastener } from './object-type.js';
 
@@ -54,13 +55,15 @@ export function updateAutomaticJoints(before, after) {
     const material = [...targets].map((id) => objects.get(id)).filter(Boolean);
     material.push(...cuts.filter((c) => c.targets.some((id) => targets.has(id))));
     try {
-      const result = automaticPlacement(
-        s,
-        s.insertion.start,
-        s.insertion.direction,
-        material,
-        s.insertion.limited ? s.insertion.depth : null,
-      );
+      const result = !s.generatedBy
+        ? refreshIndependentFastener(s, material)
+        : automaticPlacement(
+            s,
+            s.insertion.start,
+            s.insertion.direction,
+            material,
+            s.insertion.limited ? s.insertion.depth : null,
+          );
       const error = validateFastener(result);
       if (error) throw new Error(error);
       return result;

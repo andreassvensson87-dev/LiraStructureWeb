@@ -37,7 +37,13 @@ export function selectionGrips(objects, selectedIds, drawing = false) {
       const ref = {
         id: object.id,
         kind:
-          isPlate(object) || object.type === 'polysweep' ? index : index === 0 ? 'start' : 'end',
+          isPlate(object) || object.type === 'polysweep'
+            ? index
+            : index === 0
+              ? 'start'
+              : index === 1
+                ? 'end'
+                : 'y',
       };
       const cell = point.map((v) => Math.floor(v / 1e-6));
       let group;
@@ -74,7 +80,7 @@ export function wholeGripObjects(sources, refs) {
             refs.some(
               (ref) =>
                 ref.id === source.id &&
-                (ref.kind === i || ref.kind === (i === 0 ? 'start' : 'end')),
+                (ref.kind === i || ref.kind === (i === 0 ? 'start' : i === 1 ? 'end' : 'y')),
             ),
           ),
       )

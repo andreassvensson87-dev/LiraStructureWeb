@@ -168,12 +168,16 @@ test('transparent batches sort copies after orbit and preserve colours, hidden o
     batches.sync(camera);
     assert.equal(batch.mesh.material.transparent, transparent);
     assert.equal(batch.mesh.material.depthWrite, !transparent);
-    assert.equal(batch.lines.material.transparent, transparent);
+    // Contours keep alpha blending enabled in both modes; their effective opacity changes.
+    assert.equal(batch.lines.material.transparent, objects[0].children[0].material.transparent);
+    assert.equal(batch.lines.material.uniforms.opacity.value, transparent ? 0.35 : 1);
     assert.equal(batch.lines.material.depthWrite, !transparent);
     objects.forEach((o, i) => {
       assert.equal(o.geometry, geometries[i]);
       assert.equal(o.userData.transparentView, transparent);
       assert.equal(o.material.opacity, transparent ? 0.3 : 1);
+      assert.equal(o.children[0].material.opacity, batch.lines.material.uniforms.opacity.value);
+      assert.equal(o.children[0].material.depthWrite, batch.lines.material.depthWrite);
       assert.ok(o.userData.instanced);
     });
   }

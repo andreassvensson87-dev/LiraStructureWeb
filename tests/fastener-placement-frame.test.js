@@ -274,6 +274,15 @@ test('picked vertical material face places the group and bores in that face with
   tools.operation.draft = { ...draft, holes: [{ ...draft.holes[0], targetId: 'other' }] };
   picking.point({ clientX: 300, clientY: 300 });
   assert.equal(tools.operation.surfaceFrame, undefined);
+  tools.first = [100, -20, 200];
+  tools.operation = {
+    mode: 'grip',
+    sources: batch,
+    gripRefs: batch.map((s) => ({ id: s.id, kind: 'y' })),
+  };
+  mesh.visible = false; // The ordinary dependent preview temporarily replaces this target mesh.
+  close(picking.point({ clientX: 300, clientY: 250 }), [100, -20, 150]);
+  assert.equal(tools.operation.frame, undefined, 'Y grip does not lock the previous plane');
 });
 
 test('surface plane keeps a valid axis for end faces and inclined faces', () => {

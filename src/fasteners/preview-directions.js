@@ -20,6 +20,7 @@ export function paintFastenerDirections(root, batch, projectPoint) {
   paintCadGuide(root, p, anchor, { dashed: true });
   for (const [direction, color] of [
     [source.group?.u || frame.x.toArray(), cadFeedback.axisX],
+    [source.layout?.frame.v || frame.y.toArray(), cadFeedback.axisY],
     [frame.z.toArray(), cadFeedback.axisZ],
   ]) {
     const tip = projectPoint(

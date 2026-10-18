@@ -164,7 +164,7 @@ test('each cell adapts to the material it intersects and updates after thickness
     [40, 40, 40, 40],
   );
 });
-test('group selection, move, rotation and reference following retain a shared frame', () => {
+test('group selection, move, rotation and independent placement retain a shared frame', () => {
   const batch = fastenerGroupBatch(draft, [plate]);
   const model = [plate, ...batch];
   assert.equal(groupSelection(model, [batch[2].id]).size, 4);
@@ -178,7 +178,8 @@ test('group selection, move, rotation and reference following retain a shared fr
   const followed = applyObjectBatch(model, [
     transformObject(plate, 'move', [0, 0, 0], [5, 7, 9]),
   ]).objects;
-  close(followed[1].group.origin, [-55, 67, 49]);
+  close(followed[1].group.origin, batch[0].group.origin);
+  close(followed[1].start, batch[0].start);
   validateFastenerGroups(followed);
   const moved = applyObjectBatch(
     model,

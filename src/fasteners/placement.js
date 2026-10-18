@@ -7,7 +7,7 @@ import { hasNut } from './library.js';
 import { fittedAssembly } from './assembly.js';
 import { entryAllowance, reachableMaterialLayers } from './material-reach.js';
 
-class AxisMiss extends Error {
+export class AxisMiss extends Error {
   constructor(part, bounds, frame) {
     super(`Skruvaxeln träffar inte ${part.name || part.id}.`);
     const center = bounds.getCenter(new THREE.Vector3()).sub(frame.origin).dot(frame.z);

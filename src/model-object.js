@@ -11,6 +11,7 @@ import {
 } from './fasteners/geometry.js';
 import { geometryEdges } from './fasteners/edges.js';
 import { fastenerAccessories } from './fasteners/accessories.js';
+import { fastenerHoleDisplayGeometry } from './fasteners/display.js';
 import { itemDisplayTemplate, itemGeometry } from './items/geometry.js';
 import {
   profileDisplayObject,
@@ -219,8 +220,32 @@ export function createDisplayGeometryContext(model, options = {}) {
 }
 export function selectionGeometryReader(model, options = {}) {
   const entry = indexedEntries(model, true, options);
-  const reader = (s) => entry(s).geometry;
+  const holeSelections = new WeakMap();
+  const reader = (s) => {
+    const body = entry(s).geometry;
+    if (s.type !== 'fastener' || s.assembly?.bolt !== false) return body;
+    let geometry = holeSelections.get(s);
+    if (!geometry) {
+      const holes = fastenerHoleDisplayGeometry(s, model);
+      const triangles = body.index ? body.toNonIndexed() : body;
+      const hardware = triangles.attributes.position.array;
+      const bores = holes.attributes.position.array;
+      const vertices = new Float32Array(hardware.length + bores.length);
+      vertices.set(hardware);
+      vertices.set(bores, hardware.length);
+      geometry = new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.BufferAttribute(vertices, 3),
+      );
+      geometry.computeBoundingBox();
+      holeSelections.set(s, geometry);
+      if (triangles !== body) triangles.dispose();
+      holes.dispose();
+    }
+    return geometry;
+  };
   reader.bounds = (s) => {
+    if (s.type === 'fastener' && s.assembly?.bolt === false) return reader(s).boundingBox;
     const value = entry(s);
     return value.bounds || value.geometry.boundingBox;
   };

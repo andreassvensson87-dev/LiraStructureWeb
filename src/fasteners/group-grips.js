@@ -4,6 +4,7 @@ import { fastenerGroupBatch } from './groups.js';
 import {
   applyFastenerLayout,
   fastenerLayoutFromPoints,
+  fastenerLayoutFromThreePoints,
   fastenerLayoutAnchors,
   layoutForFastener,
 } from './placement-frame.js';
@@ -35,12 +36,25 @@ export function moveFastenerGroupGrips(sources, refs, target, base, model) {
         });
     } else {
       const layout = layoutForFastener(source);
-      const tip = fastenerLayoutAnchors(source)[1];
+      const yGrip = chosen.some((r) => r.kind === 'y');
+      const anchors = fastenerLayoutAnchors(source);
+      const tip = anchors[yGrip ? 2 : 1];
       const destination = base ? tip.map((v, i) => v + target[i] - base[i]) : target;
-      const picked = fastenerLayoutFromPoints(layout.frame.origin, destination, layout.frame);
+      const xPoint =
+        yGrip && chosen.some((r) => r.kind === 'end')
+          ? anchors[1].map((v, i) => v + target[i] - (base || tip)[i])
+          : anchors[1];
+      const picked = yGrip
+        ? fastenerLayoutFromThreePoints(layout.frame.origin, xPoint, destination)
+        : fastenerLayoutFromPoints(layout.frame.origin, destination, layout.frame);
       const draft = applyFastenerLayout({
         ...source,
-        layout: { ...layout, frame: picked.frame, xLength: picked.xLength },
+        layout: {
+          ...layout,
+          frame: picked.frame,
+          xLength: picked.xLength,
+          yLength: yGrip ? picked.yLength : layout.yLength || 100,
+        },
       });
       for (const member of fastenerGroupBatch(draft, model)) updates.set(member.id, member);
     }

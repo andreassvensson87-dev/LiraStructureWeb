@@ -35,8 +35,8 @@ export function updateObjectMeshTransparency(object, transparentView) {
   material.needsUpdate = true;
   const outline = object.children[0]?.material;
   if (outline) {
-    outline.transparent = transparentView;
-    outline.opacity = transparentView ? 0.35 : 0.55;
+    outline.transparent = true;
+    outline.opacity = transparentView ? 0.35 : 1;
     outline.depthWrite = !transparentView;
     outline.needsUpdate = true;
   }
@@ -76,7 +76,7 @@ export function updateObjectMeshSelection(object, s, selectedIds) {
   if (cut) object.material.opacity = selected ? 0.2 : 0;
   const outline = object.children[0];
   outline.material.color.set(
-    cut ? (selected ? 0xe87924 : 0xb77a48) : selected ? 0x145d4d : 0x3e5663,
+    cut ? (selected ? 0xe87924 : 0xb77a48) : selected ? 0x145d4d : 0x000000,
   );
   if (object.userData.edgeSelection) {
     outline.material.depthTest = !selected;
@@ -202,10 +202,10 @@ export function createObjectMesh(
           ? cadFeedback.preview
           : selectedIds.has(s.id)
             ? 0x145d4d
-            : 0x3e5663,
+            : 0x000000,
       depthTest: !cut && !(holeSelection && selectedIds.has(s.id)),
-      transparent: ghost || cut,
-      opacity: cut ? (selectedIds.has(s.id) ? 1 : 0.8) : ghost ? 0.5 : 0.55,
+      transparent: true,
+      opacity: cut ? (selectedIds.has(s.id) ? 1 : 0.8) : ghost ? 0.5 : 1,
     }),
   );
   lines.renderOrder = cut ? 20 : holeSelection && selectedIds.has(s.id) ? 26 : 0;

@@ -47,12 +47,12 @@ const matrix = (s) => {
   const f = objectType(s).partFrame(s);
   return new THREE.Matrix4().makeBasis(f.x, f.y, f.z).setPosition(f.origin);
 };
-/** A joint follows its reference part. Explicitly transformed screws win over automatic following. */
+/** Only component-owned hardware follows a reference part; manual groups are independent. */
 export function followFasteners(before, after, explicitlyChanged = new Set()) {
   const previous = new Map(before.map((s) => [s.id, s]));
   const current = new Map(after.map((s) => [s.id, s]));
   return after.map((s) => {
-    if (!isFastener(s) || !s.anchorId || explicitlyChanged.has(s.id)) return s;
+    if (!isFastener(s) || !s.generatedBy || !s.anchorId || explicitlyChanged.has(s.id)) return s;
     const old = previous.get(s.anchorId),
       next = current.get(s.anchorId);
     if (!old || !next || old === next) return s;

@@ -97,7 +97,7 @@ const schedule = (project, id) => {
   return partHoleSchedule(source, project.objects, partMatrix(source));
 };
 
-test('selected layers seat both washers and nut outside material, then refit after thickness edits', () => {
+test('selected layers seat hardware initially; thickness edits update machining without moving hardware', () => {
   const project = fixture();
   const original = structuredClone(project);
   const screw = project.objects.at(-1);
@@ -116,13 +116,13 @@ test('selected layers seat both washers and nut outside material, then refit aft
   const a = { ...project.objects[0], thickness: 30 };
   project.objects = applyObjectBatch(project.objects, [a]).objects;
   const next = project.objects.at(-1);
-  assert.ok(new THREE.Vector3(...next.start).distanceTo(new THREE.Vector3(100, 100, 32)) < 1e-6);
-  assert.equal(next.nutOffset, 74);
+  assert.deepEqual(next.start, screw.start);
+  assert.equal(next.nutOffset, screw.nutOffset);
   assert.deepEqual(
     next.holes.map((h) => [h.offset, h.depth]),
     [
-      [2, 30],
-      [32, 40],
+      [2, 20],
+      [22, 40],
     ],
   );
   assert.deepEqual(
@@ -280,7 +280,7 @@ test('project imports reject damaged files, duplicate objects, dangling bore tar
   assert.equal(original.objects.length, 4);
 });
 
-test('copying an automatic joint remaps bore ownership and deleting a layer refits the remaining hardware', () => {
+test('copying a manual joint remaps bore ownership and deleting a layer keeps hardware stationary', () => {
   const project = fixture();
   const sources = project.objects.filter((s) => s.id !== 'other');
   const copied = applyObjectBatch(
@@ -303,10 +303,10 @@ test('copying an automatic joint remaps bore ownership and deleting a layer refi
   );
   const screw = remaining.at(-1);
   assert.equal(screw.anchorId, 'b');
-  assert.ok(Math.abs(screw.start[2] - 2) < 1e-6);
-  assert.equal(screw.nutOffset, 44);
+  assert.deepEqual(screw.start, project.objects.at(-1).start);
+  assert.equal(screw.nutOffset, project.objects.at(-1).nutOffset);
   assert.deepEqual(
     screw.holes.map((h) => [h.offset, h.depth]),
-    [[2, 40]],
+    [[22, 40]],
   );
 });

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { axisPlacement, fastenerFrame } from './geometry.js';
 import { groupBasis, groupPoint, validateFastenerGroup } from './group-data.js';
+import { refreshIndependentFastener } from './fixed-placement.js';
 import { automaticPlacement } from './placement.js';
 import { validateFastener } from './object-type.js';
 import { validateFastenerTargets } from './relations.js';
@@ -53,6 +54,40 @@ export function fastenerGroupBatch(
             model,
             draft.groupLimit ?? (draft.insertion?.limited ? draft.insertion.depth : null),
           );
+          // Reapplying properties must not reseat independent hardware on a moved part.
+          if (
+            old?.layout &&
+            !draft.generatedBy &&
+            JSON.stringify([
+              old.layout.frame,
+              old.layout.offset,
+              old.layout.rotation,
+              old.layout.reversed,
+              old.assembly,
+              old.washers,
+            ]) ===
+              JSON.stringify([
+                draft.layout?.frame,
+                draft.layout?.offset,
+                draft.layout?.rotation,
+                draft.layout?.reversed,
+                draft.assembly,
+                draft.washers,
+              ])
+          ) {
+            const oldPoint = groupPoint(old.group, old.group.row, old.group.column);
+            const delta = start.map((v, i) => v - oldPoint[i]);
+            const head = old.start.map((v, i) => v + delta[i]);
+            const end = new THREE.Vector3(...head).add(axis).toArray();
+            screw = refreshIndependentFastener(
+              {
+                ...screw,
+                ...axisPlacement(screw.spec, head, end),
+                insertion: { ...screw.insertion, start, direction },
+              },
+              model,
+            );
+          }
           const error = validateFastener(screw);
           if (error) throw new Error(error);
           validateFastenerTargets(screw, model);

@@ -116,6 +116,13 @@ test('Move and Copy preserve all native grip families as passive markers, then r
   assert.ok(
     [...overlay.markers.values()].filter((m) => m.grip).every((m) => m.tagName === 'BUTTON'),
   );
+  overlay.update(camera, 600, 600, sources, ids, false, null, null, [], [], false, true);
+  assert.ok([...overlay.markers.values()].every((m) => m.tagName === 'SPAN'));
+  assert.deepEqual(
+    overlay.refsInRect({ x: 0, y: 0 }, { x: 600, y: 600 }),
+    expected,
+    'passive marquee markers still support explicit Alt rectangle selection of grips',
+  );
 });
 
 test('shared model snap resolves the visible group datum outside body bounds during Move and Copy', (t) => {

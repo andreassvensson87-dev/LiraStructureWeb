@@ -8,7 +8,9 @@ export function gripPoint(object, ref) {
         ? 0
         : ref.kind === 'end'
           ? 1
-          : -1;
+          : ref.kind === 'y'
+            ? 2
+            : -1;
   return object && index >= 0 ? objectGripPoints(object)[index] : null;
 }
 export function validGripRefs(objects, refs, selectedIds) {
