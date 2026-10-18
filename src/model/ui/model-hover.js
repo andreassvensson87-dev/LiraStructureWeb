@@ -44,7 +44,7 @@ export function installModelHover({
     if (controllers.referenceModels?.setHoverSelection(reference)) objectFeedback.invalidate();
     const source = objectFeedback.sources.get(id) || renderState.renderedById.get(id)?.source;
     const eligible =
-      isPhysical(source) &&
+      (isPhysical(source) || source?.type === 'fastener') &&
       (!fit || (source.type ?? 'sweep') === 'sweep') &&
       (!propertyCopy ||
         (tools.operation.mode === 'componentProperties'

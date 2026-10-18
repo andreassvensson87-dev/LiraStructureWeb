@@ -19,6 +19,8 @@ import { InstanceBatches } from '../src/model/instance-batches.js';
 import { isTransparentMesh } from '../src/model/selection-hit.js';
 import { exportGeometry } from '../src/ifc/geometry.js';
 import { createModelPicking } from '../src/model/ui/model-picking.js';
+import { installModelHover } from '../src/model/ui/model-hover.js';
+import { modelSelection } from '../src/model/selection-mode.js';
 import { fastenerPerformanceModel } from '../scripts/fastener-performance.js';
 
 const spec = {
@@ -349,8 +351,35 @@ test('holes without hardware keep owner picking, hover and selected contours wit
     getRenderedById: () => new Map(model.map((s) => [s.id, { source: s }])),
     getReferences: () => null,
   });
+  const hoverFeedback = new ObjectFeedback(new THREE.Scene());
+  hoverFeedback.setModel(model);
+  const actions = { ...picking, userSelection: (ids) => modelSelection(model, [], ids) };
+  const renderer = { domElement: { style: {} } };
+  installModelHover({
+    actions,
+    controllers: {},
+    objectFeedback: hoverFeedback,
+    project: { objects: model },
+    renderState: { renderedById: new Map() },
+    renderer,
+    tools: {},
+    ui: {},
+  });
   for (const transparent of [false, true]) {
     for (const mesh of meshes) updateObjectMeshTransparency(mesh, transparent);
+    actions.updateObjectHover({ clientX: 313, clientY: 300, buttons: 0 });
+    hoverFeedback.refresh();
+    assert.deepEqual(
+      [...hoverFeedback.entries.keys()].sort(),
+      batch.map((s) => s.id).sort(),
+      'hovering a hole rim highlights the complete group through the real hover controller',
+    );
+    assert.equal(renderer.domElement.style.cursor, 'pointer');
+    for (const entry of hoverFeedback.entries.values())
+      assert.ok(entry.edges.geometry.attributes.position.count > 0);
+    actions.updateObjectHover({ clientX: 0, clientY: 0, buttons: 0 });
+    hoverFeedback.refresh();
+    assert.equal(hoverFeedback.entries.size, 0, 'leaving clears the hole highlight');
     picking.ray({ clientX: 313, clientY: 300 });
     assert.equal(
       picking.selectionHit(),
@@ -460,6 +489,7 @@ test('holes without hardware keep owner picking, hover and selected contours wit
   dispose(cover);
   solid.dispose();
   feedback.dispose();
+  hoverFeedback.dispose();
   meshes.forEach(dispose);
 });
 
