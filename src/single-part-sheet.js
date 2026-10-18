@@ -1,3 +1,4 @@
+import { createViewCropPreview } from './drawing-view-crop-preview.js';
 import { bindInspectorField } from './inspector/field-state.js';
 import { resolvePartDrawingGeometry } from './part-sheet-geometry.js';
 import {
@@ -63,7 +64,7 @@ import {
 import { assemblySchedule } from './project/assemblies.js';
 import { assemblyDrawingMatrix } from './assembly-frames.js';
 
-import { updatePartHolePanel, partHoleSchedule } from './fasteners/drawing.js';
+import { partHoleSchedule } from './fasteners/drawing.js';
 import {
   PAPER_KEY,
   standardPapers,
@@ -84,6 +85,7 @@ export class SinglePartSheet {
     getObjects,
     getProject = () => ({}),
     getSnapSettings = () => ({ polar: 45 }),
+    openDrawingList = () => {},
   }) {
     this.getSnapSettings = getSnapSettings;
     this.getProject = getProject;
@@ -224,6 +226,10 @@ export class SinglePartSheet {
     fitAll.title = 'Visa papper och allt innehåll, även utanför pappret';
     fitAll.onclick = () => this.fit(true);
     this.$('fit').after(fitAll);
+    this.$('fit').dataset.drawingCommandGroup = 'display';
+    fitAll.dataset.drawingCommandGroup = 'display';
+    this.$('review').dataset.drawingCommandGroup = 'document';
+    this.$('layout').dataset.drawingCommandGroup = 'views';
     const existingTools = new Set(toolbar.children);
     this.annotations = new DrawingAnnotations({
       dialog: this.dialog,
@@ -232,8 +238,15 @@ export class SinglePartSheet {
       adapter: {
         paper: this.svg,
         paperSize: () => this.paper,
-        beginViewGrip: (event, node) =>
-          beginDrawingViewGrip({
+        beginViewGrip: (event, node) => {
+          const preview = createViewCropPreview({
+            host: this.annotations.overlayHost,
+            paper: this.annotations.adapter.paper,
+            paperSize: this.annotations.adapter.paperSize,
+          });
+          const session = beginDrawingViewGrip({
+            preview: (view) => preview.paint(view),
+            clearPreview: () => preview.remove(),
             event,
             node,
             paper: this.svg,
@@ -247,7 +260,10 @@ export class SinglePartSheet {
               this.extraSections.sync();
               this.viewPlacement?.sync();
             },
-          }),
+          });
+          if (!session) preview.remove();
+          return session;
+        },
         cancelTools: () => this.cancelInteraction(),
         redraw: () => this.compose(),
         pixelScale: () => this.svg.getBoundingClientRect().width / this.paper[0],
@@ -299,6 +315,7 @@ export class SinglePartSheet {
       toolbar,
       tools: [...toolbar.children].filter((child) => !existingTools.has(child)),
       cancel: () => this.cancelInteraction(),
+      openList: openDrawingList,
       save: () => this.save?.(this.record),
       annotations: () => this.annotations,
     });
@@ -509,7 +526,7 @@ export class SinglePartSheet {
         },
         redraw: () => this.compose(),
         commit: (view) => this.extraSections.commit(view),
-        update: (view) => this.extraSections.update(view),
+        update: (view, options) => this.extraSections.update(view, options),
       },
     });
     this.detailTool = new DrawingDetailTool({
@@ -533,7 +550,7 @@ export class SinglePartSheet {
         },
         redraw: () => this.compose(),
         commit: (view) => this.extraSections.commit(view),
-        update: (view) => this.extraSections.update(view),
+        update: (view, options) => this.extraSections.update(view, options),
       },
     });
     this.viewMarquee = installDrawingViewMarquee({
@@ -653,26 +670,7 @@ export class SinglePartSheet {
           ).map((h) => ({ ...h, sourceId: e.id })),
         )
       : partHoleSchedule(source, this.getObjects(), localMatrix);
-    updatePartHolePanel(
-      this.dialog.querySelector('.drawing-inspector'),
-      source,
-      this.getObjects(),
-      localMatrix,
-    );
-    if (this.assembly) {
-      const panel = this.dialog.querySelector('[data-part-holes]');
-      panel.replaceChildren();
-      panel.hidden = !this.holeSchedule.length;
-      const summary = document.createElement('summary');
-      summary.textContent = `Hål i assembly · ${this.holeSchedule.length}`;
-      panel.append(summary);
-      for (const h of this.holeSchedule) {
-        const p = document.createElement('p');
-        p.className = 'inspector-note';
-        p.textContent = `${state.parts.assignments[h.sourceId]?.mark || 'Ej numrerad'} · ${h.label}`;
-        panel.append(p);
-      }
-    }
+
     this.drawingReflection = partDrawingReflection(localMatrix);
     this.geometryInDrawingFrame = false;
     if (!assemblyData) this.geometry.applyMatrix4(localMatrix);

@@ -139,9 +139,8 @@ export default [
           patterns: [
             {
               regex:
-                '^(?!\\./(?:app/(?:workspace-startup|model-application)\\.js|(?:style|cad-statusbar|drawing-editor-header|drawing-view-grips|drawing-rich-text|ui/exact-length)\\.css)$)',
-              message:
-                'main.js only loads styles, recovers the workspace and starts the application.',
+                '^(?!\\./(?:app/application-startup\\.js|(?:style|cad-statusbar|drawing-editor-header|drawing-view-grips|drawing-rich-text|ui/exact-length)\\.css)$)',
+              message: 'main.js only loads styles and starts the application.',
             },
           ],
         },

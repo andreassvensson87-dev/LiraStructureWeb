@@ -87,7 +87,9 @@ export function installModelFrameLoop({
     objectFeedback.refresh();
     viewWidget.update();
     connectionMarkers.update(camera);
-    grid.updateLabels(camera, host.clientWidth, host.clientHeight);
+    grid.updateLabels(camera, host.clientWidth, host.clientHeight, {
+      workArea: controllers.workAreaUI?.bounds() || null,
+    });
     const visibleGridIds = new Set(
       gridPickIds(
         project.grid,
@@ -96,12 +98,7 @@ export function installModelFrameLoop({
         ),
       ),
     );
-    for (const label of grid.labels)
-      if (
-        !visibleGridIds.has(label.id) ||
-        !(controllers.workAreaUI?.allowsPoint(label.position.toArray()) ?? true)
-      )
-        label.el.hidden = true;
+    for (const label of grid.labels) if (!visibleGridIds.has(label.id)) label.el.hidden = true;
     insertionPoints.allowsPoint = (p) => controllers.workAreaUI?.allowsPoint(p) ?? true;
     insertionPoints.update(
       camera,

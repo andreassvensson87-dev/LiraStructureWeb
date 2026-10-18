@@ -10,13 +10,17 @@ export function beginDrawingViewGrip({
   selected,
   annotations,
   render,
+  preview = () => {},
+  clearPreview = () => {},
 }) {
-  const kind = node.dataset.viewGrip || node.dataset.cropCorner || 'move';
+  const kind = node.dataset.viewGrip || node.dataset.cropCorner;
+  if (!kind) return null;
   const id = node.closest('[data-view]')?.dataset.view || selected()[0]?.id;
   const active = views().find((view) => view.id === id);
   if (!active) return null;
   const chosen = kind === 'move' ? selected() : [active];
   const before = structuredClone(chosen);
+  const drafts = structuredClone(chosen);
   const point = (event) => {
     const rect = paper.getBoundingClientRect(),
       size = paperSize();
@@ -39,7 +43,7 @@ export function beginDrawingViewGrip({
     apply: (hit) => {
       const delta = hit.point.map((v, i) => v - origin[i]);
       for (const original of before) {
-        const view = views().find((view) => view.id === original.id);
+        const view = drafts.find((view) => view.id === original.id);
         if (!view) continue;
         Object.assign(
           view,
@@ -49,8 +53,17 @@ export function beginDrawingViewGrip({
         );
       }
     },
-    preview: render,
-    commit: () => annotations.recordOperation(before, structuredClone(chosen), restore),
-    cancel: () => restore(before),
+    preview: () => drafts.forEach(preview),
+    commit: () => {
+      clearPreview();
+      for (const draft of drafts)
+        Object.assign(
+          views().find((view) => view.id === draft.id),
+          draft,
+        );
+      render();
+      annotations.recordOperation(before, structuredClone(chosen), restore);
+    },
+    cancel: clearPreview,
   };
 }

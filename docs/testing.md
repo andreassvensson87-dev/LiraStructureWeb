@@ -580,3 +580,45 @@ Den gemensamma snapfärgen i `ui/cad-feedback.js` är magenta (#d000b8). SVG-sym
 Felet återskapades i Single Part: bladbredd 629,289 → 439,039 px medan den öppna textens bredd och font låg kvar på 260 respektive 5,244 px. Richtextcontrollern observerar nu bladets och överläggsvärdens storlek under redigering och följer scrollhändelser i samma värd. Bekräfta, avbryt och dialogstängning kopplar bort storleksobservationen; textinnehållet byggs inte om vid zoom/pan.
 
 Browserprov i separat lokalt projekt, Single Part och GA: zoomkvot 0,697675 gav samma kvot för textstorlek och redigeringsbredd, medan formateringsraden behöll 30 px höjd. Zoom in, fortsatt befintlig textredigering, bekräftelse och återöppning kontrollerades. Vid horisontell panorering flyttades blad och redigeringsruta båda cirka −244 px. Tvåradigt innehåll behölls och sparad SVG-text hade fortsatt texthöjd 3,5 mm. GA verifierade motsvarande zoomkvot och sparad höjd. Inga konsolfel. Befintliga richtexttester, lint och riktad formatering passerade. Inte publicerat.
+
+### Hållista borttagen från ritningsinspektorn — 2026-10-18
+
+Single Part och Assembly skapar inte längre det separata, alltid öppna hålinformationsfältet i inspektorn. Den oanvända DOM-funktionen `updatePartHolePanel` har tagits bort ur `fasteners/drawing.js`; hålschema och snappkandidater används fortsatt av ritningsgeometrin. Browserprov med sex skruvar genom två plåtar: P1 och A1 öppnas utan hållista, hålen finns kvar på bladet och inga konsolfel rapporteras. Befintliga simplified-holes- och joint-workflow-tester, lint och formatering passerade. Inte publicerat.
+
+### Vyernas mittgrepp borttaget — 2026-10-18
+
+Single Part/Assemblys SVG-vygrepp och GA:s HTML-vygrepp skapar bara de åtta befintliga beskärningsgreppen längs kanten. Inspektorns hänvisning till mittgreppet har tagits bort. Ingen vygeometri, skala, flytttransaktion eller beskärningsregel ändrad.
+
+Browserprov på Single Part, Assembly och GA verifierade åtta kantgrepp och inget mittgrepp. Vyposition ändrades via X-fältet och Assemblys östra grepp ändrade bredd från 56 till cirka 72,018 mm. Inga konsolfel. Den övre Flytta-knappen gäller idag ritobjekt, inte vyer; detta har inte utökats inom presentationsändringen. Befintliga drawing-view-actions-, drawing-grip-interaction- och drawing-views-tester samt lint passerade. Inte publicerat.
+
+### Klick–dra–släpp och återanvända vyprojektioner — 2026-10-18
+
+Befintliga grepp- och snitttester har anpassats till dragning: klick utan rörelse startar ingen placering, mittknappen lämnas till navigation, slutpositionen tas från pointerup, Esc återställer, ogiltig ändpunkt avvisas och numeriskt mått under aktivt grepp valideras. Snittets flytt/djup och detaljgräns använder utkast utan sparad vyändring eller projektion under preview; bekräftelse ger en reversibel historikoperation. Full `npm run check` körs med logg `/tmp/lira-drawing-drag-final-check.log`.
+
+Det utökade profilvisningsscenariot skyddar 100 beskärningar utan ny geometri-/snapberäkning, oförändrade kandidatidentiteter, invalidation av ändrat snitt och beroende detalj samt bevarad oberoende vy. GA-scenariot skyddar att bara ändrad vy och dess efterföljare byggs om, utan dubbel uppdatering av den aktiva vyn.
+
+Återanvändbart beräkningsprov: `node scripts/benchmark-view-crop.mjs`, 32 cylindrar/4 096 trianglar, två vyer, 12 ändringar per väg. På denna Mac var median för framtvingad full omräkning 48,74 ms (max 71,92) och med återanvänd projektion 0,0012 ms (max 0,0124). SHA-256 över vektorer och ytor var oförändrad. Detta mäter Node-beräkningen i ett syntetiskt projekt, inte browserns totala interaktionstid, SVG-målning eller import. Rådata: `/tmp/lira-crop-benchmark.json`.
+
+Browserprov i separat lokalt projekt: Single Part, Assembly och GA; vanliga vyer och sektionsvyer. Single Part-sektionens bredd 48 → 64,685 mm, Ångra till 48, Gör om till 64,685, med skala 1:10 bevarad. Klick på grepp och därefter tom yta ändrade inte bredden. Assembly-sektion 48 → 68,023 och Ångra; GA 390 → 369,977 och Ångra, samt GA-sektion 30 → 53,36 och Ångra. Drag i snittdjup på GA ändrade 1 000 → 828,759 mm med Ångra/Gör om. Single Parts snittflyttgrepp återställdes med Ångra; detaljgräns ändrade detaljvybredd 40 → 59,515 mm och Ångra återställde 40. De gemensamma snittgreppens träffytor verifierades till 18 skärmpixlar i båda arbetsytorna. Inga konsolfel rapporterades. Inte publicerat.
+
+### Start utan gammalt gränssnitt — 2026-10-18
+
+`application-startup.test.js` skyddar ordningen återställning → appskapande → första bild → synlig arbetsyta och fel från modulhämtning, återställning eller appskapande. Inget fel får exponera den halvbyggda arbetsytan. Den tidiga CSS-grinden behåller mätbara mått så att kamera/canvas och ribbon byggs med rätt storlek.
+
+Browserprov med tillfällig kopia av verklig index-HTML och sex sekunders startfördröjning visade enbart startytan; det gamla sidhuvudets visibility var hidden med 1 280 px bevarad bredd. Efter start fanns en ribbon, ingen startyta och inget startattribut. Ett avsiktligt loaderfel visade felmeddelande och Ladda om, medan gamla kontroller förblev dolda. Tillfälliga provsidor togs bort efter kontroll. Vanlig dev-start kontrollerades med återställt projekt och Sweep-verktyg.
+
+Produktionsprovet upptäckte en cirkulär väntan mellan entry-filens top-level await och Vites preloadhjälpare i lazy-moduler. Entry-filen startar nu boot-funktionen utan att invänta dess promise; ordning/felhantering finns kvar i boot-modulen. Produktionsstart och efterföljande omladdning verifierades via Vite preview: ribbon synlig, startytan/startattributet borta och inga konsolfel på produktionsorigin. Hela `npm run check` passerade. Full kontrollogg: `/tmp/lira-startup-check.log`. Inte publicerat.
+
+### Stomlinjebubblor på klippt arbetsområde — 2026-10-18
+
+`grid-bubble-size.test.js` verifierar bubblor vid klippta ändar, bevarade originalpunkter, start-/slutval, plushöjdsgränser och återställd full utsträckning utan arbetsområde. Sneda/omvända linjer behåller ändordningen; helt osynliga linjer och ren hörntangering får inga bubblor. Berörda bubbel-, etikett- och arbetsområdestester passerade (17 scenarier), liksom lint. Loggar: `/tmp/lira-work-area-bubbles-tests.log` och `/tmp/lira-work-area-bubbles-lint.log`.
+
+Browserprov i separat lokalt projekt med sju stomlinjer och box −1 500…1 500 i XY: mittlinjerna 2 och B samt den sneda linjen S korsade boxen trots att deras ursprungliga ändpunkter låg utanför. Alla tre fick två bubblor vid de klippta ändarna, medan de övriga fyra linjernas bubblor var dolda. Samma sex bubblor kontrollerades ovanifrån och i 3D. Inga konsolfel. Inte publicerat.
+
+### Strukturerade ritningsmenyer och ritningslista — 2026-10-18
+
+Webbläsarkontroll med ett testprojekt med Single Part P100, Assembly A200 och en ny GA-001. Samtliga visar Ritningslista/dokumentnamn/Till modellen i översta raden samt en enda Spara-knapp. Arkiv, Fler och Spara och till modellen är borttagna från ritningseditorn. Ritning, Ändra, Rita, Annotera, Vyer, Visa och Bibliotek använder samma ribbon.
+
+Verifierat återöppning via Ritningslista med bevarad vyposition: P100 X=28 efter Spara och A200 X=42 efter stängning via listknappen. GA duplicerade en vy, ändrade kopians X till 55 och sparade med Cmd+S; båda vyerna och kopians position fanns kvar efter återöppning. Markera som aktuell gav Aktuell i GA-listan. Till modellen stängde både editor och listdialog. Visa blad/Visa allt och Lägg till vy-menyn fungerade; Spara som ritningsmall öppnade rätt dialog från Bibliotek. Inga JavaScript-fel observerades.
+
+Berörda ritningshanterings-, urvals- och vytester: 22 passerade. Lint, formatering och produktionsbygge kontrolleras för ändringen.

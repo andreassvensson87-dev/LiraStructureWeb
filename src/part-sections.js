@@ -124,19 +124,40 @@ export class PartSections {
     return { ...data, frame, section };
   }
   build() {
-    this.cache.clear();
+    const existing = new Set(this.items.map((view) => view.id));
+    for (const id of this.cache.keys())
+      if (!existing.has(id)) {
+        this.cache.delete(id);
+        delete this.e.annotationCandidates[id];
+      }
     for (const view of this.items) {
       const source = this.e.drawingGeometry?.(view) || {
         geometry: this.e.geometry,
         snapGeometry: this.e.snapGeometry,
         entries: this.e.assemblyEntries,
       };
+      const frameKey = JSON.stringify([
+        this.frame(view),
+        detailSource(view, this.e.config.views).section,
+        this.e.drawingReflection?.elements,
+        this.e.config.assemblyReferenceMatrix,
+      ]);
+      const previous = this.cache.get(view.id);
+      if (
+        previous?.geometry === source.geometry &&
+        previous?.snapGeometry === source.snapGeometry &&
+        previous?.frameKey === frameKey
+      )
+        continue;
       const data = this.data(view, source.geometry);
       const projection = sectionProjection(
         source.entries?.map((e) => e.geometry) || source.geometry,
         data.frame,
         data.section,
       );
+      data.geometry = source.geometry;
+      data.snapGeometry = source.snapGeometry;
+      data.frameKey = frameKey;
       data.vectors = projection.edges;
       data.modelFaces = projection.faces;
       if (data.section) {
@@ -209,8 +230,8 @@ export class PartSections {
     this.e.compose();
     this.e.selectView(view.id);
   }
-  update(view) {
-    if (view.section) {
+  update(view, { recenter = true } = {}) {
+    if (view.section && recenter) {
       const data = sectionDrawing(
         [this.e.drawingGeometry?.(view).geometry || this.e.geometry],
         this.frame(view),

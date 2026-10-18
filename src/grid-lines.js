@@ -1,3 +1,4 @@
+import { clipSegmentToBox } from './model/work-area.js';
 import { visibleGridEndpoints, gridBubbleCenter } from './grid-label-position.js';
 import { gridSegments, gridCrossings } from './grid-geometry.js';
 import {
@@ -85,14 +86,25 @@ export class GridLines {
       line.material.color.setHex(ids.includes(line.userData.gridId) ? 0x16815e : 0x82969f);
     for (const { el, id } of this.labels) el.classList.toggle('snap-active', ids.includes(id));
   }
-  updateLabels(camera, width, height, { keepVisible = false, diameter } = {}) {
+  updateLabels(camera, width, height, { keepVisible = false, diameter, workArea = null } = {}) {
     for (const { position, opposite, index, el, bubbleEnds } of this.labels) {
-      const p = position.clone().project(camera);
+      const segment = clipSegmentToBox(position.toArray(), opposite.toArray(), workArea);
+      if (!segment) {
+        el.hidden = true;
+        continue;
+      }
+      const endpointPosition = new THREE.Vector3(...segment[0]);
+      const oppositePosition = new THREE.Vector3(...segment[1]);
+      if (endpointPosition.distanceToSquared(oppositePosition) < 1e-12) {
+        el.hidden = true;
+        continue;
+      }
+      const p = endpointPosition.clone().project(camera);
       const metrics =
         diameter === undefined
           ? modelGridBubbleMetrics(
               el.textContent,
-              projectedGridBubbleDiameter(camera, position, width, height),
+              projectedGridBubbleDiameter(camera, endpointPosition, width, height),
             )
           : gridBubbleMetrics(el.textContent, diameter);
       if (diameter === undefined)
@@ -112,7 +124,7 @@ export class GridLines {
       el.style.fontSize = `${metrics.fontSize}px`;
       el.style.borderWidth = `${metrics.strokeWidth}px`;
       if (keepVisible) {
-        const q = opposite.clone().project(camera),
+        const q = oppositePosition.clone().project(camera),
           radius = labelRadius;
         const ends =
           Math.abs(p.z) <= 1 && Math.abs(q.z) <= 1
@@ -136,7 +148,7 @@ export class GridLines {
         continue;
       }
       el.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
-      const q = opposite.clone().project(camera);
+      const q = oppositePosition.clone().project(camera);
       const endpoint = [((p.x + 1) * width) / 2, ((1 - p.y) * height) / 2];
       const center =
         diameter === undefined

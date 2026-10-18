@@ -7,7 +7,16 @@ import { createDrawingToolbox } from './drawing-toolbox.js';
 import { installDrawingEditorHeader } from './drawing-editor-header.js';
 import { installDrawingInspectorPanels } from './drawing/ui/inspector-panels.js';
 
-export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save, annotations }) {
+export function drawingEditorShell({
+  dialog,
+  body,
+  toolbar,
+  tools,
+  cancel,
+  save,
+  annotations,
+  openList,
+}) {
   dialog.classList.add('drawing-editor');
   const back = dialog.querySelector('header button');
   back.textContent = 'Till modellen';
@@ -38,7 +47,16 @@ export function drawingEditorShell({ dialog, body, toolbar, tools, cancel, save,
   body.prepend(nav);
   // Snitt och detaljverktyg installeras också under konstruktörens samma körning.
   queueMicrotask(() => {
-    installDrawingEditorHeader({ dialog, toolbar, save, annotations });
+    installDrawingEditorHeader({
+      dialog,
+      toolbar,
+      save,
+      annotations,
+      openList: () => {
+        dialog.addEventListener('close', openList, { once: true });
+        dialog.close();
+      },
+    });
     createDrawingToolbox(nav, toolbar);
     installDrawingInspectorPanels(
       dialog,

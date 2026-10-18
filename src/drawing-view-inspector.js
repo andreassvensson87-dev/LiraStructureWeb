@@ -10,7 +10,7 @@ export function createDrawingViewInspector(
   const section = document.createElement('section');
   section.className = 'drawing-view-placement';
   section.innerHTML =
-    '<h3>Vy på bladet</h3><p>Mittgrepp flyttar · kantgrepp beskär</p><div class="drawing-view-fields"></div>';
+    '<h3>Vy på bladet</h3><p>Kantgrepp beskär</p><div class="drawing-view-fields"></div>';
   const fields = section.querySelector('div'),
     inputs = [];
   for (const [key, axis, text] of [

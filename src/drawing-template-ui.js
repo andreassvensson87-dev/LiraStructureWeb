@@ -2,10 +2,8 @@ import { createDrawingTemplate, readDrawingTemplates, TEMPLATE_KEY } from './dra
 import { actionButton } from './drawing-toolbar.js';
 export function installTemplateSave(editor, toolbar) {
   const button = actionButton(document.createElement('button'), 'page', 'Spara som ritningsmall');
-  const menu = [...toolbar.querySelectorAll('.drawing-action-menu')]
-    .find((w) => w.firstElementChild.textContent.trim() === 'Mer')
-    ?.querySelector('.drawing-action-panel');
-  (menu || toolbar).append(button);
+  button.dataset.drawingCommandGroup = 'library';
+  toolbar.append(button);
   button.onclick = () => {
     editor.cancelInteraction();
     const dialog = document.createElement('dialog');

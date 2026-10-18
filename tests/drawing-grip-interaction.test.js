@@ -72,32 +72,31 @@ function fixture() {
   };
 }
 
-test('a grip supports drag or click-place and creates exactly one commit', () => {
+test('a grip commits on drag release and a click alone never starts placement', () => {
   const f = fixture();
   f.controller.down(f.event(0));
   f.controller.move(f.event(20));
-  f.controller.up(f.event(20));
-  assert.equal(f.value, 20);
+  f.controller.up(f.event(25));
+  assert.equal(f.value, 25);
   assert.equal(f.committed, 1);
   assert.equal(f.controller.session, null);
   assert.equal(f.captures.size, 0);
   const g = fixture();
+  g.controller.down({ ...g.event(0), button: 1 });
+  assert.equal(g.controller.session, undefined, 'middle button remains available to navigation');
   g.controller.down(g.event(0));
   g.controller.up(g.event(0));
-  assert.equal(g.controller.session.placing, true);
+  assert.equal(g.controller.session, null);
   assert.equal(g.committed, 0);
   g.controller.move(g.event(30));
-  assert.equal(g.value, 30);
-  g.controller.down(g.event(40));
-  assert.equal(g.value, 40);
-  assert.equal(g.committed, 1);
+  assert.equal(g.value, 0);
+  assert.equal(g.committed, 0);
 });
 test('invalid placement cannot commit a previous preview, and Escape restores without history', () => {
   const f = fixture();
   f.controller.down(f.event(0));
-  f.controller.up(f.event(0));
   f.controller.move(f.event(20));
-  f.controller.down(f.event(-1));
+  f.controller.move(f.event(-1));
   assert.equal(f.committed, 0);
   assert.ok(f.controller.session);
   f.controller.key({ ...f.event(0), key: 'Escape' });
@@ -108,7 +107,6 @@ test('invalid placement cannot commit a previous preview, and Escape restores wi
 test('numeric grip input accepts decimal comma and rejects zero without ending placement', () => {
   const f = fixture();
   f.controller.down(f.event(0));
-  f.controller.up(f.event(0));
   f.controller.submit('0');
   assert.ok(f.controller.session);
   assert.equal(f.committed, 0);
@@ -186,6 +184,14 @@ test('moving a group of views and cropping are reversible in the same history as
   const move = begin('move');
   assert.equal(move.locate({ clientX: 0, clientY: 0 }).view, 'paper');
   move.apply({ point: [30, 40] });
+  assert.deepEqual(
+    views.map((v) => v.position),
+    [
+      [10, 20],
+      [150, 20],
+    ],
+    'draft does not change saved views',
+  );
   move.commit();
   assert.deepEqual(
     views.map((v) => v.position),

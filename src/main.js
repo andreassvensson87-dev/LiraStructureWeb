@@ -4,8 +4,6 @@ import './drawing-editor-header.css';
 import './drawing-view-grips.css';
 import './ui/exact-length.css';
 import './drawing-rich-text.css';
-import { recoverWorkspace } from './app/workspace-startup.js';
-import { createModelApplication } from './app/model-application.js';
+import { startApplication } from './app/application-startup.js';
 
-const workspace = await recoverWorkspace();
-await createModelApplication(workspace);
+startApplication();

@@ -19,6 +19,7 @@ export class PartViewTool {
         return button;
       }),
     });
+    menu.dataset.drawingCommandGroup = 'views';
     editor.$('layout').after(menu);
     editor.workspace.addEventListener(
       'pointermove',

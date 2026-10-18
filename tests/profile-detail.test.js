@@ -324,6 +324,65 @@ test('Single Part renders adjacent views with independent display contours and i
     editor.drawingGeometry(editor.config.views[0]).geometry,
     editor.drawingGeometry(editor.config.views[1]).geometry,
   );
+  const cached = sections.cache.get('exact'),
+    snaps = editor.annotationCandidates.exact;
+  let rebuilds = 0;
+  const data = sections.data.bind(sections);
+  sections.data = (...args) => {
+    rebuilds++;
+    return data(...args);
+  };
+  const standard = editor.config.views[0];
+  Object.assign(standard, {
+    position: [10, 20],
+    size: [100, 80],
+    camera: { center: [0, 0] },
+    scale: 20,
+  });
+  for (let i = 0; i < 100; i++) {
+    standard.size[0]++;
+    standard.camera.center[0] += 10;
+    sections.build();
+  }
+  assert.equal(rebuilds, 0, 'paper cropping never projects the geometry or reconstructs snapping');
+  assert.equal(sections.cache.get('exact'), cached);
+  assert.equal(editor.annotationCandidates.exact, snaps);
+  editor.getObjects = () => model;
+  const section = createSectionView(
+    standard,
+    [
+      [0, 0],
+      [100, 0],
+    ],
+    1,
+    [30, 30],
+    editor.config.views,
+  );
+  editor.config.views.push(section);
+  const child = createDetailView(
+    section,
+    [
+      [0, 0],
+      [100, 100],
+    ],
+    [20, 20],
+    editor.config.views,
+  );
+  editor.config.views.push(child);
+  sections.build();
+  const childCache = sections.cache.get(child.id);
+  const cut = sections.cache.get(section.id);
+  rebuilds = 0;
+  section.section.depth += 10;
+  sections.build();
+  assert.notEqual(sections.cache.get(section.id), cut, 'depth change invalidates its projection');
+  assert.notEqual(
+    sections.cache.get(child.id),
+    childCache,
+    'dependent detail also updates after a section change',
+  );
+  assert.equal(sections.cache.get('exact'), cached, 'unrelated projection survives snitt changes');
+  assert.ok(rebuilds > 0);
   editor.disposeProfileVariants();
   editor.geometry.dispose();
   editor.snapGeometry.dispose();

@@ -14,19 +14,6 @@
   background: transparent;
   flex-wrap: nowrap;
 }
-.drawing-document-identity {
-  gap: 14px;
-}
-.drawing-document-header .drawing-document-identity > .drawing-action-menu {
-  margin-left: 0;
-  padding-left: 12px;
-  border-left: 1px solid #ffffff26;
-}
-.drawing-document-identity > span {
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 .drawing-document-header .drawing-document-title {
   font-size: 14px;
   overflow: hidden;
@@ -47,31 +34,10 @@
 .drawing-document-header .drawing-action:hover {
   background: #ffffff14 !important;
 }
-.drawing-editor .drawing-document-header button.drawing-document-save,
-.drawing-editor .drawing-document-header .drawing-save-menu > button.drawing-action {
-  background: #3d7861 !important;
-}
-.drawing-editor .drawing-document-header .drawing-document-save {
-  border-radius: 6px 0 0 6px;
-}
-.drawing-editor .drawing-document-header .drawing-save-menu > button {
-  padding: 7px !important;
-  border-left: 1px solid #ffffff22 !important;
-  border-radius: 0 6px 6px 0;
-}
 .drawing-document-actions > button:last-child {
   margin-left: 12px;
   color: #eff6f4;
   background: transparent;
-}
-.drawing-editor .drawing-document-header .drawing-action-panel .drawing-action {
-  color: #425a64 !important;
-  background: transparent;
-  width: 100%;
-  justify-content: flex-start;
-}
-.drawing-editor .drawing-document-header .drawing-action-panel .drawing-action:hover {
-  background: #edf4f1 !important;
 }
 .drawing-editor > :is(.plan-toolbar, .sheet-toolbar).drawing-commandbar {
   min-height: 44px;
@@ -82,20 +48,6 @@
 .drawing-editor > :is(.plan-toolbar, .sheet-toolbar) > .drawing-action-menu {
   margin-left: 0;
 }
-.drawing-history-controls,
-.drawing-fit-controls {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding-right: 10px;
-  border-right: 1px solid #dce5e7;
-}
-.drawing-editor .drawing-history-controls .drawing-action {
-  padding: 6px 8px;
-}
-.drawing-editor .drawing-fit-controls .drawing-action-menu > button {
-  padding: 6px 4px;
-}
 .drawing-editor > :is(.plan-toolbar, .sheet-toolbar) .drawing-settings-button {
   margin-left: auto;
   font-size: 12px;
@@ -104,9 +56,6 @@
   outline: 2px solid #b3d9c9;
 }
 @media (max-width: 760px) {
-  .drawing-document-identity > span {
-    display: none;
-  }
   .drawing-editor > header.drawing-document-header {
     gap: 8px;
     padding: 0 10px;

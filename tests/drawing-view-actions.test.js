@@ -1,3 +1,4 @@
+import { GAViews } from '../src/ga-views.js';
 import { installDrawingViewDeselection } from '../src/drawing-view-actions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -116,4 +117,43 @@ test('empty paper deselects a view and Escape cancels tools before clearing sele
   selected = true;
   surfaceListeners.pointerdown(event());
   assert.equal(selected, false, 'empty paper clears selection');
+});
+
+test('updating a GA section rebuilds its descendants once and preserves unrelated snapshots', () => {
+  const items = [
+    { id: 'plan', camera: { center: [0, 0] } },
+    { id: 'section', source: { parentViewId: 'plan' }, camera: { center: [2, 3] } },
+    { id: 'detail', source: { parentViewId: 'section' }, camera: { center: [4, 5] } },
+    { id: 'other', camera: { center: [6, 7] } },
+  ];
+  const rebuilt = [],
+    snapshots = [];
+  const controller = Object.assign(Object.create(GAViews.prototype), {
+    active: items[0],
+    e: {
+      record: { sheet: { views: items } },
+      rebuild() {
+        rebuilt.push(controller.active.id);
+      },
+      navigation: { size() {} },
+    },
+    capture() {},
+    snapshot() {
+      snapshots.push(this.active.id);
+    },
+    load(view) {
+      this.active = view;
+    },
+    setSelected() {},
+  });
+  controller.refreshChanged('section');
+  assert.deepEqual(rebuilt, ['detail', 'section']);
+  assert.deepEqual(snapshots, ['plan', 'detail']);
+  assert.deepEqual([...controller.selectedIds], ['section']);
+  assert.deepEqual(items[1].camera.center, [2, 3]);
+  rebuilt.length = 0;
+  snapshots.length = 0;
+  controller.refreshChanged('section');
+  assert.deepEqual(rebuilt, ['detail', 'section']);
+  assert.deepEqual(snapshots, ['detail']);
 });

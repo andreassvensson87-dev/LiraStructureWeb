@@ -59,22 +59,36 @@ export function createDrawingToolbox(root, toolbar) {
   const notes = commands('notes');
   const views = commands('views');
   const dialog = root.closest('dialog');
-  const toolbarNodes = [];
+  const toolbarGroups = { document: [], display: [], views: [], library: [], history: [] };
   const collect = (node) => {
-    if (node.classList.contains('drawing-action-menu')) {
-      for (const child of node.querySelector('.drawing-action-panel').children) collect(child);
-    } else if (node.matches('.drawing-history-controls,.drawing-fit-controls')) {
-      for (const child of node.children) collect(child);
-    } else toolbarNodes.push({ node });
+    const group = node.dataset.drawingHistory ? 'history' : node.dataset.drawingCommandGroup;
+    if (group && toolbarGroups[group]) {
+      const command = node.classList.contains('drawing-action-menu')
+        ? {
+            label: node.querySelector('button').textContent.trim(),
+            icon: 'plus',
+            menu: [...node.querySelector('.drawing-action-panel').children].map((node) => ({
+              node,
+            })),
+          }
+        : { node };
+      toolbarGroups[group].push(command);
+    } else if (node.classList.contains('drawing-action-menu')) {
+      [...node.querySelector('.drawing-action-panel').children].forEach(collect);
+    } else if (node.classList.contains('drawing-history-controls')) {
+      [...node.children].forEach(collect);
+    }
   };
   [...toolbar.children].forEach(collect);
-  const history = toolbarNodes.filter(({ node }) => node.dataset.drawingHistory);
-  const fit = toolbarNodes.find(({ node }) => node.textContent.trim() === 'Visa blad');
-  const more = toolbarNodes.filter((item) => !history.includes(item) && item !== fit);
+  const viewCommands = [...toolbarGroups.views, ...views];
+  const libraries = [...commands('other'), ...toolbarGroups.library];
   const definitions = [
     {
       label: 'Ritning',
-      items: [{ node: dialog.querySelector('.drawing-document-save'), size: 'large' }],
+      items: [
+        { node: dialog.querySelector('.drawing-document-save'), size: 'large' },
+        ...(toolbarGroups.document.length ? [{ stack: toolbarGroups.document }] : []),
+      ],
     },
     {
       label: 'Ändra',
@@ -84,6 +98,7 @@ export function createDrawingToolbox(root, toolbar) {
           : { ...select, size: 'large' },
         ...(modify.length ? [{ ...modify[0], size: 'large' }] : []),
         ...(modify.length > 1 ? [{ stack: modify.slice(1) }] : []),
+        { stack: toolbarGroups.history },
       ],
     },
     ...(draw.length
@@ -110,30 +125,26 @@ export function createDrawingToolbox(root, toolbar) {
           },
         ]
       : []),
-    ...(views.length
+    ...(viewCommands.length
       ? [
           {
             label: 'Vyer',
             items: [
-              { ...views[0], size: 'large' },
-              ...(views.length > 1 ? [{ stack: views.slice(1) }] : []),
+              { ...viewCommands[0], size: 'large' },
+              ...(viewCommands.length > 1 ? [{ stack: viewCommands.slice(1) }] : []),
             ],
           },
         ]
       : []),
     {
-      label: 'Blad och vy',
-      items: [
-        { stack: history },
-        ...(fit ? [{ ...fit, size: 'large' }] : []),
-        { label: 'Fler', menu: more },
-      ],
+      label: 'Visa',
+      items: toolbarGroups.display.map((command) => ({ ...command, size: 'large' })),
     },
-    ...(commands('other').length
+    ...(libraries.length
       ? [
           {
             label: 'Bibliotek',
-            items: [{ label: 'Bibliotek', menu: commands('other'), icon: 'library' }],
+            items: [{ label: 'Bibliotek', menu: libraries, icon: 'library' }],
           },
         ]
       : []),

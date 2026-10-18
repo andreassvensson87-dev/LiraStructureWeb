@@ -1,3 +1,4 @@
+import { createViewCropPreview } from './drawing-view-crop-preview.js';
 import { bindInspectorField, setInspectorFieldState } from './inspector/field-state.js';
 import { buildPlanObjects, buildSectionObjects } from './plan-view-geometry.js';
 import { paintPlanView, paintSectionGrid, paintSectionLevels } from './plan-view-renderer.js';
@@ -53,6 +54,7 @@ export class PlanView {
   constructor({
     getState,
     getSnapSettings = () => ({ polar: 45 }),
+    openDrawingList = () => {},
     getReferenceModels = () => [],
   }) {
     this.getSnapSettings = getSnapSettings;
@@ -190,6 +192,9 @@ export class PlanView {
     const fitPaper = actionButton(document.createElement('button'), 'fit', 'Visa blad');
     fitPaper.onclick = () => this.navigation.fit();
     toolbar.prepend(fitPaper);
+    fitPaper.dataset.drawingCommandGroup = 'display';
+    this.$('fit').dataset.drawingCommandGroup = 'display';
+    this.reviewButton.dataset.drawingCommandGroup = 'document';
     const existingTools = new Set(toolbar.children);
     this.annotations = new DrawingAnnotations({
       dialog: this.dialog,
@@ -198,8 +203,15 @@ export class PlanView {
       adapter: {
         paper: this.page,
         paperSize: () => [this.frameLayout.width, this.frameLayout.height],
-        beginViewGrip: (event, node) =>
-          beginDrawingViewGrip({
+        beginViewGrip: (event, node) => {
+          const preview = createViewCropPreview({
+            host: this.annotations.overlayHost,
+            paper: this.annotations.adapter.paper,
+            paperSize: this.annotations.adapter.paperSize,
+          });
+          const session = beginDrawingViewGrip({
+            preview: (view) => preview.paint(view),
+            clearPreview: () => preview.remove(),
             event,
             node,
             paper: this.page,
@@ -211,11 +223,15 @@ export class PlanView {
               this.record.sheet.viewPosition = [...this.views.active.position];
               if (node.dataset.cropCorner) {
                 this.views.load(this.views.active);
-                this.rebuild();
+                this.positionView();
+                this.draw();
               } else this.views.position();
               this.navigation.size();
             },
-          }),
+          });
+          if (!session) preview.remove();
+          return session;
+        },
         cancelTools: () => this.cancelInteraction(),
         manualLeaders: true,
         visible: (item) => !this.views?.active || item.view === this.views.active.id,
@@ -323,6 +339,7 @@ export class PlanView {
       toolbar,
       tools: [...toolbar.children].filter((child) => !existingTools.has(child)),
       cancel: () => this.cancelInteraction(),
+      openList: openDrawingList,
       save: () => {
         this.captureSettings();
         this.saveRecord?.(this.record);
@@ -374,7 +391,7 @@ export class PlanView {
         },
         redraw: () => this.draw(),
         commit: (view) => this.commitSection(view),
-        update: (view) => this.updateSection(view),
+        update: (view, options) => this.updateSection(view, options),
       },
     });
     this.detailTool = new DrawingDetailTool({
@@ -406,11 +423,7 @@ export class PlanView {
           this.views.activate(view.id);
           this.views.refresh();
         },
-        update: (view) => {
-          this.views.activate(view.id);
-          this.views.load(view);
-          this.views.refresh();
-        },
+        update: (view) => this.views.refreshChanged(view.id),
       },
     });
   }
@@ -858,19 +871,13 @@ export class PlanView {
     this.sectionTool.sync();
     this.views.refresh();
   }
-  updateSection(view) {
-    const bounds = this.sectionBounds(view);
-    view.camera.center = bounds.getCenter(new THREE.Vector2()).toArray();
-    if (this.views.active.id === view.id) {
-      this.views.load(view);
-      this.rebuild();
-    } else {
-      this.draw();
-      this.views.activate(view.id);
+  updateSection(view, { recenter = true } = {}) {
+    if (recenter) {
+      const bounds = this.sectionBounds(view);
+      view.camera.center = bounds.getCenter(new THREE.Vector2()).toArray();
     }
-    this.views.list();
-    this.navigation.size();
-    this.views.refresh();
+    this.views.refreshChanged(view.id);
+    this.sectionTool.sync();
   }
   rebuildSection() {
     const view = this.views.active,

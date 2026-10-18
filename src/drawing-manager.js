@@ -322,10 +322,7 @@ export class DrawingManager {
       this.selection = new Set(next.slice(records.length).map((r) => r.id));
       this.render();
     };
-    button.onclick = () => {
-      this.render();
-      this.dialog.showModal();
-    };
+    button.onclick = () => this.show();
     this.dialog.querySelector('header button').onclick = () => this.dialog.close();
     this.dialog.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -390,6 +387,11 @@ export class DrawingManager {
     this.change([...state.drawings, record]);
     this.render();
     this.$('message').textContent = 'Ritning skapad.';
+  }
+
+  show() {
+    this.render();
+    if (!this.dialog.open) this.dialog.showModal();
   }
 
   openDrawing(record) {

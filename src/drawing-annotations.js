@@ -1,3 +1,4 @@
+import { beginDrawingMarkerGrip } from './drawing-marker-grip-editor.js';
 import { pickShapePoint, completeShape, shapeLengthPoint } from './drawing-shape-creation.js';
 import {
   pickDimensionPoint,
@@ -215,6 +216,10 @@ export class DrawingAnnotations {
     this.ui();
   }
   beginGrip(event, node) {
+    for (const tool of this.markerTools || []) {
+      const session = beginDrawingMarkerGrip(tool, event, node);
+      if (session) return session;
+    }
     if (node.closest('[data-rich-text]')) return this.richText?.beginGrip(event, node);
     return beginDrawingObjectGrip(this, event, node) || this.adapter.beginViewGrip?.(event, node);
   }

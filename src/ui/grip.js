@@ -10,7 +10,7 @@ export function createSvgGrip({ point: [x, y], role = 'point', zoom = 1, key, la
   group.setAttribute('role', 'img');
   for (const [name, value] of Object.entries(attrs)) group.setAttribute(name, value);
   const title = document.createElementNS(NS, 'title');
-  title.textContent = `${label} · dra eller klicka och placera · Esc avbryter`;
+  title.textContent = `${label} · dra och släpp · Esc avbryter`;
   group.append(title);
   const hit = document.createElementNS(NS, 'rect');
   hit.classList.add('cad-grip-hit');
@@ -56,13 +56,15 @@ export function createHtmlGrip({ role = 'point', key, label }) {
   node.dataset.gripRole = role;
   node.dataset.gripKey = key;
   node.setAttribute('aria-label', label);
-  node.title = `${label} · dra eller klicka och placera · Esc avbryter`;
+  node.title = `${label} · dra och släpp · Esc avbryter`;
   return node;
 }
 
+export function screenGripScale(node) {
+  const matrix = node.getScreenCTM?.();
+  return matrix ? Math.max(1e-9, Math.hypot(matrix.a, matrix.b)) : 1;
+}
 export function updateScreenGrips(root) {
-  for (const node of root.querySelectorAll('g.cad-grip')) {
-    const matrix = node.getScreenCTM();
-    if (matrix) updateSvgGrip(node, Math.max(1e-9, Math.hypot(matrix.a, matrix.b)));
-  }
+  for (const node of root.querySelectorAll('g.cad-grip'))
+    updateSvgGrip(node, screenGripScale(node));
 }

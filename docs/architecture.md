@@ -442,3 +442,25 @@ Origo-, X- och Y-grepp går genom gemensam greppmarkering, Move, linjär Move oc
 `object-mesh.js` markerar verklig skruvhårdvara med renderingsflaggan `opaqueHardware`, oberoende av scenens transparensläge. Den befintliga transparensuppdateringen behåller opacitet 1 och djupskrivning för skaft, muttrar, brickor och deras konturer. `display-detail.js` för vidare samma flagga till översiktsrepresentationen; `instance-batches.js` använder den för både kroppar och linjer och hoppar över transparenssortering för hårdvaran. Scenläget behålls separat för befintlig meshåteranvändning.
 
 `selection-hit.js` använder homogena ytträffar för hårdvaran och behåller den gemensamma kanttoleransen för små skruvar. Ägare med enbart hål och tom fysisk geometri behåller sitt tidigare urvalsbeteende; hålmarkörer följer delarnas visningsläge. Tillfällig ghost-preview behåller befintlig återkoppling. Renderingsflaggan sparas inte i modellen och påverkar inte borrning, tillverkningsgeometri, ritningar eller export.
+
+### Ritningsgrepp och beskärningspreview
+
+`drawing-grip-interaction.js` äger klick–dra–släpp för ritningsgrepp, med pointer capture, återställning vid Esc/avbrott och ett avslut per dragning. Klick utan drag lämnar inget placeringsläge. Snitt- och detaljmarkörer använder `ui/grip.js` med skärmkonstanta träffytor; `drawing-marker-grip-editor.js` översätter greppet till ett lokalt utkast, använder befintlig ritningssnap och uppdaterar vyn först vid släpp. `drawing-tool-feedback.js` målar enbart markörens preview under dragningen. View-controllererna äger geometriuppdatering och den befintliga annoteringshistoriken äger ångringen.
+
+`drawing-view-grip-editor.js` ändrar ett lokalt vyutkast. `drawing-view-crop-preview.js` visar en pappersanknuten ram via befintlig previewstil; innehåll, projektion och snapindex byggs inte om medan ramen dras. Vid bekräftelse ändras vyn och en historikoperation registreras. `PartSections` återanvänder projektion/snap när källgeometri och geometriskt vykoordinatsystem är oförändrade; pappersposition, beskärning, kameraoffset och skala ingår inte i invalidationsnyckeln. Ändrad snittdefinition eller källgeometri invaliderar berörda vyer inklusive beroende detaljer. `GAViews.refreshChanged` bygger om ändrad vy och dess efterföljare, med den aktiva ändrade vyn sist, utan att räkna om oberoende snapshots. Ren GA-beskärning använder redan upplöst vektorgeometri.
+
+### Startvisning utan ombyggnadsblinkning
+
+`index.html` laddar `ui/startup.css` före kontrollernas HTML. Attributet `data-app-starting` döljer den ofärdiga arbetsytan med bevarade layoutmått; den neutrala startytan använder appens befintliga logotyp och UI-färger. `ui/startup.js` äger visning och felåterkoppling. `app/application-startup.js` laddar återställning och modellapplikation, inväntar uppbyggnad och första renderingsramarna, och lämnar sedan över till arbetsytan. Fel visar Ladda om utan att exponera halvbyggda kontroller. Ingen modellåterställning eller händelsehantering ligger i `main.js`.
+
+Startfilen startar boot-funktionen utan top-level await: Vites uppdelade lazy-moduler kan importera entry-filens preloadhjälpare och får inte blockeras av att entry-filen samtidigt väntar på dem. Boot-funktionen äger själv completion och felhantering. Lint begränsar startfilen till stilar och denna startmodul.
+
+### Stomlinjebubblor vid arbetsområdets gräns
+
+`GridLines.updateLabels` får samma arbetsområdesbox som modellens övriga visning. Den befintliga `clipSegmentToBox` klipper stomlinjens ändpunktspar före projektion och bubbelplacering. Bubblorna följer den synliga linjens ändar utan att flytta modellobjektens ändpunkter eller grepp. Helt bortklippta linjer och tangentkontakt i en enda punkt får inga bubblor. Modellens frameloop behåller objektens synlighetsfilter men gör ingen extra bortfiltrering baserad på de ursprungliga ändpunkterna.
+
+### Ritningsmenyer och ritningslista
+
+Ritningseditorns översta rad ägs av `drawing-editor-header.js` och innehåller ritningslistan, dokumentnamnet och återgång till modellen. `drawing-toolbox.js` beskriver placeringen med det gemensamma ribbon-byggblocket. Befintliga kommandon anger sin grupp via `data-drawing-command-group`; kommandonas noder, handlers och disabled-status behålls. Ingen generell Fler-meny samlar oklassificerade kontroller.
+
+`drawing-workspace.js` stänger editorn genom dess vanliga livscykel innan listans callback körs. Därmed sparas ritningen med befintlig save-transaktion. `app/drawing-controller.js` kopplar båda editorerna till `DrawingManager.show()`, som också används för att öppna listan från modellen. Editorn äger ingen separat ritningslista eller projektmutation.

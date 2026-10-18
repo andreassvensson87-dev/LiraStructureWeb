@@ -10,6 +10,7 @@ import {
 import { actionButton } from './drawing-toolbar.js';
 import {
   DrawingViewActions,
+  dependentViewIds,
   installDrawingViewDeselection,
   installDrawingViewMarquee,
 } from './drawing-view-actions.js';
@@ -62,6 +63,7 @@ export class GAViews {
       ['Duplicera vy', true],
     ]) {
       const b = actionButton(document.createElement('button'), copy ? 'layout' : 'plus', label);
+      b.dataset.drawingCommandGroup = 'views';
       b.onclick = () => this.add(copy);
       toolbar.insertBefore(b, editor.actionsMenu);
     }
@@ -95,17 +97,16 @@ export class GAViews {
         editor.navigation.size();
       },
     });
-    for (const corner of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'move']) {
+    for (const corner of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
       const grip = createHtmlGrip({
-        role: corner === 'move' ? 'move' : 'point',
+        role: 'point',
         key: `ga-view:${corner}`,
-        label: corner === 'move' ? 'Flytta vyn' : 'Beskär vyn · skalan behålls',
+        label: 'Beskär vyn · skalan behålls',
       });
       grip.classList.add('ga-view-grip', 'ga-view-grip-' + corner);
-      if (corner === 'move') grip.dataset.viewportGrip = 'true';
-      else grip.dataset.cropCorner = corner;
+      grip.dataset.cropCorner = corner;
       grip.style.cursor = viewGripCursor(corner);
-      grip.title = corner === 'move' ? 'Flytta vyn' : 'Beskär vyn · skalan behålls';
+      grip.title = 'Beskär vyn · skalan behålls';
       editor.host.append(grip);
     }
     this.marquee = installDrawingViewMarquee({
@@ -341,6 +342,26 @@ export class GAViews {
     this.load(this.items.find((v) => v.id === id));
     this.e.rebuild();
     this.setSelected(!!this.selectedIds.size);
+    this.e.navigation.size();
+  }
+  refreshChanged(id) {
+    const target = this.items.find((view) => view.id === id);
+    if (!target) return;
+    if (this.active?.id !== id) {
+      this.capture();
+      this.snapshot();
+    }
+    const affected = dependentViewIds(this.items, id);
+    for (const view of this.items) {
+      if (!affected.has(view.id) || view.id === id) continue;
+      this.load(view);
+      this.e.rebuild();
+      this.snapshot();
+    }
+    this.load(target);
+    this.e.rebuild();
+    this.selectedIds = new Set([id]);
+    this.setSelected(true);
     this.e.navigation.size();
   }
   activate(id, additive = false, preserve = false) {

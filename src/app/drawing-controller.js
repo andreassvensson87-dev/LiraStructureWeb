@@ -31,6 +31,7 @@ export function createDrawingController({
       references: project.references,
     }),
     getSnapSettings,
+    openDrawingList: () => manager.show(),
     getReferenceModels,
   });
   const singleSheet = new SinglePartSheet({
@@ -38,6 +39,7 @@ export function createDrawingController({
     getObjects: () => project.objects,
     getProject: () => project.info,
     getSnapSettings,
+    openDrawingList: () => manager.show(),
   });
   const manager = new DrawingManager({
     getState: () => ({ ...project, selected: getSelection() }),

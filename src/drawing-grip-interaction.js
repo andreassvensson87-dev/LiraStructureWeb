@@ -17,15 +17,6 @@ export class DrawingGripInteraction {
   }
   down(event) {
     if (event.button !== 0) return;
-    if (this.session?.placing) {
-      if (!(this.editor.adapter.paper || this.editor.surface).contains(event.target)) {
-        if (!this.editor.dynamicInput.contains(event.target)) this.cancel();
-        return;
-      }
-      this.stop(event);
-      if (this.update(event)) this.finish();
-      return;
-    }
     if (this.session || this.editor.mode) return;
     let grip = event.target.closest('.cad-grip');
     if (grip) {
@@ -94,9 +85,9 @@ export class DrawingGripInteraction {
   }
   move(event) {
     const s = this.session;
-    if (!s || (!s.placing && event.pointerId !== s.id)) return;
+    if (!s || event.pointerId !== s.id) return;
     this.stop(event);
-    if (!s.placing && !s.moved && Math.hypot(event.clientX - s.x, event.clientY - s.y) < 3) return;
+    if (!s.moved && Math.hypot(event.clientX - s.x, event.clientY - s.y) < 3) return;
     s.moved = true;
     this.update(event);
   }
@@ -107,23 +98,19 @@ export class DrawingGripInteraction {
   }
   up(event) {
     const s = this.session;
-    if (!s || s.placing || event.pointerId !== s.id) return;
+    if (!s || event.pointerId !== s.id) return;
     this.stop(event);
     this.release();
-    if (s.moved) {
-      if (s.valid) this.finish();
-      else this.cancel();
-    } else {
-      s.placing = true;
-      this.feedback();
-    }
+    if (s.moved && this.update(event)) this.finish();
+    else this.cancel();
   }
+
   feedback() {
     const s = this.session;
     if (!s) return;
     for (const node of this.editor.dialog.querySelectorAll('.cad-grip'))
       node.classList.toggle('is-active', node.dataset.gripKey === s.key);
-    this.editor.hint.textContent = `${s.label} · ${s.placing ? 'välj ny punkt' : 'dra greppet'} · Esc avbryter`;
+    this.editor.hint.textContent = `${s.label} · dra greppet · Esc avbryter`;
     const form = this.editor.dynamicInput;
     if (form) {
       form.hidden = !s.numeric;

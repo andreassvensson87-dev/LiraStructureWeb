@@ -1,0 +1,41 @@
+/* Loaded by index.html, before the legacy control markup can be painted.
+   Keep layout measurable while the workspace adopts the existing controls. */
+html[data-app-starting] {
+  overflow: hidden;
+  background: #edf2f4;
+}
+html[data-app-starting] body > :not(#app-startup):not(noscript),
+html[data-app-starting] body > :not(#app-startup):not(noscript) * {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+#app-startup {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: 24px;
+  background: #edf2f4;
+  color: var(--ui-ink, #253e48);
+  font:
+    14px system-ui,
+    sans-serif;
+  text-align: center;
+}
+#app-startup p {
+  margin: 0;
+}
+#app-startup button {
+  padding: 8px 14px;
+  border: 1px solid var(--ui-border, #d3dcdf);
+  border-radius: 5px;
+  background: white;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

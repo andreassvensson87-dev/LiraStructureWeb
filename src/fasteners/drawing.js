@@ -39,25 +39,3 @@ export function partHoleCandidates(schedule, frame, reflection = null) {
     return [{ point, diameter: h.diameter }];
   });
 }
-/** Read-only machining data accompanies the actual projected hole geometry. */
-export function updatePartHolePanel(root, source, model, localMatrix) {
-  let panel = root.querySelector('[data-part-holes]');
-  if (!panel) {
-    panel = document.createElement('details');
-    panel.dataset.partHoles = '';
-    panel.open = true;
-    root.append(panel);
-  }
-  panel.replaceChildren();
-  const schedule = partHoleSchedule(source, model, localMatrix);
-  panel.hidden = !schedule.length;
-  const summary = document.createElement('summary');
-  summary.textContent = `Hål · ${schedule.length}`;
-  panel.append(summary);
-  for (const h of schedule) {
-    const p = document.createElement('p');
-    p.className = 'inspector-note';
-    p.textContent = `${h.label}. Centrum XYZ: ${h.center.map(fmt).join(' / ')} mm i detaljens koordinater.`;
-    panel.append(p);
-  }
-}

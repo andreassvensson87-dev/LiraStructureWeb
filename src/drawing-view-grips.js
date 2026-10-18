@@ -9,29 +9,26 @@ export function drawingViewGrips(width, height) {
     ['s', width / 2, height],
     ['sw', 0, height],
     ['w', 0, height / 2],
-    ['move', width / 2, height / 2],
   ].map(([kind, x, y]) => ({ kind, x, y }));
 }
 export function viewGripCursor(kind) {
-  return kind === 'move'
-    ? 'move'
-    : kind === 'n' || kind === 's'
-      ? 'ns-resize'
-      : kind === 'e' || kind === 'w'
-        ? 'ew-resize'
-        : kind === 'nw' || kind === 'se'
-          ? 'nwse-resize'
-          : 'nesw-resize';
+  return kind === 'n' || kind === 's'
+    ? 'ns-resize'
+    : kind === 'e' || kind === 'w'
+      ? 'ew-resize'
+      : kind === 'nw' || kind === 'se'
+        ? 'nwse-resize'
+        : 'nesw-resize';
 }
 export function appendDrawingViewGrips(group, width, height, zoom) {
   for (const { kind, x, y } of drawingViewGrips(width, height)) {
     const handle = createSvgGrip({
       point: [x, y],
-      role: kind === 'move' ? 'move' : 'point',
+      role: 'point',
       zoom,
       key: `view:${group.dataset.view}:${kind}`,
-      label: kind === 'move' ? 'Flytta vyn' : 'Beskär vyn · skalan behålls',
-      attrs: { 'data-view-grip': kind, ...(kind === 'move' ? {} : { 'data-section-crop': kind }) },
+      label: 'Beskär vyn · skalan behålls',
+      attrs: { 'data-view-grip': kind, 'data-section-crop': kind },
     });
     handle.classList.add('drawing-view-grip');
     handle.style.cursor = viewGripCursor(kind);

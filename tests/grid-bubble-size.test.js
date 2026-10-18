@@ -102,3 +102,79 @@ test('perspective model bubbles are bounded and long text expands width rather t
     assert.equal(el.hidden, false);
   }
 });
+
+test('work area crops place bubbles on visible line ends without changing original grid points', () => {
+  const editor = Object.create(GridLines.prototype);
+  const camera = new THREE.OrthographicCamera(-1000, 1000, 1000, -1000, 1, 10000);
+  camera.position.z = 5000;
+  camera.updateMatrixWorld();
+  const a = new THREE.Vector3(-900, 0, 0),
+    b = new THREE.Vector3(900, 0, 0);
+  editor.labels = [a, b].map((position, index) => ({
+    position,
+    opposite: [b, a][index],
+    index,
+    el: { textContent: 'A', style: {} },
+  }));
+  const workArea = new THREE.Box3(
+    new THREE.Vector3(-300, -300, -10),
+    new THREE.Vector3(300, 300, 10),
+  );
+  editor.updateLabels(camera, 800, 800, { workArea });
+  const [start, end] = editor.labels.map((s) => s.el);
+  assert.equal(start.hidden, false);
+  assert.equal(end.hidden, false);
+  assert.ok(
+    Math.abs(parseFloat(start.style.left) + parseFloat(start.style.width) / 2 - 280) < 1e-6,
+  );
+  assert.ok(Math.abs(parseFloat(end.style.left) - parseFloat(end.style.width) / 2 - 520) < 1e-6);
+  assert.deepEqual(a.toArray(), [-900, 0, 0]);
+  assert.deepEqual(b.toArray(), [900, 0, 0]);
+  editor.labels.forEach((l) => (l.bubbleEnds = 'start'));
+  editor.updateLabels(camera, 800, 800, { workArea });
+  assert.equal(start.hidden, false);
+  assert.equal(end.hidden, true);
+  editor.labels.forEach((l) => (l.bubbleEnds = 'both'));
+  const above = workArea.clone().translate(new THREE.Vector3(0, 0, 100));
+  editor.updateLabels(camera, 800, 800, { workArea: above });
+  assert.ok(
+    editor.labels.every((l) => l.el.hidden),
+    'line outside height limits has no bubbles',
+  );
+  editor.updateLabels(camera, 800, 800);
+  assert.equal(start.hidden, false);
+  assert.equal(end.hidden, false);
+  assert.ok(Math.abs(parseFloat(start.style.left) + parseFloat(start.style.width) / 2 - 40) < 1e-6);
+});
+
+test('angled and reversed grid lines retain endpoint order at the work area, while tangencies remain hidden', () => {
+  const editor = Object.create(GridLines.prototype);
+  const camera = new THREE.OrthographicCamera(-1000, 1000, 1000, -1000, 1, 10000);
+  camera.position.z = 5000;
+  camera.updateMatrixWorld();
+  const workArea = new THREE.Box3(
+    new THREE.Vector3(-300, -300, -10),
+    new THREE.Vector3(300, 300, 10),
+  );
+  const make = (a, b) =>
+    (editor.labels = [
+      {
+        position: new THREE.Vector3(...a),
+        opposite: new THREE.Vector3(...b),
+        index: 0,
+        el: { textContent: 'B', style: {} },
+      },
+    ]);
+  make([900, 900, 0], [-900, -900, 0]);
+  editor.updateLabels(camera, 800, 800, { workArea });
+  const el = editor.labels[0].el;
+  assert.equal(el.hidden, false);
+  assert.ok(parseFloat(el.style.left) > 520);
+  assert.ok(parseFloat(el.style.top) < 280);
+  make([-900, -300, 0], [300, 900, 0]);
+  editor.updateLabels(camera, 800, 800, { workArea });
+  assert.equal(editor.labels[0].el.hidden, true, 'a single corner contact is not a visible line');
+  make([-900, 700, 0], [900, 700, 0]);
+  editor.updateLabels(camera, 800, 800, { workArea });
+  assert.equal(editor.labels[0].el.hidden, true);
+});

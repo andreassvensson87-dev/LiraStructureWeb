@@ -27,6 +27,7 @@ export function paintDrawingTool(tool, root, parentId, project, unit = 1) {
 export class DrawingToolFeedback {
   constructor(tool, workspace, type) {
     Object.assign(this, { tool, workspace, type });
+    (tool.adapter.feedback.markerTools ||= []).push(tool);
     tool.dialog.addEventListener('close', () => this.graphics?.clear());
     this.ghost = document.createElement('div');
     this.ghost.className = 'drawing-placement-preview';
@@ -140,7 +141,11 @@ export class DrawingToolFeedback {
     }
     this.hit = this.locate(e);
     t.hover = this.hit?.point;
-    const graphics = this.graphics?.get(t.draft.parentId);
+    this.repaint();
+  }
+  repaint() {
+    const t = this.tool;
+    const graphics = this.graphics?.get(t.draft?.parentId);
     if (graphics?.root.isConnected) {
       graphics.root.replaceChildren();
       t.paint(graphics.root, t.draft.parentId, graphics.project, graphics.unit);

@@ -1,3 +1,4 @@
+import { createSvgGrip, screenGripScale } from './ui/grip.js';
 import { DrawingToolFeedback } from './drawing-tool-feedback.js';
 import { createSectionView } from './drawing-sections.js';
 import { extentGeometry, resizeSectionExtent } from './section-extents.js';
@@ -119,26 +120,10 @@ export class DrawingSectionTool {
   down(e) {
     if (e.button !== 0) return;
     if (this.feedback.select(e)) return;
-    const handle = e.target.closest('[data-section-endpoint],[data-section-extent]');
-    if (!this.draft && !handle) return;
+    if (!this.draft) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     this.consumeUp = true;
-    if (handle && !this.draft) {
-      const section = this.adapter.views().find((v) => v.id === handle.dataset.sectionId);
-      if (!section) return;
-      this.adapter.cancel();
-      this.draft = {
-        edit: section.id,
-        index: Number(handle.dataset.sectionEndpoint),
-        parentId: section.source.parentViewId,
-        points: structuredClone(section.section.points),
-        extent: handle.dataset.sectionExtent,
-        section: structuredClone(section.section),
-      };
-      this.hint();
-      return;
-    }
     const d = this.draft;
     if (d.points.length === 2 && d.side && !d.edit) {
       const parent = this.adapter.views().find((v) => v.id === d.parentId),
@@ -155,22 +140,6 @@ export class DrawingSectionTool {
     }
     const hit = this.feedback.locate(e);
     if (!hit) return;
-    if (d.edit) {
-      if (d.extent) {
-        const view = this.adapter.views().find((v) => v.id === d.edit);
-        view.section = resizeSectionExtent(d.section, d.extent, hit.point);
-        this.cancel();
-        this.adapter.update(view);
-        return;
-      }
-      const section = this.adapter.views().find((v) => v.id === d.edit),
-        other = section.section.points[1 - d.index];
-      if (Math.hypot(hit.point[0] - other[0], hit.point[1] - other[1]) < 0.01) return;
-      section.section.points[d.index] = hit.point;
-      this.cancel();
-      this.adapter.update(section);
-      return;
-    }
     if (!d.points.length) {
       d.parentId = hit.view;
       d.points.push(hit.point);
@@ -268,24 +237,21 @@ export class DrawingSectionTool {
     );
     for (const [i, p] of handles.map(project).entries())
       group.append(
-        svg('rect', {
-          'data-section-id': id,
-          'data-section-extent': ['start', 'end', 'depth', 'move'][i],
-          x: p[0] - 2 * u,
-          y: p[1] - 2 * u,
-          width: 4 * u,
-          height: 4 * u,
-          fill: i === 3 ? '#d7eee4' : 'white',
-          stroke: '#32937d',
-          'stroke-width': 1,
-          'vector-effect': 'non-scaling-stroke',
-          cursor: 'move',
-          'aria-label': [
+        createSvgGrip({
+          point: p,
+          role: i === 2 ? 'parameter' : i === 3 ? 'move' : 'point',
+          zoom: screenGripScale(root),
+          key: `section:${id}:extent:${i}`,
+          label: [
             'Ändra snittets början',
             'Ändra snittets slut',
             'Ändra snittdjup',
             'Flytta hela snittet i pilarnas riktning',
           ][i],
+          attrs: {
+            'data-section-id': id,
+            'data-section-extent': ['start', 'end', 'depth', 'move'][i],
+          },
         }),
       );
     root.append(group);
@@ -341,18 +307,12 @@ export class DrawingSectionTool {
         );
       if (id && this.selectedMarker === id)
         group.append(
-          svg('rect', {
-            'data-section-id': id,
-            'data-section-endpoint': index,
-            x: p[0] - 1.5 * u,
-            y: p[1] - 1.5 * u,
-            width: 3 * u,
-            height: 3 * u,
-            fill: 'white',
-            stroke: '#466b83',
-            'stroke-width': 0.3 * u,
-            'pointer-events': 'all',
-            cursor: 'move',
+          createSvgGrip({
+            point: p,
+            zoom: screenGripScale(root),
+            key: `section:${id}:endpoint:${index}`,
+            label: 'Flytta snittlinjens ändpunkt',
+            attrs: { 'data-section-id': id, 'data-section-endpoint': index },
           }),
         );
     }

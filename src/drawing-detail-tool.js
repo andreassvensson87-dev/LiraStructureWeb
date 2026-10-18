@@ -1,5 +1,6 @@
+import { createSvgGrip, screenGripScale } from './ui/grip.js';
 import { DrawingToolFeedback } from './drawing-tool-feedback.js';
-import { createDetailView, updateDetailArea } from './drawing-details.js';
+import { createDetailView } from './drawing-details.js';
 import { actionButton } from './drawing-toolbar.js';
 const ns = 'http://www.w3.org/2000/svg';
 function node(tag, attrs, text) {
@@ -66,24 +67,11 @@ export class DrawingDetailTool {
   down(e) {
     if (e.button !== 0) return;
     if (this.feedback.select(e)) return;
-    const handle = e.target.closest('[data-detail-corner]');
-    if (!this.draft && !handle) return;
+    if (!this.draft) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     this.consumeUp = true;
     try {
-      if (handle) {
-        const view = this.adapter.views().find((v) => v.id === handle.dataset.detailId);
-        this.adapter.cancel();
-        this.draft = {
-          edit: view.id,
-          index: Number(handle.dataset.detailCorner),
-          parentId: view.source.parentViewId,
-          points: structuredClone(view.detail.points),
-        };
-        this.hint();
-        return;
-      }
       const d = this.draft;
       if (!d.edit && d.points.length === 2) {
         const parent = this.adapter.views().find((v) => v.id === d.parentId),
@@ -99,15 +87,6 @@ export class DrawingDetailTool {
       }
       const hit = this.feedback.locate(e);
       if (!hit) return;
-      if (d.edit) {
-        const view = this.adapter.views().find((v) => v.id === d.edit),
-          points = structuredClone(view.detail.points);
-        points[d.index] = hit.point;
-        updateDetailArea(view, points);
-        this.cancel();
-        this.adapter.update(view);
-        return;
-      }
       if (!d.points.length) {
         d.parentId = hit.view;
         d.points.push(hit.point);
@@ -184,18 +163,12 @@ export class DrawingDetailTool {
     if (id && this.selectedMarker === id)
       for (const [index, p] of [a, b].entries())
         g.append(
-          node('rect', {
-            'data-detail-id': id,
-            'data-detail-corner': index,
-            x: p[0] - 1.5 * u,
-            y: p[1] - 1.5 * u,
-            width: 3 * u,
-            height: 3 * u,
-            fill: 'white',
-            stroke: '#466b83',
-            'stroke-width': 0.3 * u,
-            'pointer-events': 'all',
-            cursor: 'move',
+          createSvgGrip({
+            point: p,
+            zoom: screenGripScale(root),
+            key: `detail:${id}:${index}`,
+            label: 'Ändra detaljgräns',
+            attrs: { 'data-detail-id': id, 'data-detail-corner': index },
           }),
         );
     root.append(g);
