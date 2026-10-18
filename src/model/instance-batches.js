@@ -114,9 +114,9 @@ export class InstanceBatches {
           clipping: true,
           vertexShader: lineVertex,
           fragmentShader: lineFragment,
-          uniforms: { opacity: { value: first.object.material.transparent ? 0.35 : 1 } },
-          transparent: true,
-          depthWrite: !first.object.material.transparent,
+          uniforms: { opacity: { value: first.object.children[0].material.opacity } },
+          transparent: first.object.children[0].material.transparent,
+          depthWrite: first.object.children[0].material.depthWrite,
         }),
       );
       // Bounds of the small template cannot bound all the transformed copies.
@@ -230,13 +230,15 @@ export class InstanceBatches {
   setTransparentView(transparentView) {
     this.holes.setTransparentView(transparentView);
     for (const batch of this.batches) {
-      batch.mesh.material.transparent = transparentView;
-      batch.mesh.material.opacity = transparentView ? 0.3 : 1;
-      batch.mesh.material.depthWrite = !transparentView;
+      const hardware = batch.entries[0].object.userData.opaqueHardware;
+      const transparent = transparentView && !hardware;
+      batch.mesh.material.transparent = transparent;
+      batch.mesh.material.opacity = transparent ? 0.3 : 1;
+      batch.mesh.material.depthWrite = !transparent;
       batch.mesh.material.needsUpdate = true;
-      batch.lines.material.transparent = true;
-      batch.lines.material.depthWrite = !transparentView;
-      batch.lines.material.uniforms.opacity.value = transparentView ? 0.35 : 1;
+      batch.lines.material.transparent = !hardware;
+      batch.lines.material.depthWrite = !transparent;
+      batch.lines.material.uniforms.opacity.value = transparent ? 0.35 : 1;
       batch.lines.material.needsUpdate = true;
       batch.cameraSignature = '';
     }

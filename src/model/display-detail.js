@@ -20,6 +20,7 @@ export function addDisplayProxy(object, descriptor) {
   mesh.userData = {
     id: object.userData.id,
     overviewProxy: true,
+    opaqueHardware: object.userData.opaqueHardware,
     lodOwner: object,
     detailVisible: false,
     instanceDescriptor: descriptor,

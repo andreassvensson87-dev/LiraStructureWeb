@@ -209,3 +209,86 @@ test('preview and edit share reach, retain bore identity, refit on edits and rou
   assert.equal(result.layerCount, 2);
   assert.equal(result.spec.length, input.spec.length);
 });
+
+test('free group datums reorient an HEA flange group onto its web without changing bore identities', async () => {
+  const close = (a, b) =>
+    (a.toArray?.() || a).forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-6));
+  const { selectionGrips } = await import('../src/model/grips.js');
+  const { groupPoint } = await import('../src/fasteners/group-data.js');
+  const f = fixture('HEA 200', 60);
+  const batch = preparePickedFasteners(
+    {
+      ...f.draft,
+      spec: withFastenerLength(spec, 40),
+      group: {
+        id: 'free-plane',
+        shape: 'array',
+        rows: 2,
+        columns: 2,
+        distancesX: [30],
+        distancesY: [50],
+        rotation: 0,
+      },
+    },
+    {
+      start: [500, 60, 95],
+      xPoint: [500, 160, 95],
+      yPoint: [400, 60, 95],
+      frame: null,
+      model: [f.beam],
+    },
+  );
+  batch.forEach((s, i) =>
+    Object.assign(s, { prefix: 'SK', number: i + 1, name: `Skruv ${i + 1}` }),
+  );
+  const probe = { ...f.draft, start: [500, -400, 0], end: [500, -399, 0] };
+  const web = partAxisIntervals(probe, f.beam, [f.beam]);
+  assert.equal(web.length, 1);
+  const webEntry = -400 + web[0].offset;
+  const { moveGripPoints, gripWorkPlane } = await import('../src/model/grips.js');
+  const project = createProject({
+    grid: { x: [], y: [] },
+    levels: { active: 'l', items: [{ id: 'l', name: 'Plan', elevation: 0 }] },
+  });
+  project.objects = [f.beam, ...batch];
+  const history = new ProjectHistory();
+  const editor = createModelEditor({ project, checkpoint: () => history.checkpoint(project) });
+  const ids = new Set(batch.map((s) => s.id));
+  const original = structuredClone(project.objects);
+  // Translate the origin to the web, then turn X out of the horizontal plane.
+  let grips = selectionGrips(project.objects, ids);
+  const origin = [500, webEntry, 0];
+  editor.update(moveGripPoints(batch, grips[0].refs, origin, grips[0].point, project.objects));
+  const beforeTurn = structuredClone(project.objects);
+  const sources = project.objects.slice(1);
+  grips = selectionGrips(project.objects, ids);
+  assert.equal(gripWorkPlane(sources, grips[1].refs, grips[1].point), null);
+  editor.update(
+    moveGripPoints(sources, grips[1].refs, [500, webEntry, 100], grips[1].point, project.objects),
+  );
+  for (const [i, s] of project.objects.slice(1).entries()) {
+    close(fastenerFrame(s).z, [0, 1, 0]);
+    close(s.layout.frame.u, [0, 0, 1]);
+    close(s.layout.frame.v, [-1, 0, 0]);
+    assert.equal(s.holes[0].active, true);
+    assert.equal(s.holes[0].layers.length, 1);
+    assert.ok(Math.abs(s.holes[0].layers[0].depth - web[0].depth) < 1e-5);
+    assert.equal(s.spec.length, 40);
+    assert.equal(s.id, batch[i].id);
+    assert.equal(s.holes[0].id, batch[i].holes[0].id);
+    assert.ok(Math.abs(groupPoint(s.group, s.group.row, s.group.column)[1] - webEntry) < 1e-6);
+  }
+  assert.deepEqual(
+    parseProjectFile(serializeProject(project)).objects,
+    JSON.parse(JSON.stringify(project.objects)),
+  );
+  const last = structuredClone(project.objects);
+  const previous = history.undo(project);
+  assert.deepEqual(structuredClone(previous.objects), beforeTurn);
+  assert.deepEqual(structuredClone(history.redo(previous).objects), last);
+  assert.deepEqual(
+    original,
+    structuredClone([f.beam, ...batch]),
+    'drafts never modify the original objects',
+  );
+});

@@ -119,7 +119,7 @@ test('one and many screws expose three shared pattern grips and retain identity 
   }
 });
 
-test('X grips follow inclined pattern planes; invalid directions cannot enter a transaction', () => {
+test('X grips turn an inclined frame freely; invalid directions cannot enter a transaction', () => {
   const f = fixture();
   const axis = new THREE.Vector3(0, 1, 0),
     turn = (s) => rotateObject(s, [0, 0, 0], axis.toArray(), 35);
@@ -128,7 +128,7 @@ test('X grips follow inclined pattern planes; invalid directions cannot enter a 
     source = batch[0];
   const grips = selectionGrips(f.project.objects, new Set(batch.map((s) => s.id)));
   const plane = gripWorkPlane(batch, grips[1].refs, grips[1].point);
-  close(plane.u, source.layout.frame.u);
+  assert.equal(plane, null, 'X grip cannot retain a plane constraint');
   const origin = source.layout.frame.origin;
   const target = origin.map((v, i) => v + source.layout.frame.v[i] * 150);
   const edited = moveGripPoints(batch, grips[1].refs, target, grips[1].point, f.project.objects);

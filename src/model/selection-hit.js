@@ -45,7 +45,7 @@ function geometryEdges(geometry) {
 export function isTransparentMesh(mesh) {
   return (
     mesh.isMesh &&
-    (mesh.userData.transparentView === true ||
+    ((mesh.userData.transparentView === true && !mesh.userData.opaqueHardware) ||
       (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).some(
         (material) => material?.visible !== false && material?.transparent && material.opacity < 1,
       ))
@@ -218,7 +218,7 @@ export function modelSelectionEntry(mesh, camera) {
   return {
     mesh,
     transparent: isTransparentMesh(mesh),
-    edgeSelection: mesh.userData.edgeSelection,
+    edgeSelection: mesh.userData.edgeSelection || mesh.userData.opaqueHardware,
     aperture: mesh.userData.edgeSelection ? holeApertureMesh(mesh) : null,
     edges,
   };

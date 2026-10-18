@@ -7,7 +7,7 @@ import { selectedBlock } from '../blocks/placement.js';
 import { blockGripValues } from '../blocks/grip.js';
 import { updateModelBlock } from '../blocks/model-adapter.js';
 import { cloneTransformSource } from './tools/transform-tool.js';
-import { moveFastenerGroupGrips, fastenerGripPlane } from '../fasteners/group-grips.js';
+import { moveFastenerGroupGrips } from '../fasteners/group-grips.js';
 
 export const retainsSelectionGrips = (operation) =>
   !!operation &&
@@ -141,8 +141,6 @@ export function moveGripPoints(sources, refs, target, base, model = sources) {
 
 /** Parallel plate grips constrain the displacement in their shared plane directions. */
 export function gripWorkPlane(sources, refs, base) {
-  const fastenerPlane = fastenerGripPlane(sources, refs, base);
-  if (fastenerPlane) return fastenerPlane;
   const whole = wholeGripObjects(sources, refs);
   const plates = sources.filter(
     (source) =>

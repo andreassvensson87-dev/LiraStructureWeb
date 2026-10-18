@@ -16,6 +16,7 @@ import { ObjectFeedback } from '../src/model/object-feedback.js';
 import { updateFastenerDetail } from '../src/model/fastener-detail.js';
 import { updateDisplayDetail } from '../src/model/display-detail.js';
 import { InstanceBatches } from '../src/model/instance-batches.js';
+import { isTransparentMesh } from '../src/model/selection-hit.js';
 import { exportGeometry } from '../src/ifc/geometry.js';
 import { createModelPicking } from '../src/model/ui/model-picking.js';
 import { fastenerPerformanceModel } from '../scripts/fastener-performance.js';
@@ -176,7 +177,7 @@ test('an unbatched screw remains selectable through its visible coarse proxy', (
   assert.equal(
     picking.selectionHit(),
     source.id,
-    'transparent coarse rims use the normal edge-hit path',
+    'opaque hardware remains pickable in the transparent model view',
   );
   dispose(object);
 });
@@ -229,7 +230,32 @@ test('detail switching submits one representation per screw, restores selected s
   updateObjectMeshSelection(objects[0], a, new Set(['a']));
   updateObjectMeshTransparency(objects[0], true);
   assert.ok(objects[0].userData.overviewMesh.material.color.equals(objects[0].material.color));
-  assert.equal(objects[0].userData.overviewMesh.material.opacity, 0.3);
+  assert.equal(objects[0].userData.overviewMesh.material.opacity, 1);
+  for (const transparent of [true, false, true]) {
+    objects.forEach((object) => updateObjectMeshTransparency(object, transparent));
+    batches.setTransparentView(transparent);
+    for (const pixels of [15, 4]) {
+      frame(pixels);
+      for (const batch of [near, coarse]) {
+        assert.equal(batch.mesh.material.transparent, false);
+        assert.equal(batch.mesh.material.opacity, 1);
+        assert.equal(batch.mesh.material.depthWrite, true);
+        assert.equal(batch.lines.material.transparent, false);
+        assert.equal(batch.lines.material.uniforms.opacity.value, 1);
+        assert.equal(batch.lines.material.depthWrite, true);
+        assert.equal(
+          batch.cameraSignature,
+          '',
+          'opaque hardware skips transparent instance sorting',
+        );
+      }
+      for (const object of objects) {
+        assert.equal(isTransparentMesh(object), false, 'solid picking follows visible hardware');
+        assert.equal(object.children[0].material.opacity, 1);
+        assert.equal(object.userData.overviewMesh.material.transparent, false);
+      }
+    }
+  }
   assert.deepEqual(snap.objectCorners(a), before);
   batches.clear();
   assert.equal(
@@ -435,4 +461,49 @@ test('holes without hardware keep owner picking, hover and selected contours wit
   solid.dispose();
   feedback.dispose();
   meshes.forEach(dispose);
+});
+
+test('bolts, rods and accessories start opaque in transparent scenes while temporary preview keeps its feedback', () => {
+  const source = screw();
+  const rod = defaultFasteners().find((s) => s.kind === 'rod' && s.diameter === 12);
+  const variants = [
+    source,
+    { ...source, assembly: { bolt: false, nearWasher: true, farWasher: true, nut: true } },
+    { ...source, spec: { ...rod, length: 80, thread: { ...rod.thread, length: 80 } } },
+  ];
+  for (const s of variants) {
+    const before = structuredClone(s);
+    const mesh = createObjectMesh(s, { model: [s], selectedIds: new Set(), transparentView: true });
+    const geometry = mesh.geometry;
+    for (const transparent of [true, false, true]) {
+      updateObjectMeshTransparency(mesh, transparent);
+      assert.equal(
+        mesh.userData.transparentView,
+        transparent,
+        'the renderer retains the scene mode for mesh reuse',
+      );
+      assert.equal(mesh.material.transparent, false);
+      assert.equal(mesh.material.opacity, 1);
+      assert.equal(mesh.material.depthWrite, true);
+      assert.equal(mesh.children[0].material.opacity, 1);
+      assert.equal(mesh.children[0].material.transparent, false);
+      if (mesh.userData.overviewMesh) {
+        assert.equal(mesh.userData.overviewMesh.material.transparent, false);
+        assert.equal(mesh.userData.overviewMesh.material.opacity, 1);
+      }
+      assert.equal(mesh.geometry, geometry);
+      assert.equal(isTransparentMesh(mesh), false);
+    }
+    const preview = createObjectMesh(s, {
+      model: [s],
+      selectedIds: new Set(),
+      transparentView: true,
+      ghost: true,
+    });
+    assert.equal(preview.material.transparent, true);
+    assert.ok(preview.material.opacity < 1, 'temporary preview keeps its existing feedback');
+    assert.deepEqual(s, before);
+    dispose(preview);
+    dispose(mesh);
+  }
 });

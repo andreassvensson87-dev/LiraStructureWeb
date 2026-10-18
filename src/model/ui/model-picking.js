@@ -140,7 +140,7 @@ export function createModelPicking({
     ray(e);
     const placingFastener = tools.operation?.mode === 'fastenerCreate';
     const editingFastenerPlane =
-      tools.operation?.gripRefs?.some((ref) => ref.kind === 'y') &&
+      tools.operation?.gripRefs?.some((ref) => ['end', 'y'].includes(ref.kind)) &&
       tools.operation.sources?.every((source) => source.type === 'fastener');
     let fastenerSurface = null;
     if (placingFastener || editingFastenerPlane) {

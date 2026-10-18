@@ -527,3 +527,28 @@ Slutlig isolerad `npm run check` passerade efter Y-greppets rättning: formateri
 ### Rättad förväntan för instansrenderade konturer — 2026-10-18
 
 Det återstående felet i `instance-batches.test.js` var en inaktuell förväntan på materialets blandningsflagga. Konturer använder blandning i båda visningslägena; testet verifierar nu effektiv opacitet 1 respektive 0,35, korrekt djupskrivning och överensstämmelse med vanliga objekt genom upprepade lägesbyten. Befintliga kontroller av orbitordning, markering, dolda objekt och återanvänd geometri behålls. Inga renderingsändringar behövdes. Full `npm run check` i den delade arbetskopian passerade: formatering, lint, samtliga regressionstester och produktionsbygge. Logg: `/tmp/lira-render-test-final-check.log`.
+
+### Fri vridning av skruvgruppens plan — 2026-10-18
+
+Den kvarvarande X-låsningen togs bort från både geometri och grepparbetsplan. Befintliga grepp-/pickingtester skyddar fria X-träffar på stående materialytor och bibehållen ogiltighetsvalidering. `fastener-reach.test.js` flyttar en grupp från HEA 200:s fläns till livet och vrider X från horisontellt till vertikalt. Verkliga materialintervall verifierar fyra aktiva hål genom livets 6,5 mm med bibehållna skruv-/hål-ID:n, 30/50-delningar, manuella längder, projektfil och ångra/gör om.
+
+Browserprov på separat localhost-origin: markera gruppens X-grepp, Flytta linjärt med dY = −100 och dZ = 100, bekräfta och spara projektfilen. Gruppens axlar blev u=(0,0,1), v=(−1,0,0) och skruvaxel=(0,1,0). Samtliga fyra M8 × 40 hade ett aktivt lager på 6,5 mm i HEA-livet. Transparent närbild och Ångra/Gör om kontrollerades. Inga browserfel rapporterades.
+
+Slutlig `npm run check` passerade i arbetskopian: formatering, lint, full regression och produktionsbygge. Logg: `/tmp/lira-free-group-final-check.log`. Ingen publicering ingick.
+
+### Homogen skruvhårdvara och 10 000 skruvar — 2026-10-18
+
+`fastener-display.test.js` skyddar homogen hårdvara vid direkt skapande i transparent vy och vid upprepade lägesbyten: skruv, gängstång samt muttrar/brickor utan skaft. Befintliga detalj-/översiktsprov kontrollerar även instansmaterial, oförändrade geometrier, bibehållen markering och att hårdvaran inte transparenssorteras. Opaka ytträffar och den gemensamma kanttoleransen provas på liten översiktsskruv. Hål utan hårdvara och ghost-preview behåller sina tidigare visningsregler. Full `npm run check` passerade, inklusive befintliga borr-, räckvidds- och IFC-tester. Logg: `/tmp/lira-opaque-fasteners-check.log`.
+
+Återanvändbart WebGL-prov: `scripts/benchmark-render.html?fasteners=10000`, samt `&zoom=8` för närbild. Samma modell med 10 000 M12-skruvar, två brickor och en mutter per skruv, 200 plåtar och 20 000 aktiva hål före/efter. Chromium 155 på denna Mac, 1200 × 800 pixlar, pixelkvot 1, 10 uppvärmningsbilder och 120 mätbilder per visningsläge med kamerarörelse. Mätningen omfattar verklig mesh-, detalj- och instansrendering men inte appöverlägg, snap, musinmatning eller total importtid. CPU-inlämning är inte GPU-tid; skärmens uppdateringsfrekvens påverkar bildintervallet. En körning per fall visar inte statistiskt säkerställda generella vinster.
+
+| Vy | Scenläge | Median CPU före → efter | p95 CPU före → efter | Median bildintervall före → efter |
+| --- | --- | --- | --- | --- |
+| Översikt | Homogen | 9,1 → 9,2 ms | 10,0 → 10,0 ms | 16,7 → 16,7 ms |
+| Översikt | Transparent | 9,8 → 9,6 ms | 11,0 → 10,4 ms | 16,7 → 16,7 ms |
+| Närbild | Homogen | 7,7 → 8,3 ms | 9,2 → 9,3 ms | 16,7 → 16,7 ms |
+| Närbild | Transparent | 9,8 → 7,2 ms | 14,9 → 13,1 ms | 16,7 → 16,7 ms |
+
+Transparent översikts p95 bildintervall 17,3 → 17,6 ms och närbild 17,3 → 16,8 ms. Antal inskickade trianglar, linjer och renderingsanrop behölls: översikt cirka 2,04 miljoner trianglar/762 400 linjesegment/6 anrop; transparent närbild cirka 9,08 miljoner/1,56 miljoner/8 anrop. Delade geometribuffertar cirka 133,7 MiB i båda versionerna; detta är inte total process- eller GPU-minnesanvändning. Benchmarkens nya materialräkning bekräftade 10 000 opaka hårdvaruinstanser och noll transparenta i transparent scen. Rådata ligger i `/Users/andreassvensson/.codex/visualizations/opaque-fasteners/` (`before-overview.json`, `after-overview.json`, `before-close.json`, `after-close.json` och `after-overview-verified.json`).
+
+Browserprov i separat localhost-projekt: sex skruvar genom två transparenta plåtar med homogena skaft, muttrar och brickor; markering direkt på skruvhuvudets yta öppnade hela gruppen. Ändring av längd 80 → 90, Tillämpa och växling homogen/transparent behöll sex skruvar och aktiva hål i båda lagren. Inga browserfel rapporterades. Ingen publicering ingick.

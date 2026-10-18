@@ -1,9 +1,8 @@
-import * as THREE from 'three';
 import { transformSpan } from './holes.js';
 import { fastenerGroupBatch } from './groups.js';
 import {
   applyFastenerLayout,
-  fastenerLayoutFromPoints,
+  fastenerLayoutWithXPoint,
   fastenerLayoutFromThreePoints,
   fastenerLayoutAnchors,
   layoutForFastener,
@@ -46,7 +45,7 @@ export function moveFastenerGroupGrips(sources, refs, target, base, model) {
           : anchors[1];
       const picked = yGrip
         ? fastenerLayoutFromThreePoints(layout.frame.origin, xPoint, destination)
-        : fastenerLayoutFromPoints(layout.frame.origin, destination, layout.frame);
+        : fastenerLayoutWithXPoint(layout, destination);
       const draft = applyFastenerLayout({
         ...source,
         layout: {
@@ -60,24 +59,4 @@ export function moveFastenerGroupGrips(sources, refs, target, base, model) {
     }
   }
   return updates;
-}
-
-/** An X grip stays in the saved pattern plane, including inclined work planes. */
-export function fastenerGripPlane(sources, refs, base) {
-  if (!refs.length || refs.some((r) => r.kind !== 'end')) return null;
-  const byId = new Map(sources.map((s) => [s.id, s]));
-  const chosen = refs.map((r) => byId.get(r.id));
-  if (chosen.some((s) => !s?.group)) return null;
-  const frame = layoutForFastener(chosen[0]).frame;
-  const normal = new THREE.Vector3(...frame.u).cross(new THREE.Vector3(...frame.v));
-  if (
-    chosen.some((s) => {
-      const f = layoutForFastener(s).frame;
-      return (
-        Math.abs(normal.dot(new THREE.Vector3(...f.u).cross(new THREE.Vector3(...f.v)))) < 1 - 1e-8
-      );
-    })
-  )
-    return null;
-  return { ...structuredClone(frame), origin: [...base] };
 }

@@ -28,16 +28,17 @@ import { itemDisplayTemplate } from '../items/geometry.js';
 export function updateObjectMeshTransparency(object, transparentView) {
   if (object.userData.helper || object.userData.cut || object.userData.ghost) return;
   object.userData.transparentView = transparentView;
+  const transparent = transparentView && !object.userData.opaqueHardware;
   const material = object.material;
-  material.transparent = transparentView;
-  material.opacity = transparentView ? 0.3 : 1;
-  material.depthWrite = !transparentView;
+  material.transparent = transparent;
+  material.opacity = transparent ? 0.3 : 1;
+  material.depthWrite = !transparent;
   material.needsUpdate = true;
   const outline = object.children[0]?.material;
   if (outline) {
-    outline.transparent = true;
-    outline.opacity = transparentView ? 0.35 : 1;
-    outline.depthWrite = !transparentView;
+    outline.transparent = !object.userData.opaqueHardware;
+    outline.opacity = transparent ? 0.35 : 1;
+    outline.depthWrite = !transparent;
     outline.needsUpdate = true;
   }
   const proxy = object.userData.overviewMesh;
@@ -172,6 +173,7 @@ export function createObjectMesh(
   m.userData.geometryIdentity =
     geometryContext?.identity?.(s) || cachedDisplayGeometryIdentity(s, profileDetail);
   m.userData.exactProfile = profileDetail === 'exact' && hasExactProfile(s);
+  m.userData.opaqueHardware = !ghost && isFastener(s) && geometry.attributes.position.count > 0;
   m.userData.transparentView = transparentView;
   m.userData.id = s.id;
   m.userData.ghost = ghost;

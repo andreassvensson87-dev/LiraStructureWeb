@@ -94,7 +94,16 @@
           triangles.push(renderer.info.render.triangles);
           lines.push(renderer.info.render.lines);
         }
+        const hardware = example.batches.batches.filter(
+          (batch) => batch.mesh.visible && batch.entries[0].object.userData.opaqueHardware,
+        );
         return {
+          opaqueHardwareInstances: hardware
+            .filter((batch) => !batch.mesh.material.transparent)
+            .reduce((sum, batch) => sum + batch.mesh.count, 0),
+          transparentHardwareInstances: hardware
+            .filter((batch) => batch.mesh.material.transparent)
+            .reduce((sum, batch) => sum + batch.mesh.count, 0),
           transparent,
           frameIntervalMs: summarize(intervals),
           submissionCpuMs: summarize(cpu),

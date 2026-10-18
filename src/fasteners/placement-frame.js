@@ -99,6 +99,17 @@ export function fastenerLayoutFromThreePoints(origin, xPoint, yPoint) {
   validateFastenerLayout(layout);
   return layout;
 }
+/** Turn the complete frame with X instead of projecting the picked direction into its old plane. */
+export function fastenerLayoutWithXPoint(layout, xPoint) {
+  const { origin, u, v } = layout.frame;
+  if (!point(xPoint)) throw new Error('Välj en giltig X-riktning.');
+  const x = new THREE.Vector3(...xPoint).sub(new THREE.Vector3(...origin));
+  if (x.length() < 0.001) throw new Error('Välj X-riktning minst 0,001 mm från origo.');
+  const turn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(...u), x.normalize());
+  const y = new THREE.Vector3(...v).applyQuaternion(turn);
+  const yPoint = new THREE.Vector3(...origin).addScaledVector(y, layout.yLength || 100).toArray();
+  return fastenerLayoutFromThreePoints(origin, xPoint, yPoint);
+}
 /** Adapt existing axis-based generated/manual fasteners to the same inspector fields. */
 export function layoutForFastener(source) {
   if (source.layout) return structuredClone(source.layout);
