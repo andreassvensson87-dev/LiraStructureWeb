@@ -20,7 +20,7 @@ import { plateVertices } from '../plate.js';
 import { sharedGeometryView } from '../fasteners/geometry.js';
 import { isFastener } from '../fasteners/object-type.js';
 import { holesForPart } from '../fasteners/relations.js';
-import { holeDisplayMesh } from '../fasteners/display.js';
+import { holeDisplayMesh, fastenerDisplayEdges } from '../fasteners/display.js';
 import { hasExactProfile } from '../profile-detail.js';
 import { itemDisplayTemplate } from '../items/geometry.js';
 
@@ -78,6 +78,10 @@ export function updateObjectMeshSelection(object, s, selectedIds) {
   outline.material.color.set(
     cut ? (selected ? 0xe87924 : 0xb77a48) : selected ? 0x145d4d : 0x3e5663,
   );
+  if (object.userData.edgeSelection) {
+    outline.material.depthTest = !selected;
+    outline.renderOrder = selected ? 26 : 0;
+  }
   if (cut) outline.material.opacity = selected ? 1 : 0.8;
   const proxy = object.userData.overviewMesh;
   if (proxy) {
@@ -172,18 +176,23 @@ export function createObjectMesh(
   m.userData.id = s.id;
   m.userData.ghost = ghost;
   m.userData.selected = selectedIds.has(s.id);
+  let outlines = template
+    ? sharedGeometryView(template.edges)
+    : geometryContext
+      ? geometryContext.edges(s, isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1)
+      : edgesForModel(
+          s,
+          model,
+          isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1,
+          true,
+          profileDetail,
+        );
+  const holeSelection = isFastener(s) && s.assembly?.bolt === false;
+  if (holeSelection)
+    outlines = fastenerDisplayEdges(s, model, outlines, template?.matrix, geometryContext);
+  m.userData.edgeSelection = holeSelection;
   const lines = new THREE.LineSegments(
-    template
-      ? sharedGeometryView(template.edges)
-      : geometryContext
-        ? geometryContext.edges(s, isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1)
-        : edgesForModel(
-            s,
-            model,
-            isFastener(s) ? 10 : !cut && roundProfile(s) ? 5 : 1,
-            true,
-            profileDetail,
-          ),
+    outlines,
     new THREE.LineBasicMaterial({
       color: cut
         ? selectedIds.has(s.id)
@@ -194,20 +203,20 @@ export function createObjectMesh(
           : selectedIds.has(s.id)
             ? 0x145d4d
             : 0x3e5663,
-      depthTest: !cut,
+      depthTest: !cut && !(holeSelection && selectedIds.has(s.id)),
       transparent: ghost || cut,
       opacity: cut ? (selectedIds.has(s.id) ? 1 : 0.8) : ghost ? 0.5 : 0.55,
     }),
   );
-  lines.renderOrder = cut ? 20 : 0;
+  lines.renderOrder = cut ? 20 : holeSelection && selectedIds.has(s.id) ? 26 : 0;
   m.userData.cut = cut;
-  if (!ghost && !cut)
+  if (!ghost && !cut && !holeSelection)
     m.userData.instanceDescriptor =
       template ||
       geometryContext?.instanceDescriptor?.(s) ||
       objectInstanceDescriptor(s, true, profileDetail);
   m.add(lines);
-  if (!ghost && isFastener(s) && template) addFastenerOverviewMesh(m, s);
+  if (!ghost && isFastener(s) && template && !holeSelection) addFastenerOverviewMesh(m, s);
   const holes = cut || isFastener(s) ? [] : geometryContext?.holes(s) || holesForPart(s, model);
   m.userData.holes = holes;
   const holeMesh = holeDisplayMesh(s, model, holes, transparentView, ghost, geometryContext);

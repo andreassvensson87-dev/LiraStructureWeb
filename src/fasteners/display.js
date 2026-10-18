@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { partAxisIntervals } from './placement.js';
+import { holesForFastener } from './relations.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const segments = 24;
 
 /** Small closed bore volumes follow the material layers without boolean subtraction. */
-export function simplifiedHoleGeometry(part, model, holes, geometryContext = null) {
+export function simplifiedHoleGeometry(part, model, holes, geometryContext = null, rims = null) {
   const points = [];
   const triangle = (a, b, c) => points.push(...a.toArray(), ...b.toArray(), ...c.toArray());
   for (const hole of holes) {
@@ -59,6 +61,9 @@ export function simplifiedHoleGeometry(part, model, holes, geometryContext = nul
           const correction = Math.abs(slope) > 1e-6 ? -normal.dot(radial) / slope : 0;
           return center.clone().add(radial).addScaledVector(axis, correction);
         });
+        if (rims)
+          for (let i = 0; i < segments; i++)
+            rims.push(...ring[i].toArray(), ...ring[(i + 1) % segments].toArray());
         return { center, ring };
       });
       for (let j = 0; j < rings.length - 1; j++)
@@ -80,6 +85,28 @@ export function simplifiedHoleGeometry(part, model, holes, geometryContext = nul
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+/** Hole rims remain owned by the group when its bolt is disabled. Exact solids stay untouched. */
+export function fastenerDisplayEdges(source, model, edges, matrix, geometryContext = null) {
+  if (source.assembly?.bolt !== false) return edges;
+  const rims = [];
+  for (const hole of holesForFastener(source)) {
+    const part = model.find((s) => s.id === hole.targetId);
+    if (!part) continue;
+    const geometry = simplifiedHoleGeometry(part, model, [hole], geometryContext, rims);
+    geometry.dispose();
+  }
+  if (!rims.length) return edges;
+  const holes = new THREE.BufferGeometry().setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(rims, 3),
+  );
+  if (matrix) holes.applyMatrix4(matrix.clone().invert());
+  const combined = mergeGeometries([edges, holes]);
+  edges.dispose();
+  holes.dispose();
+  return combined;
 }
 
 export function holeDisplayMesh(

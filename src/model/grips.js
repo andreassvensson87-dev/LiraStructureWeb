@@ -8,6 +8,22 @@ import { blockGripValues } from '../blocks/grip.js';
 import { updateModelBlock } from '../blocks/model-adapter.js';
 import { cloneTransformSource } from './tools/transform-tool.js';
 import { moveFastenerGroupGrips, fastenerGripPlane } from '../fasteners/group-grips.js';
+
+export const retainsSelectionGrips = (operation) =>
+  !!operation &&
+  !operation.referenceId &&
+  (['move', 'copy'].includes(operation.mode) || !!operation.gripRefs);
+
+/** Selected insertion datums can lie outside the physical object's snap bounds. */
+export function transformGripSnapPoints(objects, selectedIds, operation) {
+  if (!retainsSelectionGrips(operation)) return [];
+  return selectionGrips(objects, selectedIds).map((grip) => ({
+    coords: grip.point,
+    symbol: 'square',
+    label: 'Insättningspunkt',
+    featureId: `grip:${grip.refs.map((r) => `${r.id}:${r.kind}`).join('|')}`,
+  }));
+}
 /** Group only selected, coincident world points; never merge by screen position. */
 export function selectionGrips(objects, selectedIds, drawing = false) {
   if (drawing || !selectedIds.size) return [];

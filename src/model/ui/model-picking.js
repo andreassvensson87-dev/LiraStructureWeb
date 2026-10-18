@@ -13,6 +13,7 @@ import { resolveSnap } from '../../snap.js';
 import { canSelectModelObject } from '../selection-mode.js';
 import { drawingWorkPlane } from '../../work-plane.js';
 import { fastenerPlaneFromSurface } from '../../fasteners/placement-frame.js';
+import { transformGripSnapPoints } from '../grips.js';
 
 // Converts viewport input into model hits and points using the shared snap engine.
 export function createModelPicking({
@@ -184,16 +185,25 @@ export function createModelPicking({
       sweeps: snapObjects,
       grid: { ...project.grid, z: levelElevation(project.levels) },
       referencePoints: nextPointReferenceCandidates(
-        getReferences()?.candidates({
-          ray: raycaster.ray,
-          start: tools.first,
-          perpendicular: snap.perpendicular,
-          nearest: snap.nearest !== false,
-          camera,
-          pointer: [e.clientX - r.left, e.clientY - r.top],
-          width: r.width,
-          height: r.height,
-        }) || [],
+        [
+          ...(getReferences()?.candidates({
+            ray: raycaster.ray,
+            start: tools.first,
+            perpendicular: snap.perpendicular,
+            nearest: snap.nearest !== false,
+            camera,
+            pointer: [e.clientX - r.left, e.clientY - r.top],
+            width: r.width,
+            height: r.height,
+          }) || []),
+          ...(snap.endpoints
+            ? transformGripSnapPoints(
+                project.objects.filter((s) => ui.selectedIds.has(s.id) && isVisible(s.id)),
+                ui.selectedIds,
+                tools.operation,
+              )
+            : []),
+        ],
         tools.nextPointSnap,
       ),
       endpoints: snap.endpoints,

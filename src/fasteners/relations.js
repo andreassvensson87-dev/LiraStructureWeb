@@ -27,6 +27,7 @@ function derivedHoles(s) {
   }
   return holes;
 }
+export const holesForFastener = (source) => derivedHoles(source);
 export function holesForPart(part, model) {
   return model
     .filter(isFastener)

@@ -4,6 +4,7 @@ import { updateDisplayDetail } from '../display-detail.js';
 import { platePoint } from '../../plate.js';
 import { createModelMeasurementOverlay } from './measurement-overlay.js';
 import { updateCameraDepth } from '../camera-depth.js';
+import { retainsSelectionGrips } from '../grips.js';
 
 export function installModelFrameLoop({
   actions,
@@ -128,7 +129,7 @@ export function installModelFrameLoop({
             ? tools.operation.points
             : [],
       controllers.pointUI?.selected() || [],
-      !!tools.operation?.gripRefs,
+      retainsSelectionGrips(tools.operation),
     );
     updateSnapOverlay();
     controllers.workPlaneGuide.update(camera, host.clientWidth, host.clientHeight);

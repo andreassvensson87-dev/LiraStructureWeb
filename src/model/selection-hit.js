@@ -118,15 +118,14 @@ export function featureEdgeHit(mesh, resource, raycaster, context) {
 /** Native objects and references share edge tolerance, depth ordering and face pass-through. */
 export function displayedSelectionHit(entries, raycaster, context) {
   const opaque = entries.filter((entry) => !entry.transparent);
+  const opaqueMeshes = opaque.map((entry) => entry.mesh);
+  let edgeRaycaster;
   const surface = raycaster
-    .intersectObjects(
-      opaque.map((entry) => entry.mesh),
-      false,
-    )
+    .intersectObjects(opaqueMeshes, false)
     .find((hit) => !context?.workArea || withinWorkArea(context.workArea, hit.point.toArray()));
   let best = null;
   for (const entry of entries) {
-    if (!entry.transparent) continue;
+    if (!entry.transparent && !entry.edgeSelection) continue;
     const resources = entry.edges || [];
     for (const edge of resources) {
       const hit = featureEdgeHit(
@@ -135,7 +134,25 @@ export function displayedSelectionHit(entries, raycaster, context) {
         raycaster,
         context,
       );
-      if (!hit || (surface && surface.distance < hit.distance - 1e-5)) continue;
+      if (!hit) continue;
+      if (surface && surface.distance < hit.distance - 1e-5) {
+        // A tolerated edge lies beside the pointer ray. On an inclined face,
+        // comparing their depths falsely treats the face's own rim as hidden.
+        edgeRaycaster ??= new THREE.Raycaster();
+        edgeRaycaster.layers.mask = raycaster.layers.mask;
+        edgeRaycaster.near = raycaster.near;
+        edgeRaycaster.far = raycaster.far;
+        const projected = hit.point.clone().project(context.camera);
+        edgeRaycaster.setFromCamera(new THREE.Vector2(projected.x, projected.y), context.camera);
+        const edgeDepth = hit.point
+          .clone()
+          .sub(edgeRaycaster.ray.origin)
+          .dot(edgeRaycaster.ray.direction);
+        const blocker = edgeRaycaster
+          .intersectObjects(opaqueMeshes, false)
+          .find((h) => !context.workArea || withinWorkArea(context.workArea, h.point.toArray()));
+        if (blocker && blocker.distance < edgeDepth - 1e-5) continue;
+      }
       hit.object = entry.mesh;
       if (
         !best ||
@@ -167,5 +184,10 @@ export function modelSelectionEntry(mesh, camera) {
     for (const child of mesh.children) {
       if (!child.userData.overviewProxy) visit(child);
     }
-  return { mesh, transparent: isTransparentMesh(mesh), edges };
+  return {
+    mesh,
+    transparent: isTransparentMesh(mesh),
+    edgeSelection: mesh.userData.edgeSelection,
+    edges,
+  };
 }

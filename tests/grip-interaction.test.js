@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGripInteraction } from '../src/model/ui/grip-interaction-controller.js';
-function fixture(t) {
+function fixture(t, canStart = () => true) {
   const events = () => ({
     handlers: new Map(),
     addEventListener(type, fn) {
@@ -29,7 +29,7 @@ function fixture(t) {
   const controller = createGripInteraction({
     host,
     getGrip: (target) => target?.grip,
-    canStart: () => true,
+    canStart,
     select: (grip) => log.push(['select', grip]),
     beginBox: () => log.push(['box']),
     begin: (grip) => {
@@ -82,6 +82,23 @@ test('grip click selects, drag previews and releases exactly one commit, fast re
     f.log.map((x) => x[0]),
     ['begin', 'preview', 'commit'],
   );
+});
+test('an active transform leaves pointer gestures to the command without grip capture or editing', (t) => {
+  const f = fixture(t, () => false);
+  const event = () =>
+    f.e(10, 10, {
+      preventDefault() {
+        assert.fail('the grip consumed command input');
+      },
+      stopImmediatePropagation() {
+        assert.fail('the grip intercepted command input');
+      },
+    });
+  f.host.handlers.get('pointerdown')(event());
+  f.root.handlers.get('pointermove')(f.e(70));
+  f.root.handlers.get('pointerup')(f.e(70));
+  assert.deepEqual(f.log, []);
+  assert.equal(f.controls.enabled, true);
 });
 test('Alt starts the shared rectangle; Escape, capture loss, blur and outside release cancel without commit', (t) => {
   const f = fixture(t);

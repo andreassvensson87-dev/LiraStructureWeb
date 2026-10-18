@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { preparePickedFasteners } from '../src/fasteners/placement-draft.js';
+import { defaultHoleForSpec } from '../src/fasteners/library.js';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { defaultFasteners } from '../src/fasteners/default-catalog.js';
@@ -252,4 +254,137 @@ test('the 10000-screw fixture retains 20000 active linked bores and independent 
       s.holes.every((h) => h.active && h.layers.length === 1 && ids.has(h.targetId)),
     ),
   );
+});
+
+test('holes without hardware keep owner picking, hover and selected contours without creating export solids', () => {
+  const part = {
+    id: 'part',
+    type: 'plate',
+    frame: { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0] },
+    polygon: [
+      [0, 0],
+      [400, 0],
+      [400, 400],
+      [0, 400],
+    ],
+    thickness: 20,
+    side: 'positive',
+  };
+  const batch = preparePickedFasteners(
+    {
+      type: 'fastener',
+      spec,
+      placementMode: 'range',
+      lengthMode: 'manual',
+      assembly: {
+        bolt: false,
+        nearWasher: false,
+        farWasher: false,
+        nearNut: false,
+        nut: false,
+        extraNut: false,
+      },
+      holes: [{ ...defaultHoleForSpec(spec, part.id), id: 'bore' }],
+      anchorId: part.id,
+      group: {
+        id: 'group',
+        shape: 'array',
+        rows: 2,
+        columns: 2,
+        distancesX: [60],
+        distancesY: [60],
+        rotation: 0,
+      },
+    },
+    { start: [100, 200, 20], xPoint: [200, 200, 20], frame: part.frame, model: [part] },
+  );
+  const model = [part, ...batch],
+    before = structuredClone(model);
+  const root = new THREE.Group();
+  const meshes = model.map((s) => createObjectMesh(s, { model, selectedIds: new Set() }));
+  root.add(...meshes);
+  root.updateMatrixWorld(true);
+  const camera = new THREE.OrthographicCamera(-150, 150, 150, -150, 0.1, 3000);
+  camera.position.set(100, 200, 1000);
+  camera.lookAt(100, 200, 0);
+  camera.updateMatrixWorld();
+  const picking = createModelPicking({
+    project: { objects: model },
+    ui: {},
+    tools: {},
+    camera,
+    objects: root,
+    host: {
+      clientWidth: 600,
+      clientHeight: 600,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 600, height: 600 }),
+    },
+    getRenderedById: () => new Map(model.map((s) => [s.id, { source: s }])),
+    getReferences: () => null,
+  });
+  for (const transparent of [false, true]) {
+    for (const mesh of meshes) updateObjectMeshTransparency(mesh, transparent);
+    picking.ray({ clientX: 313, clientY: 300 });
+    assert.equal(
+      picking.selectionHit(),
+      batch[0].id,
+      'the visible bore rim selects its group owner',
+    );
+  }
+  camera.position.set(600, -500, 800);
+  camera.lookAt(100, 200, 20);
+  camera.updateMatrixWorld();
+  const rim = new THREE.Vector3(106.5, 200, 20).project(camera);
+  for (const transparent of [false, true]) {
+    for (const mesh of meshes) updateObjectMeshTransparency(mesh, transparent);
+    for (const [dx, dy] of [
+      [2, 0],
+      [-2, 0],
+      [0, 2],
+      [0, -2],
+    ]) {
+      picking.ray({ clientX: (rim.x + 1) * 300 + dx, clientY: (1 - rim.y) * 300 + dy });
+      assert.equal(
+        picking.selectionHit(),
+        batch[0].id,
+        'an oblique face does not occlude its own rim',
+      );
+    }
+  }
+  const outline = meshes[1].children[0];
+  assert.ok(outline.geometry.attributes.position.count > 0);
+  updateObjectMeshSelection(meshes[1], batch[0], new Set(batch.map((s) => s.id)));
+  assert.equal(outline.material.color.getHex(), 0x145d4d);
+  assert.equal(
+    outline.material.depthTest,
+    false,
+    'selected rims remain visible above bore markers',
+  );
+  const feedback = new ObjectFeedback(new THREE.Scene());
+  feedback.setModel(model);
+  feedback.setHover([batch[0].id]);
+  feedback.refresh();
+  assert.deepEqual(
+    feedback.entries.get(batch[0].id).edges.geometry.attributes.position.array,
+    outline.geometry.attributes.position.array,
+  );
+  const solid = fastenerGeometry(batch[0]);
+  assert.equal(
+    solid.attributes.position.count,
+    0,
+    'holes-only never creates an IFC/manufacturing screw solid',
+  );
+  assert.deepEqual(model, before);
+  assert.ok(batch.every((s) => s.holes.every((h) => h.active)));
+  const cover = createObjectMesh(
+    { ...part, id: 'cover', frame: { ...part.frame, origin: [0, 0, 100] } },
+    { model: [], selectedIds: new Set() },
+  );
+  cover.updateMatrixWorld(true);
+  picking.ray({ clientX: 313, clientY: 300 });
+  assert.equal(picking.selectionHit([cover]), 'cover', 'opaque material still occludes bore rims');
+  dispose(cover);
+  solid.dispose();
+  feedback.dispose();
+  meshes.forEach(dispose);
 });

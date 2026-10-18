@@ -59,7 +59,7 @@ export class InsertionPoints {
     end,
     placed = [],
     selectedPoints = [],
-    movingPoints = false,
+    retainSelectionGrips = false,
   ) {
     if (drawing || this.selection !== selected) this.menu.hidden = true;
     this.selection = selected;
@@ -143,7 +143,7 @@ export class InsertionPoints {
       if (grip && interactive && !marker.hidden)
         this.screenGrips.push({ grip, x: ((p.x + 1) * width) / 2, y: ((1 - p.y) * height) / 2 });
     };
-    const grips = selectionGrips(sweeps, selectedIds, drawing && !movingPoints);
+    const grips = selectionGrips(sweeps, selectedIds, drawing && !retainSelectionGrips);
     const screenGrips = grips.map(({ point }) => {
       const p = new THREE.Vector3(...point).project(camera);
       return [((p.x + 1) * width) / 2, ((1 - p.y) * height) / 2];
@@ -171,7 +171,7 @@ export class InsertionPoints {
         });
       }
     }
-    if (drawing && !movingPoints) {
+    if (drawing && !retainSelectionGrips) {
       placed.forEach((p, i) => show(`draft:${i}`, p, 'start', true));
       show('preview:start', start, 'start', true);
       if (start) show('preview:end', end, 'end', true);

@@ -495,3 +495,15 @@ Browserkontroll i separat produktionspreview: sex skruvar genom två plåtar med
 `fastener-placement-frame.test.js` provar riktig modellpicking mot en stående vald plåt med horisontellt arbetsplan, gruppens axlar, sex skruvar med aktiva hål, oförändrat arbetsplan, uteblivet övertagande från icke vald del samt giltiga orienteringsaxlar på ändyta och sned yta. Befintliga placerings-, grupp- och räckviddstester samt centrala modellflöden passerade.
 
 Browserprov i separat produktionspreview: två stående plåtar valdes, Rutnät 60 × 60 sattes och fyra skruvar skapades genom två klick direkt på plåtytan utan byte av arbetsplan. Sparad projektfil verifierades: layoutens u = X och v = Z, skruvaxlar i Y och åtta aktiva hål. Vändning genom inspektorn och Tillämpa behöll gruppen och båda förbandsdelarnas hål. Transparent visning visade de genomgående skruvarna; inga konsolfel rapporterades.
+
+### Markering av enbart hål — 2026-10-17
+
+`fastener-display.test.js` skyddar en grupp utan skruv, muttrar eller brickor: verklig modellpicking på hålkanter i homogen/transparent visning, lodrät och sned kamera med pixeltolerans, gruppägarens ID, markerade konturer och hover, oförändrade aktiva hål, tom exakt skruvsolid samt fortsatt skymning bakom en täckande plåt. Gemensamma markeringstester skyddar IFC, referenslägen, arbetsområde och instansägare.
+
+Browserprov i separat produktionspreview: sex skruvar genom två plåtar, alla hårdvaruval avstängda i inspektorn och Tillämpa. Efter Esc valdes gruppen direkt genom en hålkant i sned homogen vy; delning X ändrades från 60 60 till 80 80 och tillämpades med sex hålpositioner kvar. Samma kantval öppnade gruppens inspektor i transparent visning. Inga konsolfel rapporterades.
+
+### Synliga och snappbara insättningspunkter under transform — 2026-10-17
+
+`transform-grips.test.js` provar Sweep, Item, hjälplinje, stomlinje, Polysweep, Plate och skruvgrupp genom de befintliga greppdefinitionerna. Move/Copy och linjär/plantransform behåller greppen som passiva markörer utan hörnmeny eller Alt-greppurval; normal redigering återkommer efter kommandot. Verklig modellpicking med tom fysisk snap-bredfas träffar skruvgruppens X-datum utanför kroppens bounds. Dold källa, avslutat kommando och exklusivt annat nästa-punkt-val ger inte den träffen. `grip-interaction.test.js` skyddar att aktiv transform inte konsumerar pointer eller startar greppgest. Befintliga tester för gruppgrepp med Move/linjär Move, panorering och orbit passerade. Full `npm run check` passerade.
+
+Browserprov i separat produktionspreview: sex skruvar markerades, Move visade två passiva insättningspunkter och båda användes som från-/tillpunkt. Sparad modell bekräftade exakt +120 i X för samtliga gruppursprung, oförändrat Y/Z och sex skruvar. En Ångra återställde gruppen; Copy genom samma punkter skapade sex nya skruvar och totalt tolv, med normal greppredigering åter efter commit. Efter Ångra visades även plåtens fyra passiva hörn under Move; Escape och ny markering återställde hörnknapparna. Inga konsolfel rapporterades.

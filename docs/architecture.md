@@ -410,3 +410,15 @@ Profileditorns befintliga pointermetoder matar samma gest med händelser och slu
 ### Skruvgrupp på vald materialyta
 
 Modellens befintliga picking-adapter hämtar första punktens ytnormal enbart från synliga förbandsdelar i utkastets `holes`. Vanlig snap behålls; fri punkt får den träffade ytan även när arbetsplanet ses från sidan. En snappunkt måste ligga i den träffade ytans plan för att överta det. `fastenerPlaneFromSurface` i `fasteners/placement-frame.js` skapar ett ortonormalt placeringsplan med arbetsplanets X som orienteringsreferens. Första bekräftade punktvalet låser planet i verktygssessionen; hover ändrar inte arbetsplan eller projekt. Utan ytträff används befintligt arbetsplan. Andra punkten, preview, domänvalidering, hål och redigering använder sedan samma sparade layout som tidigare.
+
+### Hålgrupp utan synlig skruv
+
+`fasteners/display.js` härleder gruppägda hålkanter från samma lager- och ringberäkning som delarnas hålvisning. När skruven är avstängd kombineras dessa kanter med eventuella kvarvarande tillbehör i objektets vanliga outline. Geometrin för hål/solid/export och klassningen som icke-fysisk hålgrupp ändras inte. Sådana outlines använder inte hårdvarans gemensamma instansmall eller översiktsproxy, eftersom kanterna beror på måldelarnas verkliga materialytor. Modellmeshens valda färg och `ObjectFeedback` använder samma konturer.
+
+Den gemensamma `modelSelectionEntry` tillåter extra kantträff även för en opak mesh utan fysisk skruv. Hålkanterna returnerar gruppägarens ID och använder befintligt gruppurval och inspektor. Vid möjlig skymning kontrollerar `displayedSelectionHit` djup vid kantens projicerade punkt; en kant inom pixeltoleransen på en sned yta får inte felaktigt skymmas av ytans träff vid muspekaren. Ogenomskinlig geometri framför kanten fortsätter att blockera träffen.
+
+### Insättningspunkter under Move och Copy
+
+`model/grips.js` äger `retainsSelectionGrips` och `transformGripSnapPoints`. Modellens bildloop behåller samma `selectionGrips` under Move/Copy, inklusive linjära verktyg, plantransformer och markerade grepp. `InsertionPoints` visar dem som passiva spans under kommandot; hörntillägg, hörnmeny, greppval och dragning aktiveras först i vanligt markeringsläge. Markörernas befintliga pointer-events lämnar kommandots canvas och kameran som inmatningsägare.
+
+Picking-adaptern matar de synliga markerade objektens befintliga greppankare till `resolveSnap` som punktkandidater när ändpunktssnap är aktiv. Därmed går också ett gruppankare utanför den fysiska meshens bounds att snappa till. Samma nästa-punkt-filter, prioritering, lås och arbetsområdeskontroll gäller. Ingen parallell snapmotor, ny objektspecifik regel eller modellmutation införs.

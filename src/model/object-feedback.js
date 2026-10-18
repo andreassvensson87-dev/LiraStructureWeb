@@ -6,6 +6,7 @@ import {
   isPhysical,
 } from '../model-object.js';
 import { sharedGeometryView } from '../fasteners/geometry.js';
+import { fastenerDisplayEdges } from '../fasteners/display.js';
 
 export const FEEDBACK_COLORS = {
   first: 0x297fc4,
@@ -104,7 +105,7 @@ export class ObjectFeedback {
     for (const id of this.entries.keys()) if (!wanted.has(id)) this.remove(id);
     for (const id of wanted) {
       const source = this.sources.get(id);
-      if (!source || !isPhysical(source) || !this.visible(id)) {
+      if (!source || (!isPhysical(source) && source.type !== 'fastener') || !this.visible(id)) {
         this.remove(id);
         continue;
       }
@@ -130,12 +131,15 @@ export class ObjectFeedback {
             polygonOffsetUnits: -2,
           }),
         );
+        let outlines = template
+          ? sharedGeometryView(template.edges)
+          : source.type === 'fastener'
+            ? edgesForModel(source, this.model, 10, true)
+            : new THREE.EdgesGeometry(geometry);
+        if (source.type === 'fastener')
+          outlines = fastenerDisplayEdges(source, this.model, outlines, template?.matrix);
         const edges = new THREE.LineSegments(
-          template
-            ? sharedGeometryView(template.edges)
-            : source.type === 'fastener'
-              ? edgesForModel(source, this.model, 10, true)
-              : new THREE.EdgesGeometry(geometry),
+          outlines,
           new THREE.LineBasicMaterial({ transparent: true, depthWrite: false, depthTest: false }),
         );
         mesh.raycast = edges.raycast = () => {};
