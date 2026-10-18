@@ -1,6 +1,6 @@
 // Presentation only. Callers provide snap results and projected coordinates.
 export const cadFeedback = Object.freeze({
-  snap: '#16815e',
+  snap: '#d000b8',
   preview: '#28946d',
   previewOpacity: 0.65,
   rubberBand: '#a6b3ba',

@@ -50,7 +50,6 @@ export function composePartSheet({
   getAttributeState,
   annotations,
   assembly,
-  partMaterialPanel,
   paintAssemblySchedule,
   assemblyPanel,
   selectedViews,
@@ -99,11 +98,6 @@ export function composePartSheet({
     if (settings.dockToTop) settings.position = singlePartMaterialPosition(paper, frameLayout);
     const data = singlePartMaterialData(record, getAttributeState());
     appendSinglePartMaterialSchedule(svg, data, settings);
-    for (const input of partMaterialPanel.querySelectorAll('input')) {
-      const key = input.dataset.materialField;
-      if (key === 'visible') input.checked = settings.visible;
-      else input.value = settings.position[key === 'x' ? 0 : 1];
-    }
     if (settings.visible && data && !data.verified)
       $('message').textContent =
         'Numrera om detaljerna för att uppdatera materiallistans antal och totaler.';

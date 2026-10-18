@@ -558,3 +558,25 @@ Browserprov i separat localhost-projekt: sex skruvar genom två transparenta pl�
 Det vanliga hoverfiltret accepterar nu även skruvgruppens hålägare när skruv, muttrar och brickor är avstängda. Befintligt test i `fastener-display.test.js` går genom riktig picking, hovercontroller, gruppurval och ObjectFeedback i homogen/transparent vy: hålkant lyser upp hela gruppen, konturer finns och hover släpper utanför modellen. Specialisttester för feedback, skruvvisning och modellträffar passerar, liksom lint och kärnflöden.
 
 Browserkontroll med separat tillfällig renderingsharness som använder appens befintliga meshbyggare, picking, hovercontroller och feedback: sex skruvar respektive sex hålförekomster utan hårdvara, homogen/transparent växling och borttagen hover. Sex markerade förekomster övergår till noll utanför gruppen; inga konsolfel. Testharnessen togs bort efter kontrollen. Bild: `/Users/andreassvensson/.codex/visualizations/fastener-hover/holes.png`. Inte publicerat.
+
+### Markeringsrektangel på scrollat Single Part-/Assemblyblad — 2026-10-18
+
+`.sheet-workspace` är nu positioneringsreferens för sin befintliga absoluta markeringsruta. Före rättningen räknades scrollningen in i koordinaterna men rutan placerades relativt ritningskroppen, så den hamnade utanför synlig yta. GA:s arbetsyta var redan positionerad.
+
+Browserkontroll i separat localhost-projekt med Single Part och Assembly: scrollposition 787/475, omslutande och korsande dragning, flera markerade vyer samt dold ruta efter avslut. Vid visuell diagnos behölls tillfälligt den senaste rutan efter pointerup; dess skärmrektangel stämde exakt med dragningen (130,220)–(750,360). Den tillfälliga diagnostikregeln togs bort och dolt sluttillstånd verifierades igen. Inga konsolfel. Lint och riktad formateringskontroll passerade. Ingen modell-/markeringslogik ändrades och inget CSS-implementationstest lades till. Inte publicerat.
+
+
+### Materiallista borttagen från ritningsinspektorn — 2026-10-18
+
+Single Parts separata Materiallista-sektion och dess formulärsynk har tagits bort; tabellen på bladet renderas fortfarande via befintliga ritningsinställningar. Browserkontroll av P100 i separat lokalt projekt: Ritningsinställningar visar blad/layout, papper, orientering, pappersbibliotek och typsnitt utan Materiallista; bladets tabell finns kvar. Inga konsolfel. Lint och riktad formatering passerade. Inte publicerat.
+
+
+### Tydligare snapfärg — 2026-10-18
+
+Den gemensamma snapfärgen i `ui/cad-feedback.js` är magenta (#d000b8). SVG-symboler i modell, ritning och rameditor samt canvaseditorns punktsnap använder samma token. Browserkontroll: starta Linje på Single Part och snappa till ändpunkt; samma ändpunktssymbol kontrollerad vid Sweep i modellen. Båda har den nya färgen och inga konsolfel rapporterades. Lint och riktad formatering passerade. Ingen snaplogik eller symbolstorlek ändrad. Inte publicerat.
+
+### Textredigering följer ritningsbladets zoom och panorering — 2026-10-18
+
+Felet återskapades i Single Part: bladbredd 629,289 → 439,039 px medan den öppna textens bredd och font låg kvar på 260 respektive 5,244 px. Richtextcontrollern observerar nu bladets och överläggsvärdens storlek under redigering och följer scrollhändelser i samma värd. Bekräfta, avbryt och dialogstängning kopplar bort storleksobservationen; textinnehållet byggs inte om vid zoom/pan.
+
+Browserprov i separat lokalt projekt, Single Part och GA: zoomkvot 0,697675 gav samma kvot för textstorlek och redigeringsbredd, medan formateringsraden behöll 30 px höjd. Zoom in, fortsatt befintlig textredigering, bekräftelse och återöppning kontrollerades. Vid horisontell panorering flyttades blad och redigeringsruta båda cirka −244 px. Tvåradigt innehåll behölls och sparad SVG-text hade fortsatt texthöjd 3,5 mm. GA verifierade motsvarande zoomkvot och sparad höjd. Inga konsolfel. Befintliga richtexttester, lint och riktad formatering passerade. Inte publicerat.

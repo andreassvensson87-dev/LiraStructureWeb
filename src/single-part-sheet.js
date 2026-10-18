@@ -192,49 +192,6 @@ export class SinglePartSheet {
     };
     this.assemblyPanel.append(placeSchedule);
     inspector.append(this.assemblyPanel);
-    this.partMaterialPanel = document.createElement('details');
-    this.partMaterialPanel.hidden = true;
-    const materialSummary = document.createElement('summary');
-    materialSummary.textContent = 'Materiallista';
-    this.partMaterialPanel.append(materialSummary);
-    for (const [key, title] of [
-      ['visible', 'Visa på bladet'],
-      ['x', 'X på blad · mm'],
-      ['y', 'Y på blad · mm'],
-    ]) {
-      const label = document.createElement('label'),
-        input = document.createElement('input');
-      label.textContent = title;
-      input.type = key === 'visible' ? 'checkbox' : 'number';
-      input.dataset.materialField = key;
-      input.setAttribute('aria-label', 'Materiallista · ' + title);
-      if (key !== 'visible') input.step = 'any';
-      input.onchange = () => {
-        const settings = this.config.partMaterialSchedule;
-        if (key === 'visible') settings.visible = input.checked;
-        else if (input.value.trim() && Number.isFinite(Number(input.value))) {
-          settings.position[key === 'x' ? 0 : 1] = Number(input.value);
-          settings.dockToTop = false;
-        }
-        this.compose();
-      };
-      bindInspectorField(input, () => {
-        const settings = this.config?.partMaterialSchedule;
-        return key === 'visible'
-          ? !!settings?.visible
-          : (settings?.position?.[key === 'x' ? 0 : 1] ?? input.value);
-      });
-      label.append(input);
-      this.partMaterialPanel.append(label);
-    }
-    const dockMaterial = document.createElement('button');
-    dockMaterial.textContent = 'Placera uppe till höger';
-    dockMaterial.onclick = () => {
-      this.config.partMaterialSchedule.dockToTop = true;
-      this.compose();
-    };
-    this.partMaterialPanel.append(dockMaterial);
-    inspector.append(this.partMaterialPanel);
     const hiddenLabel = document.createElement('label');
     hiddenLabel.className = 'drawing-check';
     hiddenLabel.innerHTML = '<input id=sheet-hidden-lines type=checkbox>Visa skymda kanter';
@@ -785,7 +742,6 @@ export class SinglePartSheet {
     if (this.assembly)
       this.config.assemblySchedule = normalizeAssemblySchedule(this.config.assemblySchedule);
     this.assemblyPanel.hidden = !this.assembly;
-    this.partMaterialPanel.hidden = !!this.assembly;
     if (!this.assembly)
       this.config.partMaterialSchedule = normalizeSinglePartMaterialSchedule(
         this.config.partMaterialSchedule,
@@ -1034,7 +990,6 @@ export class SinglePartSheet {
       getAttributeState: this.getAttributeState,
       annotations: this.annotations,
       assembly: this.assembly,
-      partMaterialPanel: this.partMaterialPanel,
       paintAssemblySchedule: this.paintAssemblySchedule.bind(this),
       assemblyPanel: this.assemblyPanel,
       selectedViews: this.selectedViews.bind(this),

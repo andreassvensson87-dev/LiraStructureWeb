@@ -2219,6 +2219,7 @@ button.insertion-point.edge-add:hover {
   font-size: 12px;
 }
 .sheet-workspace {
+  position: relative;
   flex: 1;
   min-height: 120px;
   overflow: auto;

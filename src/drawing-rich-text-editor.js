@@ -55,6 +55,10 @@ export class DrawingRichTextEditor {
     this.content.setAttribute('aria-multiline', 'true');
     this.box.append(this.tools, this.content);
     editor.overlayHost.append(this.box);
+    // The paper can zoom or pan without repainting its SVG. Keep the live
+    // HTML draft aligned without rebuilding content or disturbing the caret.
+    this.viewportObserver = new ResizeObserver(() => this.position());
+    editor.overlayHost.addEventListener('scroll', () => this.position(), true);
     for (const [label, text, command] of [
       ['Fet', 'B', 'bold'],
       ['Kursiv', 'I', 'italic'],
@@ -354,6 +358,8 @@ export class DrawingRichTextEditor {
       } else this.content.append(p);
     }
     this.box.hidden = false;
+    this.viewportObserver.observe(this.paper);
+    this.viewportObserver.observe(this.e.overlayHost);
     this.e.ui();
     this.e.adapter.redraw();
     this.position();
@@ -372,8 +378,18 @@ export class DrawingRichTextEditor {
       host = this.e.overlayHost.getBoundingClientRect();
     const scale = paper.width / this.e.adapter.paperSize()[0];
     Object.assign(this.box.style, {
-      left: paper.left - host.left + this.draft.points[0][0] * scale + 'px',
-      top: paper.top - host.top + this.draft.points[0][1] * scale + 'px',
+      left:
+        paper.left -
+        host.left +
+        this.e.overlayHost.scrollLeft +
+        this.draft.points[0][0] * scale +
+        'px',
+      top:
+        paper.top -
+        host.top +
+        this.e.overlayHost.scrollTop +
+        this.draft.points[0][1] * scale +
+        'px',
       width: this.draft.width * scale + 'px',
       transform: `rotate(${this.draft.rotation || 0}deg)`,
       transformOrigin: '0 0',
@@ -398,6 +414,7 @@ export class DrawingRichTextEditor {
     this.draft = null;
     this.original = null;
     this.box.hidden = true;
+    this.viewportObserver.disconnect();
     this.e.mode = null;
     this.e.selected = id;
     this.e.selectedIds = new Set([id]);
@@ -410,6 +427,7 @@ export class DrawingRichTextEditor {
     this.draft = null;
     this.original = null;
     this.box.hidden = true;
+    this.viewportObserver.disconnect();
     if (this.e.mode === 'richtext') this.e.mode = null;
     if (redraw) {
       this.e.ui();
