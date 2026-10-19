@@ -28,6 +28,7 @@ export function installModelFasteners({
   let placementReturn = null;
   Object.assign(actions, { commitFastener });
   controllers.fastenerUI = new FastenerUI({
+    creationValues: () => controllers.propertyUI?.creationValues('fastener') || {},
     getObjects: () => project.objects,
     getPartMark: (id) => project.parts.assignments[id]?.mark || '',
     getWorkPlane: () =>

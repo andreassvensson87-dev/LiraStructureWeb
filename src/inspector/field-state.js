@@ -1,3 +1,4 @@
+import { installInspectorEnter } from './enter.js';
 const drafts = new WeakMap();
 
 /** Pending presentation only. Owners decide when a value has actually been committed. */
@@ -32,6 +33,7 @@ export function bindInspectorField(control, committed) {
     });
   };
   for (const event of ['input', 'change', 'blur']) control.addEventListener(event, sync);
+  installInspectorEnter(control);
   sync();
   return sync;
 }
@@ -84,10 +86,12 @@ export function createInspectorDraft(
   root.addEventListener('input', sync);
   root.addEventListener('change', sync);
   accept();
+  const disposeEnter = installInspectorEnter(root);
   const draft = {
     sync,
     accept,
     dispose() {
+      disposeEnter();
       root.removeEventListener('input', sync, { capture: true });
       root.removeEventListener('change', sync, { capture: true });
       root.removeEventListener('input', sync);

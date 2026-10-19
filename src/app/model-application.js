@@ -119,11 +119,7 @@ export async function createModelApplication({
   grid.set({ ...project.grid, modelObjects: true, z: levelElevation(project.levels) });
   const objects = new THREE.Group();
   scene.add(objects);
-  const connectionMarkers = createConnectionMarkers(host, (id) => {
-    if (tools.operation?.mode === 'componentProperties')
-      controllers.componentUI.pickCopy(project.objects.find((s) => s.id === id));
-    else setSelection([id]);
-  });
+  const connectionMarkers = createConnectionMarkers(host, (id) => setSelection([id]));
   const instanceBatches = new InstanceBatches(scene);
   const insertionPoints = new InsertionPoints(
     host,

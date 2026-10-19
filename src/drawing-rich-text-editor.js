@@ -142,6 +142,7 @@ export class DrawingRichTextEditor {
     this.paper.addEventListener(
       'dblclick',
       (event) => {
+        if (this.e.propertyUI?.active()) return;
         const target = event.target.closest('[data-rich-text]');
         if (target) {
           event.preventDefault();
@@ -230,6 +231,10 @@ export class DrawingRichTextEditor {
       return;
     }
     const target = event.target.closest('[data-rich-text]');
+    if (target && this.e.propertyUI?.active()) {
+      this.e.down(event);
+      return;
+    }
     if (target && event.shiftKey && !this.e.mode) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -329,6 +334,7 @@ export class DrawingRichTextEditor {
       this.paper.releasePointerCapture(gesture.id);
   }
   edit(item, create = false) {
+    if (create && this.e.propertyUI) item = this.e.propertyUI.defaultsFor(item);
     this.original = create ? null : item;
     this.fieldSource = structuredClone(item);
     this.draft = structuredClone(item);
@@ -481,7 +487,9 @@ export class DrawingRichTextEditor {
       const boundary = root.querySelector(':scope > [data-paper-boundary]');
       root.insertBefore(back, boundary ? boundary.nextSibling : root.firstChild);
     }
-    for (const item of this.e.items.filter((item) => item.type === 'richtext')) {
+    for (const item of (this.e.propertyUI?.display(this.e.items) || this.e.items).filter(
+      (item) => item.type === 'richtext',
+    )) {
       if (this.draft?.id === item.id) continue;
       paintDrawingText(
         item.drawOrder === 'back' ? back : layer,

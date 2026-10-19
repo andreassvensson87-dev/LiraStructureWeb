@@ -1,4 +1,4 @@
-import { bindInspectorField } from './field-state.js';
+import { bindInspectorField, setInspectorFieldState } from './field-state.js';
 import { createMarkChangeButton } from '../ui/mark-change-dialog.js';
 import { isPhysical } from '../model-object.js';
 import { identityError } from '../object-identity.js';
@@ -20,9 +20,19 @@ export function installModelIdentity({ $, actions, controllers, modelEditor, pro
       operation: tools.operation,
     });
   function applyCreationAttributes(object) {
-    return applyObjectDraft(object, ui.objectDrafts[object.type || 'sweep']);
+    const type = object.type || 'sweep';
+    return applyObjectDraft(object, {
+      ...controllers.propertyUI?.identityDefaults(type),
+      ...ui.objectDrafts[type],
+    });
   }
-  Object.assign(actions, { selectedPartDrawing, syncIdentity, applyCreationAttributes });
+  Object.assign(actions, {
+    selectedPartDrawing,
+    syncIdentity,
+    applyCreationAttributes,
+    readInspectorIdentity,
+    resetInspectorIdentity,
+  });
   const nameRow = createAttributeRow(objectNameField);
   const nameInput = nameRow.querySelector('input');
   nameInput.id = 'inspector-name';
@@ -172,6 +182,34 @@ export function installModelIdentity({ $, actions, controllers, modelEditor, pro
     bindInspectorField($(`part-series-${key}`), () =>
       context().object ? objectSeries(context().object)[key] : $(`part-series-${key}`).value,
     );
+  function resetInspectorIdentity() {
+    const current = context();
+    if (current.mode !== 'edit') return;
+    const object = current.object;
+    nameInput.value = object.name || '';
+    ifcInput.value = object.ifcClass || objectType(object).ifcClass || '';
+    const series = objectSeries(object);
+    for (const key of ['prefix', 'start']) $(`part-series-${key}`).value = series[key];
+    for (const input of [nameInput, ifcInput, $('part-series-prefix'), $('part-series-start')])
+      setInspectorFieldState(input);
+  }
+  function readInspectorIdentity(object) {
+    const current = context();
+    if (current.mode !== 'edit' || current.locked || current.object.id !== object.id) return object;
+    if (!nameInput.value.trim()) throw Error('Ange ett namn.');
+    return applyObjectDraft(object, {
+      name: nameInput.value,
+      ...(isPhysical(object)
+        ? {
+            ifcClass: ifcInput.value,
+            partSeries: {
+              prefix: $('part-series-prefix').value.trim(),
+              start: Number($('part-series-start').value),
+            },
+          }
+        : {}),
+    });
+  }
   const openPartDrawing = document.createElement('button');
   openPartDrawing.id = 'inspector-open-drawing';
   openPartDrawing.type = 'button';

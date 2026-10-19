@@ -1,12 +1,9 @@
 import { isPhysical } from '../../model-object.js';
-import { editablePlate } from '../plate-properties.js';
-import { editableSweep } from '../sweep-properties.js';
 
 export function installModelHover({
   actions,
   controllers,
   objectFeedback,
-  project,
   renderState,
   renderer,
   tools,
@@ -24,15 +21,7 @@ export function installModelHover({
   }
   function updateObjectHover(e) {
     const fit = tools.operation?.mode === 'fit';
-    const propertyCopy = ['sweepProperties', 'plateProperties', 'componentProperties'].includes(
-      tools.operation?.mode,
-    );
-    if (
-      e.buttons ||
-      ui.marquee ||
-      (tools.drawing && !fit) ||
-      (tools.operation && !fit && !propertyCopy)
-    ) {
+    if (e.buttons || ui.marquee || (tools.drawing && !fit) || (tools.operation && !fit)) {
       objectFeedback.setHover([], 'canvas');
       if (controllers.referenceModels?.setHoverSelection(null)) objectFeedback.invalidate();
       return;
@@ -45,13 +34,7 @@ export function installModelHover({
     const source = objectFeedback.sources.get(id) || renderState.renderedById.get(id)?.source;
     const eligible =
       (isPhysical(source) || source?.type === 'fastener') &&
-      (!fit || (source.type ?? 'sweep') === 'sweep') &&
-      (!propertyCopy ||
-        (tools.operation.mode === 'componentProperties'
-          ? project.objects.find((s) => s.id === source?.generatedBy)?.kind === tools.operation.kind
-          : tools.operation.mode === 'plateProperties'
-            ? editablePlate(source)
-            : editableSweep(source)));
+      (!fit || (source.type ?? 'sweep') === 'sweep');
     objectFeedback.setHover(
       eligible ? (!tools.operation && !tools.drawing ? [...userSelection([id])] : [id]) : [],
       'canvas',

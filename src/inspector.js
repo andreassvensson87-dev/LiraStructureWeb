@@ -89,7 +89,7 @@ export class Inspector {
     $('inspector-properties').addEventListener(
       'keydown',
       (e) => {
-        if (!this.session) return;
+        if (!this.session || e.isComposing || e.target.closest('[data-independent-editor]')) return;
         if (e.key === 'Escape') {
           e.preventDefault();
           this.rollback();
@@ -503,7 +503,14 @@ export class Inspector {
   input(e) {
     const input = e.target,
       { selected, operation } = this.getState();
-    if (this.busy || !selected.length || operation || !input.matches('input,select')) return;
+    if (
+      this.busy ||
+      !selected.length ||
+      operation ||
+      input.closest('[data-independent-editor]') ||
+      !input.matches('input,select')
+    )
+      return;
     if (this.session && this.session.input !== input && !this.multiEditing) this.finish();
     if (!this.session)
       this.session = {

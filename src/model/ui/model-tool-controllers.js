@@ -68,8 +68,10 @@ export function installModelTools({
     ray,
     select: selectModelOrReference,
     getWorkArea: () => controllers.workAreaUI?.bounds() || null,
-    getGrip: (target) => insertionPoints.gripAtTarget(target),
-    gripsInRect: (a, b) => insertionPoints.refsInRect(a, b),
+    getGrip: (target) =>
+      controllers.propertyUI?.active() ? null : insertionPoints.gripAtTarget(target),
+    gripsInRect: (a, b) =>
+      controllers.propertyUI?.active() ? [] : insertionPoints.refsInRect(a, b),
     selectGrips: (refs, options) => controllers.pointUI?.select(refs, options),
     selectionHit,
     setSelection: (ids) => setSelection(userSelection(ids)),
@@ -148,8 +150,7 @@ export function installModelTools({
     restoreDefaults: restorePlateDefaults,
     applyCreationAttributes: (object) => actions.applyCreationAttributes?.(object) || object,
     syncPropertyUI: () => {
-      controllers.sweepPropertyUI?.sync();
-      controllers.platePropertyUI?.sync();
+      controllers.propertyUI?.sync();
     },
   });
   actions.changeInsertionVertex = (index, remove) => {
@@ -166,6 +167,7 @@ export function installModelTools({
         : null;
   };
   actions.activateInsertion = (kind, event) => {
+    if (controllers.propertyUI?.active()) return;
     if (controllers.pointUI?.activate(kind, event)) return;
     if (typeof kind === 'object') actions.startGrip(kind);
     else if (String(kind).startsWith('edge:'))

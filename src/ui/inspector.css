@@ -253,3 +253,9 @@ body:has(#inspector-properties.point-context) .selection-type-dock {
   outline: 1px solid #ba3939;
   outline-offset: 0;
 }
+
+/* Copying exposes only its shared field choices; target editing resumes after confirm/cancel. */
+:is(#inspector-properties, .annotation-inspector)[data-property-copy-active]
+  > :not(.property-transfer-actions) {
+  display: none !important;
+}

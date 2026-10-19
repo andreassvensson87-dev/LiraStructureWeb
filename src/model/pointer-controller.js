@@ -14,9 +14,6 @@ export function pointerCommand({
 }) {
   if (planeTransform) return 'plane-transform';
   if (linear) return 'linear';
-  if (mode === 'componentProperties') return 'component-property-target';
-  if (mode === 'plateProperties') return 'plate-property-target';
-  if (mode === 'sweepProperties') return 'sweep-property-target';
   if (mode === 'fit') return picking ? 'fit-reference' : null;
   if (mode === 'fastenerTargets') return 'fastener-target';
   if (mode === 'assemblyMain') return 'assembly-main';
@@ -54,9 +51,6 @@ export function installModelPointer(
       e.pointerType !== 'touch' &&
       !s.drawing &&
       s.mode !== 'assemblyMain' &&
-      s.mode !== 'sweepProperties' &&
-      s.mode !== 'plateProperties' &&
-      s.mode !== 'componentProperties' &&
       (!s.mode || s.boxMode || e.shiftKey)
     ) {
       down = null; // The selection controller owns the entire gesture, including release.
@@ -86,9 +80,6 @@ export function installModelPointer(
         'fastener-target',
         'assembly-main',
         'fit-reference',
-        'sweep-property-target',
-        'plate-property-target',
-        'component-property-target',
       ].includes(command)
     ) {
       actions[command](e);

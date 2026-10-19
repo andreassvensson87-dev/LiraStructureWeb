@@ -2,7 +2,7 @@ import { componentPlacementPrompt } from '../components/placement-session.js';
 import { componentDefinition } from '../components/definitions.js';
 import { createComponentUI } from '../components/ui.js';
 import { applyObjectBatch } from '../model/tools/transform-tool.js';
-import { isPhysical, displayGeometry } from '../model-object.js';
+import { displayGeometry } from '../model-object.js';
 import { updateAutomaticJoints } from '../fasteners/update-joints.js';
 
 export function installModelComponents({
@@ -25,30 +25,9 @@ export function installModelComponents({
   const setSelection = (...args) => actions.setSelection(...args);
   const syncOperationUI = (...args) => actions.syncOperationUI(...args);
   controllers.componentUI = createComponentUI({
+    creationProperties: (object) => controllers.propertyUI?.defaultsFor(object) || object,
     promptChanged: (text) => {
       $('status').textContent = text;
-    },
-    beginCopy: (kind) => {
-      controllers.inspector.finish();
-      setDrawing(false);
-      tools.operation = { mode: 'componentProperties', kind };
-      renderer.domElement.style.cursor = 'crosshair';
-      renderer.domElement.focus({ preventScroll: true });
-      $('status').textContent =
-        'Kopiera kopplingsegenskaper · Välj målkopplingar, sedan Modifiera eller Enter';
-    },
-    commitCopy: (batch) => {
-      const previous = new Map(project.objects.map((s) => [s.id, s]));
-      const next = applyObjectBatch(project.objects, batch).objects;
-      for (const object of next)
-        if (isPhysical(object) && object !== previous.get(object.id))
-          displayGeometry(object, next, 'exact').dispose();
-      modelEditor.replace(next);
-      setDrawing(false);
-      setSelection(batch.map((s) => s.id));
-      render();
-      $('status').textContent =
-        `Egenskaper kopierade till ${batch.length} koppling${batch.length === 1 ? '' : 'ar'} · Ångra återställer ändringen`;
     },
     getObjects: () => project.objects,
     getSelection: () => project.objects.filter((s) => ui.selectedIds.has(s.id)),
@@ -72,11 +51,9 @@ export function installModelComponents({
     hoverReference: hoverInspectorReference,
     finish: () => {
       const fitKind = tools.operation?.mode === 'fit' ? tools.operation.kind : null;
-      const copyActive = tools.operation?.mode === 'componentProperties';
       controllers.inspector?.finish();
       setDrawing(false);
       if (fitKind) $('status').textContent = `${componentDefinition(fitKind).label} avbruten`;
-      if (copyActive) $('status').textContent = 'Egenskapskopiering avbruten';
     },
     commit: (draft, mode) => {
       clearPreview();

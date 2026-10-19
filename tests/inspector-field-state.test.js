@@ -120,3 +120,48 @@ test('checkbox and dropdown drafts use the same baseline, while immediate commit
   assert.equal(size.hasAttribute('aria-invalid'), false);
   draft.dispose();
 });
+
+test('Enter confirms the owning form once, while invalid input, composition and multiline text are left alone', async () => {
+  const { installInspectorEnter } = await import('../src/inspector/enter.js');
+  const field = new Field('length', '120');
+  field.matches = () => true;
+  field.closest = () => null;
+  let submissions = 0,
+    reports = 0;
+  const button = { disabled: false };
+  field.form = { querySelector: () => button, requestSubmit: () => submissions++ };
+  field.checkValidity = () => field.validity.valid;
+  field.reportValidity = () => reports++;
+  const dispose = installInspectorEnter(field);
+  const enter = (properties = {}) => {
+    const event = new Event('keydown', { cancelable: true });
+    Object.assign(event, { key: 'Enter', ...properties });
+    field.dispatchEvent(event);
+    return event;
+  };
+  assert.ok(enter().defaultPrevented);
+  assert.equal(submissions, 1);
+  field.validity.valid = false;
+  enter();
+  assert.equal(submissions, 1);
+  assert.equal(reports, 1);
+  field.validity.valid = true;
+  button.disabled = true;
+  enter();
+  assert.equal(submissions, 1);
+  button.disabled = false;
+  enter({ isComposing: true });
+  enter({ shiftKey: true });
+  assert.equal(submissions, 1);
+  field.type = 'search';
+  enter();
+  assert.equal(submissions, 1);
+  field.type = 'number';
+  field.matches = () => false;
+  enter();
+  assert.equal(submissions, 1);
+  dispose();
+  field.matches = () => true;
+  enter();
+  assert.equal(submissions, 1);
+});

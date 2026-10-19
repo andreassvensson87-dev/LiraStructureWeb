@@ -1,3 +1,4 @@
+import { installInspectorEnter } from '../inspector/enter.js';
 import { createComponentInspector } from './inspector.js';
 import { createComponentPlacement, componentPlacementPrompt } from './placement-session.js';
 import { editComponentParameter } from './parameter-edit.js';
@@ -14,13 +15,9 @@ import {
 } from './definitions.js';
 import { connectionIcon } from './markers.js';
 import { designation } from '../object-identity.js';
-import {
-  componentCopyKeys,
-  copyComponentProperties,
-  localComponentCopyKeys,
-} from './property-copy.js';
 
 export function createComponentUI({
+  creationProperties = (object) => object,
   getObjects,
   getSelection,
   getFastenerSpecs,
@@ -32,8 +29,6 @@ export function createComponentUI({
   hoverReference,
   selectSource,
   showInspector,
-  beginCopy,
-  commitCopy,
   promptChanged,
 }) {
   const toolbar = document.querySelector('.toolbox');
@@ -63,79 +58,12 @@ export function createComponentUI({
   <details class="component-object-options" data-disclosure="identity"><summary>Objektnamn</summary></details>`;
   document.getElementById('inspector-properties').append(panel);
   const form = panel.querySelector('form');
+  installInspectorEnter(form);
   let placement = null;
   let creation = null,
     source = null,
     staged = null,
     valid = false;
-  let copying = null;
-  const copyKeys = new Set();
-  const copyBar = document.createElement('section');
-  copyBar.className = 'object-property-copy';
-  copyBar.hidden = true;
-  copyBar.innerHTML =
-    '<button type="button" data-start>Kopiera till andra…</button><p data-copy-status role="status" hidden></p><div class="sweep-copy-actions" hidden><button type="button" data-cancel>Avbryt</button><button type="button" data-apply class="primary">Modifiera</button></div>';
-  panel.append(copyBar);
-  copyBar.querySelector('[data-start]').onclick = () => {
-    try {
-      if (!valid || componentDraftChanged(source, staged))
-        throw new Error('Modifiera eller återställ källkopplingen först.');
-      if (!copyKeys.size) throw new Error('Välj minst en egenskap att kopiera.');
-      const snapshot = structuredClone(source);
-      beginCopy(snapshot.kind);
-      copying = { source: snapshot, targets: [] };
-      error();
-      sync();
-    } catch (e) {
-      error(e);
-    }
-  };
-  copyBar.querySelector('[data-cancel]').onclick = () => {
-    finish();
-    sync();
-  };
-  copyBar.querySelector('[data-apply]').onclick = confirmCopy;
-  function confirmCopy() {
-    if (!copying || !copying.targets.length) return;
-    try {
-      const objects = getObjects();
-      const batch = copying.targets.map((id) =>
-        copyComponentProperties(
-          copying.source,
-          objects.find((s) => s.id === id),
-          [...copyKeys],
-          objects,
-        ),
-      );
-      commitCopy(batch);
-    } catch (e) {
-      error(e);
-    }
-  }
-  function pickCopy(object) {
-    try {
-      const component = object?.generatedBy
-        ? getObjects().find((s) => s.id === object.generatedBy)
-        : object;
-      if (
-        !copying ||
-        component?.kind !== copying.source.kind ||
-        component.type !== 'component' ||
-        component.id === copying.source.id
-      )
-        throw new Error(
-          `Välj en annan ${componentDefinition(copying?.source.kind || source.kind).label.toLowerCase()} eller en av dess delar.`,
-        );
-      const ids = new Set(copying.targets);
-      if (ids.has(component.id)) ids.delete(component.id);
-      else ids.add(component.id);
-      copying.targets = [...ids];
-      error();
-      sync();
-    } catch (e) {
-      error(e);
-    }
-  }
   const identity = document.getElementById('inspector-identity');
   const identityHome = document.createComment('Object name home');
   identity.before(identityHome);
@@ -165,8 +93,7 @@ export function createComponentUI({
     hoverReference,
     fastenerChoices,
     openFastenerLibrary,
-    copyKeys,
-    getState: () => ({ source, staged, valid, creation, copying }),
+    getState: () => ({ source, staged, valid, creation }),
     changed: () => sync(),
     changeParameter: (key, value) => {
       staged = editComponentParameter(staged, key, value, getFastenerSpecs?.() || []);
@@ -216,11 +143,6 @@ export function createComponentUI({
         )
       : new Map();
     source = component;
-    if (!same) {
-      copyKeys.clear();
-      for (const key of componentCopyKeys(component.kind))
-        if (!localComponentCopyKeys.includes(key)) copyKeys.add(key);
-    }
     staged = structuredClone(component);
     valid = !creation;
     error();
@@ -248,7 +170,6 @@ export function createComponentUI({
   }
   function cancel() {
     if (creation) promptChanged?.(`${componentDefinition(creation.kind).label} avbruten`);
-    copying = null;
     placement = null;
     hoverReference(null);
     creation = null;
@@ -263,16 +184,6 @@ export function createComponentUI({
   }
   function sync() {
     const selected = getSelection();
-    copyBar.hidden = !!creation || selected.length !== 1 || !componentCopyKeys(source?.kind).length;
-    copyBar.querySelector('[data-start]').hidden = !!copying;
-    copyBar.querySelector('.sweep-copy-actions').hidden = !copying;
-    copyBar.querySelector('[data-copy-status]').hidden = !copying;
-    if (copying) {
-      copyBar.querySelector('[data-copy-status]').textContent =
-        `${copying.targets.length} mål valda · Klicka på kopplingssymboler eller deras delar, sedan Modifiera.`;
-      copyBar.querySelector('[data-apply]').disabled = !copying.targets.length || !copyKeys.size;
-      controls();
-    }
     const owner =
       selected.length &&
       selected.every((s) => s.generatedBy && s.generatedBy === selected[0].generatedBy)
@@ -292,7 +203,6 @@ export function createComponentUI({
     panel.querySelector('.component-object-options').hidden = false;
     form.hidden = creation ? !creation.ready : !component;
     if (component && !creation && source !== component) fill(component);
-    copyBar.hidden = !!creation || !component || !componentCopyKeys(component.kind).length;
     if (!component && !creation) {
       source = null;
       staged = null;
@@ -310,11 +220,6 @@ export function createComponentUI({
       component?.references ||
       [];
     highlight(refs);
-    if (copying)
-      highlight([
-        ...refs,
-        ...copying.targets.flatMap((id) => getObjects().find((s) => s.id === id)?.references || []),
-      ]);
     inspector.references(refs, component);
     if (!panel.hidden) {
       if (owner) document.getElementById('material-panel').hidden = true;
@@ -341,13 +246,12 @@ export function createComponentUI({
     e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (creation || copying) finish();
+      if (creation) finish();
       else cancel();
       sync();
     } else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
       e.preventDefault();
-      if (copying) confirmCopy();
-      else confirm();
+      confirm();
     }
   });
   form.onsubmit = (e) => {
@@ -378,9 +282,10 @@ export function createComponentUI({
   for (const kind of componentKinds())
     document.getElementById(commandId(kind)).onclick = () => start(kind);
   return {
-    pickCopy,
-    confirmCopy,
-    canConfirmCopy: () => !!copying && !copyBar.querySelector('[data-apply]').disabled,
+    draft: () => {
+      if (!valid) throw Error('Åtgärda kopplingens ogiltiga värden först.');
+      return staged;
+    },
     canConfirm: () =>
       !!source && valid && (!!creation?.ready || componentDraftChanged(source, staged)),
     confirm,
@@ -400,7 +305,7 @@ export function createComponentUI({
         // Native tool reset cancels the previous controller session before activating preview.
         placement = null;
         creation = next;
-        const candidate = { ...next };
+        const candidate = creationProperties({ ...next });
         delete candidate.ready;
         fill(candidate);
         preview();

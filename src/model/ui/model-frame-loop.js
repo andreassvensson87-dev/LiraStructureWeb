@@ -127,7 +127,7 @@ export function installModelFrameLoop({
             : [],
       controllers.pointUI?.selected() || [],
       retainsSelectionGrips(tools.operation),
-      ui.boxMode,
+      ui.boxMode || !!controllers.propertyUI?.active(),
     );
     updateSnapOverlay();
     controllers.workPlaneGuide.update(camera, host.clientWidth, host.clientHeight);

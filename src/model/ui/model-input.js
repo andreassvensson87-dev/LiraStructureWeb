@@ -65,13 +65,12 @@ export function installModelInput({
     'confirm-work-area': () => controllers.workAreaUI.confirm(),
     'confirm-plane-transform': () => controllers.planeTransformUI.confirmActive(),
     'confirm-linear': () => controllers.linearUI.confirmActive(),
-    'confirm-component-properties': () => controllers.componentUI.confirmCopy(),
-    'confirm-plate-properties': () => controllers.platePropertyUI.confirm(),
-    'confirm-sweep-properties': () => controllers.sweepPropertyUI.confirm(),
+    'confirm-property-copy': () => controllers.propertyUI.confirm(),
     'confirm-fit': () => controllers.componentUI.confirm(),
   };
   function toolState() {
     return {
+      propertyCopy: !!controllers.propertyUI?.active(),
       linear: !!tools.operation?.linearId,
       planeTransform: !!tools.operation?.planeId,
       mode: tools.operation?.mode,
@@ -117,38 +116,34 @@ export function installModelInput({
       render();
       return;
     }
+    if (controllers.propertyUI?.active()) {
+      controllers.propertyUI.cancel();
+      return;
+    }
     cancelBox();
     if (tools.operation?.mode === 'assemblyMain') $('status').textContent = 'Assembly avbruten';
     if (tools.operation?.mode === 'fit') $('status').textContent = 'Fit avbruten';
     if (tools.operation?.mode === 'workPlane')
       $('status').textContent = 'Val av arbetsplan avbrutet';
-    if (
-      ['sweepProperties', 'plateProperties', 'componentProperties'].includes(tools.operation?.mode)
-    )
-      $('status').textContent = 'Egenskapskopiering avbruten';
     controllers.modelContextMenu.close();
     select(null);
     return;
   }
   function modelToolMenuState() {
     const state = toolState();
-    const completion = modelCompletionCommand(state);
+    const completion = controllers.propertyUI?.active()
+      ? 'confirm-property-copy'
+      : modelCompletionCommand(state);
     const pointCommand = pointerCommand(state);
     const pointPicking =
-      ![
-        null,
-        'select',
-        'component-property-target',
-        'sweep-property-target',
-        'plate-property-target',
-        'fit-reference',
-        'fastener-target',
-        'assembly-main',
-      ].includes(pointCommand) &&
+      ![null, 'select', 'fit-reference', 'fastener-target', 'assembly-main'].includes(
+        pointCommand,
+      ) &&
       (!state.linear || state.picking) &&
       (!state.planeTransform || state.picking) &&
       (state.mode !== 'workArea' || !controllers.workAreaUI.canConfirm());
     const ready = {
+      'confirm-property-copy': () => controllers.propertyUI.canConfirm(),
       'confirm-linear': () => controllers.linearUI.canConfirm(),
       'confirm-plane-transform': () => controllers.planeTransformUI.canConfirm(),
       'confirm-work-area': () => controllers.workAreaUI.canConfirm(),
@@ -156,9 +151,7 @@ export function installModelInput({
       'finish-plate': () => !$('plate-apply').disabled,
       'finish-rotation': () => !controllers.rotationHandle.error.textContent,
       'confirm-fit': () => controllers.componentUI.canConfirm(),
-      'confirm-component-properties': () => controllers.componentUI.canConfirmCopy(),
-      'confirm-plate-properties': () => controllers.platePropertyUI.canConfirm(),
-      'confirm-sweep-properties': () => controllers.sweepPropertyUI.canConfirm(),
+
       'confirm-fastener-targets': () =>
         !controllers.fastenerUI.placeForm.querySelector('[type=submit]').disabled,
     };
@@ -190,7 +183,8 @@ export function installModelInput({
     confirmModelTool: () => {
       const state = modelToolMenuState();
       if (!state.canConfirm) return;
-      if (state.completion === 'confirm-point') commitPoint(state.target);
+      if (state.completion === 'confirm-property-copy') controllers.propertyUI.confirm();
+      else if (state.completion === 'confirm-point') commitPoint(state.target);
       else completionActions[state.completion]?.();
     },
   });
@@ -231,10 +225,6 @@ export function installModelInput({
       ...completionActions,
       linear: (p) => controllers.linearUI.pickPoint(p),
       'plane-transform': (p) => controllers.planeTransformUI.pickPoint(p),
-      'component-property-target': (e) => {
-        ray(e);
-        controllers.componentUI.pickCopy(project.objects.find((s) => s.id === selectionHit()));
-      },
       'fit-reference': (e) => {
         objectFeedback.setHover([], 'canvas');
         if (controllers.referenceModels?.setHoverSelection(null)) objectFeedback.invalidate();
@@ -269,14 +259,6 @@ export function installModelInput({
         } catch (error) {
           $('status').textContent = `${error.message} · Välj huvuddel eller Escape för att avbryta`;
         }
-      },
-      'plate-property-target': (e) => {
-        ray(e);
-        controllers.platePropertyUI.pick(project.objects.find((s) => s.id === selectionHit()));
-      },
-      'sweep-property-target': (e) => {
-        ray(e);
-        controllers.sweepPropertyUI.pick(project.objects.find((s) => s.id === selectionHit()));
       },
       'fastener-target': (e) => {
         ray(e);
@@ -347,6 +329,7 @@ export function installModelInput({
   });
   window.addEventListener('keydown', (e) => {
     const command = modelKeyboardCommand(e, {
+      propertyCopy: !!controllers.propertyUI?.active(),
       linear: !!tools.operation?.linearId,
       planeTransform: !!tools.operation?.planeId,
       editing:

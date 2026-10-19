@@ -2,6 +2,7 @@
 export function modelKeyboardCommand(
   e,
   {
+    propertyCopy,
     linear,
     planeTransform,
     editing,
@@ -20,10 +21,7 @@ export function modelKeyboardCommand(
   if (e.key === 'Escape') return 'cancel';
   if (editing) return null;
   if (mode === 'coordinatePoint') return null;
-  if (mode === 'componentProperties')
-    return e.key === 'Enter' ? 'confirm-component-properties' : null;
-  if (mode === 'plateProperties') return e.key === 'Enter' ? 'confirm-plate-properties' : null;
-  if (mode === 'sweepProperties') return e.key === 'Enter' ? 'confirm-sweep-properties' : null;
+  if (propertyCopy) return e.key === 'Enter' ? 'confirm-property-copy' : null;
   if (mode === 'fit') return e.key === 'Enter' && !picking ? 'confirm-fit' : null;
   if (mode === 'assemblyMain') return null;
   const modifier = e.ctrlKey || e.metaKey,

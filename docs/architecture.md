@@ -506,3 +506,7 @@ Modellens `resolveSnap` och IFC:s befintliga kantindex behåller `snapEdge` på 
 `ui/cad-feedback.js` äger den turkosa färgen och `paintCadNearestEdge`. Modellens `model/nearest-feedback.js` projicerar endast den valda kanten och klipper dess skärmutsträckning; `snap-overlay.js` återanvänder det befintliga passiva SVG-lagret. Ritningar använder `drawing-overlay.js` och befintligt tillfälligt feedbacklager, som utesluts från export. Modellen återanvänder oförändrad kantgrafik när pekaren glider längs samma kant. Hjälplinjen är inte ett modellerat eller sparat objekt.
 
 `DrawingAnnotations.syncCadSettings` rensar inaktuellt hover-/trackingresultat när de delade CAD-inställningarna ändras. Endast den öppna ritningen får då begära omritning; en stängd ritning behåller inga aktiva feedbackuppdrag.
+
+## Egenskapsöverföring
+
+Attributkopiering förbereder frikopplade objekt genom `model/property-transfer.js` och skruvarnas befintliga grupp-/placeringsregler. Inspektoradaptern äger urval, tillfällig visning och modell-editorcommit. Gemensamma knappar i `inspector/property-actions.js` äger inga modellregler. Ritningens adapter återanvänder markering och anteckningshistorik; stilförslagen berör inte måttankare eller geometri. Skapandeförval har en separat lokal lagringsgräns och ändrar inga projektobjekt. Se `docs/inspector.md`.

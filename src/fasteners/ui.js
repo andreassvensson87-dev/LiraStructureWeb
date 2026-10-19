@@ -35,6 +35,7 @@ const button = (text, action) => {
 };
 export class FastenerUI {
   constructor({
+    creationValues = () => ({}),
     getObjects,
     getPartMark,
     getWorkPlane,
@@ -50,6 +51,7 @@ export class FastenerUI {
     targetsChanged,
   }) {
     Object.assign(this, {
+      creationValues,
       getObjects,
       getPartMark,
       getWorkPlane,
@@ -323,7 +325,7 @@ export class FastenerUI {
   }
   defaultHole(targetId) {
     const h = defaultHoleForSpec(this.currentSpec(), targetId);
-    return boreFeature(h);
+    return boreFeature({ ...h, ...this.creationValues().hole?.hole });
   }
   readAccessories() {
     this.accessoryRows = [...this.placeForm.querySelectorAll('[data-accessory-row]')].map(
@@ -443,6 +445,7 @@ export class FastenerUI {
     this.renderAccessories();
     this.renderHoles();
     if (source) this.showPickedFeedback(warningSources);
+    else renderFastenerPlacementFeedback(this.placeForm, null, []);
     this.placeForm.querySelector('[data-delete]').hidden = !source;
     this.placeForm.querySelector('[type=submit]').textContent = source ? 'Tillämpa' : 'Skapa';
     this.productPicker.set(this.specOptions, this.currentSpec());
@@ -451,8 +454,39 @@ export class FastenerUI {
       ? 'Ta bort skruvgrupp'
       : 'Ta bort skruv';
     this.placeForm.querySelector('[data-error]').textContent = '';
+    if (!source) this.loadCreationProperties();
     this.fieldDraft.accept();
     this.placeForm.querySelector('[type=submit]').disabled = !!source;
+  }
+  loadCreationProperties() {
+    const values = this.creationValues();
+    const f = this.placeForm.elements;
+    const spec = values.product?.spec;
+    if (spec) {
+      this.refreshSpecs(`${spec.id}:${spec.revision}`);
+      this.specChanged();
+      f.manualLength.value = spec.length;
+    }
+    const hardware = values.hardware;
+    if (hardware) {
+      f.assemblyMode.value = hardware.assembly ? 'preset' : 'manual';
+      this.assemblyPicker.set(
+        this.currentSpec(),
+        hardware.assembly || assemblyDefaults(this.currentSpec()),
+      );
+      f.washerHead.checked = !!hardware.washers?.head;
+      f.washerNut.checked = !!hardware.washers?.nut;
+      f.customAccessories.checked = hardware.accessories != null;
+      this.accessoryRows = structuredClone(hardware.accessories || []);
+      f.nutOffset.value = hardware.nutOffset ?? '';
+      f.startAllowance.value = hardware.startAllowance ?? 20;
+      this.renderAccessories();
+    }
+    if (values.pattern?.pattern)
+      this.groupEditor.load({
+        group: { ...values.pattern.pattern, id: crypto.randomUUID(), rotation: 0 },
+      });
+    this.productPicker.set(this.specOptions, this.currentSpec());
   }
   renderHoles() {
     this.holeSettings.sync(this.holeRows, this.currentSpec());

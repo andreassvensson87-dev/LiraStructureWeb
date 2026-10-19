@@ -40,7 +40,6 @@ const identity = {
 export const objectInspectorSchemas = {
   sweep: defineAttributeSchema({
     key: 'sweep',
-    mode: 'sweepProperties',
     noun: 'sweeps',
     className: 'sweep-inspector',
     editable: editableSweep,
@@ -86,7 +85,6 @@ export const objectInspectorSchemas = {
   }),
   plate: defineAttributeSchema({
     key: 'plate',
-    mode: 'plateProperties',
     noun: 'plåtar',
     className: 'plate-inspector',
     editable: editablePlate,

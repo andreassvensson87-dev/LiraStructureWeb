@@ -1,3 +1,6 @@
+import { installInspectorEnter } from './inspector/enter.js';
+import { createCreationDefaults } from './inspector/creation-defaults.js';
+import { createDrawingPropertyActions } from './drawing/ui/property-actions.js';
 import { insertDrawingVertex, removeDrawingVertex } from './drawing-vertex-editing.js';
 import { beginDrawingMarkerGrip } from './drawing-marker-grip-editor.js';
 import { pickShapePoint, completeShape, shapeLengthPoint } from './drawing-shape-creation.js';
@@ -94,6 +97,7 @@ export class DrawingAnnotations {
     this.toolButtons.push(leader);
     this.panel = document.createElement('section');
     this.panel.className = 'annotation-inspector';
+    installInspectorEnter(this.panel);
     dialog.querySelector('.drawing-inspector').prepend(this.panel);
     this.hint = document.createElement('div');
     this.hint.className = 'annotation-hint';
@@ -186,6 +190,7 @@ export class DrawingAnnotations {
     // Keep editable text's clipboard behavior; only a drawing selection is a tool intent.
     dialog.addEventListener('copy', (event) => this.copySelection(event), true);
     dialog.addEventListener('close', () => {
+      this.propertyUI?.reset();
       this.endDrag(true);
       this.mode = null;
       this.draft = null;
@@ -197,9 +202,11 @@ export class DrawingAnnotations {
     this.transform = new DrawingShapeTransform(this, toolbar);
     this.marquee = new DrawingMarquee(this, toolbar);
     this.blocks = new DrawingBlocks(this, toolbar);
+    this.propertyUI = createDrawingPropertyActions(this, createCreationDefaults(localStorage));
     this.ui();
   }
   beginGrip(event, node) {
+    if (this.propertyUI?.active()) return null;
     for (const tool of this.markerTools || []) {
       const session = beginDrawingMarkerGrip(tool, event, node);
       if (session) return session;
@@ -213,6 +220,7 @@ export class DrawingAnnotations {
     this.future = [];
   }
   open(record) {
+    this.propertyUI?.reset();
     this.selectionScope?.clear();
     this.grips?.cancel();
     this.marquee?.cancel();
@@ -240,6 +248,7 @@ export class DrawingAnnotations {
     this.future = [];
   }
   undo(redo = false) {
+    this.propertyUI?.reset();
     const from = redo ? this.future : this.history,
       to = redo ? this.history : this.future;
     if (!from.length) return;
@@ -278,6 +287,7 @@ export class DrawingAnnotations {
     this.adapter.redraw();
   }
   start(mode, workflow = 'chain') {
+    if (this.propertyUI?.active()) this.propertyUI.cancel();
     this.marquee?.cancel();
     this.adapter.cancelTools?.();
     this.workflow = workflow;
@@ -293,6 +303,11 @@ export class DrawingAnnotations {
       this.dynamicInput.querySelector('input').value = '';
     }
     this.mode = mode;
+    if (workflow === 'shape' && this.propertyUI && this.record) {
+      const settings = shapeToolSettings(this.record, mode);
+      Object.assign(settings, this.propertyUI.defaultsFor({ type: 'shape', ...settings }));
+      delete settings.type;
+    }
     this.draft = null;
     this.hover = null;
     this.phase = 'points';
@@ -372,6 +387,7 @@ export class DrawingAnnotations {
       },
       message,
     );
+    this.propertyUI?.sync();
   }
   finishPoints() {
     if (!this.draft || this.draft.points.length < 2) return;
@@ -465,6 +481,7 @@ export class DrawingAnnotations {
     this.surface.focus({ preventScroll: true });
   }
   completionCommand() {
+    if (this.propertyUI?.active()) return 'property-copy';
     if (this.drag || this.grips?.session || this.richText?.draft) return null;
     if (this.transform?.active())
       return this.transform.phase === 'select' ? `${this.mode}:select` : null;
@@ -477,6 +494,10 @@ export class DrawingAnnotations {
       : null;
   }
   complete() {
+    if (this.propertyUI?.active()) {
+      this.propertyUI.confirm();
+      return;
+    }
     if (this.transform?.active()) this.transform.finishSelection();
     else if (this.mode === 'assistant') {
       if (this.assistant.phase === 'select' && this.assistant.sources.length) {
@@ -489,6 +510,17 @@ export class DrawingAnnotations {
     this.adapter.redraw();
   }
   key(e) {
+    if (
+      this.propertyUI?.active() &&
+      ['Escape', 'Enter'].includes(e.key) &&
+      !e.target.closest('input,select,textarea,[contenteditable=true]')
+    ) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.key === 'Escape') this.propertyUI.cancel();
+      else this.propertyUI.confirm();
+      return;
+    }
     if (e.key === 'Escape') {
       const menu = e.target?.closest?.('.cad-status-menu[open], .ui-command-menu');
       if (
@@ -649,7 +681,7 @@ export class DrawingAnnotations {
         }
         this.selected = id;
         this.selectedIds = new Set([id]);
-        if (this.item()?.type === 'shape') {
+        if (this.propertyUI?.active() || this.item()?.type === 'shape') {
           this.ui();
           this.adapter.redraw();
           return;
@@ -704,7 +736,8 @@ export class DrawingAnnotations {
     if (this.workflow === 'shape' && shapeNames[this.mode]) {
       const picked = pickShapePoint(this.draft, this.mode, hit);
       if (picked.duplicate) return;
-      this.draft = picked.draft;
+      this.draft =
+        !this.draft && this.propertyUI ? this.propertyUI.defaultsFor(picked.draft) : picked.draft;
       if (this.record)
         applyShapeToolSettings(this.draft, shapeToolSettings(this.record, this.mode));
       if (picked.finish === 'closed') {
@@ -766,7 +799,8 @@ export class DrawingAnnotations {
       return;
     }
     if (picked.duplicate) return;
-    this.draft = picked.draft;
+    this.draft =
+      !this.draft && this.propertyUI ? this.propertyUI.defaultsFor(picked.draft) : picked.draft;
     if (picked.place) {
       this.finishPoints();
       if (this.phase !== 'place' && this.workflow === 'point') {
@@ -901,7 +935,7 @@ export class DrawingAnnotations {
     this.overlay = el('g', { class: 'drawing-overlay', 'data-annotation-helper': 'overlay' });
     root.append(this.overlay);
     let layer = front;
-    for (const item of this.items) {
+    for (const item of this.propertyUI?.display(this.items) || this.items) {
       if (item.type === 'richtext') continue;
       if (item.parametricBlock && item.view === 'paper') continue;
       layer = item.drawOrder === 'back' ? back : front;

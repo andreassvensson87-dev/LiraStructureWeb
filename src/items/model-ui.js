@@ -17,6 +17,7 @@ export function createItemController({
   renderer,
   showProperties,
   getElevation,
+  creationValues = () => ({}),
 }) {
   const $ = (id) => document.getElementById(id);
   const toolbar = $('draw').parentElement,
@@ -98,7 +99,7 @@ export function createItemController({
       tools.operation = { mode: 'itemCreate', definition };
       const start = [0, 0, getElevation()],
         target = definition.end.map((v, i) => start[i] + v - definition.start[i]);
-      draft = placeItem(definition, start, target);
+      draft = placeItem(definition, start, target, creationValues().rotation?.rotation ?? 0);
       syncOperationUI();
       sync();
       showProperties();

@@ -9,8 +9,6 @@ import {
 } from '../src/model/plate-properties.js';
 import { validateObject } from '../src/model-object.js';
 import { applyObjectBatch } from '../src/model/tools/transform-tool.js';
-import { pointerCommand } from '../src/model/pointer-controller.js';
-import { modelKeyboardCommand } from '../src/model/keyboard-command.js';
 const source = {
   id: 'a',
   type: 'plate',
@@ -156,25 +154,4 @@ test('plate property batch preserves target contours in a single immutable model
   assert.equal(next.find((o) => o.id === 'b').thickness, 20);
   assert.deepEqual(next.find((o) => o.id === 'b').polygon, target.polygon);
   assert.deepEqual(objects, saved);
-});
-test('plate picking and keyboard routing support Modify and cancellation', () => {
-  assert.equal(
-    pointerCommand({ mode: 'plateProperties', drawing: false }),
-    'plate-property-target',
-  );
-  assert.equal(
-    modelKeyboardCommand({ key: 'Enter' }, { mode: 'plateProperties', editing: false }),
-    'confirm-plate-properties',
-  );
-  assert.equal(
-    modelKeyboardCommand({ key: 'Escape' }, { mode: 'plateProperties', editing: false }),
-    'cancel',
-  );
-  assert.equal(
-    modelKeyboardCommand(
-      { key: 'Delete' },
-      { mode: 'plateProperties', editing: false, hasSelection: true },
-    ),
-    null,
-  );
 });

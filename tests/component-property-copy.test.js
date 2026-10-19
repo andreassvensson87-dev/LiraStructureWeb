@@ -7,8 +7,6 @@ import { boltedEndplateDefaults } from '../src/components/bolted-endplate.js';
 import { updateComponents } from '../src/components/fit.js';
 import { copyComponentProperties, componentCopyKeys } from '../src/components/property-copy.js';
 import { applyObjectBatch } from '../src/model/tools/transform-tool.js';
-import { modelKeyboardCommand } from '../src/model/keyboard-command.js';
-import { pointerCommand } from '../src/model/pointer-controller.js';
 const column = {
   id: 'column',
   type: 'sweep',
@@ -124,19 +122,6 @@ test('copying a screw spec copies its detached length options snapshot', () => {
   assert.deepEqual(result.lengthOptions, source.lengthOptions);
   assert.notEqual(result.lengthOptions, source.lengthOptions);
 });
-test('connection copying routes target clicks and Enter while blocking unrelated edits', () => {
-  assert.equal(pointerCommand({ mode: 'componentProperties' }), 'component-property-target');
-  assert.equal(
-    modelKeyboardCommand({ key: 'Enter' }, { mode: 'componentProperties' }),
-    'confirm-component-properties',
-  );
-  assert.equal(
-    modelKeyboardCommand({ key: 'Delete' }, { mode: 'componentProperties', hasSelection: true }),
-    null,
-  );
-  assert.equal(modelKeyboardCommand({ key: 'Escape' }, { mode: 'componentProperties' }), 'cancel');
-});
-
 for (const kind of ['fit', 'baseplate', 'stiffener', 'endplate', 'boltedEndplate', 'beamSplice']) {
   test(`${kind} copies default attributes against the target's own members and rebuilds a batch`, () => {
     if (kind === 'boltedEndplate') {

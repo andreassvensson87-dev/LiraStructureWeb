@@ -19,7 +19,6 @@ export function createComponentInspector({
   hoverReference,
   fastenerChoices,
   openFastenerLibrary,
-  copyKeys,
   changed,
   changeParameter,
   changeReference,
@@ -54,7 +53,7 @@ export function createComponentInspector({
       : '';
   }
   function controls() {
-    const { source, staged, valid, creation, copying } = getState();
+    const { source, staged, valid, creation } = getState();
     if (!source) return;
     const def = componentDefinition(source.kind);
     for (const parameter of def.parameters) {
@@ -74,8 +73,8 @@ export function createComponentInspector({
     }
     attributeLayout?.sync({
       compact: true,
-      copyVisible: !creation && !panel.hidden,
-      copying: !!copying,
+      copyVisible: false,
+      copying: false,
       state: { draft: staged },
     });
     form.querySelectorAll('[data-section]').forEach((section) => {
@@ -197,18 +196,11 @@ export function createComponentInspector({
         root.append(note);
       }
     }
-    attributeLayout = mountAttributeLayout(panel, schema, changed, {
-      keys: () => [...copyKeys],
-      has: (key) => copyKeys.has(key),
-      set: (key, checked) => {
-        if (checked) copyKeys.add(key);
-        else copyKeys.delete(key);
-      },
-    });
+    attributeLayout = mountAttributeLayout(panel, schema);
     controls();
   }
   function references(refs, component) {
-    const { source, creation, copying } = getState();
+    const { source, creation } = getState();
     const links = panel.querySelector('.component-references');
     hoverReference(null);
     links.replaceChildren();
@@ -216,7 +208,7 @@ export function createComponentInspector({
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.referenceIndex = i;
-      button.disabled = !!copying;
+      button.disabled = false;
       const object = getObjects().find((s) => s.id === id);
       button.textContent = `${componentDefinition((creation || component || source).kind).references[i]}: ${object?.name || id}`;
       button.setAttribute(
@@ -246,7 +238,7 @@ export function createComponentInspector({
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = `Plåt: ${designation(plate)}`;
-        button.disabled = !!copying;
+        button.disabled = false;
         button.onclick = () => selectSource(plate.id);
         button.onpointerenter = () => hoverReference(plate.id);
         button.onpointerleave = () => hoverReference(null);

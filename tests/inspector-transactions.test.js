@@ -183,6 +183,7 @@ test('standard sweep input modifies every scoped sweep while preserving each axi
     type: 'number',
     value: '180',
     dataset: {},
+    closest: () => null,
     matches: () => true,
   };
   h.inspector.actions = { querySelector: () => ({}) };
@@ -234,7 +235,14 @@ test('grid dimensions and labels use the ordinary inspector preview, commit and 
   });
   const input = (key, value, type = 'number') =>
     inspector.input({
-      target: { id: key, dataset: { common: key }, type, value, matches: () => true },
+      target: {
+        id: key,
+        dataset: { common: key },
+        type,
+        value,
+        closest: () => null,
+        matches: () => true,
+      },
     });
   input('gridAngle', '45');
   assert.deepEqual(object.end, [0, 1000, 0]);

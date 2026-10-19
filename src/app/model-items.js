@@ -19,6 +19,7 @@ export function installModelItems({
   const remove = (...args) => actions.remove(...args);
   const render = (...args) => actions.render(...args);
   controllers.itemUI = createItemController({
+    creationValues: () => controllers.propertyUI?.creationValues('item') || {},
     project,
     ui,
     tools,

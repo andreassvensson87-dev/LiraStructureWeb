@@ -139,8 +139,6 @@ export function installModelRenderer({
     syncMaterialPanel();
     controllers.helperController.sync();
     controllers.componentUI?.sync();
-    controllers.sweepPropertyUI?.sync();
-    controllers.platePropertyUI?.sync();
     controllers.itemUI?.sync();
     controllers.blockUI?.sync();
     controllers.polysweepUI?.sync();
@@ -162,6 +160,7 @@ export function installModelRenderer({
       if (controllers.drawingManager?.dialog.open) controllers.drawingManager.render();
     }
     controllers.assemblyPanel?.sync();
+    controllers.propertyUI?.sync();
     interactionTimings.record('otherUiMs', uiStarted);
   }
 }

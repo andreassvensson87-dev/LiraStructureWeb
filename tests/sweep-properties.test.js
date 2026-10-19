@@ -12,8 +12,6 @@ import { TIBNOR_PROFILES } from '../src/tibnor-catalog.js';
 import { applyObjectBatch } from '../src/model/tools/transform-tool.js';
 import { updateComponents } from '../src/components/fit.js';
 import { beamSpliceDefaults } from '../src/components/beam-splice.js';
-import { pointerCommand } from '../src/model/pointer-controller.js';
-import { modelKeyboardCommand } from '../src/model/keyboard-command.js';
 const source = {
   id: 'source',
   type: 'sweep',
@@ -219,25 +217,4 @@ test('copying to coupled beams regenerates the joint atomically and incompatible
     /H- eller I/,
   );
   assert.deepEqual(objects, saved);
-});
-test('property picking routes clicks and Enter to copying rather than drawing or geometry transforms', () => {
-  assert.equal(
-    pointerCommand({ mode: 'sweepProperties', drawing: false }),
-    'sweep-property-target',
-  );
-  assert.equal(
-    modelKeyboardCommand({ key: 'Enter' }, { mode: 'sweepProperties', editing: false }),
-    'confirm-sweep-properties',
-  );
-  assert.equal(
-    modelKeyboardCommand({ key: 'Escape' }, { mode: 'sweepProperties', editing: false }),
-    'cancel',
-  );
-  assert.equal(
-    modelKeyboardCommand(
-      { key: 'Delete' },
-      { mode: 'sweepProperties', editing: false, hasSelection: true },
-    ),
-    null,
-  );
 });

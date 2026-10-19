@@ -13,7 +13,7 @@ export function installPolysweepTools({
   ui,
 }) {
   function start() {
-    actions.startDrawing();
+    actions.startDrawing('polysweep');
     tools.operation = { mode: 'polysweepCreate', points: [] };
     actions.syncOperationUI();
     $('form').inert = false;

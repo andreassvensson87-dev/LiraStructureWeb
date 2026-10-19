@@ -306,8 +306,6 @@ export function installModelSession({
     syncMaterialPanel();
     controllers.helperController.sync();
     controllers.componentUI?.sync();
-    controllers.sweepPropertyUI?.sync();
-    controllers.platePropertyUI?.sync();
     objectFeedback.setSelection(ui.selectedIds);
     objectFeedback.setModel(project.objects);
     connectionMarkers.sync(
@@ -321,8 +319,10 @@ export function installModelSession({
       tools.operation,
     );
     controllers.itemUI?.sync();
+    controllers.propertyUI?.sync();
   }
   function rememberPlate(source) {
+    if (ui.selectedIds.size) return;
     if (!editablePlate(source)) return;
     try {
       lastPlateDefaults = storePlateDefaults(localStorage, source);
@@ -331,7 +331,15 @@ export function installModelSession({
     }
   }
   function restorePlateDefaults() {
-    if (!lastPlateDefaults) return;
+    const seed = {
+      type: 'plate',
+      thickness: lastPlateDefaults?.thickness ?? +$('plate-thickness').value,
+      side: lastPlateDefaults?.side ?? $('plate-side').value,
+      contourOffset: lastPlateDefaults?.contourOffset ?? 0,
+      ...lastPlateDefaults,
+    };
+    const next = controllers.propertyUI?.defaultsFor(seed) || seed;
+    lastPlateDefaults = next;
     $('plate-thickness').value = lastPlateDefaults.thickness;
     $('plate-side').value = lastPlateDefaults.side;
     $('plate-contour-offset').value = lastPlateDefaults.contourOffset;
@@ -342,6 +350,7 @@ export function installModelSession({
     ui.draftMaterialAutomatic = !lastPlateDefaults.material;
   }
   function rememberSweep(source) {
+    if (ui.selectedIds.size) return;
     if (!editableSweep(source)) return;
     try {
       lastSweepDefaults = storeSweepDefaults(localStorage, source);
@@ -349,21 +358,23 @@ export function installModelSession({
       /* Invalid drafts do not replace the last usable properties. */
     }
   }
-  function restoreSweepDefaults() {
-    if (!lastSweepDefaults) return;
+  function restoreSweepDefaults(type = 'sweep') {
     const current = readForm();
+    lastSweepDefaults =
+      controllers.propertyUI?.defaultsFor({ ...current, ...lastSweepDefaults, type }) ||
+      lastSweepDefaults;
+    if (!lastSweepDefaults) return;
     ui.draftMaterial = {
       material: lastSweepDefaults.material ?? null,
       colorOverride: lastSweepDefaults.colorOverride ?? null,
     };
     ui.draftMaterialAutomatic = !lastSweepDefaults.material;
-    fillForm({ ...lastSweepDefaults, type: 'sweep', start: current.start, end: current.end });
+    fillForm({ ...lastSweepDefaults, type, start: current.start, end: current.end });
   }
-  function startDrawing() {
+  function startDrawing(type = 'sweep') {
     controllers.inspector?.finish();
-    if (ui.selected) rememberSweep(project.objects.find((o) => o.id === ui.selected));
     select(null);
-    restoreSweepDefaults();
+    restoreSweepDefaults(typeof type === 'string' ? type : 'sweep');
     setDrawing(true);
     controllers.inspector.show('properties');
   }
@@ -419,8 +430,7 @@ export function installModelSession({
           ? 'Kopiera ↵'
           : 'Flytta ↵'
         : 'Skapa ↵';
-    controllers.sweepPropertyUI?.sync();
-    controllers.platePropertyUI?.sync();
+    controllers.propertyUI?.sync();
     actions.syncIdentity?.();
     actions.syncMaterialPanel?.();
   }
