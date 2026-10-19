@@ -1,3 +1,5 @@
+@import './ui/context-menu.css';
+@import './inspector/selection-dock.css';
 @import './ui/tool-hud.css';
 @import './ui/inspector-rail.css';
 
@@ -3199,35 +3201,6 @@ dialog.drawing-editor {
 .drawing-inspector.annotation-focused > :not(.annotation-inspector) {
   display: none !important;
 }
-.annotation-context-menu {
-  position: absolute;
-  z-index: 50;
-  min-width: 200px;
-  padding: 5px;
-  background: white;
-  border: 1px solid #d5dfe1;
-  border-radius: 8px;
-  box-shadow: 0 6px 20px #172b3226;
-}
-.annotation-context-menu[hidden] {
-  display: none;
-}
-.model-context-menu {
-  position: fixed;
-}
-.annotation-context-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  padding: 9px 12px;
-  background: transparent;
-}
-.annotation-context-menu button:hover,
-.annotation-context-menu button:focus-visible {
-  background: #edf3f3;
-}
-
 .annotation-reference-status {
   font-size: 11px;
   color: #657b84;
@@ -5045,4 +5018,13 @@ body:has(.grid-editing) #inspector-properties > #grid-inspector:not([hidden]) {
 body:has(#helper-form[data-object-type='gridline']:not([hidden])) #inspector-identity,
 body:has(#helper-form[data-object-type='gridline']:not([hidden])) #sweep-identity-details {
   display: none;
+}
+
+.model-axis-feedback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
 }

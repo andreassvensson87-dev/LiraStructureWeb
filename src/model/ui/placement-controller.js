@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { resetToolLength } from '../tool-session.js';
 import { endpointAtLength } from '../../length-input.js';
-import { drawingWorkPlane, workPlaneFromPoints, workPlaneFromTwoPoints } from '../../work-plane.js';
+import {
+  workPlaneAxes,
+  drawingWorkPlane,
+  workPlaneFromPoints,
+  workPlaneFromTwoPoints,
+} from '../../work-plane.js';
 import { plateNormal } from '../../plate.js';
 import { isHelper } from '../../model-object.js';
 import { componentTransformSources } from '../../components/ownership.js';
@@ -23,7 +28,6 @@ export function createPlacementController({
   modelEditor,
   renderer,
   scene,
-  guide,
   frameGate,
   workPlaneGuide,
   preview,
@@ -81,7 +85,9 @@ export function createPlacementController({
     if (!tools.typedDirection) {
       tools.typedDirection =
         tools.lastDirection?.slice() ??
-        (tools.axisLock ? { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] }[tools.axisLock] : null);
+        (tools.axisLock
+          ? workPlaneAxes(drawingWorkPlane(tools.operation, tools.temporaryPlane))[tools.axisLock]
+          : null);
       tools.directionLabel = tools.axisLock
         ? `${tools.axisLock} låst`
         : tools.activeSnap?.label || 'Vald riktning';
@@ -121,7 +127,6 @@ export function createPlacementController({
       updateSnapOverlay();
     } catch (error) {
       clearPreview();
-      guide.visible = false;
       tools.activeSnap = null;
       updateSnapOverlay();
       $('draw-length-error').textContent = error.message;
@@ -320,7 +325,6 @@ export function createPlacementController({
   function previewLinear(target) {
     if (tools.operation?.referenceId) return showPreview(target, false);
     clearPreview();
-    guide.visible = false;
     try {
       const result = prepareLinear(target),
         ids = new Set(result.ids);
@@ -456,7 +460,6 @@ export function createPlacementController({
   function showPreview(p, showForm = true) {
     if (tools.operation?.gripRefs) tools.operation.gripPreview = null;
     clearPreview();
-    guide.visible = false;
     if (tools.operation?.referenceId) {
       getReferences().previewPlacement(
         tools.operation.referenceId,
@@ -503,13 +506,6 @@ export function createPlacementController({
         return false;
       }
       scene.add(ui.preview);
-      const positions = guide.geometry.attributes.position;
-      positions.setXYZ(0, ...tools.first);
-      positions.setXYZ(1, ...p);
-      positions.needsUpdate = true;
-      guide.geometry.computeBoundingSphere();
-      guide.computeLineDistances();
-      guide.visible = tools.activeSnap.kind === 'direction';
       $('status').textContent =
         s.type === 'item'
           ? `${tools.activeSnap.label} · Fast referenslängd ${fmt(Math.hypot(...s.end.map((v, i) => v - s.start[i])))} mm`
@@ -575,7 +571,6 @@ export function createPlacementController({
       return;
     }
     clearPreview();
-    guide.visible = false;
     if (!p || !tools.first) {
       tools.lastDirection = null;
       return;
@@ -589,7 +584,6 @@ export function createPlacementController({
     previewLinear,
     previewPlane: (batch) => {
       clearPreview();
-      guide.visible = false;
       try {
         modelEditor.prepare(batch, { copy: tools.operation?.mode === 'copy' });
         ui.previewSweep = batch.length === 1 ? batch[0] : null;
@@ -605,7 +599,6 @@ export function createPlacementController({
     clearTransformPreview: () => {
       if (tools.operation?.gripRefs) tools.operation.gripPreview = null;
       clearPreview();
-      guide.visible = false;
       tools.activeSnap = null;
       updateSnapOverlay();
       frameGate.invalidate();

@@ -20,7 +20,6 @@ export function installModelSession({
   controllers,
   frameGate,
   grid,
-  guide,
   host,
   insertionPoints,
   interactionTimings,
@@ -277,7 +276,6 @@ export function installModelSession({
     controllers.pointUI?.sync();
     syncWorkPlane();
     resetLength();
-    guide.visible = false;
     syncLocks();
     updateSnapOverlay();
     clearPreview();

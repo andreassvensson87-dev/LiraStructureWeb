@@ -29,6 +29,9 @@ export function createGAShell() {
   inspector.className = 'drawing-inspector';
   inspector.setAttribute('aria-label', 'Ritningsinspector');
   inspector.innerHTML = '<h3>Planvy</h3>';
+  const settings = document.createElement('div');
+  settings.className = 'drawing-settings-fields';
+  inspector.append(settings);
   body.append(host, inspector);
   for (const label of dialog.querySelectorAll('.plan-toolbar label')) inspector.append(label);
   const paperWorkspace = document.createElement('div');
@@ -57,5 +60,6 @@ export function createGAShell() {
     frameSVG,
     body,
     inspector,
+    settings,
   };
 }

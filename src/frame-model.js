@@ -134,11 +134,19 @@ export function snapFrame(
       lines.flatMap(([a, b]) => {
         const point = nearestSegmentPoint(raw, a, b);
         return point && eligible(point)
-          ? [{ point, kind: 'Närmaste', type: 'nearest', distance: distance(raw, point) * scale }]
+          ? [
+              {
+                point,
+                kind: 'Närmaste',
+                type: 'nearest',
+                distance: distance(raw, point) * scale,
+                snapEdge: { points: [a, b] },
+              },
+            ]
           : [];
       }),
     );
-    if (closest) return { point: closest.point, kind: closest.kind };
+    if (closest) return { point: closest.point, kind: closest.kind, snapEdge: closest.snapEdge };
   }
   if (grid && kind === 'Fritt') {
     point = point.map((v) => Math.round(v / step) * step);

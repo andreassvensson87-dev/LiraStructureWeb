@@ -70,7 +70,13 @@ export function referenceCandidates(
         if (nearest) {
           const point = nearestProjectedSegment(pointer, from, to, camera, width, height);
           if (point && screen(new THREE.Vector3(...point)).distanceTo(cursor) < SNAP_PIXELS.nearest)
-            result.push({ coords: point, label: 'Närmaste', symbol: 'line', edge: true });
+            result.push({
+              coords: point,
+              label: 'Närmaste',
+              symbol: 'line',
+              edge: true,
+              snapEdge: { points: [from, to] },
+            });
         }
       }
     }

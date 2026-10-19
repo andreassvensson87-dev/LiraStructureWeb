@@ -98,3 +98,7 @@
 #inspector-properties .inspector-multi-profile[hidden] {
   display: none;
 }
+
+.drawing-editor .drawing-body:has(> .selection-type-dock) {
+  position: relative;
+}

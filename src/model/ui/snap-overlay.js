@@ -1,9 +1,13 @@
+import { modelNearestFeedback } from '../nearest-feedback.js';
+import { modelAxisFeedback } from '../axis-feedback.js';
+import { drawingWorkPlane } from '../../work-plane.js';
+import { paintAxisFeedback } from '../../ui/axis-feedback.js';
 import { gridPickIds } from '../grid-objects.js';
-import { cadFeedback, paintCadSnap } from '../../ui/cad-feedback.js';
+import { paintCadSnap, paintCadNearestEdge } from '../../ui/cad-feedback.js';
 import { nextPointSnapLabel } from '../next-point-snap.js';
 import * as THREE from 'three';
 
-export function createSnapOverlay({ project, ui, tools, host, scene, camera, grid }) {
+export function createSnapOverlay({ project, ui, tools, host, camera, grid }) {
   const snapMarker = document.createElement('div');
   snapMarker.className = 'snap-marker';
   snapMarker.hidden = true;
@@ -12,21 +16,18 @@ export function createSnapOverlay({ project, ui, tools, host, scene, camera, gri
   symbolRoot.setAttribute('viewBox', '-8 -8 16 16');
   snapMarker.append(symbolRoot);
   host.append(snapMarker);
+  const axisRoot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  axisRoot.classList.add('model-axis-feedback');
+  axisRoot.setAttribute('aria-hidden', 'true');
+  host.append(axisRoot);
+  const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  const axisLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  axisRoot.append(edgeLayer, axisLayer);
+  let feedbackKey = null,
+    edgeKey = null;
   const snapStatus = document.createElement('span');
   snapStatus.id = 'snap-status';
   document.querySelector('footer').append(snapStatus);
-  const guide = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-    new THREE.LineDashedMaterial({
-      color: cadFeedback.snap,
-      dashSize: 180,
-      gapSize: 90,
-      depthTest: false,
-    }),
-  );
-  guide.visible = false;
-  guide.renderOrder = 10;
-  scene.add(guide);
   function updateSnapOverlay() {
     grid.highlight([
       ...gridPickIds(project.grid, ui.selectedIds),
@@ -41,23 +42,30 @@ export function createSnapOverlay({ project, ui, tools, host, scene, camera, gri
       ? `Nästa punkt: ${nextPointSnapLabel(tools.nextPointSnap)}${snapText ? ` · ${snapText}` : ''}`
       : snapText;
     if (snapStatus.textContent !== text) snapStatus.textContent = text;
-    const colors = { X: '#ba4b47', Y: '#22845f', Z: '#3e75b5' };
-    guide.material.color.set(colors[tools.activeSnap?.axis] || cadFeedback.tracking);
-    if (guide.visible) {
-      const positions = guide.geometry.attributes.position;
-      const a = new THREE.Vector3().fromBufferAttribute(positions, 0);
-      const b = new THREE.Vector3().fromBufferAttribute(positions, 1);
-      const worldLength = a.distanceTo(b);
-      a.project(camera);
-      b.project(camera);
-      const screenLength = Math.hypot(
-        ((a.x - b.x) * host.clientWidth) / 2,
-        ((a.y - b.y) * host.clientHeight) / 2,
-      );
-      if (screenLength > 1) {
-        guide.material.dashSize = (cadFeedback.dashPixels[0] * worldLength) / screenLength;
-        guide.material.gapSize = (cadFeedback.dashPixels[1] * worldLength) / screenLength;
-      }
+    const feedback =
+      tools.drawing && (project.snap.axes || +project.snap.polar || tools.axisLock)
+        ? modelAxisFeedback({
+            snap: tools.activeSnap,
+            start: tools.first,
+            workPlane: drawingWorkPlane(tools.operation, tools.temporaryPlane),
+            camera,
+            width: host.clientWidth,
+            height: host.clientHeight,
+          })
+        : null;
+    const key = JSON.stringify(feedback);
+    if (key !== feedbackKey) {
+      feedbackKey = key;
+      paintAxisFeedback(axisLayer, feedback);
+    }
+    const nearest = tools.drawing
+      ? modelNearestFeedback(tools.activeSnap, camera, host.clientWidth, host.clientHeight)
+      : null;
+    const nextEdgeKey = JSON.stringify(nearest);
+    if (nextEdgeKey !== edgeKey) {
+      edgeKey = nextEdgeKey;
+      edgeLayer.replaceChildren();
+      paintCadNearestEdge(edgeLayer, nearest);
     }
     snapMarker.hidden =
       !active || tools.activeSnap.kind === 'free' || tools.activeSnap.kind === 'direction';
@@ -69,5 +77,5 @@ export function createSnapOverlay({ project, ui, tools, host, scene, camera, gri
       paintCadSnap(symbolRoot, [0, 0], { symbol: tools.activeSnap.symbol || 'square' });
     }
   }
-  return { guide, snapMarker, updateSnapOverlay };
+  return { snapMarker, updateSnapOverlay };
 }

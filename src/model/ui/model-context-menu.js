@@ -215,7 +215,9 @@ export function installModelContextMenu({
   }
   // Grips overlay the canvas. Keep their vertex menu, while other grips use the object menu.
   installContextClick(surface.parentElement, open, {
-    accepts: (event) => event.target === surface || !!event.target.closest?.('.insertion-point'),
+    accepts: (event) =>
+      !event.target.closest?.('.drawing-editor') &&
+      (event.target === surface || !!event.target.closest?.('.insertion-point')),
   });
   controllers.modelContextMenu = menu;
 }

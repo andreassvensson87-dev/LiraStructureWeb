@@ -1,3 +1,4 @@
+import { closeDrawingEditors } from './drawing-navigation.js';
 import { singlePartPDFPage, gaPDFPage, createDrawingPDF } from '../drawing-pdf.js';
 import { DrawingManager } from '../drawing-manager.js';
 import { PlanView } from '../plan-view.js';
@@ -105,7 +106,8 @@ export function createDrawingController({
       }
       return createDrawingPDF(pages);
     },
-    open: (record) => {
+    open: async (record) => {
+      await closeDrawingEditors([singleSheet, planView]);
       finishEditing();
       stopTool();
       if (record.type === 'AS' && record.assemblyKey) {

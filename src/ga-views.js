@@ -1,19 +1,16 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import { createHtmlGrip } from './ui/grip.js';
 import { detailSource, nextDetailLabel } from './drawing-details.js';
 import { nextSectionName } from './drawing-sections.js';
 import {
   ensureGAViews,
+  dependentViewIds,
   duplicateDrawingView,
   resizeDrawingView,
   drawingViewSelection,
 } from './drawing-views.js';
 import { actionButton } from './drawing-toolbar.js';
-import {
-  DrawingViewActions,
-  dependentViewIds,
-  installDrawingViewDeselection,
-  installDrawingViewMarquee,
-} from './drawing-view-actions.js';
+import { DrawingViewActions, installDrawingViewDeselection } from './drawing-view-actions.js';
 import { drawingProfileDetail } from './profile-detail.js';
 import { createDrawingViewInspector } from './drawing-view-inspector.js';
 import { viewGripCursor } from './drawing-view-grips.js';
@@ -40,10 +37,11 @@ export class GAViews {
         this.refresh();
       },
     });
+    editor.annotations.viewActions = this.actions;
     const section = document.createElement('section');
     section.className = 'ga-view-properties';
     section.innerHTML =
-      '<h3>Vyer</h3><label>Markerad vy<select aria-label="Markerad GA-vy"></select></label><label>Namn<input aria-label="GA-vyns namn" maxlength="80"></label><div class="ga-view-actions"></div>';
+      '<label>Markerad vy<select aria-label="Markerad GA-vy"></select></label><label>Namn<input aria-label="GA-vyns namn" maxlength="80"></label><div class="ga-view-actions"></div>';
     inspector.prepend(section);
     this.select = section.querySelector('select');
     this.name = section.querySelector('input');
@@ -72,7 +70,13 @@ export class GAViews {
     remove.onclick = () => this.remove();
     section.querySelector('.ga-view-actions').append(remove);
     this.removeButton = remove;
-    this.placement = createDrawingViewInspector(section, {
+    const identity = createEditorSection('Vy', [
+      this.name.parentElement,
+      editor.paperScale.parentElement,
+      section.querySelector('.ga-view-actions'),
+    ]);
+    section.append(identity);
+    this.placement = createDrawingViewInspector(inspector, {
       selected: () => (this.selected ? this.active : null),
       selectedViews: () => this.selectedViews(),
       move: (dx, dy) => {
@@ -109,22 +113,21 @@ export class GAViews {
       grip.title = 'Beskär vyn · skalan behålls';
       editor.host.append(grip);
     }
-    this.marquee = installDrawingViewMarquee({
-      dialog: editor.dialog,
+    editor.annotations.marquee.bindViews({
       surface: editor.paperWorkspace,
       paper: editor.page,
       paperSize: () => [editor.frameLayout.width, editor.frameLayout.height],
       views: () => this.items,
+      changed: () => {
+        this.load(this.items.find((v) => v.id === this.active?.id) || this.items[0]);
+        this.refresh();
+      },
       ids: () => this.selectedIds,
       change: (ids) => {
         this.selectedIds = ids;
         if (ids.size) this.activate([...ids].at(-1), false, true);
         else this.setSelected(false);
       },
-      hit: (event) =>
-        event.target.closest(
-          '.plan-canvas,.ga-view-snapshot,[data-annotation],[data-section-marker],[data-detail-marker]',
-        ),
       busy: () =>
         !!(
           editor.drag ||
@@ -179,7 +182,7 @@ export class GAViews {
     this.placement?.sync();
   }
   get items() {
-    return this.e.record.sheet.views;
+    return this.e.record?.sheet?.views || [];
   }
   reset() {
     for (const snapshot of this.snapshots.values()) snapshot.remove();
@@ -368,11 +371,13 @@ export class GAViews {
     this.selectedIds = drawingViewSelection(this.selectedIds, id, additive, preserve);
     if (!this.selectedIds.size) {
       this.setSelected(false);
+      this.e.annotations.selectionScope?.capture();
       return;
     }
     if (!this.selectedIds.has(id)) id = [...this.selectedIds].at(-1);
     if (this.active?.id === id) {
       this.setSelected(true);
+      this.e.annotations.selectionScope?.capture();
       return;
     }
     const next = this.items.find((v) => v.id === id);
@@ -388,6 +393,7 @@ export class GAViews {
     e.rebuild();
     this.list();
     e.navigation.size();
+    e.annotations.selectionScope?.capture();
   }
   add(copy) {
     const e = this.e;

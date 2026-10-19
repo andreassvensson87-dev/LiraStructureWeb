@@ -1,3 +1,4 @@
+import { insertDrawingVertex, removeDrawingVertex } from './drawing-vertex-editing.js';
 import { beginDrawingMarkerGrip } from './drawing-marker-grip-editor.js';
 import { pickShapePoint, completeShape, shapeLengthPoint } from './drawing-shape-creation.js';
 import {
@@ -125,11 +126,7 @@ export class DrawingAnnotations {
       describe();
     }
     this.tracking = new CadTracking();
-    this.cad = createCadStatusbar(dialog, footer || dialog, () => {
-      this.tracking?.reset();
-      this.trackHit = null;
-      if (this.record) this.adapter.redraw();
-    });
+    this.cad = createCadStatusbar(dialog, footer || dialog, () => this.syncCadSettings());
     const lengthLabel = document.createElement('label');
     lengthLabel.innerHTML = '<span>Längd · mm</span>';
     const lengthControl = installExactLength(footer || dialog, { label: lengthLabel });
@@ -172,20 +169,7 @@ export class DrawingAnnotations {
       this.adapter.redraw();
     };
     if (adapter.paper) this.richText = new DrawingRichTextEditor(this, toolbar);
-    this.contextMenu = document.createElement('div');
-    this.contextMenu.className = 'annotation-context-menu';
-    this.contextMenu.hidden = true;
-    this.contextMenu.setAttribute('role', 'menu');
-    dialog.append(this.contextMenu);
     this.grips = new DrawingGripInteraction(this);
-    surface.addEventListener('contextmenu', (e) => this.context(e), true);
-    dialog.addEventListener(
-      'pointerdown',
-      (e) => {
-        if (!this.contextMenu.contains(e.target)) this.contextMenu.hidden = true;
-      },
-      true,
-    );
     surface.addEventListener('pointerdown', (e) => this.down(e), true);
     surface.addEventListener('pointermove', (e) => this.move(e), true);
     surface.addEventListener('pointerup', (e) => this.up(e), true);
@@ -229,6 +213,7 @@ export class DrawingAnnotations {
     this.future = [];
   }
   open(record) {
+    this.selectionScope?.clear();
     this.grips?.cancel();
     this.marquee?.cancel();
     this.richText?.cancel(false);
@@ -242,6 +227,13 @@ export class DrawingAnnotations {
     this.selectedIds = new Set();
     this.hover = null;
     this.ui();
+  }
+  syncCadSettings() {
+    this.tracking?.reset();
+    this.trackHit = null;
+    this.previousPointSnap = null;
+    this.hover = null;
+    if (this.record && this.dialog.open) this.adapter.redraw();
   }
   checkpoint() {
     this.history.push(structuredClone(this.items));
@@ -274,7 +266,7 @@ export class DrawingAnnotations {
     this.marquee?.cancel();
     this.richText?.cancel(false);
     this.assistant?.cancel();
-    this.contextMenu.hidden = true;
+    this.contextMenu?.close();
     this.phase = 'points';
     this.tracking?.reset();
     if (this.dynamicInput) this.dynamicInput.hidden = true;
@@ -313,7 +305,14 @@ export class DrawingAnnotations {
     return this.items.find((a) => a.id === this.selected);
   }
   ui(message) {
+    this.selectionScope?.sync();
+    for (const button of this.dialog.querySelectorAll('[data-drawing-history]'))
+      button.disabled = !(button.dataset.drawingHistory === 'redo' ? this.future : this.history)
+        .length;
     if (this.selectedIds?.size) this.selectedIds = blockSelection(this.items, this.selectedIds);
+    const selectedViews = this.marquee?.views?.ids()?.size || 0;
+    for (const button of this.toolButtons || [])
+      if (button.dataset.annotationMode === 'rotate-shapes') button.disabled = selectedViews > 0;
     const focus = this.selected || this.mode;
     if (focus && focus !== this.inspectorFocus) this.showProperties?.();
     this.inspectorFocus = focus;
@@ -340,6 +339,7 @@ export class DrawingAnnotations {
           draft: this.draft,
           phase: this.phase,
           selectedIds: this.selectedIds,
+          selectedViewCount: selectedViews,
           history: this.history,
           future: this.future,
           drag: this.drag,
@@ -366,6 +366,7 @@ export class DrawingAnnotations {
           finishShape: (close) => this.finishShape(close),
           finishPoints: () => this.finishPoints(),
           addDimensionPoint: () => this.startAdding(),
+          removeDimensionPoint: (index) => this.removeDimensionPoint(index),
           undo: (redo) => this.undo(redo),
         },
       },
@@ -414,9 +415,47 @@ export class DrawingAnnotations {
       this.ui(error.message);
     }
   }
+  editVertex(change, value) {
+    const item = this.item();
+    if (!['polyline', 'polygon'].includes(item?.shape) || item.parametricBlock) return;
+    try {
+      const next =
+        change === 'insert' ? insertDrawingVertex(item, value) : removeDrawingVertex(item, value);
+      this.checkpoint();
+      Object.assign(item, next);
+      this.ui();
+      this.adapter.redraw();
+    } catch (error) {
+      this.ui(error.message);
+    }
+  }
+  placeDimensionLine() {
+    if (this.item()?.type !== 'dimension') return;
+    this.mode = 'place-existing';
+    this.hover = null;
+    this.ui();
+    this.adapter.redraw();
+    this.surface.focus({ preventScroll: true });
+  }
+  removeDimensionPoint(index) {
+    const item = this.item();
+    if (
+      item?.type !== 'dimension' ||
+      item.points.length <= 2 ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= item.points.length
+    )
+      return;
+    this.checkpoint();
+    item.points.splice(index, 1);
+    item.references?.splice(index, 1);
+    this.ui();
+    this.adapter.redraw();
+  }
   startAdding() {
     if (this.item()?.type !== 'dimension') return;
-    this.contextMenu.hidden = true;
+    this.contextMenu?.close();
     this.mode = 'add';
     this.phase = 'points';
     this.hover = null;
@@ -424,58 +463,6 @@ export class DrawingAnnotations {
     this.adapter.redraw();
     this.surface.setAttribute('tabindex', '-1');
     this.surface.focus({ preventScroll: true });
-  }
-  context(e) {
-    const target = e.target.closest('[data-annotation]');
-    if (!target) {
-      this.contextMenu.hidden = true;
-      return;
-    }
-    const item = this.items.find((a) => a.id === target.dataset.annotation);
-    if (item?.type !== 'dimension') return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    this.endDrag(true);
-    this.selected = item.id;
-    this.mode = null;
-    this.hover = null;
-    const anchor = e.target.closest('[data-anchor]');
-    const index = anchor ? Number(anchor.dataset.anchor) : null;
-    this.ui();
-    this.adapter.redraw();
-    this.contextMenu.replaceChildren();
-    const add = (label, fn, disabled = false) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.setAttribute('role', 'menuitem');
-      button.textContent = label;
-      button.disabled = disabled;
-      button.onclick = () => {
-        this.contextMenu.hidden = true;
-        fn();
-      };
-      this.contextMenu.append(button);
-    };
-    add('Lägg till måttpunkt', () => this.startAdding());
-    if (index !== null)
-      add(
-        'Ta bort måttpunkt',
-        () => {
-          this.checkpoint();
-          item.points.splice(index, 1);
-          item.references?.splice(index, 1);
-          this.ui();
-          this.adapter.redraw();
-        },
-        item.points.length <= 2,
-      );
-    this.contextMenu.hidden = false;
-    const box = this.dialog.getBoundingClientRect();
-    this.contextMenu.style.left =
-      Math.max(0, Math.min(e.clientX - box.left, box.width - 210)) + 'px';
-    this.contextMenu.style.top =
-      Math.max(0, Math.min(e.clientY - box.top, box.height - 100)) + 'px';
-    this.contextMenu.querySelector('button').focus();
   }
   completionCommand() {
     if (this.drag || this.grips?.session || this.richText?.draft) return null;
@@ -515,6 +502,8 @@ export class DrawingAnnotations {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.selected = null;
+      this.marquee?.clearViews();
+      this.selectionScope?.clear();
       this.cancel();
       return;
     }
@@ -552,10 +541,10 @@ export class DrawingAnnotations {
       input.focus();
       return;
     }
-    if (e.key === 'Escape' && !this.contextMenu.hidden) {
+    if (e.key === 'Escape' && this.contextMenu?.isOpen()) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.contextMenu.hidden = true;
+      this.contextMenu?.close();
       return;
     }
     if (this.drag) {
@@ -566,15 +555,28 @@ export class DrawingAnnotations {
       }
       return;
     }
-    if (e.key === 'Escape' && (this.mode || this.selected)) {
+    if (
+      e.key === 'Escape' &&
+      (this.mode ||
+        this.selected ||
+        this.marquee?.views?.ids()?.size ||
+        this.selectionScope?.hasSelection())
+    ) {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.selected = null;
+      this.marquee?.clearViews();
+      this.selectionScope?.clear();
       this.cancel();
       return;
     }
     if (e.target.closest('input,select,textarea,[contenteditable="true"]')) return;
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && this.selected) {
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      !e.altKey &&
+      !e.shiftKey &&
+      (this.selected || this.marquee?.views?.ids()?.size)
+    ) {
       const mode = { m: 'move-shapes', c: 'copy-shapes', r: 'rotate-shapes' }[e.key.toLowerCase()];
       if (mode) {
         e.preventDefault();
@@ -609,7 +611,7 @@ export class DrawingAnnotations {
   }
   copySelection(event) {
     if (
-      !this.selected ||
+      (!this.selected && !this.marquee?.views?.ids()?.size) ||
       this.mode ||
       event.target.closest('input,select,textarea,[contenteditable="true"]')
     )

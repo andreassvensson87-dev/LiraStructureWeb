@@ -391,7 +391,9 @@ export class DrawingManager {
 
   show() {
     this.render();
-    if (!this.dialog.open) this.dialog.showModal();
+    // Reopen above the drawing editor when the list is already underneath it.
+    if (this.dialog.open) this.dialog.close();
+    this.dialog.showModal();
   }
 
   openDrawing(record) {

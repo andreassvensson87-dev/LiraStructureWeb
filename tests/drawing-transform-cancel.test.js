@@ -24,7 +24,7 @@ test('Escape cancels a pending geometry transform without changing items or undo
     mode: 'copy-shapes',
     selected: null,
     drag: null,
-    contextMenu: { hidden: true },
+    contextMenu: { close() {}, isOpen: () => false },
     hover: { point: [100, 100] },
     ui() {},
     adapter: { redraw() {} },

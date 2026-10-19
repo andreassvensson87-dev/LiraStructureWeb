@@ -1,5 +1,10 @@
-import './selection-dock.css';
 const icons = {
+  dimension: 'M3 7v14M21 7v14M3 15h18M3 15l4-3M3 15l4 3M21 15l-4-3M21 15l-4 3',
+  richtext: 'M4 4h16M12 4v16M8 20h8',
+  line: 'M4 20 20 4M3 17v4h4M17 3h4v4',
+  shape: 'M4 4h16v16H4Z',
+  view: 'M3 5h18v14H3ZM6 8h12v8H6Z',
+  leader: 'M3 20 10 12h11M3 20l1-5M3 20l5-1',
   all: 'M3 7l9-4 9 4-9 4ZM3 12l9 4 9-4M3 17l9 4 9-4',
   sweep: 'M4 3h16v4h-6v10h6v4H4v-4h6V7H4Z',
   plate: 'm3 14 13-9 5 3-13 9ZM3 14v3l5 4 13-10V8M8 17v4',
@@ -10,16 +15,31 @@ const icons = {
   polygoncut: 'M4 4h16v16H4ZM3 21 21 3',
   linecut: 'M3 18 21 6M3 13l4 8M17 3l4 8',
 };
-export function installSelectionDock(inspector) {
+export function installSelectionDock(
+  inspector,
+  { host = document.querySelector('.workspace'), anchor } = {},
+) {
   const dock = document.createElement('div');
   dock.className = 'selection-type-dock';
   dock.hidden = true;
   dock.setAttribute('role', 'toolbar');
   dock.setAttribute('aria-label', 'Redigera markerad objekttyp');
-  document.querySelector('.workspace').append(dock);
+  host.append(dock);
+  const position = () => {
+    if (!anchor) return;
+    dock.style.right =
+      Math.max(0, host.getBoundingClientRect().right - anchor.getBoundingClientRect().left) + 'px';
+    dock.style.top = '12px';
+  };
+  if (anchor) {
+    const observer = new ResizeObserver(position);
+    observer.observe(anchor);
+    observer.observe(host);
+  }
   let signature;
   return {
     sync() {
+      position();
       const state = inspector.rawState(),
         groups = inspector.scope.groups(state.selected);
       dock.hidden =

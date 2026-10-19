@@ -1,3 +1,4 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import { createViewCropPreview } from './drawing-view-crop-preview.js';
 import { bindInspectorField } from './inspector/field-state.js';
 import { resolvePartDrawingGeometry } from './part-sheet-geometry.js';
@@ -19,11 +20,7 @@ import { installTemplateSave } from './drawing-template-ui.js';
 
 import { drawingFont } from './drawing-preferences.js';
 import { arrangePartViews, createPartViews } from './part-view-layout.js';
-import {
-  DrawingViewActions,
-  installDrawingViewDeselection,
-  installDrawingViewMarquee,
-} from './drawing-view-actions.js';
+import { DrawingViewActions, installDrawingViewDeselection } from './drawing-view-actions.js';
 import { duplicateDrawingView } from './drawing-views.js';
 import { nextSectionName } from './drawing-sections.js';
 import { nextDetailLabel } from './drawing-details.js';
@@ -193,7 +190,7 @@ export class SinglePartSheet {
       this.compose();
     };
     this.assemblyPanel.append(placeSchedule);
-    inspector.append(this.assemblyPanel);
+    shell.settings.append(this.assemblyPanel);
     const hiddenLabel = document.createElement('label');
     hiddenLabel.className = 'drawing-check';
     hiddenLabel.innerHTML = '<input id=sheet-hidden-lines type=checkbox>Visa skymda kanter';
@@ -316,6 +313,7 @@ export class SinglePartSheet {
       tools: [...toolbar.children].filter((child) => !existingTools.has(child)),
       cancel: () => this.cancelInteraction(),
       openList: openDrawingList,
+      fit: (all) => this.fit(all),
       save: () => this.save?.(this.record),
       annotations: () => this.annotations,
     });
@@ -435,7 +433,13 @@ export class SinglePartSheet {
       this.viewName,
       () => this.config?.views?.find((v) => v.id === this.selectedView)?.name || '',
     );
-    this.extraSections = new PartSections(this);
+    const properties = this.dialog.querySelector('.view-properties');
+    const viewSections = {
+      identity: createEditorSection('Vy', [nameLabel]),
+      appearance: createEditorSection('Visning', [hiddenLabel, this.profileDetailControl.root]),
+    };
+    properties.prepend(viewSections.identity, viewSections.appearance);
+    this.extraSections = new PartSections(this, viewSections);
     this.viewPlacement = createDrawingViewInspector(this.dialog.querySelector('.view-properties'), {
       selected: () => this.config?.views.find((v) => v.id === this.selectedView),
       selectedViews: () => this.selectedViews(),
@@ -503,6 +507,7 @@ export class SinglePartSheet {
         this.selectView(id);
       },
     });
+    this.annotations.viewActions = this.viewActions;
     this.viewTool = new PartViewTool(this, toolbar);
     this.sectionTool = new DrawingSectionTool({
       dialog: this.dialog,
@@ -553,21 +558,21 @@ export class SinglePartSheet {
         update: (view, options) => this.extraSections.update(view, options),
       },
     });
-    this.viewMarquee = installDrawingViewMarquee({
-      dialog: this.dialog,
+    this.annotations.marquee.bindViews({
       surface: this.workspace,
       paper: this.svg,
       paperSize: () => this.paper,
       views: () => this.config.views,
+      changed: () => {
+        this.extraSections.build();
+        this.compose();
+        this.syncInspector();
+      },
       ids: () => this.selectedViewIds,
       change: (ids) => {
         this.selectedViewIds = ids;
         this.selectView([...ids].at(-1) || null, false, true);
       },
-      hit: (event) =>
-        event.target.closest(
-          '[data-view],[data-annotation],[data-section-marker],[data-detail-marker]',
-        ),
       busy: () =>
         !!(
           this.drag ||
@@ -607,7 +612,6 @@ export class SinglePartSheet {
   }
   cancelInteraction() {
     this.annotations?.grips?.cancel();
-    this.viewMarquee?.cancel();
     this.viewActions?.cancel();
     this.viewTool?.cancel();
     this.sectionTool?.cancel();
@@ -865,6 +869,7 @@ export class SinglePartSheet {
         ?.setAttribute('stroke', active ? '#589383' : '#c5d0d4');
     }
     this.compose();
+    this.annotations.selectionScope?.capture();
   }
   syncInspector() {
     return syncPartViewInspector({

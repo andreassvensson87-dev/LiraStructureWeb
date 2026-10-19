@@ -1,3 +1,4 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import { bindInspectorField } from './inspector/field-state.js';
 export function renderRichTextInspector({
   item,
@@ -24,6 +25,10 @@ export function renderRichTextInspector({
     hint.textContent = 'Dra ut textens bredd på bladet.';
     return;
   }
+  const typography = createEditorSection('Typografi', []);
+  const placement = createEditorSection('Placering', []);
+  const appearance = createEditorSection('Utseende', []);
+  panel.append(typography, placement, appearance);
   for (const [labelText, key, min, max] of [
     ['Texthöjd · mm', 'textSize', 0.5, 20],
     ['Bredd · mm', 'width', 10, 2000],
@@ -47,7 +52,7 @@ export function renderRichTextInspector({
       () => Math.round(((draft ? original : item)?.[key] ?? item[key]) * 1000) / 1000,
     );
     label.append(input);
-    panel.append(label);
+    (key === 'width' ? placement : typography).append(label);
   }
   const fontLabel = document.createElement('label');
   fontLabel.textContent = 'Typsnitt';
@@ -58,7 +63,7 @@ export function renderRichTextInspector({
   font.onchange = () => change('font', font.value);
   bindInspectorField(font, () => (draft ? original : item)?.font ?? item.font);
   fontLabel.append(font);
-  panel.append(fontLabel);
+  typography.append(fontLabel);
   const alignmentLabel = document.createElement('label');
   alignmentLabel.textContent = 'Justering';
   const alignment = document.createElement('select');
@@ -86,7 +91,7 @@ export function renderRichTextInspector({
     return paragraphs.every((p) => p.align === paragraphs[0].align) ? paragraphs[0].align : 'mixed';
   });
   alignmentLabel.append(alignment);
-  panel.append(alignmentLabel);
+  typography.append(alignmentLabel);
   for (const [key, text] of [
     ['frame', 'Ram'],
     ['background', 'Bakgrund'],
@@ -99,7 +104,7 @@ export function renderRichTextInspector({
     input.onchange = () => change(key, input.checked);
     bindInspectorField(input, () => (draft ? original : item)?.[key] ?? item[key]);
     label.append(input, text);
-    panel.append(label);
+    appearance.append(label);
   }
   for (const [axis, text] of [
     [0, 'X · mm'],
@@ -122,7 +127,7 @@ export function renderRichTextInspector({
         1000,
     );
     label.append(input);
-    panel.append(label);
+    placement.append(label);
   }
   const action = (text, fn, disabled = false) => {
     const b = document.createElement('button');

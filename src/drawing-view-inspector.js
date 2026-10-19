@@ -1,3 +1,4 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import {
   bindInspectorField,
   createInspectorDraft,
@@ -7,10 +8,11 @@ export function createDrawingViewInspector(
   parent,
   { selected, changed, selectedViews = () => (selected() ? [selected()] : []), move },
 ) {
-  const section = document.createElement('section');
-  section.className = 'drawing-view-placement';
-  section.innerHTML =
-    '<h3>Vy på bladet</h3><p>Kantgrepp beskär</p><div class="drawing-view-fields"></div>';
+  const section = createEditorSection('Placering på bladet', []);
+  section.classList.add('drawing-view-placement');
+  const grid = document.createElement('div');
+  grid.className = 'drawing-view-fields';
+  section.append(grid);
   const fields = section.querySelector('div'),
     inputs = [];
   for (const [key, axis, text] of [
@@ -77,9 +79,9 @@ export function createDrawingViewInspector(
       view = selected();
     section.hidden = !views.length;
     const multiple = views.length > 1;
-    section.querySelector('h3').textContent = multiple
+    section.querySelector('summary').textContent = multiple
       ? views.length + ' vyer markerade'
-      : 'Vy på bladet';
+      : 'Placering på bladet';
     fields.hidden = multiple;
     batch.hidden = !multiple;
     if (!view) return;

@@ -90,3 +90,11 @@
   color: #637a83;
   font-size: 12px;
 }
+
+.drawing-settings-fields > .drawing-settings-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 0;
+  font-size: 12px;
+}

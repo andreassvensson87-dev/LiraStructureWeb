@@ -242,8 +242,13 @@ test('drawing nearest and perpendicular use finite visible edges, share priority
   const hit = () => locateDrawingPoint(editor, { clientX: 0, clientY: 0 }, 'v');
   assert.equal(hit().kind, 'Närmaste');
   assert.deepEqual(hit().point, [32, 0]);
+  assert.deepEqual(hit().snapEdge.points, [
+    [0, 0],
+    [100, 0],
+  ]);
   point = [49, 1];
   assert.equal(hit().kind, 'Mittpunkt');
+  assert.equal(hit().snapEdge, undefined);
   point = [1, 1];
   assert.equal(hit().kind, 'Ändpunkt');
   base = [32, 50];
@@ -253,6 +258,7 @@ test('drawing nearest and perpendicular use finite visible edges, share priority
   base = [130, 50];
   point = [130, 0];
   assert.equal(hit().snapped, undefined);
+  assert.equal(hit().snapEdge, undefined);
   base = null;
   point = [32, 1];
   settings.nearest = false;
@@ -418,8 +424,13 @@ test('reference edges defer to Polar and acquired Otrack, never acquire anchors 
   };
   const hit = (event = {}) => locateDrawingPoint(editor, { clientX: 0, clientY: 0, ...event }, 'v');
   assert.equal(hit().kind, 'Polar');
+  assert.equal(hit().snapEdge, undefined);
   settings.polar = 0;
   assert.equal(hit().kind, 'Närmaste');
+  assert.deepEqual(hit().snapEdge.points, [
+    [100, -200],
+    [100, 400],
+  ]);
   const now = Date.now;
   let time = 0;
   Date.now = () => time;
@@ -430,6 +441,7 @@ test('reference edges defer to Polar and acquired Otrack, never acquire anchors 
   assert.deepEqual(editor.tracking.points, [], 'Nearest cannot become an Otrack anchor');
   editor.tracking.points = [[100, 20]];
   assert.equal(hit().kind, 'Otrack');
+  assert.equal(hit().snapEdge, undefined, 'Otrack must not inherit the rejected Nearest edge');
   settings.polar = 45;
   const corner = hit();
   assert.equal(corner.kind, 'Skärning');

@@ -153,12 +153,11 @@ export async function createModelApplication({
   });
   objectFeedback.setModel(project.objects);
 
-  const { guide, snapMarker, updateSnapOverlay } = createSnapOverlay({
+  const { snapMarker, updateSnapOverlay } = createSnapOverlay({
     project,
     ui,
     tools,
     host,
-    scene,
     camera,
     grid,
   });
@@ -213,7 +212,6 @@ export async function createModelApplication({
     modelEditor,
     renderer,
     scene,
-    guide,
     frameGate,
     workPlaneGuide,
     preview,
@@ -286,7 +284,6 @@ export async function createModelApplication({
     frameGate,
     objectFeedback,
     interactionTimings,
-    guide,
     snapMarker,
     raycaster,
     pointerQueue,

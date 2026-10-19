@@ -8,13 +8,20 @@ import { GAViews } from '../src/ga-views.js';
 test('GA view inspection is safe before the first view exists and releases selection between drawings', () => {
   let removed = 0;
   const views = Object.assign(Object.create(GAViews.prototype), {
-    e: { record: { sheet: {} } },
+    e: { record: {} },
     snapshots: new Map([['old', { remove: () => removed++ }]]),
     active: null,
     selectedIds: new Set(['old']),
     selected: true,
     ready: true,
   });
+  assert.deepEqual(
+    views.items,
+    [],
+    'The selection dock can inspect a new GA before its sheet exists',
+  );
+  views.e.record.sheet = {};
+  assert.deepEqual(views.items, []);
   assert.deepEqual(views.selectedViews(), [], 'Initial paper layout precedes ensureGAViews');
   const first = { id: 'first' };
   views.e.record.sheet.views = [first];

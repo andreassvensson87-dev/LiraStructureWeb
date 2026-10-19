@@ -24,7 +24,6 @@ export function installModelTools({
   navigation,
   actions,
   modelEditor,
-  guide,
   scene,
   tools,
   objects,
@@ -80,7 +79,6 @@ export function installModelTools({
   const { rotationHandle, rotationLine, showRotationLine, pickRotationAxis } =
     createRotationController({
       modelEditor,
-      guide,
       host,
       camera,
       scene,
@@ -131,7 +129,6 @@ export function installModelTools({
     host,
     camera,
     renderer,
-    guide,
     remove,
     getInspector: () => controllers.inspector,
     select,

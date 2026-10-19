@@ -23,7 +23,7 @@ function node(tag, attrs, text) {
   return n;
 }
 export class PartSections {
-  constructor(editor) {
+  constructor(editor, { identity, appearance }) {
     this.e = editor;
     this.cache = new Map();
     const label = document.createElement('label');
@@ -34,13 +34,13 @@ export class PartSections {
     this.scale.max = '1000';
     this.scale.step = 'any';
     label.append(this.scale);
-    editor.dialog.querySelector('.view-properties').append(label);
+    identity.append(label);
     const hatchLabel = document.createElement('label');
     hatchLabel.textContent = 'Visa materialhatchning';
     this.hatch = document.createElement('input');
     this.hatch.type = 'checkbox';
     hatchLabel.append(this.hatch);
-    label.after(hatchLabel);
+    appearance.append(hatchLabel);
     this.hatch.onchange = () => {
       for (const view of editor.selectedViews()) view.settings.materialHatch = this.hatch.checked;
       editor.compose();

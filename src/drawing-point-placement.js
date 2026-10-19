@@ -16,6 +16,7 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
     (editor.transform?.active() && editor.transform.base) ||
     editor.draft?.points.at(-1) ||
     editor.grips?.session?.base;
+  delete hit.snapEdge;
   const rawPoint = [...hit.point];
   const originPixel = editor.adapter.project(hit.point, hit.view),
     unitPixel = editor.adapter.project([hit.point[0] + 1, hit.point[1]], hit.view);
@@ -275,6 +276,7 @@ export function locateDrawingPoint(editor, e, view, snap = true, excludeId = nul
     hit.kind = chosen.kind;
     hit.snapped = chosen.snapped;
     hit.reference = chosen.reference || chosen.point.reference || null;
+    if (chosen.snapEdge) hit.snapEdge = chosen.snapEdge;
     if (chosen.guideBase) hit.guideBase = chosen.guideBase;
     if (chosen === trackingChoice) editor.trackHit.point = chosen.point;
   }

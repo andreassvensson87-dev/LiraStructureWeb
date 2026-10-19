@@ -1,4 +1,3 @@
-import './context-menu.css';
 import { installContextMenuDismissal } from './context-menu-dismissal.js';
 
 /** Presentation only: callers supply command state and retain command ownership. */

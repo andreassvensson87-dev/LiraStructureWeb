@@ -7,7 +7,6 @@ import { rotationCandidates, applyObjectBatch } from '../tools/transform-tool.js
 import { rotateReferencePlacement } from '../../references/reference-placement.js';
 export function createRotationController({
   modelEditor,
-  guide,
   host,
   camera,
   scene,
@@ -166,7 +165,6 @@ export function createRotationController({
       tools.first = null;
       tools.axisLock = null;
       tools.activeSnap = null;
-      guide.visible = false;
       syncLocks();
       showRotationLine(tools.operation.pivot, p);
       rotationHandle.show(tools.operation.pivot, p);

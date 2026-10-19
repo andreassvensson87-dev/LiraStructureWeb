@@ -2,8 +2,8 @@ import { GAViews } from '../src/ga-views.js';
 import { installDrawingViewDeselection } from '../src/drawing-view-actions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dependentViewIds, alignDrawingView } from '../src/drawing-view-actions.js';
-import { ensurePartViews, duplicateDrawingView } from '../src/drawing-views.js';
+import { alignDrawingView } from '../src/drawing-view-actions.js';
+import { dependentViewIds, ensurePartViews, duplicateDrawingView } from '../src/drawing-views.js';
 
 test('deletion includes nested descendants but not sibling views', () => {
   const views = [

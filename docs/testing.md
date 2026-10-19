@@ -622,3 +622,50 @@ Webbläsarkontroll med ett testprojekt med Single Part P100, Assembly A200 och e
 Verifierat återöppning via Ritningslista med bevarad vyposition: P100 X=28 efter Spara och A200 X=42 efter stängning via listknappen. GA duplicerade en vy, ändrade kopians X till 55 och sparade med Cmd+S; båda vyerna och kopians position fanns kvar efter återöppning. Markera som aktuell gav Aktuell i GA-listan. Till modellen stängde både editor och listdialog. Visa blad/Visa allt och Lägg till vy-menyn fungerade; Spara som ritningsmall öppnade rätt dialog från Bibliotek. Inga JavaScript-fel observerades.
 
 Berörda ritningshanterings-, urvals- och vytester: 22 passerade. Lint, formatering och produktionsbygge kontrolleras för ändringen.
+
+
+### Ritningslista ovanpå öppen ritning — 2026-10-19
+
+Browserprov med P100, A200 och GA-001: Stäng/Esc i ritningslistan återgår till samma öppna editor. Single Part och GA behöll exakt scrollposition (787/475) och bladbredd (629,289 px); assembly återgick med Esc. P100 → A200 → GA → P100 fungerade utan kvarvarande gammal editor eller konsolfel. Det nya navigationstestet skyddar att close-eventets sparning/resursfrigöring sker före återanvändning av editorn. Berörda navigation-/hanteringstester samt lint passerade. Inte publicerat.
+
+### Blandad rektangelmarkering och bladförflyttning — 2026-10-19
+
+`drawing-mixed-selection.test.js` skyddar ramträff mot tom vyinteriör, omslutning, blandad förflyttning med olika skalor, mått/text, bevarade modellankare när mått följer sin vy, frikopplade ankare vid individuell flytt, kopiering utan dubblerat innehåll, nya identiteter och omkopplade beroende vyer. Befintlig ritningshistorik provas för gemensam Ångra/Gör om.
+
+Browserprov: Single Part och Assembly valde linje med ruta inne i vyn utan markerad ram. Blandat urval med vy, vylinje och fristående linje flyttade samtliga exakt 30 skärmpixlar per axel en gång. Single Part med fyra ritobjekt (vylinje, mått, fristående linje och richtext) plus en vy gav samma 30 px för varje element; Shift-klick tog bort enbart en linje och Esc avmarkerade även vyn. Kopiering gav en vykopia och en kopia per berört ritobjekt; Ångra/Gör om återställde lägena. GA provades med linje i vyn, gemensam flytt från punkter utanför vyn, kopiering med en annotering per vy och ångring. Inga konsolfel. Full kontrollogg: `/tmp/lira-mixed-check.log`. Inte publicerat.
+
+### Sektioner i ritningsinspektorn — 2026-10-19
+
+Browserkontroll på Single Part, Assembly och GA: Vy/Visning/Placering på bladet är gemensamma sektioner; GA har även Avgränsning. Namn och X-position redigerades, Visning fälldes ihop och öppnades igen, och assemblys skala 1:20 bevarades vid återöppning. GA:s snitthöjd ändrades till 1300 och bevarades vid återöppning. Inställningsfliken visade blad- och typsnittsfälten i separata grupper. Richtextens grupperade Bredd ändrades till 85 mm. Måttlinjens punkter kunde minskas från tre till två och punktlistan förblev öppen efter omritning. Inga konsolfel. 34 berörda tester, lint och riktad formateringskontroll passerade. Inga tester för enbart DOM-gruppering tillagda. Inte publicerat.
+
+### Delad typväljare för modell och ritning — 2026-10-19
+
+`drawing-selection-scope.test.js` skyddar Alla/typval, identiteter och aktuella objekt efter en måttavgränsad flytt, återställning av typfilter i historik, nya urval och borttagna medlemmar. Modellens befintliga selection-scope-tester körs med samma byggblock. GA:s befintliga livscykelscenario har utökats till tiden innan även bladobjektet finns; detta fångar startfelet som hittades i browserprovet.
+
+Browserprov på Single Part: fem medlemmar (två linjer, en richtext, en måttkedja och en vy) ger ikoner för Alla/Linjer/Text/Mått/Vyer till vänster om inspektorn. Mått visar bara måttfält och Flytta ändrar bara måttets läge; övriga tre ritobjekt och vyn ligger kvar. Alla återställer fem medlemmar. Text och Vyer visar rätt egenskapspanel. Linjeavgränsad flytt, Alla, Ångra och Alla behåller hela grundurvalet. Måttborttagning lämnar fyra medlemmar; Ångra och Alla återställer fem. Esc rensar bas och aktivt urval även via dialogens nativa cancel. Docken döljs i Ritningsinställningar och återkommer i Egenskaper. Assembly verifierade Mått → Alla med fem medlemmar; ny GA verifierade Linjer/Vyer → Alla med två medlemmar. Full kontrollogg: `/tmp/lira-drawing-scope-check.log`. Inte publicerat.
+
+### Gemensam högerklick på ritning — 2026-10-19
+
+`drawing-context-selection.test.js` skyddar bevarat blandat/typavgränsat urval, nytt mål, tom yta, beroende vyer, minsta vyantal, gemensam borttagning med en ångringspost och avbruten bekräftelse utan historikändring. Måttpunktsborttagning återanvänder inspektorns kontroll, behåller punktreferenser och avvisar färre än två punkter. `drawing-vertex-editing.test.js` provar infogning på närmaste öppna/slutande kant, bevarad källgeometri, hatchning, dublettavvisning och minsta polygonantal. Befintliga meny-/context-click-, ritnings-, transform- och urvalstester ingår i full regression.
+
+Browserprov på Single Part P100, Assembly A200 och GA-001: högerklick på mått i blandat urval behåller vy och övriga ritobjekt; gemensamma kommandon visas och rotation är avstängd när vy ingår. Måttfilter öppnar måttmeny; måttpunkter läggs till/tas bort och borttagning är avstängd vid två punkter. Alla återställer grundurval efter måttändring. Single Part provade gemensam Flytta via menyn, textmeny, ramträffens vykommandon, tomytans Ritningslista och menyavvisning. Assembly verifierade klick utanför menyn utan ändrad markering. Inga JavaScript-fel observerades i dessa flöden.
+
+Den första borttagningskontrollen använde befintlig native confirm och blockerade testwebbläsarens styrning. Menyn använder därefter programmets gemensamma bekräftelsedialog. Den sista webbläsarkontrollen av bekräfta/avbryt samt efterföljande Ångra är ännu inte utförd; motsvarande controllerflöde är verifierat med beteendetest. Full `npm run check` passerade med 1155 tester utan fel samt lint, formatering och produktionsbygge. Logg: `/tmp/lira-drawing-context-final-check.log`. Inte publicerat.
+
+### Lokal axelspårning och gemensam feedback — 2026-10-19
+
+Befintligt snapscenario har utökats med lokal X/Y/Z-spårning och axellås på ett snett arbetsplan, inklusive avvisning av Z för planbundna verktyg. `model-axis-feedback.test.js` skyddar samma arbetsplansbas för skapande, Polysweep, grepp, Move/Copy, oförändrat snapresultat, negativ axelriktning, skillnad mellan sned polar och axel, dolt fritt/noll/ändvy-resultat samt fast storlek på vinkel och linjeförlängning vid zoom.
+
+Browserprov på separat, färsk localhost-origin: Sweep visade X-hjälplinje, axelbokstav och startvinkel; isometrisk vy provade X/Z-lås, manuell längd 1500 och rensning efter bekräftelse. Move visade Y och Copy X; numerisk Copy med avstånd 2000 skapade en kopia och tog bort överlägget. Ett slutpunktsgrepp flyttades med klick–dra–släpp och hjälpgrafiken försvann efter bekräftelse. Ett snett arbetsplan skapades med tre modellpunkter, varefter Sweep, Polysweep, Move, Copy och ett markerat grepp med Move visade automatisk lokal X-riktning. Axelbrickan mätte 21 × 21 px före och efter zoom; Esc tömde lagret. Inga JavaScript-fel rapporterades. Resultatbild: `/tmp/lira-axis-feedback.png`.
+
+Full `npm run check` passerade med 1158 tester utan fel, lint, formatering och produktionsbygge. Logg: `/tmp/lira-axis-check.log`. En första testorigin hade gammal installerad offlinecache och användes inte som bevis för den nya koden; de verkliga proven kördes på en färsk origin. Inte publicerat.
+
+### Turkos Nearest-kant i modell, ritning och IFC — 2026-10-19
+
+Befintliga snap- och ritobjektsscenarier skyddar att den vinnande kanten följer med från native-/IFC-/ritningsgeometri och saknas när mittpunkt, Polar eller Otrack vinner. Referensindexets jämförelser täcker fortsatt kameror, placering, rotation, skalning, synlighet och arbetsområde. `nearest-feedback.test.js` skyddar projicerad/klippt kant utan ändrad källgeometri och samma mål/projektion i den delade målaren, inklusive kurvor och avvisade snaptyper. Det utökade CAD-inställningstestet skyddar att stängda ritningar inte ritas om och att inaktuella kantresultat rensas.
+
+Browserprov på separat localhost med P100, A200 och GA-001 samt importerad `tests/fixtures/reference-box.ifc`: native modellkant visade en turkos linje under Nearest, samma kant behölls vid glidning och försvann utanför snapzonen. IFC-kant i modellen gav samma återkoppling; efter vald baspunkt tog Y-spårning över med noll turkosa kanter. Single Part provade både eget linjeobjekt och projicerad modellkant, Assembly provade linjeobjekt. Aktiverad Polar 45° ersatte kanten med den befintliga polarguiden.
+
+IFC-referensen placerades inom GA-vyn och aktiverades via referensinspektorn. Nearest framhävde exakt den projicerade vänsterkanten. Efter förvärv av IFC-hörnet vann Otrack med grön guide och ingen turkos kant. Avstängd Otrack återgav Nearest, Esc tog bort återkopplingen och avstängd referenssnap gav ingen kant vid samma pekarläge. Resultatbilder: `/tmp/lira-nearest-model.png`, `/tmp/lira-nearest-ifc.png`, `/tmp/lira-nearest-drawing.png`, `/tmp/lira-nearest-ga-ifc.png`.
+
+Provet hittade ett befintligt fel där ändrade delade CAD-inställningar ritade om en stängd Single Part-/Assemblyeditor. Rättningen provades genom Assembly → GA och upprepad Otrack-växling utan nya konsolfel. Tidigare fel låg kvar i webbläsarens historik. Full `npm run check` passerade med 1161 tester utan fel samt lint, formatering och produktionsbygge. Logg: `/tmp/lira-nearest-feedback-final-check.log`. Inte publicerat.

@@ -1,4 +1,9 @@
-import { cadFeedback, paintCadSnap, paintCadGuide } from './ui/cad-feedback.js';
+import {
+  cadFeedback,
+  paintCadSnap,
+  paintCadGuide,
+  paintCadNearestEdge,
+} from './ui/cad-feedback.js';
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs) => {
   const node = document.createElementNS(NS, tag);
@@ -55,6 +60,7 @@ export function paintDrawingOverlay(
   root.append(group);
   const line = (a, b, role = 'rubberBand', dashed = false) =>
     paintCadGuide(group, a, b, { role, dashed, pixelScale });
+  paintCadNearestEdge(group, hit, (point) => project(point, hit.view));
   const base = (editor.transform?.active() && editor.transform.base) || editor.draft?.points.at(-1);
   if (base) {
     const q = project(base, hit.view);

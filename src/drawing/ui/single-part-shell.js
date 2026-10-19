@@ -19,7 +19,11 @@ export function createSinglePartShell() {
   inspector.className = 'drawing-inspector';
   inspector.setAttribute('aria-label', 'Ritningsinspector');
   inspector.innerHTML =
-    '<h3>Vy</h3><label>Markerad vy<select id="sheet-selected-view"><option value="top">Top</option><option value="front">Front</option><option value="section">Sektion A–A</option></select></label><div class="view-properties"></div><details open><summary>Blad</summary><div class="sheet-properties"></div></details>';
+    '<label>Markerad vy<select id="sheet-selected-view"><option value="top">Top</option><option value="front">Front</option><option value="section">Sektion A–A</option></select></label><div class="view-properties"></div><details open><summary>Blad</summary><div class="sheet-properties"></div></details>';
+  const settings = document.createElement('div');
+  settings.className = 'drawing-settings-fields';
+  settings.append(inspector.querySelector('.sheet-properties').closest('details'));
+  inspector.append(settings);
   body.append(workspace, inspector);
   for (const v of ['top', 'front', 'section'])
     inspector.querySelector('.view-properties').append($('scale-' + v).parentElement);
@@ -27,5 +31,5 @@ export function createSinglePartShell() {
   for (const id of ['paper', 'orientation'])
     inspector.querySelector('.sheet-properties').append($(id).parentElement);
   inspector.querySelector('.sheet-properties').append($('library'));
-  return { dialog, $, svg, workspace, stage, body, inspector };
+  return { dialog, $, svg, workspace, stage, body, inspector, settings };
 }

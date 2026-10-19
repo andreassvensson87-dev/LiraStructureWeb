@@ -1,3 +1,5 @@
+import { cadFeedback } from './ui/cad-feedback.js';
+import { translateDrawingSelection } from './drawing-mixed-transform.js';
 import { actionButton } from './drawing-toolbar.js';
 import { lengthPoint } from './frame-model.js';
 
@@ -39,12 +41,23 @@ export class DrawingShapeTransform {
   }
   start(mode) {
     const selected = this.editor.item();
+    const views = this.editor.marquee?.views;
+    this.viewIds = views ? [...views.ids()] : [];
+    const itemViews = new Set(
+      this.editor.items.filter((a) => this.editor.selectedIds.has(a.id)).map((a) => a.view),
+    );
+    this.sheetMode = !!this.viewIds.length || itemViews.size > 1;
+    if (mode === 'rotate-shapes' && this.sheetMode) {
+      this.editor.hint.textContent = 'Välj ritobjekt i samma vy för rotation.';
+      return;
+    }
     this.ids = [
       ...(this.editor.selectedIds?.size
         ? this.editor.selectedIds
         : new Set(selected ? [selected.id] : [])),
     ].filter((id) => transformableDrawingObject(this.editor.items.find((item) => item.id === id)));
     if (
+      !this.sheetMode &&
       new Set(
         this.editor.items.filter((item) => this.ids.includes(item.id)).map((item) => item.view),
       ).size > 1
@@ -52,12 +65,13 @@ export class DrawingShapeTransform {
       this.editor.hint.textContent = 'Välj ritobjekt i samma vy eller text på bladet.';
       return;
     }
-    this.view = this.ids.length ? selected.view : null;
-    this.phase = this.ids.length ? 'base' : 'select';
+    this.view = this.sheetMode ? 'paper' : this.ids.length ? selected.view : null;
+    this.phase = this.ids.length || this.viewIds.length ? 'base' : 'select';
     this.base = null;
     this.reference = null;
     this.numericAngle = null;
     this.exactDistance = null;
+    this.commitPoint = null;
     if (this.editor.dynamicInput) this.editor.dynamicInput.querySelector('input').value = '';
     this.editor.start(mode);
   }
@@ -72,7 +86,7 @@ export class DrawingShapeTransform {
         ? 'Kopiera ritobjekt'
         : 'Flytta ritobjekt';
     const count = document.createElement('p');
-    count.textContent = `${this.ids.length} objekt valda`;
+    count.textContent = `${this.ids.length} ritobjekt${this.viewIds.length ? ` · ${this.viewIds.length} ${this.viewIds.length === 1 ? 'vy' : 'vyer'}` : ''} valda`;
     a.panel.append(title, count);
     const button = (label, action, disabled = false) => {
       const b = document.createElement('button');
@@ -228,8 +242,10 @@ export class DrawingShapeTransform {
       } else {
         try {
           const copy = a.mode === 'copy-shapes';
-          const result =
-            a.mode === 'rotate-shapes'
+          this.commitPoint = hit.point;
+          const result = this.sheetMode
+            ? []
+            : a.mode === 'rotate-shapes'
               ? rotatedShapes(
                   a.items,
                   this.ids,
@@ -247,6 +263,24 @@ export class DrawingShapeTransform {
   }
   commit(result) {
     const a = this.editor;
+    if (this.sheetMode) {
+      const before = a.marquee.snapshot();
+      before.annotationIds = [...this.ids];
+      before.viewIds = [...this.viewIds];
+      const target = this.commitPoint || a.hover?.point;
+      const after = translateDrawingSelection(
+        before.views,
+        before.annotations,
+        this.viewIds,
+        this.ids,
+        target.map((v, i) => v - this.base[i]),
+        a.mode === 'copy-shapes',
+      );
+      a.marquee.apply(after);
+      a.recordOperation(before, after, (state) => a.marquee.apply(state));
+      a.cancel();
+      return;
+    }
     a.checkpoint();
     if (a.mode === 'copy-shapes') a.items.push(...result);
     else
@@ -264,20 +298,25 @@ export class DrawingShapeTransform {
       const rotate = this.editor.mode === 'rotate-shapes';
       const number = Number(String(value).replace(',', '.'));
       if (!Number.isFinite(number) || !String(value).trim()) throw Error('Ange ett giltigt värde.');
-      const result = rotate
-        ? rotatedShapes(
-            this.editor.items,
-            this.ids,
-            this.base,
-            ((number * Math.PI) / 180) * (this.view === 'paper' ? -1 : 1),
-          )
-        : translatedShapes(
-            this.editor.items,
-            this.ids,
-            this.base,
-            lengthPoint(this.base, this.editor.hover?.point || this.base, value),
-            this.editor.mode === 'copy-shapes',
-          );
+      this.commitPoint = !rotate
+        ? lengthPoint(this.base, this.editor.hover?.point || this.base, value)
+        : null;
+      const result = this.sheetMode
+        ? []
+        : rotate
+          ? rotatedShapes(
+              this.editor.items,
+              this.ids,
+              this.base,
+              ((number * Math.PI) / 180) * (this.view === 'paper' ? -1 : 1),
+            )
+          : translatedShapes(
+              this.editor.items,
+              this.ids,
+              this.base,
+              lengthPoint(this.base, this.editor.hover?.point || this.base, value),
+              this.editor.mode === 'copy-shapes',
+            );
       this.commit(result);
       this.editor.dynamicInput.querySelector('input').value = '';
       this.editor.surface.focus({ preventScroll: true });
@@ -286,7 +325,7 @@ export class DrawingShapeTransform {
     }
   }
   preview() {
-    if (!this.base) return [];
+    if (!this.base || this.sheetMode) return [];
     try {
       if (this.editor.mode === 'rotate-shapes') {
         const angle =
@@ -312,6 +351,38 @@ export class DrawingShapeTransform {
     }
   }
   render(layer) {
+    if (this.sheetMode && this.base && this.editor.hover) {
+      const delta = (
+        this.exactDistance
+          ? lengthPoint(this.base, this.editor.hover.point, this.exactDistance)
+          : this.editor.hover.point
+      ).map((v, i) => v - this.base[i]);
+      for (const view of this.editor.marquee.views
+        .views()
+        .filter((v) => this.viewIds.includes(v.id))) {
+        const a = this.editor.adapter.project(
+          view.position.map((v, i) => v + delta[i]),
+          'paper',
+        );
+        const b = this.editor.adapter.project(
+          view.position.map((v, i) => v + delta[i] + view.size[i]),
+          'paper',
+        );
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        for (const [key, value] of Object.entries({
+          x: a[0],
+          y: a[1],
+          width: b[0] - a[0],
+          height: b[1] - a[1],
+          fill: 'none',
+          stroke: cadFeedback.preview,
+          'stroke-width': 1,
+          'vector-effect': 'non-scaling-stroke',
+        }))
+          rect.setAttribute(key, value);
+        layer.append(rect);
+      }
+    }
     for (const item of this.preview())
       if (!(item.parametricBlock && item.view === 'paper'))
         this.editor.paint(layer, item, false, true);

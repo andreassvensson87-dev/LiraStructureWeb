@@ -1,3 +1,4 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import { drawingFonts } from './drawing-preferences.js';
 import { readDrawingPresets } from './drawing-presets.js';
 import { presetEditor } from './drawing-preset-editor.js';
@@ -65,28 +66,27 @@ export function installDrawingSettings({ manager, planView, singleSheet }, frame
     [planView, '.plan-toolbar'],
     [singleSheet, '.sheet-toolbar'],
   ]) {
-    const button = actionButton(
-      document.createElement('button'),
-      'settings',
-      'Ritningsinställningar',
-    );
+    const label = editor === manager ? 'Ritningsinställningar' : 'Sparade inställningar…';
+    const button = actionButton(document.createElement('button'), 'settings', label);
     button.classList.add('drawing-settings-button');
-    button.setAttribute('aria-label', 'Ritningsinställningar');
-    button.title = 'Ritningsinställningar';
+    button.setAttribute('aria-label', label);
+    button.title = label;
     button.onclick = () => {
       editor.cancelInteraction?.();
       open(editor);
     };
-    editor.dialog.querySelector(toolbar).append(button);
+    editor.dialog
+      .querySelector(editor === manager ? toolbar : '.drawing-settings-fields')
+      .append(button);
   }
   for (const editor of [planView, singleSheet]) {
     const field = fontField('Ritningens typsnitt');
     field.label.className = 'drawing-font-field';
-    const parent =
-      editor === singleSheet
-        ? editor.dialog.querySelector('.sheet-properties')
-        : editor.dialog.querySelector('.drawing-inspector');
-    parent.append(field.label);
+    const parent = editor.dialog.querySelector('.drawing-settings-fields');
+    parent.insertBefore(
+      createEditorSection('Typografi', [field.label]),
+      parent.querySelector(':scope > .drawing-settings-button'),
+    );
     editor.fontSelect = field.select;
     field.select.onchange = () => {
       editor.record.typography = { font: field.select.value };

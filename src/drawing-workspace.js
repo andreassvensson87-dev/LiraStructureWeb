@@ -1,3 +1,4 @@
+import { installDrawingContextMenu } from './drawing/ui/context-menu.js';
 import { installEditorSurface } from './ui/editor-surface.js';
 import { inputWheelGesture } from './input-device.js';
 import { installDrawingPan } from './drawing-pan.js';
@@ -16,6 +17,7 @@ export function drawingEditorShell({
   save,
   annotations,
   openList,
+  fit,
 }) {
   dialog.classList.add('drawing-editor');
   const back = dialog.querySelector('header button');
@@ -26,14 +28,22 @@ export function drawingEditorShell({
     const manager = document.querySelector('#drawing-manager');
     if (manager?.open) manager.close();
   };
+  const clearIdleSelection = () => {
+    const editor = annotations();
+    if (editor.mode || editor.drag || editor.grips?.session) return;
+    editor.marquee?.clearViews();
+    editor.selectionScope?.clear();
+  };
   dialog.addEventListener('cancel', (e) => {
     e.preventDefault();
+    clearIdleSelection();
     cancel();
   });
   dialog.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
+      clearIdleSelection();
       cancel();
     }
   });
@@ -53,16 +63,26 @@ export function drawingEditorShell({
       save,
       annotations,
       openList: () => {
-        dialog.addEventListener('close', openList, { once: true });
-        dialog.close();
+        save();
+        openList();
       },
     });
     createDrawingToolbox(nav, toolbar);
-    installDrawingInspectorPanels(
+    const rail = installDrawingInspectorPanels(
       dialog,
       annotations(),
       dialog.querySelector('.drawing-ifc-panel'),
     );
+    installDrawingContextMenu(annotations(), {
+      cancel,
+      fit,
+      openList: () => {
+        save();
+        openList();
+      },
+      showProperties: () => rail.show('properties'),
+      showViews: () => rail.show('sheet'),
+    });
     installEditorSurface(dialog, {
       layout: body,
       inspector: dialog.querySelector('.drawing-inspector'),

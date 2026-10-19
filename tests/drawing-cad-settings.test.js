@@ -29,3 +29,43 @@ test('turning Snap off suppresses model and grid candidates without changing fre
   assert.deepEqual(hit.point, [10, 5]);
   assert.equal(hit.snapped, undefined);
 });
+
+test('shared snap-setting changes clear stale edge feedback and do not redraw a closed drawing', () => {
+  const editor = Object.create(DrawingAnnotations.prototype);
+  let redraws = 0,
+    resets = 0;
+  Object.assign(editor, {
+    record: {},
+    dialog: { open: false },
+    tracking: {
+      reset() {
+        resets++;
+      },
+    },
+    hover: {
+      kind: 'Närmaste',
+      snapEdge: {
+        points: [
+          [0, 0],
+          [100, 0],
+        ],
+      },
+    },
+    previousPointSnap: {},
+    trackHit: {},
+    adapter: {
+      redraw() {
+        redraws++;
+      },
+    },
+  });
+  editor.syncCadSettings();
+  assert.equal(redraws, 0);
+  assert.equal(editor.hover, null);
+  assert.equal(editor.trackHit, null);
+  assert.equal(editor.previousPointSnap, null);
+  editor.dialog.open = true;
+  editor.syncCadSettings();
+  assert.equal(redraws, 1);
+  assert.equal(resets, 2);
+});

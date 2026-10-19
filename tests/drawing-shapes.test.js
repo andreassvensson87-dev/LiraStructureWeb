@@ -77,7 +77,7 @@ function editor() {
     items: [],
     history: [],
     future: [],
-    contextMenu: { hidden: true },
+    contextMenu: { close() {}, isOpen: () => false },
     surface: { setAttribute() {}, focus() {} },
     adapter: { redraw() {} },
     ui() {},

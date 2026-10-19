@@ -102,7 +102,7 @@ test('two-point creation selects insulation for grip editing and retains tool va
     history: [],
     future: [],
     selectedIds: new Set(),
-    contextMenu: { hidden: true },
+    contextMenu: { close() {}, isOpen: () => false },
     surface: { setAttribute() {}, focus() {} },
     adapter: { redraw() {} },
     ui() {},

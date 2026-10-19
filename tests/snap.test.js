@@ -396,6 +396,7 @@ test('nearest finds finite native edges, yields to exact snaps and respects togg
   };
   const hit = run([1234, -100, 150], options);
   assert.equal(hit.label, 'Närmaste');
+  assert.ok(hit.snapEdge?.points?.length === 2);
   assert.ok(Math.hypot(...hit.point.map((v, i) => v - [1234, -100, 150][i])) < 1e-7);
   assert.equal(run([1234, -100, 150], { ...options, nearestSnap: false }).kind, 'free');
   assert.notEqual(run([4000, -100, 150], options).label, 'Närmaste');
@@ -454,7 +455,10 @@ test('IFC edge Nearest is a five-pixel fallback after Polar and uses the same pr
     assert.ok(active.points.some((p) => p.edge));
     assert.match(active.result.label, /Polar 45/);
     assert.ok(Math.abs(active.result.point[0] - active.result.point[1]) < 1e-8);
-    assert.equal(query([102, 99, 300], 0).result.label, 'Närmaste');
+    const nearest = query([102, 99, 300], 0).result;
+    assert.equal(nearest.label, 'Närmaste');
+    assert.deepEqual(nearest.snapEdge, active.points.find((p) => p.edge).snapEdge);
+    assert.equal(active.result.snapEdge, undefined, 'Polar must not display a rejected IFC edge');
     assert.equal(query([106, 99, 300], 0).result.kind, 'free');
     const native = run([102, 99, 300], {
       camera: top,
@@ -471,4 +475,23 @@ test('IFC edge Nearest is a five-pixel fallback after Polar and uses the same pr
   } finally {
     f.dispose();
   }
+});
+
+test('tracking and explicit locks follow all three local workplane axes without defeating planar tools', () => {
+  const frame = { origin: [0, 0, 0], u: [Math.SQRT1_2, 0, Math.SQRT1_2], v: [0, 1, 0] };
+  const axes = { X: frame.u, Y: frame.v, Z: [-Math.SQRT1_2, 0, Math.SQRT1_2] };
+  for (const [axis, direction] of Object.entries(axes)) {
+    const target = direction.map((v) => v * 2500);
+    const snap = run(target, { workPlane: frame, constrainToPlane: false });
+    assert.equal(snap.axis, axis);
+    assert.ok(Math.hypot(...snap.point.map((v, i) => v - target[i])) < 1e-7);
+    const locked = run(target, { workPlane: frame, constrainToPlane: false, lock: axis });
+    assert.equal(locked.axis, axis);
+    assert.ok(Math.hypot(...locked.point.map((v, i) => v - target[i])) < 1e-7);
+  }
+  const strict = run(
+    axes.Z.map((v) => v * 2500),
+    { workPlane: frame, lock: 'Z' },
+  );
+  assert.equal(strict.point, null);
 });

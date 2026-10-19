@@ -1,3 +1,4 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import { bindInspectorField } from './inspector/field-state.js';
 import { installInsulationInspector } from './drawing-insulation-inspector.js';
 import { installDrawingOrder, installDrawingGeometry } from './drawing-object-inspector.js';
@@ -13,7 +14,7 @@ import { dimensionDirections as names } from './drawing-dimension-creation.js';
 
 /** Presentation and property controls; session ownership stays with DrawingAnnotations. */
 export function renderAnnotationInspector(
-  { state, panel, hint, dialog, dynamicInput, adapter, tools, commands },
+  { state, panel, hint, dynamicInput, adapter, tools, commands },
   message,
 ) {
   const propertyEditor = {
@@ -37,13 +38,15 @@ export function renderAnnotationInspector(
     tools.assistant?.cancel();
     return;
   }
-  if (!state.mode && state.selectedIds?.size > 1) {
+  if (
+    !state.mode &&
+    (state.selectedIds?.size > 1 || (state.selectedViewCount && state.selectedIds?.size))
+  ) {
     panel.replaceChildren();
     const title = document.createElement('h3'),
       text = document.createElement('p');
-    title.textContent = `${state.selectedIds.size} ritobjekt markerade`;
-    text.textContent =
-      'Använd Flytta, Kopiera eller Rotera i den övre menyn. Shift-klick ändrar urvalet.';
+    title.textContent = `${state.selectedIds.size} ritobjekt${state.selectedViewCount ? ` · ${state.selectedViewCount} ${state.selectedViewCount === 1 ? 'vy' : 'vyer'}` : ''} markerade`;
+    text.textContent = state.selectedViewCount ? 'Flytta · Kopiera' : 'Flytta · Kopiera · Rotera';
     panel.append(title, text);
     panel.parentElement.classList.add('annotation-focused');
     hint.textContent = tools.marquee?.enabled
@@ -112,6 +115,10 @@ export function renderAnnotationInspector(
           : item.manual
             ? 'Leader'
             : 'Part mark';
+    const content = item.type !== 'shape' ? createEditorSection('Text', []) : null;
+    const dimensions = item.type === 'dimension' ? createEditorSection('Måttlinje', []) : null;
+    if (content) panel.append(content);
+    if (dimensions) panel.append(dimensions);
     const field = (labelText, key, type, value) => {
       const label = document.createElement('label'),
         input = document.createElement('input');
@@ -158,7 +165,7 @@ export function renderAnnotationInspector(
       };
       bindInspectorField(input, () => item[key] ?? value);
       label.append(input);
-      panel.append(label);
+      content.append(label);
     };
     if (item.type !== 'shape') {
       field('Kommentar', 'comment', 'text', item.comment || '');
@@ -181,13 +188,15 @@ export function renderAnnotationInspector(
       if (linked.length > 1) {
         const info = document.createElement('p');
         info.textContent = `${linked.length} länkade mått · flytt och måttstil ändras tillsammans`;
-        panel.append(info);
-        button('Bryt länk', () => {
-          commands.checkpoint();
-          unlinkDimensions(state.items, item);
-          commands.refresh();
-          adapter.redraw();
-        });
+        dimensions.append(info);
+        dimensions.append(
+          button('Bryt länk', () => {
+            commands.checkpoint();
+            unlinkDimensions(state.items, item);
+            commands.refresh();
+            adapter.redraw();
+          }),
+        );
       }
       const choice = (title, options, value, change) => {
         const label = document.createElement('label'),
@@ -197,7 +206,7 @@ export function renderAnnotationInspector(
         select.value = String(value);
         select.onchange = () => change(select.value);
         label.append(select);
-        panel.append(label);
+        dimensions.append(label);
         return select;
       };
       const direction = choice('Riktning', Object.entries(names), item.kind, (kind) => {
@@ -261,8 +270,8 @@ export function renderAnnotationInspector(
         Number(dimensionPaperOffset(item, project, adapter.unit()).value.toFixed(2)),
       );
       label.append(offset);
-      panel.append(label);
-      button('Lägg till måttpunkt', () => commands.addDimensionPoint());
+      dimensions.append(label);
+      dimensions.append(button('Lägg till måttpunkt', () => commands.addDimensionPoint()));
       const details = document.createElement('details');
       details.className = 'annotation-point-details';
       const summary = document.createElement('summary');
@@ -280,18 +289,15 @@ export function renderAnnotationInspector(
         remove.setAttribute('aria-label', `Ta bort måttpunkt ${p.index + 1}`);
         remove.disabled = item.points.length <= 2;
         remove.onclick = () => {
-          commands.checkpoint();
-          item.points.splice(p.index, 1);
-          item.references?.splice(p.index, 1);
-          commands.refresh();
-          panel.querySelector('details').open = true;
+          commands.removeDimensionPoint(p.index);
+          panel.querySelector('.annotation-point-details').open = true;
           adapter.redraw();
         };
         row.append(text, remove);
         list.append(row);
       }
       details.append(list);
-      panel.append(details);
+      dimensions.append(details);
     }
     const remove = button('Ta bort', () => {
       commands.checkpoint();
@@ -358,8 +364,6 @@ export function renderAnnotationInspector(
     undo.append(b);
   }
   panel.append(undo);
-  for (const b of dialog.querySelectorAll('[data-drawing-history]'))
-    b.disabled = !(b.dataset.drawingHistory === 'redo' ? state.future : state.history).length;
   const instructions =
     state.workflow === 'shape' && state.mode
       ? state.mode === 'circle'

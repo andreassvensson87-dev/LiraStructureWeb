@@ -1,6 +1,7 @@
 // Presentation only. Callers provide snap results and projected coordinates.
 export const cadFeedback = Object.freeze({
   snap: '#d000b8',
+  nearestEdge: '#20aaba',
   preview: '#28946d',
   previewOpacity: 0.65,
   rubberBand: '#a6b3ba',
@@ -107,4 +108,32 @@ export function paintCadGuide(
   });
   root.append(node);
   return node;
+}
+
+/** Paint only the boundary owned by the winning Nearest candidate. */
+export function paintCadNearestEdge(root, snap, project = (p) => p) {
+  if (!snap?.snapEdge || ![snap.kind, snap.label].includes('Närmaste')) return null;
+  const edge = snap.snapEdge;
+  const points =
+    edge.points ||
+    Array.from({ length: 145 }, (_, index) => {
+      const angle = edge.start + (edge.sweep * index) / 144;
+      return [
+        edge.center[0] + edge.radius * Math.cos(angle),
+        edge.center[1] + edge.radius * Math.sin(angle),
+      ];
+    });
+  const projected = points.map(project);
+  if (projected.length < 2 || projected.some((p) => !p || !p.every(Number.isFinite))) return null;
+  const path = svg('path', {
+    d: `M${projected.map((p) => p.join(',')).join('L')}`,
+    fill: 'none',
+    stroke: cadFeedback.nearestEdge,
+    'stroke-width': 2,
+    'vector-effect': 'non-scaling-stroke',
+    'pointer-events': 'none',
+    'data-cad-nearest-edge': '',
+  });
+  root.append(path);
+  return path;
 }

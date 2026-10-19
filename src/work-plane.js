@@ -30,6 +30,19 @@ export function drawingWorkPlane(operation, temporaryPlane) {
   if (operation?.mode === 'plateCreate') return operation.frame;
   if (operation?.mode === 'plateVertex') return operation.source.frame;
   if (operation?.gripRefs || operation?.mode === 'grip')
-    return operation.frame || (operation.linearId ? temporaryPlane : null) || null;
-  return !operation || ['move', 'copy'].includes(operation.mode) ? temporaryPlane : null;
+    return operation.frame || temporaryPlane || null;
+  return !operation || ['move', 'copy', 'polysweepCreate', 'blockCreate'].includes(operation.mode)
+    ? temporaryPlane
+    : null;
+}
+
+/** Orthonormal axes shared by point constraints and their visual feedback. */
+export function workPlaneAxes(frame) {
+  const x = new THREE.Vector3(...(frame?.u || [1, 0, 0])).normalize();
+  const z = x
+    .clone()
+    .cross(new THREE.Vector3(...(frame?.v || [0, 1, 0])))
+    .normalize();
+  const y = z.clone().cross(x).normalize();
+  return { X: x.toArray(), Y: y.toArray(), Z: z.toArray() };
 }

@@ -1,3 +1,4 @@
+import { createEditorSection } from './ui/editor-surface.js';
 import { createViewCropPreview } from './drawing-view-crop-preview.js';
 import { bindInspectorField, setInspectorFieldState } from './inspector/field-state.js';
 import { buildPlanObjects, buildSectionObjects } from './plan-view-geometry.js';
@@ -115,11 +116,12 @@ export class PlanView {
       this.views?.reset();
       this.frameSVG.replaceChildren();
     });
-    this.layoutSelect = layoutPicker(inspector, 'plan-frame-layout', (id) => {
+    this.layoutSelect = layoutPicker(shell.settings, 'plan-frame-layout', (id) => {
       this.record.sheet ??= {};
       this.record.sheet.layoutId = id;
       this.refreshPaper(true);
     });
+    shell.settings.append(createEditorSection('Blad', [this.layoutSelect.parentElement]));
     const scaleLabel = document.createElement('label');
     scaleLabel.textContent = 'Vy · skala 1:';
     this.paperScale = document.createElement('input');
@@ -181,6 +183,20 @@ export class PlanView {
         this.draw();
       }
     };
+    inspector.querySelector(':scope > h3')?.remove();
+    inspector.append(
+      createEditorSection('Visning', [
+        hiddenLabel,
+        this.profileDetailControl.root,
+        hatchLabel,
+        gridLabel,
+        levelsLabel,
+      ]),
+      createEditorSection(
+        'Avgränsning',
+        ['level', 'lower', 'cut', 'upper'].map((key) => this.$(key).parentElement),
+      ),
+    );
     const toolbar = this.dialog.querySelector('.plan-toolbar');
     toolbar.classList.add('drawing-commandbar');
     toolbar.setAttribute('aria-label', 'Ritningsverktyg');
@@ -340,6 +356,7 @@ export class PlanView {
       tools: [...toolbar.children].filter((child) => !existingTools.has(child)),
       cancel: () => this.cancelInteraction(),
       openList: openDrawingList,
+      fit: (all) => this.navigation.fit(all),
       save: () => {
         this.captureSettings();
         this.saveRecord?.(this.record);
@@ -485,7 +502,7 @@ export class PlanView {
   }
   cancelInteraction() {
     this.annotations?.grips?.cancel();
-    this.views?.marquee.cancel();
+    this.annotations?.marquee.cancel();
     this.views?.actions.cancel();
     this.sectionTool?.cancel();
     this.detailTool?.cancel();

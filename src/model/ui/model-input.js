@@ -14,7 +14,6 @@ export function installModelInput({
   controllers,
   frameGate,
   grid,
-  guide,
   objectFeedback,
   objects,
   pointerQueue,
@@ -226,7 +225,6 @@ export function installModelInput({
       snapMarker.hidden = true;
       tools.activeSnap = null;
       grid.highlight([]);
-      guide.visible = false;
       clearPreview();
     },
     actions: {

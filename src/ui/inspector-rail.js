@@ -1,7 +1,7 @@
 import { commandIcon } from './icons.js';
 
 /** Presentation only. Panels and commands remain owned by the workspace. */
-export function installInspectorRail(host, panels, prefix) {
+export function installInspectorRail(host, panels, prefix, { onChange = () => {} } = {}) {
   host.classList.add('ui-inspector-with-rail');
   const content = document.createElement('div');
   content.className = 'ui-inspector-content';
@@ -34,6 +34,7 @@ export function installInspectorRail(host, panels, prefix) {
       buttons[i].setAttribute('aria-selected', String(selected));
       buttons[i].tabIndex = selected ? 0 : -1;
     });
+    onChange(id);
   }
   rail.addEventListener('keydown', (event) => {
     const index = buttons.indexOf(event.target);

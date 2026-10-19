@@ -1,3 +1,4 @@
+import { drawingMarqueeHits } from './drawing-selection-geometry.js';
 import { updateDetailArea, syncDetailCrop } from './drawing-details.js';
 import { drawingProfileDetail } from './profile-detail.js';
 // Paper coordinates are millimetres; camera coordinates are model millimetres.
@@ -112,18 +113,41 @@ export function drawingViewSelection(ids, id, additive = false, preserve = false
   return next;
 }
 export function viewsInRectangle(views, a, b) {
-  const left = Math.min(a[0], b[0]),
-    right = Math.max(a[0], b[0]);
-  const top = Math.min(a[1], b[1]),
-    bottom = Math.max(a[1], b[1]);
-  const crossing = b[0] < a[0];
   return views
     .filter((view) => {
       const [x, y] = view.position,
         [w, h] = view.size;
-      return crossing
-        ? x <= right && x + w >= left && y <= bottom && y + h >= top
-        : x >= left && x + w <= right && y >= top && y + h <= bottom;
+      // Open polyline: crossing only hits the border, never the empty interior.
+      return drawingMarqueeHits(
+        [
+          {
+            points: [
+              [x, y],
+              [x + w, y],
+              [x + w, y + h],
+              [x, y + h],
+              [x, y],
+            ],
+            closed: false,
+          },
+        ],
+        a,
+        b,
+      );
     })
     .map((view) => view.id);
+}
+
+export function dependentViewIds(views, id) {
+  const ids = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const view of views)
+      if (ids.has(view.source?.parentViewId) && !ids.has(view.id)) {
+        ids.add(view.id);
+        changed = true;
+      }
+  }
+  return ids;
 }

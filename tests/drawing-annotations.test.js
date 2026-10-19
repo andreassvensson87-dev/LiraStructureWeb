@@ -18,7 +18,15 @@ test('adding dimension points transfers focus from the dismissed menu to the dra
       },
     ],
     selected: 'chain',
-    contextMenu: { hidden: false },
+    contextMenu: {
+      closed: false,
+      close() {
+        this.closed = true;
+      },
+      isOpen() {
+        return !this.closed;
+      },
+    },
     surface: {
       setAttribute: (name, value) => {
         tabindex = [name, value];
@@ -31,7 +39,7 @@ test('adding dimension points transfers focus from the dismissed menu to the dra
     adapter: { redraw() {} },
   });
   annotations.startAdding();
-  assert.equal(annotations.contextMenu.hidden, true);
+  assert.equal(annotations.contextMenu.closed, true);
   assert.equal(annotations.mode, 'add');
   assert.deepEqual(tabindex, ['tabindex', '-1']);
   assert.equal(focused, true);
@@ -181,7 +189,7 @@ test('shape creation commits one history entry, continues a line and restores it
     future: [],
     selectedIds: new Set(),
     surface: { setAttribute() {}, focus() {} },
-    contextMenu: { hidden: true },
+    contextMenu: { close() {}, isOpen: () => false },
     adapter: { redraw() {} },
     ui() {},
     location: () => hit,

@@ -1,18 +1,4 @@
-import { viewsInRectangle } from './drawing-views.js';
-export function dependentViewIds(views, id) {
-  const ids = new Set([id]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const view of views)
-      if (ids.has(view.source?.parentViewId) && !ids.has(view.id)) {
-        ids.add(view.id);
-        changed = true;
-      }
-  }
-  return ids;
-}
-
+import { dependentViewIds } from './drawing-views.js';
 import { drawingProfileDetail } from './profile-detail.js';
 
 export function alignDrawingView(view, target, direction) {
@@ -24,29 +10,9 @@ export class DrawingViewActions {
   constructor(dialog, adapter) {
     this.adapter = adapter;
     this.dialog = dialog;
-    this.menu = document.createElement('div');
-    this.menu.className = 'annotation-context-menu';
-    this.menu.hidden = true;
-    dialog.append(this.menu);
-    dialog.addEventListener(
-      'contextmenu',
-      (event) => {
-        const id = adapter.hit(event);
-        if (!id) return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        adapter.cancel();
-        this.cancel();
-        adapter.select(id);
-        this.open(id, event);
-      },
-      true,
-    );
     dialog.addEventListener(
       'pointerdown',
       (event) => {
-        if (this.menu.contains(event.target)) return;
-        this.menu.hidden = true;
         if (!this.pending || event.button !== 0) return;
         const target = adapter.views().find((v) => v.id === adapter.hit(event));
         if (!target) return;
@@ -74,7 +40,7 @@ export class DrawingViewActions {
     dialog.addEventListener(
       'keydown',
       (event) => {
-        if (event.key === 'Escape' && (this.pending || !this.menu.hidden)) {
+        if (event.key === 'Escape' && this.pending) {
           event.preventDefault();
           event.stopImmediatePropagation();
           this.cancel();
@@ -86,47 +52,41 @@ export class DrawingViewActions {
   }
   cancel() {
     this.pending = null;
-    this.menu.hidden = true;
     const hint = this.dialog.querySelector('.annotation-hint');
     if (hint) hint.textContent = 'Redo';
   }
-  open(id, event) {
-    this.menu.replaceChildren();
-    const button = (label, action) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = label;
-      b.onclick = () => {
-        this.menu.hidden = true;
-        action();
-      };
-      this.menu.append(b);
-    };
-    button('Duplicera vy', () => this.adapter.duplicate(id));
+  items(id) {
     const view = this.adapter.views().find((v) => v.id === id);
+    if (!view) return [];
     const detail = drawingProfileDetail(view, this.adapter.drawingType?.() || 'SP');
-    button(detail === 'exact' ? 'Visa profiler schematiskt' : 'Visa profiler exakt', () => {
-      view.settings ??= {};
-      view.settings.profileDetail = detail === 'exact' ? 'schematic' : 'exact';
-      this.adapter.changed(id);
-    });
-    button('Rita om vyn', () => this.adapter.changed(id));
-    button('Ta bort vy…', () => this.remove(id));
-    for (const [direction, label] of [
-      ['horizontal', 'Linjera horisontellt…'],
-      ['vertical', 'Linjera vertikalt…'],
-    ])
-      button(label, () => {
-        this.pending = { id, direction };
-        this.dialog.querySelector('.annotation-hint').textContent =
-          'Klicka på ramen till referensvyn · Esc avbryter';
-      });
-    this.menu.hidden = false;
-    const box = this.dialog.getBoundingClientRect();
-    this.menu.style.left = Math.max(0, Math.min(event.clientX - box.left, box.width - 230)) + 'px';
-    this.menu.style.top =
-      Math.max(0, Math.min(event.clientY - box.top, box.height - this.menu.offsetHeight)) + 'px';
-    this.menu.querySelector('button').focus();
+    return [
+      { label: 'Duplicera vy', run: () => this.adapter.duplicate(id) },
+      {
+        label: 'Visning',
+        items: [
+          {
+            label: detail === 'exact' ? 'Visa profiler schematiskt' : 'Visa profiler exakt',
+            run: () => {
+              view.settings ??= {};
+              view.settings.profileDetail = detail === 'exact' ? 'schematic' : 'exact';
+              this.adapter.changed(id);
+            },
+          },
+        ],
+      },
+      { label: 'Rita om vyn', run: () => this.adapter.changed(id) },
+      ...[
+        ['horizontal', 'Linjera horisontellt…'],
+        ['vertical', 'Linjera vertikalt…'],
+      ].map(([direction, label]) => ({
+        label,
+        run: () => {
+          this.pending = { id, direction };
+          this.dialog.querySelector('.annotation-hint').textContent =
+            'Klicka på ramen till referensvyn · Esc avbryter';
+        },
+      })),
+    ];
   }
   remove(id) {
     const views = this.adapter.views(),
@@ -183,108 +143,4 @@ export function installDrawingViewDeselection({
       true,
     ),
   );
-}
-
-/** Shared window/crossing selection on the empty drawing pasteboard. */
-export function installDrawingViewMarquee({
-  dialog,
-  surface,
-  paper,
-  paperSize,
-  views,
-  ids,
-  change,
-  busy,
-  hit,
-}) {
-  const box = document.createElement('div');
-  box.className = 'selection-box';
-  box.hidden = true;
-  surface.append(box);
-  let gesture = null;
-  const point = (event) => {
-    const rect = paper.getBoundingClientRect(),
-      size = paperSize();
-    return [
-      ((event.clientX - rect.left) * size[0]) / rect.width,
-      ((event.clientY - rect.top) * size[1]) / rect.height,
-    ];
-  };
-  const cancel = () => {
-    const old = gesture;
-    gesture = null;
-    box.hidden = true;
-    if (old && surface.hasPointerCapture(old.id)) surface.releasePointerCapture(old.id);
-  };
-  surface.addEventListener(
-    'pointerdown',
-    (event) => {
-      if (event.button !== 0 || busy() || hit(event) || event.defaultPrevented) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      gesture = {
-        id: event.pointerId,
-        start: point(event),
-        x: event.clientX,
-        y: event.clientY,
-        ids: new Set(ids()),
-        additive: event.shiftKey,
-      };
-      surface.setPointerCapture(event.pointerId);
-    },
-    true,
-  );
-  surface.addEventListener(
-    'pointermove',
-    (event) => {
-      if (!gesture || event.pointerId !== gesture.id) return;
-      event.stopImmediatePropagation();
-      const rect = surface.getBoundingClientRect();
-      box.hidden = false;
-      box.classList.toggle('crossing', event.clientX < gesture.x);
-      Object.assign(box.style, {
-        left: Math.min(event.clientX, gesture.x) - rect.left + surface.scrollLeft + 'px',
-        top: Math.min(event.clientY, gesture.y) - rect.top + surface.scrollTop + 'px',
-        width: Math.abs(event.clientX - gesture.x) + 'px',
-        height: Math.abs(event.clientY - gesture.y) + 'px',
-      });
-    },
-    true,
-  );
-  surface.addEventListener(
-    'pointerup',
-    (event) => {
-      if (!gesture || event.pointerId !== gesture.id) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const previous = gesture,
-        end = point(event);
-      const found =
-        Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 4
-          ? []
-          : viewsInRectangle(views(), previous.start, end);
-      cancel();
-      change(previous.additive ? new Set([...previous.ids, ...found]) : new Set(found));
-    },
-    true,
-  );
-  surface.addEventListener('pointercancel', cancel);
-  dialog.addEventListener(
-    'keydown',
-    (event) => {
-      if (event.key === 'Escape' && gesture) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        cancel();
-      }
-    },
-    true,
-  );
-  dialog.addEventListener('close', cancel);
-  return {
-    cancel,
-    get active() {
-      return !!gesture;
-    },
-  };
 }

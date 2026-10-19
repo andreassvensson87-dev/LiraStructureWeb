@@ -463,4 +463,46 @@ Startfilen startar boot-funktionen utan top-level await: Vites uppdelade lazy-mo
 
 Ritningseditorns översta rad ägs av `drawing-editor-header.js` och innehåller ritningslistan, dokumentnamnet och återgång till modellen. `drawing-toolbox.js` beskriver placeringen med det gemensamma ribbon-byggblocket. Befintliga kommandon anger sin grupp via `data-drawing-command-group`; kommandonas noder, handlers och disabled-status behålls. Ingen generell Fler-meny samlar oklassificerade kontroller.
 
-`drawing-workspace.js` stänger editorn genom dess vanliga livscykel innan listans callback körs. Därmed sparas ritningen med befintlig save-transaktion. `app/drawing-controller.js` kopplar båda editorerna till `DrawingManager.show()`, som också används för att öppna listan från modellen. Editorn äger ingen separat ritningslista eller projektmutation.
+`drawing-workspace.js` sparar genom befintlig save-transaktion och öppnar listan ovanpå den kvarvarande editorn. Listans Stäng/Esc lämnar ritning, zoom och panorering orörda. Först när en ritning väljs inväntar `app/drawing-navigation.js` den tidigare editorns close-livscykel innan nästa dokument öppnas, så att sparning och resursfrigöring avslutas före återanvändning. `app/drawing-controller.js` kopplar båda editorerna till `DrawingManager.show()`, som också används för att öppna listan från modellen. Editorn äger ingen separat ritningslista eller projektmutation.
+
+### Gemensamt urval på ritningsblad
+
+`DrawingMarquee` äger en enda rektangelgest för ritobjekt och vyer, även inne i en vy. Vyägarna tillhandahåller blad, vyer, urval och omritningscallbacks; den tidigare separata vyrektangeln har tagits bort. `viewsInRectangle` använder befintlig konturträff: en korsande ruta träffar ramens öppna polyline, inte dess fyllda inneryta. Objekturval använder befintliga renderade konturer. Shift kombinerar urval och Esc tömmer båda typerna.
+
+`drawing-mixed-transform.js` är DOM-fri och räknar Flytta/Kopiera i bladets millimeter. Ritobjekt i en vald vy behåller sina lokala koordinater och följer bara vypositionen. Övriga valda ritobjekt översätts med sin egen vyskala och vända Y-axel. Kopiering klonar vyinnehåll en gång, ger nya identiteter och kopplar om kopierade beroende vyer. `DrawingShapeTransform` äger kommandots befintliga punktval och preview; operationen återställs som en gemensam ritningshistorikpost. Rotation erbjuds för ritobjekt i en gemensam vy och spärras för vyurval.
+
+### Sektioner i ritningsinspektorn
+
+Vy, visning, avgränsning och placering använder `createEditorSection` från samma editor-UI som övriga arbetsytor. Befintliga kontroller flyttas till sektionerna utan nya inställningskällor eller ändrade handlers. Single Part skapar vy-/visningssektionerna och skickar deras mål uttryckligen till `PartSections` för dess befintliga skal- och hatchfält. GA:s gränsvärden ligger i Avgränsning, skilda från den generiska placeringen på bladet. Richtextinspektorn grupperar typografi, placering och utseende; måttinspektorn skiljer textfält från måttlinjens geometri. Ritordning behåller sitt gemensamma byggblock. Bladformat/layout och typsnitt grupperas på inställningsfliken.
+
+### Typavgränsning av ritningsurval
+
+Modell och ritning delar `SelectionScope` och `installSelectionDock`. Typupplösning och dockens värd/ankare är uttryckliga beroenden; modellens standardbeteende är oförändrat. Stilen laddas från appens stilentry så att editorernas JavaScript fortsatt kan importeras av DOM-fria tester.
+
+`drawing-selection-scope.js` behåller grundurvalets identiteter för vyer och ritobjekt och löser aktuella objekt från ritningen; filtret lagrar inga geometrikopior. `drawing/ui/selection-dock.js` översätter typvalet till editorernas befintliga aktiva vy-/objekturval och väljer rätt inspektorpanel. Alla återställer grundurvalet med aktuella värden. Canvasurval fångar en ny bas, medan panelbyte och egenskapsändringar behåller den. Programmatisk applicering spärrar tillfälligt ny urvalsfångst. Blandade transformoperationers historik sparar även typavgränsningen; kopiering kan bilda ett nytt grundurval. Esc och nativ dialog-cancel rensar basen när inget kommando pågår. GA:s vylista är tom tills bladet skapats.
+
+## Ritningens gemensamma högerklick
+
+`drawing/ui/context-menu.js` installerar en enda menyägare på ritningens arbetsyta för GA, Assembly och Single Part. Den använder `ui/context-click.js` (stationärt högersläpp) och `ui/context-menu.js` för presentation, tangentbord och avvisning. Menyn ligger i ritningsdialogen så att den fungerar med modal fokus. Modellmenyn accepterar inte ritningsmål. Måttens och vyernas tidigare separata meny-DOM är borttagen.
+
+`drawing-context-selection.js` avgör utan DOM om högerklicket behåller det effektiva urvalet eller väljer ett nytt objekt; tom yta bevarar markeringen. Inspektorns aktiva typavgränsning gäller även menykommandon. Vyträff använder samma ramträff som vanlig markering. Kommandon ligger kvar hos ritobjektens transform-, text-, mått- och vycontrollerer. `drawing-vertex-editing.js` beräknar validerade hörnändringar utan UI; vanliga ritgrepp används därefter. Parametriska block undantas från fri hörnredigering.
+
+`DrawingMarquee.removeSelection` använder samma gemensamma bladögonblicksbild som blandad flytt/kopiering. Beroende vyer och deras ritobjekt tas bort en gång, minst en vy behålls och en enda ångringspost återställer hela urvalet och dess typavgränsning. Menyadaptern tillför bekräftelsen med befintlig `createConfirmationDialog`. `dependentViewIds` hör till ritningens vyregler i `drawing-views.js`.
+
+## Modellens gemensamma axelspårning
+
+`workPlaneAxes` i `work-plane.js` är den gemensamma källan för lokala X/Y/Z-axlar. `resolveSnap` använder samma bas för automatisk axelspårning och uttryckliga axellås; numerisk längd använder denna riktning. Fria 3D-verktyg kan spåra arbetsplanets normal, medan planbundna plate-/hörnverktyg fortsatt begränsas till sitt plan. Sweep, Polysweep, Move/Copy och fria grepp använder aktuellt arbetsplan; objektbundna grepp behåller sina uttryckliga plan.
+
+`model/axis-feedback.js` projicerar accepterat snapresultat till skärmgeometri utan DOM eller ändring av snap/modell. Lokala axelträffar får färg, axelbokstav och en liten projicerad rät vinkel vid startpunkten. Sned polar behåller en neutral polarhjälplinje; fri punkt, nollängd och riktningar som ses rakt längs axeln får ingen vilseledande axelmarkering. `ui/axis-feedback.js` återanvänder `cadFeedback` och `paintCadGuide`; symbol, vinkel och strecklängder har fasta skärmmått.
+
+`snap-overlay.js` är gemensam visningsägare för skapande, grepp och Move/Copy via befintlig punktplacering och bildloop. Det pekarpassiva SVG-lagret uppdateras bara när dess projicerade feedback ändrats och töms vid bekräftelse/avbrott. Den gamla WebGL-hjälplinjen och dess verktygsspecifika beroenden har tagits bort. Ingen ny snapmotor, inställning eller inspektorkontroll införs.
+
+## Nearest visar sin vinnande kant
+
+Modellens `resolveSnap` och IFC:s befintliga kantindex behåller `snapEdge` på Nearest-kandidaten. Punkten väljs med oförändrad prioritering; endast vinnande Nearest-resultat får kantmetadata i visningsresultatet. Modellkanter klipps till arbetsområdet och IFC-kanter behåller sin vanliga världstransform. Ingen extra objektsökning görs för feedback.
+
+`snapFrame` behåller motsvarande kant på ritningens linje-/modell-/IFC-träff. Analytiska cirklar och bågar lämnar sin befintliga kurvbeskrivning till samma presentation. `locateDrawingPoint` kopierar metadata från det slutliga valet efter Polar/Otrack-prövningen och tar bort tidigare kantdata när ett nytt läge löses.
+
+`ui/cad-feedback.js` äger den turkosa färgen och `paintCadNearestEdge`. Modellens `model/nearest-feedback.js` projicerar endast den valda kanten och klipper dess skärmutsträckning; `snap-overlay.js` återanvänder det befintliga passiva SVG-lagret. Ritningar använder `drawing-overlay.js` och befintligt tillfälligt feedbacklager, som utesluts från export. Modellen återanvänder oförändrad kantgrafik när pekaren glider längs samma kant. Hjälplinjen är inte ett modellerat eller sparat objekt.
+
+`DrawingAnnotations.syncCadSettings` rensar inaktuellt hover-/trackingresultat när de delade CAD-inställningarna ändras. Endast den öppna ritningen får då begära omritning; en stängd ritning behåller inga aktiva feedbackuppdrag.

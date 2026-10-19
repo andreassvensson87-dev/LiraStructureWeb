@@ -20,6 +20,7 @@ export function installDrawingProfileDetail(parent, { view, drawingType, changed
     changed(current);
   };
   return {
+    root: label,
     sync(current = view()) {
       select.disabled = !current;
       select.value = drawingProfileDetail(current, drawingType());

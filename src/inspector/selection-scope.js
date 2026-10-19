@@ -1,6 +1,7 @@
 import { objectType } from '../model/object-types/index.js';
 export class SelectionScope {
-  constructor() {
+  constructor(resolveType = objectType) {
+    this.resolveType = resolveType;
     this.type = '';
     this.signature = '';
   }
@@ -13,14 +14,14 @@ export class SelectionScope {
       this.signature = signature;
       this.type = '';
     }
-    if (this.type && !selected.some((s) => objectType(s).id === this.type)) this.type = '';
+    if (this.type && !selected.some((s) => this.resolveType(s).id === this.type)) this.type = '';
     return this.objects(selected);
   }
   objects(selected) {
-    return this.type ? selected.filter((s) => objectType(s).id === this.type) : selected;
+    return this.type ? selected.filter((s) => this.resolveType(s).id === this.type) : selected;
   }
   choose(type, selected) {
-    if (type && !selected.some((s) => objectType(s).id === type))
+    if (type && !selected.some((s) => this.resolveType(s).id === type))
       throw Error('Objekttypen finns inte i markeringen.');
     this.type = type;
     return this.objects(selected);
@@ -28,7 +29,7 @@ export class SelectionScope {
   groups(selected) {
     const groups = new Map();
     for (const s of selected) {
-      const type = objectType(s);
+      const type = this.resolveType(s);
       if (!groups.has(type.id)) groups.set(type.id, { id: type.id, label: type.label, count: 0 });
       groups.get(type.id).count++;
     }

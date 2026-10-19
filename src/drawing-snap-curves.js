@@ -45,6 +45,14 @@ export function curveSnapCandidates(item, raw, base, settings) {
       result.push({ point: [...endpoints[0]], kind: 'Närmaste' });
     }
   }
+  for (const hit of result)
+    if (hit.kind === 'Närmaste')
+      hit.snapEdge = {
+        center: [...center],
+        radius,
+        start: item.shape === 'circle' ? 0 : geometry.start,
+        sweep: item.shape === 'circle' ? Math.PI * 2 : geometry.sweep,
+      };
   if (
     settings.perpendicular &&
     base &&

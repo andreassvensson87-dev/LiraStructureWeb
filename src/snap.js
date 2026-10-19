@@ -1,13 +1,13 @@
+import { workPlaneAxes } from './work-plane.js';
 import { chooseSnap, snapType, SNAP_PIXELS } from './snap-priority.js';
 import { perpendicularPoint } from './snap-geometry.js';
 import { nearestProjectedSegment } from './model/snap-projection.js';
-import { withinWorkArea } from './model/work-area.js';
+import { clipSegmentToBox, withinWorkArea } from './model/work-area.js';
 import { gridSegments, gridCrossings, gridProjection, lineIntersection } from './grid-geometry.js';
 import { roundProfile } from './round-profile.js';
 import { gridLabel } from './grid-labels.js';
 import * as THREE from 'three';
 import { createSnapGeometryContext, objectAnchors } from './model-object.js';
-const axes = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
 export function resolveSnap({
   pointer,
   camera,
@@ -39,6 +39,7 @@ export function resolveSnap({
   workArea = null,
   previousSnap = null,
 }) {
+  const axes = workPlaneAxes(workPlane);
   geometryContext ??= createSnapGeometryContext(model);
   const gridZ = grid.z ?? 0;
   const step = Number.isFinite(gridStep) && gridStep > 0 ? gridStep : 100;
@@ -111,7 +112,13 @@ export function resolveSnap({
         }
         if (nearestSnap && s.type !== 'gridline') {
           const point = nearestProjectedSegment(pointer, a, b, camera, width, height);
-          if (point) nearestPoints.push({ coords: point, symbol: 'line', label: 'Närmaste' });
+          if (point)
+            nearestPoints.push({
+              coords: point,
+              symbol: 'line',
+              label: 'Närmaste',
+              snapEdge: { points: clipSegmentToBox(a, b, workArea) || [a, b] },
+            });
         }
       }
   const pointCandidates = [];
@@ -159,9 +166,10 @@ export function resolveSnap({
   }
   const resultPoint = (candidate) => {
     if (!candidate) return null;
-    const { point, label, gridIds, symbol, featureId } = candidate;
+    const { point, label, gridIds, symbol, featureId, snapEdge } = candidate;
     const result = { point, label, kind: 'point', gridIds, symbol };
     if (featureId) result.featureId = featureId;
+    if (snapEdge) result.snapEdge = snapEdge;
     return result;
   };
   const exact = chooseSnap(pointCandidates, previousSnap);
@@ -170,7 +178,7 @@ export function resolveSnap({
     return resultPoint(
       chooseSnap(
         [...nearestPoints, ...(nearestSnap ? referencePoints.filter((p) => p.edge) : [])].flatMap(
-          ({ coords, label, symbol, featureId }) => {
+          ({ coords, label, symbol, featureId, snapEdge }) => {
             const p = new THREE.Vector3(...coords),
               clip = p.clone().project(camera);
             return Math.abs(clip.z) > 1 ||
@@ -184,6 +192,7 @@ export function resolveSnap({
                     label,
                     symbol,
                     featureId,
+                    snapEdge,
                     type: 'nearest',
                     distance: screen(p).distanceTo(cursor),
                     depth: clip.z,
@@ -195,7 +204,7 @@ export function resolveSnap({
     );
   }
   function directionSnap(direction, label, forced = false, base = origin) {
-    if (normal && Math.abs(direction.dot(normal)) > 1e-6)
+    if (constrainToPlane && normal && Math.abs(direction.dot(normal)) > 1e-6)
       return forced ? { point: null, label: 'Riktningen ligger utanför arbetsplanet' } : null;
     const a = screen(base),
       delta = screen(base.clone().addScaledVector(direction, 1000)).sub(a);
