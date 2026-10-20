@@ -679,3 +679,11 @@ Webbläsarprov i ett separat projekt på färsk localhost-origin: Sweep-kopierin
 Single Part verifierade linjestil, frikopplad förhandsvisning, Enter, Ångra samt nästa linjes förval. Assembly verifierade rektangelval av kopieringsmål och skrollklick. GA verifierade Enter på vykala, skapandeförval och stilkopiering mellan linjer. Ritningstextens höjd 3,5 → 5 bekräftades med Enter och tappade väntandemarkeringen. Inga JavaScript-fel rapporterades. Produktionsbygget startade på en separat färsk origin utan konsolfel.
 
 Full `npm run check` passerade: formatering, lint, 1166 tester utan fel och produktionsbygge. Logg: `/tmp/lira-properties-final-check.log`. Bild av den gemensamma kopieringsinspektorn: `inspector-property-copy.png` i den lokala visualiseringsmappen. Inte publicerat.
+
+### IFC-standardprofiler och profilrotation — 2026-10-20
+
+`reference-conversion.test.js` verifierar I-, U-, L-, T- och RHS-profiler vid 31°, 121°, 211° och 301°, med sned längdaxel samt separat roterad/förskjuten referensplacering. Automatisk matchning, manuellt profilval, upprepat val och återgång till källkonturen jämförs med källans ytor i båda riktningarna. Det skyddar osymmetriska profiler från felaktig halvvarvsrotation och manuella val från förlorad eller ackumulerad rotation.
+
+Browserprov med den riktiga konverteringsdialogen i en tillfällig, isolerad testsida: UPE 80 vid 211°, sned balk och roterad referensplacering. Automatiskt val, manuellt bibliotekssök/val och omval av automatisk standardprofil gav cirka 0,0033 mm största utbredningsavvikelse. Inga konsolfel. Detta prov använder en syntetisk referensmesh; befintliga specialisttester täcker också de verkliga IFC-fixturerna. Bild: `/tmp/lira-ifc-rotation-qa.png`.
+
+Centrala modelltester, samtliga specialist-/regressionstester, lint och formatering för ändrade käll-/testfiler samt Vite-produktionsbygget passerade. Inte publicerat.

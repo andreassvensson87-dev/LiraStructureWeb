@@ -23,13 +23,25 @@ export function profileGeometryMatch(
   const target = section.loops.map((loop) =>
     loop.map(([x, y]) => [x - section.properties.cx, y - section.properties.cy]),
   );
+  const targetEdge = target[0]
+    .map((p, i) => {
+      const q = target[0][(i + 1) % target[0].length];
+      return [q[0] - p[0], q[1] - p[1]];
+    })
+    .sort((a, b) => Math.hypot(...b) - Math.hypot(...a))[0];
+  const targetDirection = Math.atan2(targetEdge[1], targetEdge[0]);
   const angles = [0];
   for (let i = 0; i < centered[0].length; i++) {
     const p = centered[0][i],
       q = centered[0][(i + 1) % centered[0].length];
     if (Math.hypot(q[0] - p[0], q[1] - p[1]) < 5) continue;
-    const angle = ((Math.atan2(q[1] - p[1], q[0] - p[0]) % Math.PI) + Math.PI) % Math.PI;
-    if (!angles.some((a) => Math.abs(a - angle) < 1e-5)) angles.push(angle);
+    const direction = Math.atan2(q[1] - p[1], q[0] - p[0]) - targetDirection;
+    // Open sections are not invariant under a half turn. Try both directions,
+    // independently of the winding and first vertex of the recovered contour.
+    for (const offset of [0, Math.PI]) {
+      const angle = (((direction + offset) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      if (!angles.some((a) => Math.abs(a - angle) < 1e-5)) angles.push(angle);
+    }
   }
   let best = null;
   for (const angle of angles) {

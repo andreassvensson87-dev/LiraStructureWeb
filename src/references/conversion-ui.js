@@ -24,6 +24,7 @@ export function installReferenceConversion({
   const $ = (selector) => dialog.querySelector(selector);
   let row = null,
     rows = [],
+    sourceObject = null,
     sourceSection = null;
   const profiles = () => {
     const all = [...(getProfiles?.() || [])];
@@ -37,9 +38,13 @@ export function installReferenceConversion({
   function apply(section) {
     if (!dialog.open || !row?.object) return;
     try {
+      const candidate = row.profileMatch?.alternatives.find(
+        (c) => c.section.id === section.id && c.section.revision === section.revision,
+      );
       row.object = conversionProfile(
-        row.object,
+        sourceObject,
         Array.isArray(section.parameters) ? profileSnapshot(section) : section,
+        candidate?.rotation == null ? null : candidate.rotation - sourceObject.rotation,
       );
       $('[data-error]').textContent = '';
       sync();
@@ -115,6 +120,7 @@ export function installReferenceConversion({
     picker.close();
     row = null;
     rows = [];
+    sourceObject = null;
     sourceSection = null;
   });
   installDialogPresentation(dialog);
@@ -122,6 +128,7 @@ export function installReferenceConversion({
     if (selectedIds?.length !== 1) return;
     rows = planReferenceConversion(model, getObjects(), selectedIds, getProfiles?.());
     row = rows[0] || null;
+    sourceObject = row?.object || null;
     sourceSection = row?.object?.section || null;
     $('[data-source]').textContent = `${model.title} · ${row?.name || 'IFC-objekt'}`;
     $('[data-type]').value =

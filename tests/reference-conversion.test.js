@@ -7,6 +7,7 @@ import { sweepGeometry, validateSweep } from '../src/sweep.js';
 import { plateGeometry } from '../src/plate.js';
 import {
   conversionObjects,
+  conversionProfile,
   convertReferencePart,
   planReferenceConversion,
 } from '../src/references/conversion.js';
@@ -181,6 +182,59 @@ test('all HEA sizes are recognized from inclined rotated IFC contours without as
     assert.equal(converted.section.name, definition.name);
     assert.equal(converted.material, undefined);
     nearBounds(bounds(source.mesh.geometry), bounds(sweepGeometry(converted)));
+  }
+});
+
+test('standard profile conversion preserves full-turn roll for open sections and repeated manual choices', async () => {
+  const { TIBNOR_PROFILES } = await import('../src/tibnor-catalog.js');
+  const { profileSnapshot } = await import('../src/section-profile.js');
+  const { MeshBVH } = await import('three-mesh-bvh');
+  for (const type of ['i', 'u', 'l', 't', 'rhs']) {
+    const definition = TIBNOR_PROFILES.find((p) => p.profileType === type);
+    assert.ok(definition, type);
+    const section = profileSnapshot(definition);
+    for (const rotation of [31, 121, 211, 301]) {
+      const source = part(sweepGeometry({ ...beam, profile: 'custom', section, rotation }));
+      source.mesh.rotation.set(0.2, -0.4, 0.7);
+      source.mesh.position.set(400, -800, 1200);
+      source.mesh.updateMatrixWorld(true);
+      const original = source.mesh.geometry.clone().applyMatrix4(source.mesh.matrixWorld);
+      const recovered = convertReferencePart(source, model, 'sweep', []).object;
+      const before = structuredClone(recovered);
+      const automatic = convertReferencePart(source, model, 'sweep', [definition]).object;
+      const manual = conversionProfile(recovered, section);
+      for (const object of [
+        automatic,
+        manual,
+        conversionProfile(manual, section),
+        conversionProfile(manual, recovered.section),
+      ]) {
+        if (object !== automatic && object.section.id === section.id)
+          assert.deepEqual(object.start, recovered.start);
+        const target = sweepGeometry(object);
+        nearBounds(bounds(original), bounds(target));
+        for (const [from, to] of [
+          [original, target],
+          [target, original],
+        ]) {
+          const tree = new MeshBVH(to, { indirect: true });
+          const position = from.attributes.position;
+          for (let i = 0; i < position.count; i++) {
+            const hit = tree.closestPointToPoint(
+              new THREE.Vector3().fromBufferAttribute(position, i),
+            );
+            assert.ok(hit.distance < 0.03, `${type} ${rotation}: ${hit.distance}`);
+          }
+        }
+        target.dispose();
+      }
+      assert.equal(automatic.section.id, section.id, `${type} ${rotation}`);
+      assert.equal(manual.section.id, section.id);
+      assert.deepEqual(recovered, before);
+      original.dispose();
+      source.mesh.geometry.dispose();
+      source.mesh.material.dispose();
+    }
   }
 });
 

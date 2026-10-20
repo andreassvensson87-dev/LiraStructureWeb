@@ -30,6 +30,8 @@ Ursprungliga profilmått och typ måste stämma för ett parameterbaserat verifi
 
 Verifierade förslag med verifierad konturrotation kan fylla utkastets profil. Troliga och tvetydiga förslag kräver manuellt val; den återvunna IFC-konturen behålls under tiden. Skalning i en mappad representation och okänd enhet nedgraderar säkerheten. Motstridiga egenskapsmått rapporteras i stället för att skriva över den ursprungliga profildefinitionen.
 
+Konturmatchningen söker hela varvet, även för osymmetriska U-, L- och T-profiler. Rotation beräknas mellan källans och målprofilens kantriktningar; målprofilen behöver inte ligga längs koordinataxlarna. Manuellt profilval använder förslagets verifierade rotation eller matchar den valda profilen mot källkonturen. Dialogens upprepade profilval utgår från samma ursprungliga utkast, så mellanliggande val inte ändrar nästa profils orientering. Utan konturmatchning behålls utkastets befintliga rotation.
+
 ## Fler exempel och finjustering
 
 Kör `node scripts/analyze-ifc-profiles.mjs fil.ifc rapport.json` för en läsande rapport över balkar, pelare och stänger med det inbyggda biblioteket. Rapporten är uttryckligen **en metadataanalys**, inte ett mått på hur många objekt som går att konvertera. Den innehåller underlag, beslut, alternativ, avvikelser och konflikter. Ingen mesh eller triangulering behövs för rapporten.
