@@ -164,6 +164,7 @@ export function installWorkspaceSettings({
     finishEditing: () => controllers.inspector?.finish(),
   });
   installProjectFiles({
+    importModel: () => controllers.modelImportUI.open(),
     exportIFC: () => controllers.ifcExport.open(),
     project,
     newProject: () => createProject({ grid: defaultGrid, levels: initialLevels() }),

@@ -1,4 +1,106 @@
 /* Opt-in presentation for settings and small form dialogs. */
+.model-import-dialog.ui-library-window {
+  width: min(540px, calc(100vw - 32px));
+  min-width: min(360px, calc(100vw - 16px));
+  height: min(560px, calc(100dvh - 100px));
+  left: 16px;
+}
+.model-import-dialog > .ui-ribbon {
+  min-height: 48px;
+  height: auto;
+  flex-shrink: 0;
+}
+.model-import-dialog .model-import-content {
+  overflow: auto;
+  min-height: 0;
+  padding: 10px 14px;
+  flex: 1;
+}
+.model-import-options {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.model-import-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.model-import-dialog input[type='checkbox'] {
+  margin: 0;
+  vertical-align: middle;
+  width: auto;
+  flex: 0 0 auto;
+}
+.model-import-table {
+  overflow: auto;
+  max-height: 310px;
+}
+.model-import-dialog .ui-dialog-table .is-selected {
+  background: var(--ui-selection-bg, #e7f4ef);
+}
+.model-import-dialog.ui-managed-dialog .ui-dialog-table td button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  min-height: 0;
+  line-height: inherit;
+}
+.model-import-dialog [data-source] {
+  overflow-wrap: anywhere;
+  margin-bottom: 4px;
+}
+.model-import-dialog [data-summary]:empty,
+.model-import-dialog [data-error]:empty,
+.model-import-dialog [data-row-error]:empty {
+  display: none;
+}
+.model-import-dialog [data-summary] {
+  margin: 0 0 12px;
+}
+.model-import-dialog [data-details] {
+  margin-top: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 10px;
+}
+.model-import-dialog [data-details] > summary {
+  cursor: pointer;
+}
+.model-import-dialog .model-import-options {
+  margin: 12px 0;
+}
+.model-import-dialog [data-review-items] {
+  overflow-wrap: anywhere;
+}
+.model-import-dialog [data-review-items] h4 {
+  margin-bottom: 4px;
+}
+.model-import-dialog [data-detail] {
+  margin-top: 12px;
+}
+.model-import-dialog [data-detail] h3 {
+  font-size: 13px;
+  margin: 8px 0;
+}
+.model-import-dialog [data-detail] .ui-library-tree-picker {
+  margin-bottom: 10px;
+}
+.model-import-dialog [data-assumptions],
+.model-import-dialog [data-review-items] {
+  font-size: 12px;
+}
+.model-import-dialog > footer [data-status] {
+  flex: 1;
+}
+.model-import-dialog > footer {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
 dialog.ui-standard-dialog {
   color: var(--ui-ink);
   background: #fff;
@@ -95,11 +197,22 @@ dialog.ui-standard-dialog [role='alert']:not(:empty) {
 }
 
 /* A shared frame for numbering, drawing management and revisions. */
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog {
+:is(
+  #drawing-manager,
+  .numbering-dialog,
+  .drawing-revision-dialog,
+  .model-import-dialog
+).ui-managed-dialog {
   padding: 0;
   border-radius: 5px;
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog > header {
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
+  > header {
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -112,41 +225,72 @@ dialog.ui-standard-dialog [role='alert']:not(:empty) {
   background: #f4f7f8;
   color: var(--ui-ink);
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
   > header
   :is(h2, strong) {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
   > header
   button {
   color: var(--ui-ink);
   background: transparent;
   border: 0;
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
   .ui-dialog-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
   .ui-dialog-table
   :is(th, td) {
   padding: 7px 10px;
   text-align: left;
   border-bottom: 1px solid var(--ui-border);
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
   .ui-dialog-table
   th {
   background: #f4f7f8;
   color: var(--ui-ink);
   font-weight: 500;
 }
-:is(#drawing-manager, .numbering-dialog, .drawing-revision-dialog).ui-managed-dialog > footer {
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
+  > footer {
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
@@ -183,7 +327,15 @@ dialog.ui-standard-dialog [role='alert']:not(:empty) {
 .numbering-dialog.ui-managed-dialog.numbering-model-view > :not(header) {
   display: none;
 }
-#drawing-manager.ui-managed-dialog .drawing-actions.ui-ribbon {
+#drawing-manager.ui-managed-dialog .drawing-actions.ui-ribbon,
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
+  .ui-management-toolbar.ui-ribbon {
+  --ui-ribbon-height: 42px;
   height: auto;
   min-height: 42px;
   max-height: none;
@@ -191,17 +343,41 @@ dialog.ui-standard-dialog [role='alert']:not(:empty) {
   overflow: auto;
   background: #fff;
 }
-#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-group {
+#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-group,
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
+  .ui-management-toolbar
+  .ui-ribbon-group {
   padding: 0;
   min-height: 30px;
   border: 0;
 }
-#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-commands {
+#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-commands,
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
+  .ui-management-toolbar
+  .ui-ribbon-commands {
   min-height: 30px;
   align-items: center;
   gap: 8px;
 }
-#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-caption {
+#drawing-manager.ui-managed-dialog .drawing-actions .ui-ribbon-caption,
+:is(
+    #drawing-manager,
+    .numbering-dialog,
+    .drawing-revision-dialog,
+    .model-import-dialog
+  ).ui-managed-dialog
+  .ui-management-toolbar
+  .ui-ribbon-caption {
   display: none;
 }
 #drawing-manager.ui-managed-dialog .drawing-list table {

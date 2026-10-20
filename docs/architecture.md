@@ -1,5 +1,14 @@
 # Kodens ansvar och gränser
 
+## Modellförslag från externa verktyg
+
+`project/model-import.js` äger det DOM-fria v1-kontraktet, exakta biblioteksnamn, fristående Sweep/Plate-förslag, källidentiteter, granskningskrav och skydd mot återimport. Schema, exempel och AI-instruktion finns i `project/model-import.schema.json`, `project/model-import-example.json` och `docs/model-import.md`. Inga källfiler tolkas av en AI-tjänst i appen.
+
+`app/workspace-model-import.js` äger filval/drag och släpp, det tillfälliga urvalet, biblioteksvalen och fönstrets livslängd. Befintlig `previewModelBatch` visar ett fristående förslag i modellvyn. Modellens vanliga pointerrouting och `selectionHit` används även för att granska förslagsobjekt; de blir inga sparade objekt eller snapkandidater före bekräftelse. Befintliga redigeringskommandon är tillfälligt inaktiva medan navigering finns kvar. Avbryt frigör preview och återställer föregående urval. Importera visar vid behov en gemensam antagandesammanfattning före slutlig bekräftelse, återkontrollerar granskningsbeslut och källidentiteter och skickar hela urvalet till `modelEditor.add` med ett ångringssteg. Import av hela projekt behåller sin separata transaktion.
+
+`ui/model-import-dialog.js` använder `createRibbon`, `installManagementDialog`, `installFloatingWindow` och befintliga profil-/materialväljare. Arkiv-kommandot ägs fortsatt av `app/project-files.js`. Fönstret introducerar ingen separat modell-editor eller snapmotor. Se `docs/model-import.md` för formatets geometriska gränser och användning.
+
+
 ## Skruvplaceringens återkoppling
 
 `fasteners/placement-feedback.js` sammanfattar det redan upplösta skruvförslaget: nådda delar, lagerintervall och längdvarningar. Modulen söker inte material eller ändrar objekt. `placement-inspector.js` visar sammanfattningen och den kompakta dellistan; `assembly-preview-inspector.js` visar första skruvens verkliga lager och tillbehörslägen i den befintliga förbandsväljaren. Övriga skruvars varierande träffar visas som intervall i gruppens återkoppling.

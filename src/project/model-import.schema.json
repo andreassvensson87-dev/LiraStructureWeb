@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LiraStructures modellförslag v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "units", "coordinates", "importId", "objects"],
+  "properties": {
+    "format": { "const": "lira-model-import" },
+    "version": { "const": 1 },
+    "units": { "const": "mm" },
+    "coordinates": { "const": "local-z-up" },
+    "importId": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S" },
+    "objects": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/part" }
+    }
+  },
+  "$defs": {
+    "point3": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+    "point2": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S" },
+    "sourceText": { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "\\S" },
+    "part": {
+      "type": "object",
+      "required": ["id", "type", "name", "material", "source"],
+      "properties": {
+        "id": { "$ref": "#/$defs/name" },
+        "type": { "enum": ["sweep", "plate"] },
+        "name": { "$ref": "#/$defs/name" },
+        "material": { "$ref": "#/$defs/name" },
+        "ifcClass": {
+          "enum": [
+            "IfcBeam",
+            "IfcColumn",
+            "IfcMember",
+            "IfcPlate",
+            "IfcSlab",
+            "IfcWall",
+            "IfcFooting",
+            "IfcCovering",
+            "IfcMechanicalFastener",
+            "IfcBuildingElementProxy"
+          ]
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {
+            "file": { "$ref": "#/$defs/sourceText" },
+            "page": { "type": "integer", "minimum": 1 },
+            "detail": { "$ref": "#/$defs/sourceText" },
+            "elementId": { "$ref": "#/$defs/sourceText" }
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "\\S" }
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["profile", "start", "end"],
+          "properties": {
+            "type": { "const": "sweep" },
+            "profile": { "$ref": "#/$defs/name" },
+            "start": { "$ref": "#/$defs/point3" },
+            "end": { "$ref": "#/$defs/point3" },
+            "rotation": { "type": "number" },
+            "profileUp": { "$ref": "#/$defs/point3" }
+          }
+        },
+        {
+          "required": ["frame", "polygon", "thickness", "side"],
+          "properties": {
+            "type": { "const": "plate" },
+            "frame": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["origin", "u", "v"],
+              "properties": {
+                "origin": { "$ref": "#/$defs/point3" },
+                "u": { "$ref": "#/$defs/point3" },
+                "v": { "$ref": "#/$defs/point3" }
+              }
+            },
+            "polygon": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 1000,
+              "items": { "$ref": "#/$defs/point2" }
+            },
+            "thickness": { "type": "number", "minimum": 1, "maximum": 10000 },
+            "side": { "enum": ["center", "positive", "negative"] }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

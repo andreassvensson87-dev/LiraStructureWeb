@@ -1,5 +1,14 @@
 # Gemensamt UI
 
+## Importera AI-modell
+
+Arkiv → Importera AI-modell och en `.lira-import.json` släppt i modellvyn öppnar samma flyttbara granskningsfönster. Det använder `installFloatingWindow`, `installManagementDialog` och ett kompakt `createRibbon` med Välj fil, Visa modell och AI-paket. Alla giltiga objekt är förvalda, även objekt med antaganden. Tabellhuvudets kryssruta väljer alla giltiga; enskilda kryssrutor väljer bort delar. Filnamn, objektsantal och typfördelning visas ovanför tabellen. Exempelknappen har tagits bort; formatillustrationen finns kvar i AI-paketet.
+
+Detaljer och antaganden är hopfällda från början. Rad- och modellklick öppnar detaljerna för den valda delen. Profil och material kan fortfarande rättas med befintlig profilträdväljare och materialets `SearchPicker`. Felaktiga och redan importerade delar är avstängda; en del som rättats i biblioteksväljaren blir förvald. Visa bortvalda finns under Detaljer.
+
+Importera genomför ett giltigt urval utan antaganden direkt. Om urvalet innehåller antaganden visas i samma fönster en gemensam sammanfattning för enbart de valda delarna. Tillbaka återgår till urvalet, Avbryt/Esc kastar förslaget och Importera med antaganden bekräftar hela urvalet i ett ångringssteg. Ingen godkännanderuta krävs per objekt. Projektet ändras inte före den slutliga importen. AI-paketet är bundlat och fungerar offline. Se `docs/model-import.md` för formatet.
+
+
 ## Blockbibliotek och blockeditor
 
 Modellens Block-meny och ritningens befintliga Bibliotek-meny öppnar Från markering eller Blockbibliotek. Användaren ritar med vanliga modell-/ritverktyg, markerar geometrin och skapar en definition. Blockeditorn använder samma arbetsyta, ribbon och högra ikonlist som övriga editorer, med Parametrar, Referenser, Låsningar och Insättningspunkter. Punktval i förhandsvisningen öppnar motsvarande låsningar. Testvärden ändrar enbart förhandsvisningen; Spara block lagrar definitionens standardvärden som en ny revision.

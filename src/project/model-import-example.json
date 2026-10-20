@@ -1,0 +1,97 @@
+{
+  "format": "lira-model-import",
+  "version": 1,
+  "units": "mm",
+  "coordinates": "local-z-up",
+  "importId": "exempel-stomme-v1",
+  "objects": [
+    {
+      "id": "P01",
+      "type": "sweep",
+      "name": "Pelare P01",
+      "profile": "HEA 200",
+      "material": "S355J2",
+      "start": [0, 0, 0],
+      "end": [0, 0, 3500],
+      "rotation": 0,
+      "source": {
+        "file": "exempel-K101.pdf",
+        "page": 1,
+        "detail": "Axel A/1"
+      },
+      "ifcClass": "IfcColumn"
+    },
+    {
+      "id": "P02",
+      "type": "sweep",
+      "name": "Pelare P02",
+      "profile": "HEA 200",
+      "material": "S355J2",
+      "start": [6000, 0, 0],
+      "end": [6000, 0, 3500],
+      "source": {
+        "file": "exempel-K101.pdf",
+        "page": 1,
+        "detail": "Axel A/2"
+      },
+      "ifcClass": "IfcColumn"
+    },
+    {
+      "id": "B01",
+      "type": "sweep",
+      "name": "Balk B01",
+      "profile": "IPE 300",
+      "material": "S355J2",
+      "start": [0, 0, 3500],
+      "end": [6000, 0, 3500],
+      "source": {
+        "file": "exempel-K101.pdf",
+        "page": 2,
+        "detail": "Sektion A–A"
+      },
+      "ifcClass": "IfcBeam"
+    },
+    {
+      "id": "B02",
+      "type": "sweep",
+      "name": "Balk B02 – granska höjd",
+      "profile": "IPE 300",
+      "material": "S355J2",
+      "start": [0, 0, 3500],
+      "end": [0, 3000, 3500],
+      "source": {
+        "file": "exempel-K101.pdf",
+        "page": 1
+      },
+      "assumptions": [
+        "Balkens höjd antas vara +3500 mm; tydligt höjdmått saknas. Exempeldata, inte en verklig ritning."
+      ],
+      "ifcClass": "IfcBeam"
+    },
+    {
+      "id": "PL01",
+      "type": "plate",
+      "name": "Fotplåt PL01",
+      "material": "S355J2",
+      "frame": {
+        "origin": [0, 0, 0],
+        "u": [1, 0, 0],
+        "v": [0, 1, 0]
+      },
+      "polygon": [
+        [-200, -200],
+        [200, -200],
+        [200, 200],
+        [-200, 200]
+      ],
+      "thickness": 20,
+      "side": "negative",
+      "source": {
+        "file": "exempel-K102.pdf",
+        "page": 1,
+        "detail": "Fotplåt utan hål"
+      },
+      "ifcClass": "IfcPlate"
+    }
+  ]
+}

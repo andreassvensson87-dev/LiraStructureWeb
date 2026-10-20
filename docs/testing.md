@@ -1,5 +1,10 @@
 # Teststrategi
 
+
+## AI-modellimport
+
+`model-import.test.js` verifierar filformat, validering, exakta biblioteksnamn, IFC-klasser, fristående förhandsförslag, urval, gemensamt godkännande av flera antaganden, källhänvisning genom spara/öppna, blockerad återimport och ett ångringssteg för hela importen. UI använder samma modell-editor och de befintliga menyblocken. Produktionsbygget provades separat med sju giltiga objekt: filval, direktimport, en Ångra tillbaka till sex stomlinjer samt gemensam sammanfattning för två antaganden och en blockerad plåt. Inga konsolfel. Inför publicering passerade formatering, lint, 1169 tester och produktionsbygge inklusive PWA-paketering. Alla giltiga delar är förvalda, detaljer hopfällda och antaganden sammanfattas för de valda delarna före slutlig import. Felaktiga delar undantas.
+
 ## Skruvplacering, vändning och delurval
 
 `fastener-group-grips.test.js` verifierar vändning och tillagda/borttagna måldelar genom samma placeringsberäkning, oförändrade sparade objekt före Tillämpa, bibehållna befintliga skruv-/hålidentiteter, borttagna hål på bortvalda delar och ångring. Återkopplingens intervall kontrolleras med blandade träffar, inaktiva hål, Inga hål och längdvarningar. `fastener-placement-ui.test.js` skyddar att bekräftat delurval återgår till ett väntande inspektorutkast och att ogiltigt urval inte skapar eller uppdaterar gruppen.

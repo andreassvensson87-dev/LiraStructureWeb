@@ -95,6 +95,7 @@ export function installModelContextMenu({
     menu.open(items, { x: event.clientX, y: event.clientY, title: label });
   }
   function open(event) {
+    if (controllers.modelImportUI?.active()) return;
     if (tools.drawing || tools.operation) return openToolMenu(event);
     menu.root.setAttribute('aria-label', 'Objektmeny');
     controllers.inspector?.finish();

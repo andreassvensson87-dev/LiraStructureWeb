@@ -69,6 +69,7 @@ export function installModelInput({
     'confirm-fit': () => controllers.componentUI.confirm(),
   };
   function toolState() {
+    if (controllers.modelImportUI?.active()) return { mode: 'modelImport' };
     return {
       propertyCopy: !!controllers.propertyUI?.active(),
       linear: !!tools.operation?.linearId,
@@ -198,11 +199,13 @@ export function installModelInput({
     orbit: orbitAroundHit,
     point,
     move: (e) => {
+      if (controllers.modelImportUI?.active()) return;
       if (controllers.modelContextMenu.isOpen()) return;
       pointerQueue.pending = { clientX: e.clientX, clientY: e.clientY, buttons: e.buttons };
       if (tools.drawing || tools.operation) frameGate.invalidate();
     },
     leave: () => {
+      if (controllers.modelImportUI?.active()) return;
       pointerQueue.pending = null;
       if (controllers.modelContextMenu.isOpen()) return;
       objectFeedback.setHover([], 'canvas');
@@ -222,6 +225,7 @@ export function installModelInput({
       clearPreview();
     },
     actions: {
+      'model-import': (event) => controllers.modelImportUI.pick(event),
       ...completionActions,
       linear: (p) => controllers.linearUI.pickPoint(p),
       'plane-transform': (p) => controllers.planeTransformUI.pickPoint(p),
@@ -328,6 +332,10 @@ export function installModelInput({
     },
   });
   window.addEventListener('keydown', (e) => {
+    if (controllers.modelImportUI?.active()) {
+      if (e.key === 'Escape') controllers.modelImportUI.cancel();
+      return;
+    }
     const command = modelKeyboardCommand(e, {
       propertyCopy: !!controllers.propertyUI?.active(),
       linear: !!tools.operation?.linearId,

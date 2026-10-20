@@ -13,12 +13,17 @@ export function installProjectFiles({
   onLoaded,
   newProject,
   exportIFC,
+  importModel,
 }) {
   const section = document.createElement('details');
   section.className = 'project-menu';
   section.innerHTML =
-    '<summary>Arkiv <span aria-hidden="true">▾</span></summary><div class="project-menu-panel"><div class="project-file-actions"><button type="button" data-new-project>Nytt projekt</button><button type="button" data-open-project>Öppna projekt…</button><button type="button" data-save-project>Spara projekt</button><button type="button" data-save-as-project>Spara som…</button><button type="button" data-export-ifc>Exportera IFC…</button></div><input type="file" accept=".json,.lira.json" data-project-file hidden><p data-project-file-status role="status"></p></div>';
+    '<summary>Arkiv <span aria-hidden="true">▾</span></summary><div class="project-menu-panel"><div class="project-file-actions"><button type="button" data-new-project>Nytt projekt</button><button type="button" data-open-project>Öppna projekt…</button><button type="button" data-save-project>Spara projekt</button><button type="button" data-save-as-project>Spara som…</button><button type="button" data-import-model>Importera AI-modell…</button><button type="button" data-export-ifc>Exportera IFC…</button></div><input type="file" accept=".json,.lira.json" data-project-file hidden><p data-project-file-status role="status"></p></div>';
   document.querySelector('body > header').prepend(section);
+  section.querySelector('[data-import-model]').onclick = () => {
+    section.open = false;
+    importModel();
+  };
   section.querySelector('[data-export-ifc]').onclick = () => {
     section.open = false;
     exportIFC();

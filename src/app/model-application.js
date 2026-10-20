@@ -50,6 +50,7 @@ import { installModelFasteners } from './model-fasteners.js';
 import { installModelContextMenu } from '../model/ui/model-context-menu.js';
 import { installModelInput } from '../model/ui/model-input.js';
 import { installWorkspaceSettings } from './workspace-settings.js';
+import { installWorkspaceModelImport } from './workspace-model-import.js';
 import { installModelAttributes } from '../inspector/model-attributes-controller.js';
 import { installModelLibraries } from '../inspector/model-library-controller.js';
 import { installModelIdentity } from '../inspector/model-identity-controller.js';
@@ -297,6 +298,7 @@ export async function createModelApplication({
   installWorkspaceSettings(context);
   installModelAttributes(context);
   installModelLibraries(context);
+  installWorkspaceModelImport(context);
   installWorkspaceMarkChange(context);
   installModelIdentity(context);
   installModelBrowser(context);

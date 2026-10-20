@@ -12,6 +12,7 @@ export function pointerCommand({
   linear,
   planeTransform,
 }) {
+  if (mode === 'modelImport') return 'model-import';
   if (planeTransform) return 'plane-transform';
   if (linear) return 'linear';
   if (mode === 'fit') return picking ? 'fit-reference' : null;
@@ -75,6 +76,7 @@ export function installModelPointer(
     if (
       [
         'select',
+        'model-import',
         'length',
         'plate-length',
         'fastener-target',
