@@ -23,7 +23,7 @@ export function createModelImportDialog({
   dialog.innerHTML = `<header><h2 id="model-import-title">Importera AI-modell</h2><button type="button" data-close aria-label="Stäng modellimport">×</button></header>
     <nav data-toolbar class="ui-management-toolbar" aria-label="Importverktyg"><button type="button" data-file>Välj fil…</button><button type="button" data-fit>Visa modell</button><button type="button" data-packet>AI-paket</button></nav>
     <section class="model-import-content"><div data-main><p data-source class="inspector-note">Välj eller släpp filen från ChatGPT i modellvyn.</p><p data-summary class="inspector-note"></p>
-    <div class="model-import-table"><table><thead><tr><th><input type="checkbox" data-all aria-label="Välj alla giltiga objekt"></th><th>Objekt</th><th>Profil</th><th>Status</th></tr></thead><tbody data-rows></tbody></table></div>
+    <div class="model-import-table"><table><thead><tr><th><input type="checkbox" data-all aria-label="Välj alla giltiga objekt"></th><th>Objekt</th><th>Typ / profil</th><th>Status</th></tr></thead><tbody data-rows></tbody></table></div>
     <details data-details><summary>Detaljer och antaganden</summary><label class="model-import-options"><input type="checkbox" data-ghost checked> Visa bortvalda i modellen</label>
     <section data-detail hidden><h3 data-name></h3><p data-geometry class="inspector-note"></p><p data-origin class="inspector-note"></p><div data-profile></div><div data-material></div><p data-row-error role="alert"></p><ul data-assumptions></ul></section><p data-detail-hint class="inspector-note">Välj ett objekt i listan eller modellen för att visa dess detaljer.</p></details></div>
     <section data-review hidden><h3 data-review-title tabindex="-1">Importera med antaganden</h3><p class="inspector-note">Följande antaganden följer med de valda objekten. Importera tillsammans eller gå tillbaka och ändra urvalet.</p><div data-review-items></div></section>
@@ -94,7 +94,7 @@ export function createModelImportDialog({
       input.type = 'checkbox';
       input.dataset.rowFocus = `${row.id}:include`;
       input.checked = included.has(row.id);
-      input.disabled = !!row.error;
+      input.disabled = !!row.error && !included.has(row.id);
       input.setAttribute('aria-label', `Importera ${row.input.name || row.id}`);
       input.onchange = () => change(row.id, input.checked);
       cell().append(input);
@@ -108,6 +108,9 @@ export function createModelImportDialog({
       };
       cell().append(button);
       cell().textContent =
+        (row.input.type === 'fastener'
+          ? `${row.input.assembly?.bolt === false ? 'Hål' : row.input.spec} · Ø${row.input.holes?.[0]?.diameter ?? '?'}`
+          : '') ||
         row.object?.section?.name ||
         (row.input.type === 'plate'
           ? `${row.input.thickness} mm`
@@ -134,21 +137,25 @@ export function createModelImportDialog({
     const counts = new Map();
     for (const row of items) {
       const label =
-        row.input.type === 'fit'
-          ? 'Fit'
-          : ['linecut', 'polygoncut'].includes(row.input.type)
-            ? 'skärning'
-            : row.input.type === 'plate'
-              ? 'plåt'
-              : row.input.ifcClass === 'IfcColumn'
-                ? 'pelare'
-                : row.input.ifcClass === 'IfcBeam' || !row.input.ifcClass
-                  ? 'balk'
-                  : 'profildel';
+        row.input.type === 'fastener'
+          ? row.input.assembly?.bolt === false
+            ? 'hålobjekt'
+            : 'skruv'
+          : row.input.type === 'fit'
+            ? 'Fit'
+            : ['linecut', 'polygoncut'].includes(row.input.type)
+              ? 'skärning'
+              : row.input.type === 'plate'
+                ? 'plåt'
+                : row.input.ifcClass === 'IfcColumn'
+                  ? 'pelare'
+                  : row.input.ifcClass === 'IfcBeam' || !row.input.ifcClass
+                    ? 'balk'
+                    : 'profildel';
       counts.set(label, (counts.get(label) || 0) + 1);
     }
     $('summary').textContent = items.length
-      ? `${items.length} objekt · ${[...counts].map(([label, count]) => `${count} ${count > 1 && label === 'skärning' ? 'skärningar' : count > 1 && label === 'plåt' ? 'plåtar' : count > 1 && label === 'balk' ? 'balkar' : count > 1 && label === 'profildel' ? 'profildelar' : label}`).join(' · ')}`
+      ? `${items.length} objekt · ${[...counts].map(([label, count]) => `${count} ${count > 1 && label === 'skruv' ? 'skruvar' : count > 1 && label === 'skärning' ? 'skärningar' : count > 1 && label === 'plåt' ? 'plåtar' : count > 1 && label === 'balk' ? 'balkar' : count > 1 && label === 'profildel' ? 'profildelar' : label}`).join(' · ')}`
       : '';
     const eligible = items.filter((r) => !r.error);
     $('all').disabled = !eligible.length;
@@ -164,13 +171,15 @@ export function createModelImportDialog({
     $('geometry').textContent =
       object?.type === 'sweep'
         ? `Längd ${Math.hypot(...object.end.map((v, i) => v - object.start[i])).toLocaleString('sv')} mm · Rotation ${object.rotation}°`
-        : row.input.type === 'fit'
-          ? `${row.input.mode === 'abut' ? 'Mot del' : 'Gering'} · ${row.input.references.join(' → ')} · Spalt ${row.input.gap} mm`
-          : ['polygoncut', 'linecut'].includes(row.input.type)
-            ? `Mål: ${row.input.targets.join(', ')}${object?.thickness ? ` · Djup ${object.thickness} mm` : ''}`
-            : object
-              ? `Tjocklek ${object.thickness} mm · ${object.polygon.length} hörn`
-              : '';
+        : row.input.type === 'fastener'
+          ? `${row.input.spec} × ${row.input.length} mm · ${(Array.isArray(row.input.holes) ? row.input.holes : []).map((h) => `${h?.target ?? '?'}: Ø${h?.diameter ?? '?'} (${h?.extent ?? '?'})`).join(', ') || ''}`
+          : row.input.type === 'fit'
+            ? `${row.input.mode === 'abut' ? 'Mot del' : 'Gering'} · ${(Array.isArray(row.input.references) ? row.input.references : []).join(' → ')} · Spalt ${row.input.gap} mm`
+            : ['polygoncut', 'linecut'].includes(row.input.type)
+              ? `Mål: ${(Array.isArray(row.input.targets) ? row.input.targets : []).join(', ')}${object?.thickness ? ` · Djup ${object.thickness} mm` : ''}`
+              : object
+                ? `Tjocklek ${object.thickness} mm · ${object.polygon.length} hörn`
+                : '';
     const source = row.input.source;
     $('origin').textContent =
       source && typeof source.file === 'string'

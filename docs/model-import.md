@@ -1,14 +1,14 @@
-# Modellförslag till LiraStructures – version 2 (läser även version 1)
+# Modellförslag till LiraStructures – version 3 (läser även version 1/2)
 
 ## Uppdrag till ChatGPT
 
-Bearbeta användarens bifogade ritningar och modeller här i ChatGPT och leverera en nedladdningsbar `<projektnamn>.lira-import.json` som kan läsas av LiraStructures. AI-paketet är en instruktion och ett bibliotek, inte filen som ska importeras. Resultatfilen ska endast innehålla fälten i `schema`; kopiera inte med paketets `instructions`, `profiles`, `materials`, exempel eller annan metadata. Exempelobjekten är formatillustrationer och får aldrig läggas till användarens modell utan stöd i dennes underlag.
+Bearbeta användarens bifogade ritningar och modeller här i ChatGPT och leverera en nedladdningsbar `<projektnamn>.lira-import.json` som kan läsas av LiraStructures. AI-paketet är en instruktion och ett bibliotek, inte filen som ska importeras. Resultatfilen ska endast innehålla fälten i `schema`; kopiera inte med paketets `instructions`, `profiles`, `materials`, `fasteners`, exempel eller annan metadata. Exempelobjekten är formatillustrationer och får aldrig läggas till användarens modell utan stöd i dennes underlag.
 
 1. Inventera bifogade filer, ritningsnummer, revisioner, sidor och vilken del av byggnaden användaren vill modellera. Använd senaste uttryckligen angivna revision. Fråga vid motstridiga underlag; kombinera inte revisioner i tysthet.
 2. Fastställ enheter, lokalt origo, X/Y-riktning och höjdnollpunkt. Ange dessa i svaret så att användaren kan granska placeringen. Om modellen ska passa en befintlig modell behöver användaren ange motsvarande lokala koordinater. AI-paketet innehåller inte det befintliga projektets geometri eller origo.
 3. Läs plan, elevationer, sektioner och detaljmått tillsammans. Skriftliga mått går före mätning i bilden. Skilj överkant, underkant och centrumlinje; räkna om till profilens insättningslinje med verkliga profilmått. Härled inte pelartoppar eller balkcentrum enbart från en planritning. Skala inte en bild utan verifierad skala/referensmått. Vid bildmätning ska metod och osäkerhet redovisas per objekt i `assumptions`.
 4. Skapa en objekttabell med källhänvisning, profil/material, start/slut eller plåtkontur och kvarstående frågor. Ställ samlade, konkreta frågor när avgörande information saknas. Är allt entydigt får du skapa filen direkt. Ett rimligt, uttryckligen godkänt antagande ska fortfarande dokumenteras i filen.
-5. Modellera bara det som stöds: raka biblioteksprofiler, plana plåtar, Fit mellan raka profiler samt linje- och polygonskärningar enligt version 2 nedan. Redovisa alla utelämnade delar, hål, kapningar och kopplingar separat i svaret. Utelämnade bearbetningar ska märkas som förenkling i `assumptions`; dölj inte förenklingen. Ändra inte en böjd eller sammansatt del till en rak del utan användarens beslut.
+5. Modellera bara det som stöds: raka biblioteksprofiler, plana plåtar, Fit mellan raka profiler linje- och polygonskärningar samt skruvar med mutter och genomgående hål enligt version 3 nedan. Redovisa alla utelämnade delar, bearbetningar, kapningar och kopplingar separat i svaret. Utelämnade bearbetningar ska märkas som förenkling i `assumptions`; dölj inte förenklingen. Ändra inte en böjd eller sammansatt del till en rak del utan användarens beslut.
 6. Skriv filen med ett tillgängligt fil-/kodverktyg, läs tillbaka den och kontrollera att den är giltig JSON och följer schemat. Kontrollera även unika id:n, exakta biblioteksnamn, ändpunkter/längder, profilriktningar, höjder och plåttjocklekens sida. Ange vilka kontroller du faktiskt har utfört. Påstå inte att filen provats i appen om detta inte har gjorts.
 7. Lämna en nedladdningslänk till JSON-filen och en kort sammanställning: antal per objekttyp, koordinatsystem, kvarstående antaganden, utelämnade delar och hur den importeras via Arkiv → Importera AI-modell. Leverera inte bara kod i ett kodblock. Om nedladdningsbara filer inte kan skapas i aktuell ChatGPT-session, säg det uttryckligen och erbjud komplett JSON som användaren kan spara själv.
 
@@ -16,17 +16,17 @@ Bearbeta användarens bifogade ritningar och modeller här i ChatGPT och leverer
 
 PDF: kontrollera både renderade sidor och läsbar text när verktygen medger det. Ange faktisk sidposition i `source.page`, även när tryckt ritningssidnummer skiljer sig. Skannade/otydliga mått ska inte behandlas som säkra.
 
-IFC: använd en faktisk IFC-läsare om den finns tillgänglig. Hantera placeringarnas hierarki, enheter, lokala axlar och geometri. Behåll ursprungligt GlobalId i `source.elementId`. Importera endast element som verkligen kan beskrivas med v1-formatet. Ett namn som innehåller en profilbeteckning bevisar inte elementets geometri.
+IFC: använd en faktisk IFC-läsare om den finns tillgänglig. Hantera placeringarnas hierarki, enheter, lokala axlar och geometri. Behåll ursprungligt GlobalId i `source.elementId`. Importera endast element som verkligen kan beskrivas med importformatet. Ett namn som innehåller en profilbeteckning bevisar inte elementets geometri.
 
 DWG/DXF: kontrollera att ett fungerande läsverktyg finns innan du lovar tolkning. En 2D-linje räcker inte för att avgöra 3D-höjd eller profil. Om DWG inte kan läsas, be om DXF eller måttsatt PDF; om IFC inte kan läsas, be om en läsbar export med geometri och placeringar. Påstå aldrig att en fil har lästs när verktygsstöd saknas.
 
 ### Bibliotek och saknade namn
 
-Paketets `profiles` och `materials` är en biblioteksögonblicksbild. Använd exakt `name` i resultatfilen; lägg inte till definitioner eller interna biblioteks-id:n i objekten. Finns profil eller material inte i listan: fråga användaren. Föreslå att biblioteket kompletteras i LiraStructures och att ett nytt AI-paket hämtas. Byt inte till en närliggande storlek eller stålsort. Om användaren vill ha en delimport ska uteslutna delar redovisas tydligt. Parametrar och `boundsMm`, när de finns i paketet, beskriver profilens tvärsnitt i mm och får användas för omräkning från kantmått till insättningslinje.
+Paketets `profiles`, `materials` och `fasteners` är en biblioteksögonblicksbild. Använd exakt `name` i resultatfilen; lägg inte till definitioner eller interna biblioteks-id:n i objekten. Finns profil eller material inte i listan: fråga användaren. Föreslå att biblioteket kompletteras i LiraStructures och att ett nytt AI-paket hämtas. Byt inte till en närliggande storlek eller stålsort. Om användaren vill ha en delimport ska uteslutna delar redovisas tydligt. Parametrar och `boundsMm`, när de finns i paketet, beskriver profilens tvärsnitt i mm och får användas för omräkning från kantmått till insättningslinje.
 
 ## Arbetsflöde
 
-Öppna Arkiv → Importera AI-modell. Hämta **AI-paket** i fönstrets vanliga menyblock. Paketet innehåller denna instruktion, JSON-schema, en exempelmodell och namn/identiteter för appens aktuella profiler och material. Ge paketet och källunderlagen till ChatGPT. Ingen AI-tjänst anropas av appen.
+Öppna Arkiv → Importera AI-modell. Hämta **AI-paket** i fönstrets vanliga menyblock. Paketet innehåller denna instruktion, JSON-schema, en exempelmodell och namn/identiteter för appens aktuella profiler, material och skruvar. Ge paketet och källunderlagen till ChatGPT. Ingen AI-tjänst anropas av appen.
 
 Be ChatGPT: ”Analysera underlagen enligt instruktionen i detta AI-paket. Fråga efter information som saknas. Skapa sedan en nedladdningsbar .lira-import.json-fil enligt schemat. Ange alla kvarstående antaganden per objekt och behåll stabila importId och objekt-id vid rättningar.”
 
@@ -35,9 +35,9 @@ Välj resultatfilen eller dra den till modellvyn. Granska tabell och förhandsvi
 ## Instruktion till den som skapar filen
 
 - Returnera ren UTF-8 JSON i en fil med ändelsen `.lira-import.json`, utan Markdown eller körbar kod. Högst 10 MB och 1 000 objekt.
-- Använd `format: "lira-model-import"`, `version: 2`, `units: "mm"`, `coordinates: "local-z-up"`.
+- Använd `format: "lira-model-import"`, `version: 3`, `units: "mm"`, `coordinates: "local-z-up"`.
 - `importId` identifierar samma modellförslag även efter rättningar. Varje del har ett unikt, stabilt `id`. Återimport av redan inlagda id:n blockeras, även efter spara/öppna. Detta är en tilläggsimport, inte synkronisering eller uppdatering. Ångra importen innan korrigerade delar importeras på nytt. Nya delar i samma förslag kan importeras senare.
-- Ange `name`, exakt biblioteksnamn i `material` och en `source` med `file`. Lägg vid behov till `page` (1-baserat), `detail` och `elementId` (t.ex. IFC GlobalId). Källhänvisningar är text, inte inbäddade källfiler.
+- För Sweep/Plate: ange `name`, exakt biblioteksnamn i `material` och en `source` med `file`. Lägg vid behov till `page` (1-baserat), `detail` och `elementId` (t.ex. IFC GlobalId). Källhänvisningar är text, inte inbäddade källfiler.
 - Ange valfri `ifcClass` för delens roll enligt appens befintliga IFC-klasser: exempelvis `IfcColumn` för pelare, `IfcBeam` för balkar och `IfcPlate` för plåt. Både balkar och pelare är vanliga `sweep`-objekt; IFC-klassen ändrar inte geometrin. Utan fältet används objekttypens vanliga förval, vilket för Sweep är `IfcBeam`. Klass ska därför anges uttryckligen för pelare. Ogiltiga klasser avvisas av modellens befintliga validering; inga roller härleds automatiskt ur objektnamn.
 - Använd endast namn från paketets bibliotek. Namn matchas utan skillnad på stora/små bokstäver och blanksteg. Familj, liknande storlek eller materialtyp räcker inte. `S355` ersätts exempelvis inte automatiskt med `S355J2`.
 - Samtliga längder och koordinater anges i millimeter, vinklar i grader. Z är uppåt. Rita i projektets lokala koordinatsystem. Inga georefererade koordinater eller automatiska enhetsbyten stöds. Koordinater måste ligga inom ±10 000 000 mm.
@@ -93,3 +93,23 @@ Paketets exempel visar två HEA 200-pelare och en IPE 300-balk, två Fit med 5 m
 Schemafilen beskriver strukturen; appen kontrollerar också native geometri, bibliotek, referenser, dubbletter och granskningsbeslut. Okända fält och objekttyper avvisas. Felaktiga objektrader undantas. En vald bearbetning med bortvald referens blockerar importen tills urvalet rättats. Filer med fel version/enhet eller dubbla externa id:n stoppas helt. Import är fortfarande tillägg, inte synkronisering. Alla valda delar och bearbetningar importeras i en transaktion som kan ångras i ett steg.
 
 Ritningstolkningen görs i ChatGPT med de verktyg som faktiskt finns i den sessionen. Appen anropar ingen AI-tjänst. Skruvar, automatiska förband, böjda profiler och generell IFC-konvertering ingår inte i detta importformat. Befintlig IFC-konvertering är ett separat flöde. Geometrin från Fit/skärningar ska granskas i appen; formatet är inte ett intyg om bärförmåga eller tillverkning.
+
+## Skruvar och genomgående hål - version 3
+
+Använd `version: 3`. Skruvar representeras av appens befintliga `fastener` med kopplade hål. Inga fristående nya håltyper skapas. Varje skruv/hålaxel är en egen post; flera axlar i en skruvbild skrivs som flera poster. Importen skapar inte automatiskt en redigerbar skruvgrupp av separata poster. Vanliga native verktyg, inspektor, markering och hålrelationer används efter importen.
+
+Obligatoriska fält utöver `id`, `type: "fastener"`, `name`, `source`:
+
+- `spec`: exakt `name` ur paketets `fasteners`. Endast bibliotekets `kind: "bolt"` stöds i denna importversion. Biblioteket bestämmer diameter, hållfasthetsklass, ytbehandling, standard, huvud, gänga, mutter och brickmått. Förväxla inte olika produkter med samma nominella diameter. Saknas rätt produkt eller är namnet tvetydigt: komplettera biblioteket och hämta nytt paket. Välj inte närmaste produkt.
+- `length`: uttryckligen angiven skaftlängd under huvudet i mm (0 < längd <= 10000), hanterad med appens vanliga manuella längdfunktion. Bibliotekets mallängd är inte ett ritningsmått. Vid enbart hål fungerar längden som räckvidd genom det valda materialet, och ska anges tillräcklig för hela borrningen.
+- `start: [x,y,z]`: en punkt på axeln. `direction: [x,y,z]`: en ANNAN PUNKT som anger borr-/skruvriktningen från start, INTE en riktningsvektor och INTE skruvens slutpunkt. Exempel start `[120,55,1600]`, direction `[119,55,1600]` anger global -X. Appens vanliga materialanpassning bestämmer huvudets anliggning; avståndet mellan punkterna bestämmer inte skaftlängden. Sökningen görs längs hela axeln, även bakom start. `wall` väljer första materialintervallet längs riktningen. Kontrollera rätt sida mot sektionen.
+- `assembly`: alla sex booleska val krävs: `bolt`, `nearWasher`, `nearNut`, `farWasher`, `nut`, `extraNut`. Vanligt förband med bricka på båda sidor och en mutter: `{ "bolt": true, "nearWasher": true, "nearNut": false, "farWasher": true, "nut": true, "extraNut": false }`. Ange vad underlaget visar, fråga om tillbehör saknas. Gissa inte brickor eller muttrar. `nearNut` är inte giltigt för dessa skruvar; det är reserverat för gängstång i appens fulla verktyg.
+- `holes`: 1-100 objekt med `target` (externt id för Sweep/Plate i samma fil), `diameter` i mm och `extent: "wall"` eller `"profile"`. Varje måldel får förekomma en gång per skruv. Diameter gäller genomgående frigångshål och får inte vara mindre än skruvdiametern när `bolt: true`. Ingen automatisk tolerans läggs till.
+
+`wall` borrar enbart första väggen/flänsen i borriktningen. `profile` omfattar alla materialintervall genom hela målprofilen. För ett förband mot en pelarfläns ska normalt `wall` användas för pelaren, inte ett oavsiktligt hål även genom motstående fläns. Plåt med ett materiallager kan använda `profile`. Importen räknar anliggning och håldjup med befintlig native materialträff efter valda Fit/skärningar. En missad del, otillräcklig längd eller en begärd profil med oåtkomliga materiallager avvisas; inget sådant förband får tyst importeras som färdigt. Väljs skärningar bort räknas hålen om mot kvarvarande geometri.
+
+För **enbart hål** används samma `type: "fastener"` och alla sex `assembly`-val sätts till `false`. Detta är appens befintliga hålobjekt utan synlig skruv eller tillbehör. `spec` anger fortfarande en befintlig biblioteksmall; håldiametern kommer uttryckligen från `holes`. Hålet får eget externt id och källhänvisning och kan väljas bort separat.
+
+Version 3 omfattar raka cirkulära genomgående hål. Gängade hål, blindhål, slitsar, försänkningar, trä-/betongskruvar, gängstång och automatisk förbandsdimensionering ingår inte i detta filkontrakt. Underlag som kräver detta ska föranleda en fråga eller uttryckligen redovisad förenkling, aldrig översättas i tysthet. Svetsar följer inte automatiskt med en ändplåt.
+
+Paketets exempel visar en HEA 200-pelare, IPE 300-balk, 12 mm ändplåt, fyra ISO 4017 M16 x 50 med brickor/muttrar, åtta kopplade Ø18-hål samt ett separat Ø22-hål. Det är en format- och funktionspilot, inte en dimensionerad förbandslösning.

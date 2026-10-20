@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "LiraStructures modellförslag v2 (läser även v1)",
+  "title": "LiraStructures modellförslag v3 (läser även v1/v2)",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "version", "units", "coordinates", "importId", "objects"],
@@ -9,7 +9,7 @@
       "const": "lira-model-import"
     },
     "version": {
-      "enum": [1, 2]
+      "enum": [1, 2, 3]
     },
     "units": {
       "const": "mm"
@@ -508,8 +508,130 @@
         },
         {
           "$ref": "#/$defs/polygoncut"
+        },
+        {
+          "$ref": "#/$defs/fastener"
         }
       ]
+    },
+    "fastener": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "source",
+        "type",
+        "spec",
+        "length",
+        "start",
+        "direction",
+        "assembly",
+        "holes"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/name"
+        },
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/sourceText"
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "detail": {
+              "$ref": "#/$defs/sourceText"
+            },
+            "elementId": {
+              "$ref": "#/$defs/sourceText"
+            }
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S"
+          }
+        },
+        "type": {
+          "const": "fastener"
+        },
+        "spec": {
+          "$ref": "#/$defs/name"
+        },
+        "length": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10000
+        },
+        "start": {
+          "$ref": "#/$defs/point3"
+        },
+        "direction": {
+          "$ref": "#/$defs/point3"
+        },
+        "assembly": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bolt", "nearWasher", "nearNut", "farWasher", "nut", "extraNut"],
+          "properties": {
+            "bolt": {
+              "type": "boolean"
+            },
+            "nearWasher": {
+              "type": "boolean"
+            },
+            "nearNut": {
+              "type": "boolean"
+            },
+            "farWasher": {
+              "type": "boolean"
+            },
+            "nut": {
+              "type": "boolean"
+            },
+            "extraNut": {
+              "type": "boolean"
+            }
+          }
+        },
+        "holes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target", "diameter", "extent"],
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/name"
+              },
+              "diameter": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              "extent": {
+                "enum": ["wall", "profile"]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -528,6 +650,28 @@
               "properties": {
                 "type": {
                   "enum": ["sweep", "plate"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "objects": {
+            "items": {
+              "properties": {
+                "type": {
+                  "enum": ["sweep", "plate", "fit", "linecut", "polygoncut"]
                 }
               }
             }

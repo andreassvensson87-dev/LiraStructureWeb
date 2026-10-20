@@ -5,7 +5,6 @@ import {
   planModelImport,
   modelImportObjects,
   MODEL_IMPORT_LIMIT,
-  latestImportProfiles,
   modelImportDependencies,
   modelImportSelectionIssues,
 } from '../project/model-import.js';
@@ -14,8 +13,8 @@ import { profileLibraryNodes } from '../profile-tree.js';
 import { updateObjectMeshSelection } from '../model/object-mesh.js';
 import { cadFeedback } from '../ui/cad-feedback.js';
 import schema from '../project/model-import.schema.json';
-import exampleData from '../project/model-import-operations-example.json';
-import { profileSnapshot } from '../section-profile.js';
+import exampleData from '../project/model-import-fasteners-example.json';
+import { modelImportPacket } from '../project/model-import-packet.js';
 import instructions from '../../docs/model-import.md?raw';
 
 /** File/session owner. Only the model editor commits the selected, reviewed batch. */
@@ -47,7 +46,9 @@ export function installWorkspaceModelImport({
   const libraries = () => ({
     profiles: actions.getLibraryProfiles(),
     materials: controllers.materialUI.records,
+    fasteners: controllers.fastenerUI.records,
     objects: project.objects,
+    included,
   });
   const report = (error) => {
     view.$('error').textContent = error.message;
@@ -69,6 +70,8 @@ export function installWorkspaceModelImport({
         included = new Set(checked ? rows.filter((row) => !row.error).map((row) => row.id) : []);
       else if (checked) included.add(id);
       else included.delete(id);
+      if (rows.some((row) => row.input.type === 'fastener'))
+        rows = planModelImport(data, libraries(), overrides);
       if (rows.some((row) => modelImportDependencies(row.input).length)) preview();
       sync();
     },
@@ -151,7 +154,8 @@ export function installWorkspaceModelImport({
     for (const child of ui.preview.children) {
       const row = rows.find((r) => r.object?.id === child.userData.id);
       if (!row) continue;
-      const operation = modelImportDependencies(row.input).length > 0;
+      const operation =
+        row.input.type !== 'fastener' && modelImportDependencies(row.input).length > 0;
       const take = included.has(row.id),
         highlight = row.id === selected;
       child.visible = operation ? highlight && take : take || showExcluded;
@@ -214,7 +218,8 @@ export function installWorkspaceModelImport({
     view.$('import').textContent = reviewing
       ? `Importera ${included.size} med antaganden`
       : `Importera ${included.size} objekt`;
-    view.$('import').disabled = !included.size || issues.size > 0;
+    view.$('import').disabled =
+      !included.size || issues.size > 0 || rows.some((row) => included.has(row.id) && row.error);
     view.$('fit').disabled = !rows.some((row) => row.object);
     paint();
   }
@@ -255,7 +260,7 @@ export function installWorkspaceModelImport({
       if (file.size > MODEL_IMPORT_LIMIT) throw Error('Modellförslaget får vara högst 10 MB.');
       const parsed = parseModelImport(await file.text());
       if (request !== version || !engaged) return;
-      const planned = planModelImport(parsed, libraries());
+      const planned = planModelImport(parsed, { ...libraries(), included: null });
       actions.clearPreview();
       data = parsed;
       rows = planned;
@@ -281,32 +286,8 @@ export function installWorkspaceModelImport({
     const request = version;
     const example = structuredClone(exampleData);
     if (!engaged || request !== version) return;
-    const { profiles, materials } = libraries();
     const content = JSON.stringify(
-      {
-        packetVersion: 2,
-        supportedImportVersions: [1, 2],
-        instructions,
-        schema,
-        example,
-        profiles: latestImportProfiles(profiles).map((definition) => {
-          const snapshot = Array.isArray(definition.parameters)
-            ? profileSnapshot(definition)
-            : definition;
-          return {
-            id: definition.id,
-            revision: definition.revision,
-            name: definition.name,
-            boundsMm: snapshot.properties.bounds,
-            anchorMm: snapshot.anchor,
-          };
-        }),
-        materials: latestMaterials(materials).map(({ id, revision, name }) => ({
-          id,
-          revision,
-          name,
-        })),
-      },
+      modelImportPacket({ instructions, schema, example, ...libraries() }),
       null,
       2,
     );

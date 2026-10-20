@@ -1,0 +1,230 @@
+{
+  "format": "lira-model-import",
+  "version": 3,
+  "units": "mm",
+  "coordinates": "local-z-up",
+  "importId": "K-TEST-003-rev-A",
+  "objects": [
+    {
+      "id": "P01",
+      "type": "sweep",
+      "name": "Pelare P01",
+      "ifcClass": "IfcColumn",
+      "profile": "HEA 200",
+      "material": "S355J2",
+      "start": [0, 0, 0],
+      "end": [0, 0, 2200],
+      "profileUp": [1, 0, 0],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "B01",
+      "type": "sweep",
+      "name": "Balk B01",
+      "ifcClass": "IfcBeam",
+      "profile": "IPE 300",
+      "material": "S355J2",
+      "start": [107, 0, 1500],
+      "end": [1800, 0, 1500],
+      "profileUp": [0, 0, 1],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "PL01",
+      "type": "plate",
+      "name": "Andplat PL01",
+      "material": "S355J2",
+      "frame": {
+        "origin": [95, 0, 1500],
+        "u": [0, 1, 0],
+        "v": [0, 0, 1]
+      },
+      "polygon": [
+        [-90, -180],
+        [90, -180],
+        [90, 180],
+        [-90, 180]
+      ],
+      "thickness": 12,
+      "side": "positive",
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "SK01",
+      "type": "fastener",
+      "name": "Skruv SK01",
+      "spec": "ISO 4017 M16",
+      "length": 50,
+      "start": [120, -55, 1400],
+      "direction": [119, -55, 1400],
+      "assembly": {
+        "bolt": true,
+        "nearWasher": true,
+        "nearNut": false,
+        "farWasher": true,
+        "nut": true,
+        "extraNut": false
+      },
+      "holes": [
+        {
+          "target": "PL01",
+          "diameter": 18,
+          "extent": "profile"
+        },
+        {
+          "target": "P01",
+          "diameter": 18,
+          "extent": "wall"
+        }
+      ],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "SK02",
+      "type": "fastener",
+      "name": "Skruv SK02",
+      "spec": "ISO 4017 M16",
+      "length": 50,
+      "start": [120, 55, 1400],
+      "direction": [119, 55, 1400],
+      "assembly": {
+        "bolt": true,
+        "nearWasher": true,
+        "nearNut": false,
+        "farWasher": true,
+        "nut": true,
+        "extraNut": false
+      },
+      "holes": [
+        {
+          "target": "PL01",
+          "diameter": 18,
+          "extent": "profile"
+        },
+        {
+          "target": "P01",
+          "diameter": 18,
+          "extent": "wall"
+        }
+      ],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "SK03",
+      "type": "fastener",
+      "name": "Skruv SK03",
+      "spec": "ISO 4017 M16",
+      "length": 50,
+      "start": [120, -55, 1600],
+      "direction": [119, -55, 1600],
+      "assembly": {
+        "bolt": true,
+        "nearWasher": true,
+        "nearNut": false,
+        "farWasher": true,
+        "nut": true,
+        "extraNut": false
+      },
+      "holes": [
+        {
+          "target": "PL01",
+          "diameter": 18,
+          "extent": "profile"
+        },
+        {
+          "target": "P01",
+          "diameter": 18,
+          "extent": "wall"
+        }
+      ],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "SK04",
+      "type": "fastener",
+      "name": "Skruv SK04",
+      "spec": "ISO 4017 M16",
+      "length": 50,
+      "start": [120, 55, 1600],
+      "direction": [119, 55, 1600],
+      "assembly": {
+        "bolt": true,
+        "nearWasher": true,
+        "nearNut": false,
+        "farWasher": true,
+        "nut": true,
+        "extraNut": false
+      },
+      "holes": [
+        {
+          "target": "PL01",
+          "diameter": 18,
+          "extent": "profile"
+        },
+        {
+          "target": "P01",
+          "diameter": 18,
+          "extent": "wall"
+        }
+      ],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    },
+    {
+      "id": "H01",
+      "type": "fastener",
+      "name": "Extra hal H01",
+      "spec": "ISO 4017 M16",
+      "length": 50,
+      "start": [120, 70, 1500],
+      "direction": [119, 70, 1500],
+      "assembly": {
+        "bolt": false,
+        "nearWasher": false,
+        "nearNut": false,
+        "farWasher": false,
+        "nut": false,
+        "extraNut": false
+      },
+      "holes": [
+        {
+          "target": "PL01",
+          "diameter": 22,
+          "extent": "profile"
+        }
+      ],
+      "source": {
+        "file": "K-TEST-003-balk-pelarforband.pdf",
+        "page": 1,
+        "detail": "A - andplat och skruvbild"
+      }
+    }
+  ]
+}

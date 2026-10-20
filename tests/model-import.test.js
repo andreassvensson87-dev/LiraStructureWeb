@@ -17,13 +17,21 @@ import { defaultGrid } from '../src/grid-lines.js';
 import { serializeProject, parseProjectFile } from '../src/project/project-file.js';
 import { geometryForModel } from '../src/model-object.js';
 import { lineCutFrame } from '../src/line-cut.js';
+import { modelImportPacket } from '../src/project/model-import-packet.js';
+import { defaultFasteners } from '../src/fasteners/default-catalog.js';
+import { holesForPart } from '../src/fasteners/relations.js';
+import { partAxisIntervals } from '../src/fasteners/placement.js';
 import { pointerCommand } from '../src/model/pointer-controller.js';
 
 const example = () =>
   parseModelImport(
     readFileSync(new URL('../src/project/model-import-example.json', import.meta.url), 'utf8'),
   );
-const libraries = { profiles: BUILTIN_PROFILES, materials: BUILTIN_MATERIALS };
+const libraries = {
+  profiles: BUILTIN_PROFILES,
+  materials: BUILTIN_MATERIALS,
+  fasteners: defaultFasteners(),
+};
 test('review is detached; selected native parts commit, save and undo/redo together', () => {
   const project = createProject({ grid: defaultGrid, levels: initialLevels() });
   const history = new ProjectHistory();
@@ -106,7 +114,7 @@ test('assumptions require an explicit decision; invalid rows cannot slip through
 });
 test('file boundary rejects wrong units, versions, duplicate IDs and unsupported metadata', () => {
   for (const [field, value] of [
-    ['version', 3],
+    ['version', 4],
     ['units', 'm'],
     ['coordinates', 'world'],
   ]) {
@@ -304,4 +312,190 @@ test('v2 miter delegates both end cuts to native Fit and rejects parallel member
   data.objects[2].end = [0, 0, 3500];
   rows = planModelImport(data, libraries);
   assert.match(rows[3].error, /olika riktningar/);
+});
+
+const connection = () =>
+  parseModelImport(
+    readFileSync(
+      new URL('../src/project/model-import-fasteners-example.json', import.meta.url),
+      'utf8',
+    ),
+  );
+test('v3 beam-column joint imports native screws and nine linked bores, saves, edits and undoes atomically', () => {
+  const data = connection();
+  data.objects.reverse();
+  const beforeLibrary = structuredClone(libraries.fasteners);
+  const rows = planModelImport(data, libraries);
+  assert.ok(
+    rows.every((r) => !r.error),
+    rows.map((r) => r.error).join('; '),
+  );
+  const batch = modelImportObjects(data, rows, new Set(rows.map((r) => r.id)), new Set(), []);
+  const part = (id, model = batch) => model.find((o) => o.modelImport?.objectId === id);
+  const plate = part('PL01'),
+    column = part('P01'),
+    screw = part('SK01');
+  assert.equal(batch.filter((o) => o.type === 'fastener').length, 5);
+  assert.equal(holesForPart(plate, batch).length, 5);
+  assert.equal(holesForPart(column, batch).length, 4);
+  assert.equal(screw.spec.length, 50);
+  assert.equal(screw.spec.thread.length, 50);
+  assert.deepEqual(
+    screw.holes.map((h) => h.layers.map((l) => l.depth)),
+    [[12], [10]],
+  );
+  assert.deepEqual(
+    screw.accessories.map((a) => a.kind),
+    ['washer', 'washer', 'nut'],
+  );
+  assert.equal(part('H01').assembly.bolt, false);
+  assert.equal(part('H01').accessories.length, 0);
+  // The opposite column flange stays intact: wall deliberately addresses only the first flange.
+  const baseIntervals = partAxisIntervals(
+    screw,
+    column,
+    batch.filter((o) => o.type !== 'fastener'),
+  );
+  assert.equal(baseIntervals.length, 2);
+  const drilled = partAxisIntervals(screw, column, batch, {
+    geometry: (part) => geometryForModel(part, batch),
+  });
+  assert.equal(drilled.length, 1);
+  assert.ok(Math.abs(drilled[0].offset - baseIntervals[1].offset) < 0.02);
+  assert.deepEqual(libraries.fasteners, beforeLibrary);
+  const project = createProject({ grid: defaultGrid, levels: initialLevels() });
+  const before = structuredClone(project),
+    history = new ProjectHistory();
+  let checkpoints = 0;
+  const editor = createModelEditor({
+    project,
+    checkpoint() {
+      checkpoints++;
+      history.checkpoint(project);
+    },
+  });
+  editor.add(batch);
+  assert.equal(checkpoints, 1);
+  const saved = parseProjectFile(serializeProject(project));
+  assert.deepEqual(
+    saved.objects.filter((o) => o.modelImport),
+    project.objects.filter((o) => o.modelImport),
+  );
+  assert.equal(holesForPart(part('PL01', saved.objects), saved.objects).length, 5);
+  assert.ok(
+    planModelImport(data, { ...libraries, objects: saved.objects }).every((r) =>
+      /Redan importerad/.test(r.error),
+    ),
+  );
+  editor.update([{ ...part('SK01', project.objects), name: 'Redigerad skruv' }]);
+  assert.equal(part('SK01', project.objects).name, 'Redigerad skruv');
+  Object.assign(project, history.undo(project));
+  Object.assign(project, history.undo(project));
+  assert.deepEqual(project, before);
+  Object.assign(project, history.redo(project));
+  assert.equal(project.objects.filter((o) => o.modelImport).length, 8);
+});
+test('v3 blocks missed targets, short/partial grips, wrong libraries, malformed holes and unsupported versions', () => {
+  const check = (change, pattern) => {
+    const data = connection();
+    change(data.objects[3], data);
+    assert.match(planModelImport(data, libraries)[3].error, pattern);
+  };
+  check((s) => {
+    s.spec = 'M16';
+  }, /saknas/);
+  check((s) => {
+    s.length = 10;
+  }, /når inte|Längden|Skruven/);
+  check((s) => {
+    s.start[1] = 500;
+    s.direction[1] = 500;
+  }, /träffar inte/);
+  check((s) => {
+    s.holes[1].target = 'B01';
+  }, /träffar inte|når inte/);
+  check((s) => {
+    s.holes[0].diameter = 14;
+  }, /mindre än skruv/);
+  check((s) => {
+    s.holes[0].extent = 'blind';
+  }, /wall eller profile/);
+  check((s) => {
+    s.holes[0].target = 'SK02';
+  }, /inte en giltig del/);
+  check((s) => {
+    s.holes[1].target = 'PL01';
+  }, /unika referenser/);
+  check((s, d) => {
+    d.version = 2;
+  }, /version 3/);
+  // Whole profile with a second, distant flange must never silently drill only the first.
+  check((s) => {
+    s.holes[1].extent = 'profile';
+  }, /alla begärda materiallager|Längden/);
+  check((s) => {
+    s.holes = 'invalid';
+  }, /referenser/);
+  check((s) => {
+    s.holes[0] = null;
+  }, /referenser/);
+  const data = connection(),
+    rows = planModelImport(data, libraries),
+    selected = new Set(rows.map((r) => r.id));
+  selected.delete('PL01');
+  assert.equal(modelImportSelectionIssues(rows, selected).size, 5);
+  assert.throws(() => modelImportObjects(data, rows, selected, new Set(), []), /PL01/);
+});
+test('v3 resolves drilling after selected cuts regardless of file order and recalculates when a cut is excluded', () => {
+  const data = connection();
+  data.objects.unshift({
+    id: 'C01',
+    type: 'polygoncut',
+    name: 'Ta bort skruvens material',
+    targets: ['PL01'],
+    source: { file: 'test.pdf' },
+    frame: { origin: [95, 0, 1500], u: [0, 1, 0], v: [0, 0, 1] },
+    polygon: [
+      [-70, -120],
+      [-40, -120],
+      [-40, -80],
+      [-70, -80],
+    ],
+    side: 'positive',
+    thickness: 12,
+  });
+  assert.match(
+    planModelImport(data, libraries).find((r) => r.id === 'SK01').error,
+    /träffar inte|når inte/,
+  );
+  const included = new Set(data.objects.map((o) => o.id));
+  included.delete('C01');
+  assert.equal(
+    planModelImport(data, { ...libraries, included }).find((r) => r.id === 'SK01').error,
+    '',
+  );
+});
+
+test('v3 upload packet snapshots current catalog, dimensions and contract without copying project geometry', () => {
+  const schema = JSON.parse(
+    readFileSync(new URL('../src/project/model-import.schema.json', import.meta.url), 'utf8'),
+  );
+  const packet = modelImportPacket({
+    ...libraries,
+    schema,
+    example: connection(),
+    instructions: 'Test',
+    objects: [{ id: 'private-project' }],
+  });
+  assert.deepEqual(packet.supportedImportVersions, [1, 2, 3]);
+  assert.equal(packet.packetVersion, 3);
+  assert.ok(!('objects' in packet));
+  assert.equal(packet.profiles.find((p) => p.name === 'HEA 200').boundsMm.height, 190);
+  const spec = packet.fasteners.find((s) => s.name === 'ISO 4017 M16');
+  assert.equal(spec.grade, '8.8');
+  assert.equal(spec.diameter, 16);
+  const rows = planModelImport(parseModelImport(JSON.stringify(packet.example)), libraries);
+  assert.ok(rows.every((r) => !r.error));
+  spec.name = 'Detached';
+  assert.ok(libraries.fasteners.some((s) => s.name === 'ISO 4017 M16'));
 });

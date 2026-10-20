@@ -1,3 +1,4 @@
+import { importFastener } from './model-import-fastener.js';
 import { validateObject } from '../model-object.js';
 import { resolveFit } from '../components/fit.js';
 import { profileSnapshot } from '../section-profile.js';
@@ -44,8 +45,8 @@ export function parseModelImport(content) {
     fail('Filen innehåller inte giltig JSON.');
   }
   keys(data, ['format', 'version', 'units', 'coordinates', 'importId', 'objects']);
-  if (data.format !== 'lira-model-import' || ![1, 2].includes(data.version))
-    fail('Modellförslaget måste använda lira-model-import version 1 eller 2.');
+  if (data.format !== 'lira-model-import' || ![1, 2, 3].includes(data.version))
+    fail('Modellförslaget måste använda lira-model-import version 1, 2 eller 3.');
   if (data.units !== 'mm' || data.coordinates !== 'local-z-up')
     fail('Använd millimeter och lokala koordinater med Z uppåt.');
   if (!text(data.importId, 120)) fail('Ange en stabil importId (högst 120 tecken).');
@@ -63,9 +64,13 @@ export function modelImportDependencies(item) {
   const refs =
     item.type === 'fit'
       ? item.references
-      : ['linecut', 'polygoncut'].includes(item.type)
-        ? item.targets
-        : [];
+      : item.type === 'fastener'
+        ? Array.isArray(item.holes)
+          ? item.holes.map((hole) => hole?.target)
+          : []
+        : ['linecut', 'polygoncut'].includes(item.type)
+          ? item.targets
+          : [];
   return Array.isArray(refs) ? refs : [];
 }
 export function modelImportSelectionIssues(rows, selected) {
@@ -80,6 +85,7 @@ export function modelImportSelectionIssues(rows, selected) {
 function validateEntry(item, version) {
   const physical = ['sweep', 'plate'].includes(item.type);
   const fields = {
+    fastener: ['spec', 'length', 'start', 'direction', 'holes', 'assembly'],
     sweep: ['material', 'ifcClass', 'profile', 'start', 'end', 'rotation', 'profileUp'],
     plate: ['material', 'ifcClass', 'frame', 'polygon', 'thickness', 'side'],
     fit: ['references', 'mode', 'endA', 'endB', 'gap'],
@@ -88,11 +94,12 @@ function validateEntry(item, version) {
   };
   if (!fields[item.type] || (version === 1 && !physical))
     fail('Objekttypen stöds inte av filversionen. Fit och skärningar kräver version 2.');
+  if (item.type === 'fastener' && version < 3) fail('Skruvar och hål kräver version 3.');
   keys(item, ['id', 'type', 'name', 'source', 'assumptions', ...fields[item.type]]);
   if (!text(item.name, 120)) fail('Ange ett objektnamn (högst 120 tecken).');
   if (physical && !text(item.material, 120)) fail('Ange materialets biblioteksnamn.');
   if (!physical) {
-    const refs = item.type === 'fit' ? item.references : item.targets;
+    const refs = modelImportDependencies(item);
     if (
       !Array.isArray(refs) ||
       !refs.length ||
@@ -101,6 +108,8 @@ function validateEntry(item, version) {
       new Set(refs).size !== refs.length
     )
       fail('Bearbetningen behöver unika referenser till andra delar i samma fil.');
+    if (item.type === 'fastener' && refs.length > 100)
+      fail('Ett förband får ha högst 100 måldelar.');
     if (item.type === 'fit' && refs.length !== 2) fail('Fit behöver två olika sweeps.');
   }
   keys(item.source, ['file', 'page', 'detail', 'elementId']);
@@ -128,6 +137,11 @@ function validateEntry(item, version) {
       fail('Ange giltig profilrotation i grader.');
     if (item.profileUp !== undefined && !point(item.profileUp, 3))
       fail('Profilriktningen behöver tre giltiga tal.');
+  } else if (item.type === 'fastener') {
+    if (
+      ![item.start, item.direction].every((p) => point(p, 3) && p.every((v) => Math.abs(v) <= 1e7))
+    )
+      fail('Skruvens start och riktningspunkt behöver tre giltiga koordinater vardera.');
   } else if (item.type !== 'fit') {
     keys(item.frame, ['origin', 'u', 'v']);
     if (!['origin', 'u', 'v'].every((key) => point(item.frame[key], 3)))
@@ -157,7 +171,7 @@ export function isModelImportDuplicate(data, item, objects) {
 /** Detached rows. File identities never become internal model identities. */
 export function planModelImport(
   data,
-  { profiles, materials, objects = [] },
+  { profiles, materials, fasteners = [], objects = [], included = null },
   overrides = new Map(),
 ) {
   const sections = latestImportProfiles(profiles),
@@ -232,7 +246,9 @@ export function planModelImport(
     return row;
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
-  for (const row of rows.filter((r) => !r.error && !['sweep', 'plate'].includes(r.input.type))) {
+  for (const row of rows
+    .filter((r) => !r.error && !['sweep', 'plate'].includes(r.input.type))
+    .sort((a, b) => Number(a.input.type === 'fastener') - Number(b.input.type === 'fastener'))) {
     try {
       const input = row.input;
       const references = modelImportDependencies(input).map((id) => {
@@ -254,29 +270,44 @@ export function planModelImport(
         },
       };
       row.object =
-        input.type === 'fit'
-          ? resolveFit(
-              {
-                ...base,
-                type: 'component',
-                kind: 'fit',
-                references,
-                mode: input.mode,
-                endA: input.endA,
-                endB: input.endB,
-                gap: input.gap,
-              },
-              rows.flatMap((r) => (r.object ? [r.object] : [])),
+        input.type === 'fastener'
+          ? importFastener(
+              input,
+              base,
+              references,
+              fasteners,
+              rows
+                .filter(
+                  (r) =>
+                    r.object &&
+                    (['sweep', 'plate'].includes(r.input.type) || !included || included.has(r.id)),
+                )
+                .map((r) => r.object),
+              named,
             )
-          : {
-              ...base,
-              type: input.type,
-              targets: references,
-              frame: structuredClone(input.frame),
-              polygon: structuredClone(input.polygon),
-              side: input.side,
-              ...(input.type === 'polygoncut' ? { thickness: input.thickness } : {}),
-            };
+          : input.type === 'fit'
+            ? resolveFit(
+                {
+                  ...base,
+                  type: 'component',
+                  kind: 'fit',
+                  references,
+                  mode: input.mode,
+                  endA: input.endA,
+                  endB: input.endB,
+                  gap: input.gap,
+                },
+                rows.flatMap((r) => (r.object ? [r.object] : [])),
+              )
+            : {
+                ...base,
+                type: input.type,
+                targets: references,
+                frame: structuredClone(input.frame),
+                polygon: structuredClone(input.polygon),
+                side: input.side,
+                ...(input.type === 'polygoncut' ? { thickness: input.thickness } : {}),
+              };
       const error = validateObject(row.object);
       if (error) fail(error);
     } catch (error) {
