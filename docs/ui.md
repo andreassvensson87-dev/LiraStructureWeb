@@ -8,6 +8,7 @@ Detaljer och antaganden är hopfällda från början. Rad- och modellklick öppn
 
 Importera genomför ett giltigt urval utan antaganden direkt. Om urvalet innehåller antaganden visas i samma fönster en gemensam sammanfattning för enbart de valda delarna. Tillbaka återgår till urvalet, Avbryt/Esc kastar förslaget och Importera med antaganden bekräftar hela urvalet i ett ångringssteg. Ingen godkännanderuta krävs per objekt. Projektet ändras inte före den slutliga importen. AI-paketet är bundlat och fungerar offline. Se `docs/model-import.md` för formatet.
 
+Version 2 lägger Fit, linjeskärning och Polygoncut i samma tabell och befintliga menyblock. Detaljer visar referenser, spalt eller skärningens mål i stället för profil/material för bearbetningar. Alla giltiga delar och bearbetningar är förvalda. Om en referens väljs bort visas beroendefelet på bearbetningens rad och importknappen stängs av tills delen återväljs eller bearbetningen väljs bort. Bortvalda skärningar/Fit ingår inte i förhandsvisningens modellberäkning.
 
 ## Blockbibliotek och blockeditor
 

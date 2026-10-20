@@ -1,0 +1,114 @@
+{
+  "format": "lira-model-import",
+  "version": 2,
+  "units": "mm",
+  "coordinates": "local-z-up",
+  "importId": "K-TEST-002-rev-A",
+  "objects": [
+    {
+      "id": "P01",
+      "type": "sweep",
+      "name": "Pelare P01",
+      "ifcClass": "IfcColumn",
+      "profile": "HEA 200",
+      "material": "S355J2",
+      "start": [0, 0, 0],
+      "end": [0, 0, 3600],
+      "rotation": 0,
+      "profileUp": [1, 0, 0],
+      "source": {
+        "file": "K-TEST-002-fit-urklipp.pdf",
+        "page": 1,
+        "detail": "Elevation: pelarcentrum X=0; Z=0..3600; HEA-höjd 190 i X, flänsar mot balken"
+      }
+    },
+    {
+      "id": "P02",
+      "type": "sweep",
+      "name": "Pelare P02",
+      "ifcClass": "IfcColumn",
+      "profile": "HEA 200",
+      "material": "S355J2",
+      "start": [6000, 0, 0],
+      "end": [6000, 0, 3600],
+      "rotation": 0,
+      "profileUp": [1, 0, 0],
+      "source": {
+        "file": "K-TEST-002-fit-urklipp.pdf",
+        "page": 1,
+        "detail": "Elevation: pelarcentrum X=6000; Z=0..3600; HEA-höjd 190 i X, flänsar mot balken"
+      }
+    },
+    {
+      "id": "B01",
+      "type": "sweep",
+      "name": "Balk B01",
+      "ifcClass": "IfcBeam",
+      "profile": "IPE 300",
+      "material": "S355J2",
+      "start": [0, 0, 3200],
+      "end": [6000, 0, 3200],
+      "rotation": 0,
+      "profileUp": [0, 0, 1],
+      "source": {
+        "file": "K-TEST-002-fit-urklipp.pdf",
+        "page": 1,
+        "detail": "Elevation: ämnesändar X=0/6000; centrum Z=3200"
+      }
+    },
+    {
+      "id": "F01",
+      "type": "fit",
+      "name": "Fit start B01 mot P01",
+      "references": ["P01", "B01"],
+      "mode": "abut",
+      "endA": "end",
+      "endB": "start",
+      "gap": 5,
+      "source": {
+        "file": "K-TEST-002-fit-urklipp.pdf",
+        "page": 1,
+        "detail": "D1: balkända mot pelarens yttersida med 5 mm spalt"
+      }
+    },
+    {
+      "id": "F02",
+      "type": "fit",
+      "name": "Fit end B01 mot P02",
+      "references": ["P02", "B01"],
+      "mode": "abut",
+      "endA": "end",
+      "endB": "end",
+      "gap": 5,
+      "source": {
+        "file": "K-TEST-002-fit-urklipp.pdf",
+        "page": 1,
+        "detail": "D1: balkända mot pelarens yttersida med 5 mm spalt"
+      }
+    },
+    {
+      "id": "C01",
+      "type": "polygoncut",
+      "name": "Urklinkning B01 överkant vänster",
+      "targets": ["B01"],
+      "frame": {
+        "origin": [0, 0, 0],
+        "u": [1, 0, 0],
+        "v": [0, 0, 1]
+      },
+      "polygon": [
+        [95, 3270],
+        [300, 3270],
+        [300, 3370],
+        [95, 3370]
+      ],
+      "thickness": 200,
+      "side": "center",
+      "source": {
+        "file": "K-TEST-002-fit-urklipp.pdf",
+        "page": 1,
+        "detail": "D2: urklinkning X=100..300, Z=3270..3350, genom hela balkbredden. Verktyg X=95..300 och Z=3270..3370."
+      }
+    }
+  ]
+}

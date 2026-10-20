@@ -77,7 +77,7 @@ export function createModelImportDialog({
     profile.close();
     material.close();
   });
-  function rows(items, selected, included) {
+  function rows(items, selected, included, issues = new Map()) {
     const focused = $('rows').contains(document.activeElement)
       ? document.activeElement.dataset.rowFocus
       : null;
@@ -111,9 +111,16 @@ export function createModelImportDialog({
         row.object?.section?.name ||
         (row.input.type === 'plate'
           ? `${row.input.thickness} mm`
-          : row.input.profile || row.input.type);
+          : row.input.type === 'fit'
+            ? `Fit · ${row.input.mode === 'abut' ? 'mot del' : 'gering'}`
+            : row.input.type === 'linecut'
+              ? 'Linjeskärning'
+              : row.input.type === 'polygoncut'
+                ? 'Urklinkning'
+                : row.input.profile || row.input.type);
       cell().textContent =
         row.error ||
+        issues.get(row.id) ||
         (row.assumptions.length
           ? `${row.assumptions.length} ${row.assumptions.length === 1 ? 'antagande' : 'antaganden'}`
           : 'Klar');
@@ -127,17 +134,21 @@ export function createModelImportDialog({
     const counts = new Map();
     for (const row of items) {
       const label =
-        row.input.type === 'plate'
-          ? 'plåt'
-          : row.input.ifcClass === 'IfcColumn'
-            ? 'pelare'
-            : row.input.ifcClass === 'IfcBeam' || !row.input.ifcClass
-              ? 'balk'
-              : 'profildel';
+        row.input.type === 'fit'
+          ? 'Fit'
+          : ['linecut', 'polygoncut'].includes(row.input.type)
+            ? 'skärning'
+            : row.input.type === 'plate'
+              ? 'plåt'
+              : row.input.ifcClass === 'IfcColumn'
+                ? 'pelare'
+                : row.input.ifcClass === 'IfcBeam' || !row.input.ifcClass
+                  ? 'balk'
+                  : 'profildel';
       counts.set(label, (counts.get(label) || 0) + 1);
     }
     $('summary').textContent = items.length
-      ? `${items.length} objekt · ${[...counts].map(([label, count]) => `${count} ${count > 1 && label === 'plåt' ? 'plåtar' : count > 1 && label === 'balk' ? 'balkar' : count > 1 && label === 'profildel' ? 'profildelar' : label}`).join(' · ')}`
+      ? `${items.length} objekt · ${[...counts].map(([label, count]) => `${count} ${count > 1 && label === 'skärning' ? 'skärningar' : count > 1 && label === 'plåt' ? 'plåtar' : count > 1 && label === 'balk' ? 'balkar' : count > 1 && label === 'profildel' ? 'profildelar' : label}`).join(' · ')}`
       : '';
     const eligible = items.filter((r) => !r.error);
     $('all').disabled = !eligible.length;
@@ -153,9 +164,13 @@ export function createModelImportDialog({
     $('geometry').textContent =
       object?.type === 'sweep'
         ? `Längd ${Math.hypot(...object.end.map((v, i) => v - object.start[i])).toLocaleString('sv')} mm · Rotation ${object.rotation}°`
-        : object
-          ? `Tjocklek ${object.thickness} mm · ${object.polygon.length} hörn`
-          : '';
+        : row.input.type === 'fit'
+          ? `${row.input.mode === 'abut' ? 'Mot del' : 'Gering'} · ${row.input.references.join(' → ')} · Spalt ${row.input.gap} mm`
+          : ['polygoncut', 'linecut'].includes(row.input.type)
+            ? `Mål: ${row.input.targets.join(', ')}${object?.thickness ? ` · Djup ${object.thickness} mm` : ''}`
+            : object
+              ? `Tjocklek ${object.thickness} mm · ${object.polygon.length} hörn`
+              : '';
     const source = row.input.source;
     $('origin').textContent =
       source && typeof source.file === 'string'
@@ -163,7 +178,10 @@ export function createModelImportDialog({
         : '';
     $('profile').hidden = row.input.type !== 'sweep';
     profile.sync();
-    material.set(materials, object?.material?.name || row.input.material);
+    const physical = ['sweep', 'plate'].includes(row.input.type);
+    $('material').hidden = !physical;
+    materialLabel.hidden = !physical;
+    if (physical) material.set(materials, object?.material?.name || row.input.material);
     $('row-error').textContent = row.error;
     $('assumptions').replaceChildren(
       ...row.assumptions.map((text) => {

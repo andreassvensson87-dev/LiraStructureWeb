@@ -5,13 +5,17 @@ import {
   planModelImport,
   modelImportObjects,
   MODEL_IMPORT_LIMIT,
+  latestImportProfiles,
+  modelImportDependencies,
+  modelImportSelectionIssues,
 } from '../project/model-import.js';
 import { latestMaterials } from '../materials.js';
 import { profileLibraryNodes } from '../profile-tree.js';
 import { updateObjectMeshSelection } from '../model/object-mesh.js';
 import { cadFeedback } from '../ui/cad-feedback.js';
 import schema from '../project/model-import.schema.json';
-import exampleData from '../project/model-import-example.json';
+import exampleData from '../project/model-import-operations-example.json';
+import { profileSnapshot } from '../section-profile.js';
 import instructions from '../../docs/model-import.md?raw';
 
 /** File/session owner. Only the model editor commits the selected, reviewed batch. */
@@ -65,6 +69,7 @@ export function installWorkspaceModelImport({
         included = new Set(checked ? rows.filter((row) => !row.error).map((row) => row.id) : []);
       else if (checked) included.add(id);
       else included.delete(id);
+      if (rows.some((row) => modelImportDependencies(row.input).length)) preview();
       sync();
     },
     select(id) {
@@ -146,10 +151,12 @@ export function installWorkspaceModelImport({
     for (const child of ui.preview.children) {
       const row = rows.find((r) => r.object?.id === child.userData.id);
       if (!row) continue;
+      const operation = modelImportDependencies(row.input).length > 0;
       const take = included.has(row.id),
         highlight = row.id === selected;
-      child.visible = take || showExcluded;
+      child.visible = operation ? highlight && take : take || showExcluded;
       updateObjectMeshSelection(child, row.object, new Set(highlight ? [row.object.id] : []));
+      if (!child.material) continue;
       if (!highlight) child.material.color.set(take ? cadFeedback.preview : '#82969f');
       child.material.opacity = take ? cadFeedback.previewOpacity : 0.09;
       child.material.depthWrite = take;
@@ -159,7 +166,13 @@ export function installWorkspaceModelImport({
   }
   function preview() {
     actions.clearPreview();
-    const batch = rows.flatMap((row) => (row.object ? [row.object] : []));
+    const issues = modelImportSelectionIssues(rows, included);
+    const batch = rows.flatMap((row) =>
+      row.object &&
+      (!modelImportDependencies(row.input).length || (included.has(row.id) && !issues.has(row.id)))
+        ? [row.object]
+        : [],
+    );
     if (batch.length) {
       ui.preview = actions.previewModelBatch(batch);
       scene.add(ui.preview);
@@ -184,9 +197,10 @@ export function installWorkspaceModelImport({
     }
   }
   function sync() {
-    view.rows(rows, selected, included);
+    const issues = modelImportSelectionIssues(rows, included);
+    view.rows(rows, selected, included, issues);
     view.detail(
-      current(),
+      current() ? { ...current(), error: current().error || issues.get(selected) || '' } : null,
       latestMaterials(controllers.materialUI.records).map((material) => ({
         label: material.name,
         value: material,
@@ -194,13 +208,13 @@ export function installWorkspaceModelImport({
       })),
     );
     const assumptions = rows.filter((row) => included.has(row.id) && row.assumptions.length).length;
-    const errors = rows.filter((row) => row.error).length;
+    const errors = rows.filter((row) => row.error).length + issues.size;
     view.$('status').textContent =
       `${included.size} av ${rows.length} valda${errors ? ` · ${errors} kan inte importeras` : ''}${assumptions ? ` · ${assumptions} med antaganden` : ''}`;
     view.$('import').textContent = reviewing
       ? `Importera ${included.size} med antaganden`
       : `Importera ${included.size} objekt`;
-    view.$('import').disabled = !included.size;
+    view.$('import').disabled = !included.size || issues.size > 0;
     view.$('fit').disabled = !rows.some((row) => row.object);
     paint();
   }
@@ -270,10 +284,23 @@ export function installWorkspaceModelImport({
     const { profiles, materials } = libraries();
     const content = JSON.stringify(
       {
+        packetVersion: 2,
+        supportedImportVersions: [1, 2],
         instructions,
         schema,
         example,
-        profiles: profiles.map(({ id, revision, name }) => ({ id, revision, name })),
+        profiles: latestImportProfiles(profiles).map((definition) => {
+          const snapshot = Array.isArray(definition.parameters)
+            ? profileSnapshot(definition)
+            : definition;
+          return {
+            id: definition.id,
+            revision: definition.revision,
+            name: definition.name,
+            boundsMm: snapshot.properties.bounds,
+            anchorMm: snapshot.anchor,
+          };
+        }),
         materials: latestMaterials(materials).map(({ id, revision, name }) => ({
           id,
           revision,
@@ -290,6 +317,8 @@ export function installWorkspaceModelImport({
   }
   function commit() {
     try {
+      const issues = modelImportSelectionIssues(rows, included);
+      if (issues.size) throw new Error(issues.values().next().value);
       const assumptions = rows.filter((row) => included.has(row.id) && row.assumptions.length);
       if (assumptions.length && !reviewing) {
         reviewing = true;

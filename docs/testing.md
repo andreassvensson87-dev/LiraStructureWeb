@@ -1,5 +1,14 @@
 # Teststrategi
 
+### Fit och skärningar i AI-import v2 — 2026-10-20
+
+Inför publicering klarade den avgränsade releasen formatering, lint, 1173 tester och produktionsbygge med PWA. Samma byggda release importerade pilotfilens sex objekt genom den vanliga dialogen utan konsolfel.
+
+`model-import.test.js` täcker v1-kompatibilitet, tvåpassplanering med bearbetningar före delar, externa/interna referenser, abut och miter via native Fit, native linecut, polygoncut med subtraktion, bortvalda mål, saknade/självrefererande/otillåtna referenser, ogiltiga ramar och parallella Fit. Två pelare, balk, två Fit och en urklinkning sparas/öppnas med bevarade referenser. Ändrad pelarposition räknar om Fit genom vanlig modell-editor. Geometrins volym jämförs med en analytisk urklinkning och bibliotekets IPE-profil. Flyttalsavvikelse från native CSG kontrolleras med tolerans, inte exakta meshkoordinater.
+
+PDF-pilot: `output/pdf/K-TEST-002-fit-urklipp.pdf`, tolkad från renderad ritning och text här i samtalet. Ingen separat extern ChatGPT-konversation kördes. JSON-filen laddades genom appens filväljare i ett isolerat projekt. Alla sex rader var giltiga. Bortvald P01 blockerade F01. Import skapade tre Sweep, två Fit-komponenter och en Polygoncut. Native Fit-inspektorns spalt ändrades 5 → 10 och ångrades. Hela importen ångrades i ett steg till sex stomlinjer, återställdes, sparades och öppnades igen med identiska objekt. Geometrikontrollen på den exporterade projektfilen gav kapplan X=100/5900 och största utbredningsavvikelse cirka 0,001 mm. Rayprov bekräftade öppningen och materialet runt 200 × 80 mm-urklinkningen. Volymavvikelsen mot idealiserade radier var cirka 0,056 %. Rapport och projektfiler finns i `output/model-import/`.
+
+
 
 ## AI-modellimport
 
